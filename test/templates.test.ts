@@ -8,6 +8,7 @@ import { addNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { childrenOf } from '../src/model/tree.js';
 import { ROOT } from '../src/model/types.js';
+import { DEFAULTS, saveSettings } from '../src/settings.js';
 import { addPointer, removePointer } from '../src/templates/pointer.js';
 import { createTree, fill, getTemplate, listTemplates, variables } from '../src/templates/templates.js';
 import { emptyTree, tempDir } from './helpers.js';
@@ -100,6 +101,20 @@ describe('what an agent gets', () => {
     expect(text).toContain('Картинки и ролики.');
     expect(text).toContain('Соседи: ✓ Обложки');
     expect(text).toMatch(/set .* status=review/);
+  });
+
+  it('tells about treeyard note once notes have a tree to go to', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'X' });
+    const home = process.env.TREEYARD_HOME;
+    process.env.TREEYARD_HOME = tempDir('treeyard-home-');
+    try {
+      expect(contextText(tree, node.id)).not.toContain(' note "');
+      saveSettings({ ...DEFAULTS, notes: '/projects/Treeyard' });
+      expect(contextText(tree, node.id)).toMatch(/note "что мешает"` — неудобство самого treeyard/);
+    } finally {
+      process.env.TREEYARD_HOME = home;
+    }
   });
 
   it('starts with a plan by default, and /goal only in Claude Code with a criterion', () => {

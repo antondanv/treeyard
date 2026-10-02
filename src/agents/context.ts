@@ -12,6 +12,7 @@ import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { childrenOf, pathTo } from '../model/tree.js';
 import type { BrainId, StartMode, Tree, TreeNode } from '../model/types.js';
+import { loadSettings } from '../settings.js';
 
 export interface SessionPlan {
   /** The session's name: in Claude Code's `/resume`, agent view and the terminal title. */
@@ -137,6 +138,8 @@ const TEXT = {
     review: 'критерий выполнен; покажи доказательства',
     wait: 'waiting="что мешает" until="когда вернуться"',
     waitWhat: 'упёрся во внешнее',
+    note: 'что мешает',
+    noteWhat: 'неудобство самого treeyard (не задача проекта) — в «Замечания»; проект и узел запишутся сами',
     done: 'Статус done ставит человек.',
   },
   en: {
@@ -172,6 +175,9 @@ const TEXT = {
     review: 'the criterion is met; show the evidence',
     wait: 'waiting="what blocks it" until="when to come back"',
     waitWhat: 'blocked by something outside',
+    note: 'what gets in the way',
+    noteWhat:
+      'something in treeyard itself gets in the way (not a project task) — into «Notes»; the project and the node are recorded',
     done: 'Status done is set by a person.',
   },
 };
@@ -237,6 +243,8 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea\` — ${L.addWhat}`);
   lines.push(`- \`${self} set ${node.id} status=review\` — ${L.review}`);
   lines.push(`- \`${self} set ${node.id} status=waiting ${L.wait}\` — ${L.waitWhat}`);
+  // Read, not applied: the context must not switch the language or the theme of whoever asks.
+  if (loadSettings().notes) lines.push(`- \`${self} note "${L.note}"\` — ${L.noteWhat}`);
   lines.push(`- ${L.done}`);
   return lines.join('\n');
 }
