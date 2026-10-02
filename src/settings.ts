@@ -11,6 +11,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { LANGS, type Lang, setLang } from './i18n/i18n.js';
+import { STATUS_ORDERS, type StatusOrder, setStatusOrder } from './model/tree.js';
 import { applyTheme, THEMES, type Theme } from './tui/theme.js';
 
 export interface Settings {
@@ -22,6 +23,8 @@ export interface Settings {
   animation: boolean;
   /** The selected node's title runs when it does not fit. */
   marquee: boolean;
+  /** Siblings by status: work in progress on top, or ideas on top. */
+  statusOrder: StatusOrder;
   /** Ask the CLIs every few seconds which sessions are running. */
   live: boolean;
   /** Where sessions open: in a pane next to the tree (tmux) or in this terminal. */
@@ -42,6 +45,7 @@ export const DEFAULTS: Settings = {
   theme: 'dark',
   animation: true,
   marquee: true,
+  statusOrder: 'active-first',
   live: true,
   open: 'pane',
   sleepAfter: 30,
@@ -58,6 +62,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     const data = JSON.parse(readFileSync(settingsPath(env), 'utf8')) as Partial<Settings> & {
       sleep_after?: unknown;
       max_panes?: unknown;
+      status_order?: unknown;
     };
     if (data.lang && (LANGS as readonly string[]).includes(data.lang)) settings.lang = data.lang;
     if (typeof data.confirm === 'boolean') settings.confirm = data.confirm;
@@ -70,6 +75,8 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     const maxPanes = data.max_panes ?? data.maxPanes;
     if ((SLEEP_AFTER as readonly unknown[]).includes(sleepAfter)) settings.sleepAfter = sleepAfter as number;
     if ((MAX_PANES as readonly unknown[]).includes(maxPanes)) settings.maxPanes = maxPanes as number;
+    const statusOrder = data.status_order ?? data.statusOrder;
+    if ((STATUS_ORDERS as readonly unknown[]).includes(statusOrder)) settings.statusOrder = statusOrder as StatusOrder;
   } catch {
     // No file yet: the defaults.
   }
@@ -81,14 +88,16 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
 export function saveSettings(settings: Settings, env: NodeJS.ProcessEnv = process.env): void {
   const path = settingsPath(env);
   mkdirSync(dirname(path), { recursive: true });
-  const { sleepAfter, maxPanes, ...rest } = settings;
-  writeFileSync(path, `${JSON.stringify({ ...rest, sleep_after: sleepAfter, max_panes: maxPanes }, null, 2)}\n`);
+  const { sleepAfter, maxPanes, statusOrder, ...rest } = settings;
+  const data = { ...rest, status_order: statusOrder, sleep_after: sleepAfter, max_panes: maxPanes };
+  writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
 /** Makes the settings take effect in this process. */
 export function applySettings(settings: Settings): void {
   setLang(settings.lang);
   applyTheme(settings.theme);
+  setStatusOrder(settings.statusOrder);
 }
 
 let loaded: Settings | undefined;

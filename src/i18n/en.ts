@@ -112,6 +112,7 @@ export const EN: Record<string, string> = {
   '{key}: да или нет (on/off)': '{key}: on or off',
   'язык: ru или en': 'language: ru or en',
   'тема: dark или light': 'theme: dark or light',
+  'порядок статусов: active-first или active-last': 'status order: active-first or active-last',
   'нет такой настройки «{key}» — treeyard config': 'no such setting «{key}» — treeyard config',
   ' — цель: {goal}': ' — goal: {goal}',
   '  готово {done}/{total} · в работе {active} · на проверке {review} · ждут {waiting} · идей {ideas}':
@@ -318,6 +319,11 @@ export const EN: Record<string, string> = {
   'Бегущее название': 'Running title',
   'длинное название выбранного узла прокручивается, чтобы прочитать целиком':
     'a long title of the selected node scrolls so you can read all of it',
+  'Порядок статусов': 'Status order',
+  'в работе сверху': 'active on top',
+  'в работе снизу': 'active at the bottom',
+  'в работе → проверка → к работе → ждёт → идея · готовые внизу': 'active → review → todo → waiting → idea · done last',
+  'идея → ждёт → к работе → проверка → в работе · готовые внизу': 'idea → waiting → todo → review → active · done last',
   'Живые статусы сессий': 'Live session status',
   'каждые 3 с: кто из Claude Code, Codex и Antigravity работает, а кто ждёт тебя':
     'every 3 s: which Claude Code, Codex and Antigravity sessions are working and which wait for you',

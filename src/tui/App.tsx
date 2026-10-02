@@ -61,7 +61,7 @@ import {
   updateNode,
   WHO_LABEL,
 } from '../model/ops.js';
-import { GLYPH } from '../model/overview.js';
+import { GLYPH, writeOverview } from '../model/overview.js';
 import { loadTree, treeStamp, writeProject } from '../model/store.js';
 import { ago, duration } from '../model/time.js';
 import {
@@ -73,6 +73,7 @@ import {
   pathTo,
   progress,
   type Row,
+  type StatusOrder,
   summarize,
   waitingNodes,
 } from '../model/tree.js';
@@ -2318,6 +2319,19 @@ export function App(props: AppProps) {
         hint: t('длинное название выбранного узла прокручивается, чтобы прочитать целиком'),
       },
       {
+        key: 'statusOrder',
+        label: t('Порядок статусов'),
+        options: [
+          { value: 'active-first', label: t('в работе сверху') },
+          { value: 'active-last', label: t('в работе снизу') },
+        ],
+        value: s.statusOrder,
+        hint:
+          s.statusOrder === 'active-first'
+            ? t('в работе → проверка → к работе → ждёт → идея · готовые внизу')
+            : t('идея → ждёт → к работе → проверка → в работе · готовые внизу'),
+      },
+      {
         key: 'live',
         label: t('Живые статусы сессий'),
         options: yesNo,
@@ -2406,6 +2420,13 @@ export function App(props: AppProps) {
     ];
   };
 
+  const changeStatusOrder = (order: StatusOrder) => {
+    updateSettings({ statusOrder: order });
+    // The overview in git follows the order you see.
+    writeOverview(tree);
+    stampRef.current = treeStamp(props.dir);
+  };
+
   const changeSetting = (key: string, value: string) => {
     const on = value === 'on';
     if (key === 'lang' && (value === 'ru' || value === 'en')) updateSettings({ lang: value });
@@ -2413,6 +2434,7 @@ export function App(props: AppProps) {
     else if (key === 'theme' && (value === 'dark' || value === 'light')) updateSettings({ theme: value });
     else if (key === 'animation') updateSettings({ animation: on });
     else if (key === 'marquee') updateSettings({ marquee: on });
+    else if (key === 'statusOrder' && (value === 'active-first' || value === 'active-last')) changeStatusOrder(value);
     else if (key === 'live') updateSettings({ live: on });
     else if (key === 'open' && (value === 'pane' || value === 'terminal')) updateSettings({ open: value });
     else if (key === 'sleepAfter') updateSettings({ sleepAfter: Number(value) });

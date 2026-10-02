@@ -11,8 +11,8 @@ import { emptyTree, tempDir } from './helpers.js';
 const DOWN = '\u001b[B';
 const RIGHT = '\u001b[C';
 const downs = (n: number) => Array.from({ length: n }, () => DOWN);
-/** Rows of the settings screen before «Модель сессий»: language … live, brain, start. */
-const MODEL_ROW = 11;
+/** Rows of the settings screen before «Модель сессий»: language … status order … live, brain, start. */
+const MODEL_ROW = 12;
 
 beforeEach(() => {
   process.env.TREEYARD_HOME = tempDir('treeyard-home-');
@@ -87,7 +87,7 @@ describe('models come from the CLI, not from typing', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(9), RIGHT, DOWN, DOWN],
+      keys: [',', ...downs(10), RIGHT, DOWN, DOWN],
     });
     const project = loadTree(tree.project.dir).project;
     expect(project.brain).toBe('codex');
@@ -127,7 +127,7 @@ describe('settings are easy to find', () => {
 
   it('the live status covers every CLI', async () => {
     const tree = sample();
-    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(5)] });
+    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(6)] });
     expect(frame).toContain('Живые статусы сессий');
     expect(frame).toContain('Claude Code, Codex и Antigravity');
   });

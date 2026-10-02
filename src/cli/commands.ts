@@ -18,6 +18,7 @@ import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/l
 import { launchInPane } from '../agents/panes.js';
 import { pick, t } from '../i18n/i18n.js';
 import { addNode, logToNode, moveNode, STATUS_LABEL, setStatus, updateNode } from '../model/ops.js';
+import { writeOverview } from '../model/overview.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
 import { ago } from '../model/time.js';
 import {
@@ -745,16 +746,19 @@ const GLOBAL_KEYS = [
   'theme',
   'animation',
   'marquee',
+  'statusOrder',
   'live',
   'open',
   'sleepAfter',
   'maxPanes',
 ] as const;
+/** Keys in settings.json and on the command line, where they differ from the code. */
+const SNAKE: Record<string, string> = { sleepAfter: 'sleep_after', maxPanes: 'max_panes', statusOrder: 'status_order' };
 const PROJECT_KEYS = ['brain', 'start', 'model', 'effort', 'assist_model'] as const;
 
 function configCommand(args: string[]): number {
   const [requestedKey, ...rest] = args;
-  const key = requestedKey === 'sleep_after' ? 'sleepAfter' : requestedKey === 'max_panes' ? 'maxPanes' : requestedKey;
+  const key = Object.keys(SNAKE).find((name) => SNAKE[name] === requestedKey) ?? requestedKey;
   const value = rest.join(' ').trim();
   const current = settings();
   const dir = findProject();
@@ -762,7 +766,7 @@ function configCommand(args: string[]): number {
   if (!key) {
     process.stdout.write(`${out.bold(t('Для всех проектов'))}  ${out.dim(settingsPath())}\n`);
     for (const name of GLOBAL_KEYS) {
-      const label = name === 'sleepAfter' ? 'sleep_after' : name === 'maxPanes' ? 'max_panes' : name;
+      const label = SNAKE[name] ?? name;
       process.stdout.write(`  ${label.padEnd(13)} ${String(current[name])}\n`);
     }
     if (tree) {
@@ -799,6 +803,11 @@ function configCommand(args: string[]): number {
     } else if (key === 'open') {
       if (value !== 'pane' && value !== 'terminal') throw new UsageError(t('где: pane или terminal'));
       updateSettings({ open: value });
+    } else if (key === 'statusOrder') {
+      if (value !== 'active-first' && value !== 'active-last')
+        throw new UsageError(t('порядок статусов: active-first или active-last'));
+      updateSettings({ statusOrder: value });
+      if (tree) writeOverview(tree);
     } else if (key === 'sleepAfter' || key === 'maxPanes') {
       const choices: readonly number[] = key === 'sleepAfter' ? SLEEP_AFTER : MAX_PANES;
       const n = /^(off|none)$/i.test(value) ? 0 : Number(value);
