@@ -927,6 +927,7 @@ export function App(props: AppProps) {
     if (choice.kind === 'criterion') return request({ kind: 'criterion', node: nodeId });
     if (choice.kind === 'check') return check(node);
     if (choice.kind === 'context') return setModal({ kind: 'context', node: nodeId });
+    if (choice.kind === 'raise' || choice.kind === 'lower') return prioritize(node, choice.kind === 'raise' ? -1 : 1);
     if (choice.kind === 'sleep') return putToSleep(choice.ref);
     if (choice.kind === 'show' || choice.kind === 'fullscreen') {
       const pane = paneFor(choice.ref, panes);
@@ -1079,6 +1080,14 @@ export function App(props: AppProps) {
       return copy;
     });
 
+  const prioritize = (node: TreeNode, step: -1 | 1) => {
+    const peers = childrenOf(tree, node.parent).filter((peer) => peer.status === node.status);
+    const index = peers.findIndex((peer) => peer.id === node.id);
+    if (!peers[index + step]) return say(t('Узел уже на краю среди соседей этого статуса'));
+    const label = step < 0 ? t('«{title}» выше', { title: node.title }) : t('«{title}» ниже', { title: node.title });
+    if (change(label, () => shift(tree, node.id, step))) say(t('{label} · u — отменить', { label }));
+  };
+
   // ── Keys ──────────────────────────────────────────────────────────────────
 
   /** Named actions: the keyboard and the palette both go through these. */
@@ -1150,6 +1159,18 @@ export function App(props: AppProps) {
       keys: 'e',
       needs: 'node',
       run: () => current && setModal({ kind: 'edit', node: current.id }),
+    },
+    raise: {
+      label: t('Поднять приоритет среди соседей этого статуса'),
+      keys: 'K · ⇧↑',
+      needs: 'node',
+      run: () => current && prioritize(current, -1),
+    },
+    lower: {
+      label: t('Опустить приоритет среди соседей этого статуса'),
+      keys: 'J · ⇧↓',
+      needs: 'node',
+      run: () => current && prioritize(current, 1),
     },
     editor: {
       label: t('Открыть узел в редакторе'),
@@ -1275,6 +1296,8 @@ export function App(props: AppProps) {
     a: 'add',
     A: 'sibling',
     r: 'rename',
+    K: 'raise',
+    J: 'lower',
     e: 'edit',
     E: 'editor',
     d: 'done',
@@ -1425,12 +1448,16 @@ export function App(props: AppProps) {
       moveCursor(-1);
       return true;
     }
-    if (graphLayout && key.shift && (key.upArrow || key.downArrow || key.leftArrow || key.rightArrow)) {
+    if (graphLayout && key.meta && (key.upArrow || key.downArrow || key.leftArrow || key.rightArrow)) {
       viewportRef.current = {
         x: Math.max(0, viewportRef.current.x + (key.leftArrow ? -10 : key.rightArrow ? 10 : 0)),
         y: Math.max(0, viewportRef.current.y + (key.upArrow ? -5 : key.downArrow ? 5 : 0)),
       };
       bump();
+      return true;
+    }
+    if (key.shift && (key.upArrow || key.downArrow)) {
+      if (node) prioritize(node, key.upArrow ? -1 : 1);
       return true;
     }
     if (graphLayout && (key.upArrow || key.downArrow)) {
@@ -1500,24 +1527,6 @@ export function App(props: AppProps) {
       );
       const moved = tree.nodes.get(node.id);
       if (moved && moved.parent !== ROOT) expandTo(moved.parent, true);
-      return true;
-    }
-    if (input === 'K' && node) {
-      change(
-        t('«{title}» выше', {
-          title: node.title,
-        }),
-        () => shift(tree, node.id, -1),
-      );
-      return true;
-    }
-    if (input === 'J' && node) {
-      change(
-        t('«{title}» ниже', {
-          title: node.title,
-        }),
-        () => shift(tree, node.id, 1),
-      );
       return true;
     }
     return false;
@@ -1905,6 +1914,15 @@ export function App(props: AppProps) {
             live={live}
             panes={panes}
             frame={frame}
+            canRaise={
+              childrenOf(tree, modalNode.parent).filter((node) => node.status === modalNode.status)[0]?.id !==
+              modalNode.id
+            }
+            canLower={
+              childrenOf(tree, modalNode.parent)
+                .filter((node) => node.status === modalNode.status)
+                .at(-1)?.id !== modalNode.id
+            }
             onCancel={close}
             onChoose={(choice) => onMenu(modalNode.id, choice)}
           />
@@ -2880,6 +2898,8 @@ function Hints(props: { view: View; has: boolean; filter: string; pane?: 'sleepi
           : [
               ...pane,
               ['⏎', t('действия')],
+              ['K J', t('приоритет')],
+              [',', t('настройки')],
               ['c', 'claude'],
               ['a', t('добавить')],
               ['r', t('имя')],
@@ -2888,10 +2908,13 @@ function Hints(props: { view: View; has: boolean; filter: string; pane?: 'sleepi
               ['S', t('разбить')],
               ['u', t('отмена')],
               [':', t('найти')],
-              [',', t('настройки')],
               ['?', t('всё')],
             ];
-  const hints: KeyHint[] = keys.map(([key, label]) => ({ key, label }));
+  const hints: KeyHint[] = keys.map(([key, label]) => ({
+    key,
+    label,
+    ...(key === 'K J' ? { press: ['K', 'J'] } : {}),
+  }));
   return (
     <Box>
       {props.filter ? (

@@ -43,8 +43,10 @@ describe('TUI', () => {
 
   it('moves by arrows through the picture: up and down in the column, left to the parent', async () => {
     const { tree } = sample();
-    const up = await shot(tree.project.dir, [UP]);
-    expect(up).toMatch(/Тест › Продукт › ✓ Каталог/);
+    const down = await shot(tree.project.dir, [DOWN]);
+    expect(down).toMatch(/Тест › Продукт › ✓ Каталог/);
+    const up = await shot(tree.project.dir, [DOWN, UP]);
+    expect(up).toMatch(/Тест › Продукт › ◐ Корзина/);
     const left = await shot(tree.project.dir, [LEFT]);
     expect(left).toMatch(/Тест › ○ Продукт/);
     const back = await shot(tree.project.dir, [LEFT, RIGHT]);

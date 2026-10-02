@@ -260,6 +260,8 @@ export type SessionChoice =
   | { kind: 'split' }
   | { kind: 'criterion' }
   | { kind: 'check' }
+  | { kind: 'raise' }
+  | { kind: 'lower' }
   | { kind: 'context' };
 
 export function NodeMenu(props: {
@@ -270,6 +272,8 @@ export function NodeMenu(props: {
   live: Map<string, SessionInfo>;
   panes: readonly Pane[];
   frame: number;
+  canRaise?: boolean;
+  canLower?: boolean;
   onChoose: (choice: SessionChoice) => void;
   onCancel: () => void;
 }) {
@@ -388,9 +392,32 @@ export function NodeMenu(props: {
       hint: t('команда из поля «проверка», в папке проекта'),
     },
     { key: 'context', hotkey: 'p', label: t('☰ Что получит агент'), hint: t('контекст, с которым стартует сессия') },
+    {
+      key: 'raise',
+      section: t('Приоритет'),
+      hotkey: 'K',
+      label: t('↑ Поднять приоритет'),
+      hint: t('Соседи одного статуса · ⇧↑'),
+      disabled: props.canRaise === false,
+    },
+    {
+      key: 'lower',
+      hotkey: 'J',
+      label: t('↓ Опустить приоритет'),
+      hint: t('Соседи одного статуса · ⇧↓'),
+      disabled: props.canLower === false,
+    },
   );
   const pick = (key: string) => {
-    if (key === 'configure' || key === 'split' || key === 'criterion' || key === 'check' || key === 'context') {
+    if (
+      key === 'configure' ||
+      key === 'split' ||
+      key === 'criterion' ||
+      key === 'check' ||
+      key === 'context' ||
+      key === 'raise' ||
+      key === 'lower'
+    ) {
       return props.onChoose({ kind: key });
     }
     if (key.startsWith('resume:')) {
@@ -424,7 +451,8 @@ export function NodeMenu(props: {
         active
         onPick={pick}
         onCancel={props.onCancel}
-        maxRows={Math.max(6, props.height - 6)}
+        // Section headings and the selected hint also need room inside the frame.
+        maxRows={Math.max(3, props.height - 9 - items.filter((item) => item.section).length * 2)}
         onKey={(_input, key, current) => {
           if ((key.delete || key.backspace) && current?.startsWith('resume:')) {
             const ref = node.sessions.find((session) => session.id === current.slice('resume:'.length));
@@ -811,7 +839,7 @@ const help = (): [string, [string, string][]][] => [
       ['z', t('в графе: строки ↔ карточки')],
       ['i', t('панель деталей')],
       ['.', t('показать или скрыть готовое')],
-      [t('⇧ стрелки'), t('сдвинуть граф · f — к выбранному')],
+      [t('⌥ стрелки'), t('сдвинуть граф · f — к выбранному')],
       [',', t('настройки: язык, подтверждения, тема')],
     ],
   ],
@@ -835,7 +863,7 @@ const help = (): [string, [string, string][]][] => [
       ['e  E', t('поля узла · узел в редакторе')],
       ['d  w  s', t('готово · ждёт с причиной · любой статус')],
       ['tab ⇧tab', t('вложить · поднять на уровень')],
-      ['K  J', t('выше · ниже среди соседей')],
+      ['K J · ⇧↑↓', t('приоритет среди соседей одного статуса')],
       ['u', t('отменить последнее изменение')],
       ['D', t('удалить')],
     ],

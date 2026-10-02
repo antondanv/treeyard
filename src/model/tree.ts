@@ -9,6 +9,16 @@ export const CLOSED: ReadonlySet<Status> = new Set(['done', 'dropped']);
 /** Statuses that mean somebody can work on it. */
 export const OPEN: ReadonlySet<Status> = new Set(['todo', 'active', 'review']);
 
+const STATUS_ORDER: Record<Status, number> = {
+  active: 0,
+  review: 1,
+  todo: 2,
+  waiting: 3,
+  idea: 4,
+  done: 5,
+  dropped: 6,
+};
+
 export function childrenOf(tree: Tree, id: string): TreeNode[] {
   const out: TreeNode[] = [];
   for (const node of tree.nodes.values()) if (node.parent === id) out.push(node);
@@ -16,7 +26,12 @@ export function childrenOf(tree: Tree, id: string): TreeNode[] {
 }
 
 export function bySiblingOrder(a: TreeNode, b: TreeNode): number {
-  return a.order - b.order || (a.created ?? '').localeCompare(b.created ?? '') || a.title.localeCompare(b.title);
+  return (
+    STATUS_ORDER[a.status] - STATUS_ORDER[b.status] ||
+    a.order - b.order ||
+    (a.created ?? '').localeCompare(b.created ?? '') ||
+    a.title.localeCompare(b.title)
+  );
 }
 
 /** From the top-level node down to `id`, inclusive. */

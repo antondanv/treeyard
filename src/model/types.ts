@@ -44,7 +44,7 @@ export interface TreeNode {
   title: string;
   /** `root` for a top-level node. */
   parent: string;
-  /** Position among siblings; gaps of 10 leave room. */
+  /** Position among siblings of the same status; gaps of 10 leave room. */
   order: number;
   status: Status;
   who?: Who;

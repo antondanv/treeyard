@@ -56,7 +56,7 @@ export interface NewNode {
 
 export function addNode(tree: Tree, input: NewNode, source = 'treeyard'): TreeNode {
   const parent = input.parent && (input.parent === ROOT || tree.nodes.has(input.parent)) ? input.parent : ROOT;
-  const siblings = childrenOf(tree, parent);
+  const siblings = childrenOf(tree, parent).filter((node) => node.status === (input.status ?? 'todo'));
   let order = (siblings.at(-1)?.order ?? 0) + 10;
   if (input.after) {
     const index = siblings.findIndex((node) => node.id === input.after);
@@ -220,10 +220,10 @@ export function moveNode(tree: Tree, id: string, parent: string, after?: string 
   return node;
 }
 
-/** One step up or down among siblings. */
+/** One step up or down among siblings of the same status. */
 export function shift(tree: Tree, id: string, step: -1 | 1): TreeNode {
   const node = need(tree, id);
-  const siblings = childrenOf(tree, node.parent);
+  const siblings = childrenOf(tree, node.parent).filter((kid) => kid.status === node.status);
   const index = siblings.findIndex((kid) => kid.id === id);
   const target = index + step;
   if (target < 0 || target >= siblings.length) return node;

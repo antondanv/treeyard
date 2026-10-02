@@ -1,5 +1,17 @@
 /** English for every `t()` key, in the order the keys appear in the code. `scripts/i18n-keys.mjs` lists them. */
 export const EN: Record<string, string> = {
+  'Узел уже на краю среди соседей этого статуса': 'The node is already at the edge among siblings of this status',
+  '{label} · u — отменить': '{label} · u — undo',
+  'Поднять приоритет среди соседей этого статуса': 'Raise priority among siblings of this status',
+  'Опустить приоритет среди соседей этого статуса': 'Lower priority among siblings of this status',
+  приоритет: 'priority',
+  Приоритет: 'Priority',
+  '↑ Поднять приоритет': '↑ Raise priority',
+  '↓ Опустить приоритет': '↓ Lower priority',
+  'Соседи одного статуса · ⇧↑': 'Siblings of the same status · ⇧↑',
+  'Соседи одного статуса · ⇧↓': 'Siblings of the same status · ⇧↓',
+  '⌥ стрелки': '⌥ arrows',
+  'приоритет среди соседей одного статуса': 'priority among siblings of the same status',
   'новая сессия в панели ({p2})': 'new session in a pane ({p2})',
   '{n} МБ': '{n} MB',
   '{n} ГБ': '{n} GB',
