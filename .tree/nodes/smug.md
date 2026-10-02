@@ -2,7 +2,7 @@
 id: smug
 title: Замечания
 parent: root
-order: 20
+order: 30
 status: todo
 who: human
 done_when: "каждое замечание разобрано: в работу, в «Идеи» или в отказ"
