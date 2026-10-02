@@ -1,0 +1,346 @@
+/**
+ * Small building blocks: a frame for dialogs, a one-line text field, an
+ * inline choice and a menu. Each takes the keyboard only while `active`.
+ */
+import { Box, type Key, Text, useInput } from 'ink';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import stringWidth from 'string-width';
+import { t } from '../../i18n/i18n.js';
+import { C } from '../theme.js';
+
+/**
+ * State that key handlers can read at once. A burst of keys — a paste, key
+ * repeat, a slow link — reaches the handlers before React renders again, so
+ * a handler reading plain state would act on a stale value: two arrows move
+ * once, an Enter picks the item before the arrow.
+ */
+export function useLatest<T>(initial: T | (() => T)): [T, (next: T | ((before: T) => T)) => void, { current: T }] {
+  const [value, setValue] = useState(initial);
+  const ref = useRef(value);
+  const set = useCallback((next: T | ((before: T) => T)) => {
+    ref.current = typeof next === 'function' ? (next as (before: T) => T)(ref.current) : next;
+    setValue(ref.current);
+  }, []);
+  return [value, set, ref];
+}
+
+export function Frame(props: { title: string; width: number; children: ReactNode; footer?: string; color?: string }) {
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={props.color ?? C.brandDim}
+      width={props.width}
+      paddingX={1}
+    >
+      <Box marginBottom={1}>
+        <Text bold color={props.color ?? C.brand} wrap="truncate-end">
+          {props.title}
+        </Text>
+      </Box>
+      {props.children}
+      {props.footer ? (
+        <Box marginTop={1}>
+          <Text color={C.faint}>{props.footer}</Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+/** Applies one keystroke to a text and its cursor. Null when the key is not for text editing. */
+export function editText(
+  value: string,
+  cursor: number,
+  input: string,
+  key: Key,
+): { value: string; cursor: number } | null {
+  if (key.return || key.escape || key.tab || key.upArrow || key.downArrow) return null;
+  if (key.leftArrow)
+    return { value, cursor: Math.max(0, cursor - (key.ctrl || key.meta ? wordLeft(value, cursor) : 1)) };
+  if (key.rightArrow) return { value, cursor: Math.min(value.length, cursor + 1) };
+  if (key.home || (key.ctrl && input === 'a')) return { value, cursor: 0 };
+  if (key.end || (key.ctrl && input === 'e')) return { value, cursor: value.length };
+  if (key.ctrl && input === 'u') return { value: value.slice(cursor), cursor: 0 };
+  if (key.ctrl && input === 'k') return { value: value.slice(0, cursor), cursor };
+  if ((key.ctrl && input === 'w') || (key.meta && key.backspace)) {
+    const from = cursor - wordLeft(value, cursor);
+    return { value: value.slice(0, from) + value.slice(cursor), cursor: from };
+  }
+  if (key.backspace || key.delete) {
+    if (cursor === 0) return { value, cursor };
+    return { value: value.slice(0, cursor - 1) + value.slice(cursor), cursor: cursor - 1 };
+  }
+  if (key.ctrl || key.meta) return null;
+  // Typed or pasted text; line breaks in a paste become spaces.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: dropping control characters from typed text is the point.
+  const clean = input.replace(/\r?\n/g, ' ').replace(/[\u0000-\u001f\u007f]/g, '');
+  if (!clean) return null;
+  return { value: value.slice(0, cursor) + clean + value.slice(cursor), cursor: cursor + clean.length };
+}
+
+function wordLeft(value: string, cursor: number): number {
+  let i = cursor;
+  while (i > 0 && value[i - 1] === ' ') i -= 1;
+  while (i > 0 && value[i - 1] !== ' ') i -= 1;
+  return cursor - i;
+}
+
+export function TextField(props: {
+  value: string;
+  onChange: (value: string) => void;
+  active: boolean;
+  placeholder?: string;
+  width?: number;
+}) {
+  const [cursor, setCursor] = useState(props.value.length);
+  useEffect(() => {
+    if (cursor > props.value.length) setCursor(props.value.length);
+  }, [props.value, cursor]);
+  useInput(
+    (input, key) => {
+      const next = editText(props.value, cursor, input, key);
+      if (!next) return;
+      setCursor(next.cursor);
+      if (next.value !== props.value) props.onChange(next.value);
+    },
+    { isActive: props.active },
+  );
+  const width = props.width ?? 40;
+  if (!props.value && !props.active) {
+    return (
+      <Text color={C.faint} wrap="truncate-end">
+        {props.placeholder ?? ''}
+      </Text>
+    );
+  }
+  if (!props.value && props.active) {
+    return (
+      <Text wrap="truncate-end">
+        <Text inverse> </Text>
+        <Text color={C.faint}>{props.placeholder ?? ''}</Text>
+      </Text>
+    );
+  }
+  // Keep the cursor in view: show a window of the text around it.
+  const start = Math.max(0, Math.min(cursor - Math.floor(width * 0.7), props.value.length - width + 1));
+  const shown = props.value.slice(start, start + width);
+  const at = cursor - start;
+  if (!props.active) return <Text>{shown}</Text>;
+  return (
+    <Text>
+      {shown.slice(0, at)}
+      <Text inverse>{shown[at] ?? ' '}</Text>
+      {shown.slice(at + 1)}
+    </Text>
+  );
+}
+
+export interface ChoiceOption<T> {
+  value: T;
+  label: string;
+  hint?: string;
+}
+
+export function Choice<T>(props: {
+  options: ChoiceOption<T>[];
+  value: T;
+  active: boolean;
+  onChange: (value: T) => void;
+  /** Columns the choice may take; long lists show a window around the chosen option. */
+  width?: number;
+}) {
+  const index = Math.max(
+    0,
+    props.options.findIndex((option) => option.value === props.value),
+  );
+  // The value a burst of arrows has reached, before the parent renders it.
+  const latest = useRef(props.value);
+  latest.current = props.value;
+  useInput(
+    (input, key) => {
+      const step = key.leftArrow ? -1 : key.rightArrow || input === ' ' ? 1 : 0;
+      if (!step) return;
+      const at = Math.max(
+        0,
+        props.options.findIndex((option) => option.value === latest.current),
+      );
+      const next = props.options[(at + step + props.options.length) % props.options.length]!.value;
+      latest.current = next;
+      props.onChange(next);
+    },
+    { isActive: props.active },
+  );
+  return (
+    <Options
+      labels={props.options.map((option) => option.label)}
+      index={index}
+      active={props.active}
+      {...(props.width ? { width: props.width } : {})}
+    />
+  );
+}
+
+/** A row of options with the chosen one marked; ‹ › say there are more beyond the edge. */
+export function Options(props: { labels: string[]; index: number; active: boolean; width?: number }) {
+  const { from, to } = optionWindow(props.labels, props.index, props.width ?? Number.POSITIVE_INFINITY);
+  return (
+    <Box>
+      {from > 0 ? <Text color={C.faint}>{'‹ '}</Text> : null}
+      {props.labels.slice(from, to).map((label, offset) => {
+        const i = from + offset;
+        return (
+          <Box key={i} marginRight={i < to - 1 || to < props.labels.length ? 2 : 0} flexShrink={0}>
+            <Text
+              color={i === props.index ? (props.active ? C.brand : undefined) : C.faint}
+              bold={i === props.index}
+              underline={i === props.index && props.active}
+            >
+              {label}
+            </Text>
+          </Box>
+        );
+      })}
+      {to < props.labels.length ? <Text color={C.faint}>{'›'}</Text> : null}
+    </Box>
+  );
+}
+
+const GAP = 2;
+const EDGE = 2;
+
+/**
+ * Which options fit in `width` columns, always with the chosen one: the
+ * window grows from it to the right first, then to the left, so the next
+ * choice is in sight. Room is kept for the ‹ › of the hidden ones.
+ */
+export function optionWindow(labels: string[], index: number, width: number): { from: number; to: number } {
+  if (labels.length === 0) return { from: 0, to: 0 };
+  const at = Math.min(Math.max(0, index), labels.length - 1);
+  const size = (from: number, to: number) => {
+    let total = 0;
+    for (let i = from; i < to; i++) total += stringWidth(labels[i]!) + (i < to - 1 ? GAP : 0);
+    if (from > 0) total += EDGE;
+    if (to < labels.length) total += GAP + EDGE;
+    return total;
+  };
+  let from = at;
+  let to = at + 1;
+  for (;;) {
+    const right = to < labels.length && size(from, to + 1) <= width;
+    if (right) to += 1;
+    const left = from > 0 && size(from - 1, to) <= width;
+    if (left) from -= 1;
+    if (!right && !left) return { from, to };
+  }
+}
+
+export interface MenuItem {
+  key: string;
+  label: ReactNode;
+  /** One letter that picks the item at once. */
+  hotkey?: string;
+  hint?: string;
+  disabled?: boolean;
+  /** Draws a separator before the item. */
+  section?: string;
+}
+
+export function Menu(props: {
+  items: MenuItem[];
+  active: boolean;
+  onPick: (key: string) => void;
+  onCancel: () => void;
+  /** Called with the highlighted item's key, for extra keys a dialog handles itself. */
+  onKey?: (input: string, key: Key, current: string | undefined) => boolean;
+  maxRows?: number;
+}) {
+  const choosable = props.items.filter((item) => !item.disabled);
+  const [index, setIndex, indexRef] = useLatest(0);
+  const current = choosable[Math.min(index, choosable.length - 1)];
+  // A menu answers once: a second Enter in the same burst must not start a second session.
+  const done = useRef(false);
+  useInput(
+    (input, key) => {
+      if (done.current) return;
+      const n = Math.max(1, choosable.length);
+      const highlighted = choosable[Math.min(indexRef.current, choosable.length - 1)];
+      if (props.onKey?.(input, key, highlighted?.key)) return;
+      if (key.escape) {
+        done.current = true;
+        return props.onCancel();
+      }
+      if (key.upArrow || input === 'k') return setIndex((i) => (i - 1 + n) % n);
+      if (key.downArrow || input === 'j') return setIndex((i) => (i + 1) % n);
+      const hit = key.return ? highlighted : choosable.find((item) => item.hotkey && item.hotkey === input);
+      if (!hit) return;
+      done.current = true;
+      props.onPick(hit.key);
+    },
+    { isActive: props.active },
+  );
+  const rows = props.maxRows ?? 18;
+  const at = props.items.indexOf(current!);
+  const first = Math.max(0, Math.min(at - Math.floor(rows / 2), props.items.length - rows));
+  const visible = props.items.slice(first, first + rows);
+  return (
+    <Box flexDirection="column">
+      {first > 0 ? (
+        <Text color={C.faint}>
+          {t(' ↑ ещё ')}
+          {first}
+        </Text>
+      ) : null}
+      {visible.map((item) => {
+        const selected = item === current;
+        return (
+          <Box key={item.key} flexDirection="column">
+            {item.section ? (
+              <Box marginTop={1}>
+                <Text color={C.faint}>{item.section}</Text>
+              </Box>
+            ) : null}
+            <Box>
+              <Text color={selected ? C.brand : C.faint}>{selected ? '❯ ' : '  '}</Text>
+              <Box flexGrow={1}>
+                {typeof item.label === 'string' ? (
+                  <Text bold={selected} color={item.disabled ? C.faint : undefined} wrap="truncate-end">
+                    {item.label}
+                  </Text>
+                ) : (
+                  item.label
+                )}
+              </Box>
+              {item.hotkey ? <Text color={selected ? C.brand : C.faint}> {item.hotkey}</Text> : null}
+            </Box>
+            {selected && item.hint ? (
+              <Box marginLeft={2}>
+                <Text color={C.faint} wrap="truncate-end">
+                  {item.hint}
+                </Text>
+              </Box>
+            ) : null}
+          </Box>
+        );
+      })}
+      {first + rows < props.items.length ? (
+        <Text color={C.faint}>
+          {t(' ↓ ещё ')}
+          {props.items.length - first - rows}
+        </Text>
+      ) : null}
+    </Box>
+  );
+}
+
+/** Two labelled columns: `label  value`. */
+export function Field(props: { label: string; width?: number; children: ReactNode; active?: boolean }) {
+  return (
+    <Box>
+      <Box width={props.width ?? 18} flexShrink={0}>
+        <Text color={props.active ? C.brand : C.dim}>{props.label}</Text>
+      </Box>
+      <Box flexGrow={1}>{props.children}</Box>
+    </Box>
+  );
+}
