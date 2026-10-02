@@ -250,17 +250,20 @@ export function App(props: AppProps) {
   const anyBusy = useMemo(() => [...live.values()].some((s) => s.live?.status === 'busy'), [live]);
   const { frame } = useAnimation({ interval: 90, isActive: settings().animation && (anyBusy || Boolean(job)) });
 
-  const ui = (): UiState => ({
-    view,
-    ...(selected ? { selected } : {}),
-    expanded: [...expanded],
-    showClosed,
-    inspector,
-    cardWidth,
-    treeMode,
-    graphStyle,
-    split,
-  });
+  const ui = useCallback(
+    (): UiState => ({
+      view,
+      ...(selected ? { selected } : {}),
+      expanded: [...expanded],
+      showClosed,
+      inspector,
+      cardWidth,
+      treeMode,
+      graphStyle,
+      split,
+    }),
+    [view, selected, expanded, showClosed, inspector, cardWidth, treeMode, graphStyle, split],
+  );
 
   // First run: open what is in work, select the first thing to do.
   useEffect(() => {
@@ -289,7 +292,7 @@ export function App(props: AppProps) {
 
   useEffect(() => {
     if (props.persist !== false) saveUi(props.dir, ui());
-  });
+  }, [props.persist, props.dir, ui]);
 
   useEffect(() => {
     const got = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: props.dir, encoding: 'utf8' });
