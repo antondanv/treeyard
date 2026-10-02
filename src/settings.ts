@@ -42,6 +42,8 @@ export interface Settings {
   sleepAfter: number;
   /** At most this many live panes per project; the quietest sleeps first. 0 — no limit. */
   maxPanes: number;
+  /** The folder whose tree takes `treeyard note` from every project; empty — not set. */
+  notes: string;
 }
 
 export type OpenIn = 'pane' | 'terminal';
@@ -60,6 +62,7 @@ export const DEFAULTS: Settings = {
   open: 'pane',
   sleepAfter: 30,
   maxPanes: 5,
+  notes: '',
 };
 
 export function settingsPath(env: NodeJS.ProcessEnv = process.env): string {
@@ -91,6 +94,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     if ((STATUS_ORDER_NAMES as readonly unknown[]).includes(statusOrder))
       settings.statusOrder = statusOrder as StatusOrderName;
     if (isStatusOrder(customOrder)) settings.customOrder = customOrder;
+    if (typeof data.notes === 'string') settings.notes = data.notes.trim();
   } catch {
     // No file yet: the defaults.
   }

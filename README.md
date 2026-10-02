@@ -167,6 +167,7 @@ treeyard skills install    # ~/.claude/skills, ~/.codex/skills, ~/.gemini/config
 | `open` | открывать сессии в панели (`pane`, по умолчанию) или в терминале (`terminal`); без tmux — в терминале |
 | `sleep_after` | усыплять после 15/30/60 минут простоя (по умолчанию 30); `0` — выключить |
 | `max_panes` | лимит живых панелей проекта: 3/5/8 (по умолчанию 5); `0` — без предела |
+| `notes` | папка с деревом, куда `treeyard note` пишет замечания из любого проекта; `off` — убрать |
 
 | Этот проект (`.tree/tree.md`) | |
 | --- | --- |
@@ -189,6 +190,7 @@ treeyard config sleep_after 15  # усыплять после 15 минут по
 treeyard config max_panes 3     # до трёх панелей; работающие и видимые защищены
 treeyard config status_order done-first  # готовые сверху
 treeyard config status_order todo,review,active,waiting,idea,done,dropped  # свой порядок
+treeyard config notes ~/Projects/Treeyard  # куда падают замечания
 TREEYARD_LANG=en treeyard       # язык на один запуск
 ```
 
@@ -232,6 +234,7 @@ treeyard add "Показать продукт человеку" --who human --pa
 treeyard set <id> status=waiting waiting="нет сервера" until="появится VPS"
 treeyard set <id> status=review                 # агент; «готово» ставит человек
 treeyard log <id> "что сделано; что осталось"
+treeyard note "справка не помещается в экран"   # замечание о treeyard — в «Замечания»
 treeyard open <id> --brain codex                # сессия по узлу прямо из shell
 treeyard open <id> --brain codex --pane         # запустить панель и вернуться в shell
 treeyard sessions                               # сессии папки во всех CLI
@@ -239,6 +242,16 @@ treeyard sessions                               # сессии папки во �
 
 Отмена (`u`) возвращает только твои изменения: если агент успел поправить тот же
 узел, его правка останется.
+
+### Замечания
+
+Всё, где treeyard мешает или чего не хватает, — одной строкой, не отрываясь от работы,
+из любой папки: `treeyard note "…"`. Замечание становится идеей в ветке «Замечания»
+дерева из настройки `notes` (ветки нет — она появится). В описании — откуда оно пришло:
+`Откуда: Factoyard › «Закрыть один узел» (k3f9)`. Узел известен, когда команда запущена
+из сессии, открытой из узла: treeyard передаёт сессии `TREEYARD_NODE=<id>`, а сессии
+Claude Code, открытые раньше, узнаются по своему id. Из обычного shell записывается
+только проект; узел можно назвать сам: `--node <id>`.
 
 Дерево — это обычные md-файлы в `.tree/` (`tree.md` и `nodes/*.md`), их можно
 править чем угодно и коммитить вместе с кодом. Вид, выбранный узел и раскрытые

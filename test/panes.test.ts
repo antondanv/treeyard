@@ -72,6 +72,8 @@ describe('pane lifecycle', () => {
       warnings: [],
     });
     await launchInPane(tree, node.id, { brain: 'claude', start: 'chat', pane: true }, { width: 60, height: 12 });
+    // The session knows its node: `treeyard note` says where a note came from.
+    expect(backend.startPane.mock.lastCall?.[0]).toMatchObject({ env: { TREEYARD_NODE: node.id } });
     const saved = loadTree(tree.project.dir).nodes.get(node.id)!;
     expect(saved.status).toBe('active');
     expect(saved.sessions).toMatchObject([{ id: 'conversation', mode: 'pane', pane: 'claude-one' }]);
@@ -84,7 +86,10 @@ describe('pane lifecycle', () => {
     // Something was said: the CLI has the conversation in its history.
     backend.sessions.mockResolvedValue([{ brain: 'claude', id: 'conversation' }]);
     await wakeInPane(tree, node.id, saved.sessions[0]!, { width: 60, height: 12 });
-    expect(backend.startPane.mock.lastCall?.[0]).toMatchObject({ resume: 'conversation' });
+    expect(backend.startPane.mock.lastCall?.[0]).toMatchObject({
+      resume: 'conversation',
+      env: { TREEYARD_NODE: node.id },
+    });
     expect(loadTree(tree.project.dir).nodes.get(node.id)!.sessions).toMatchObject([
       { id: 'conversation', pane: 'claude-two' },
     ]);

@@ -7,6 +7,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
@@ -17,6 +18,7 @@ import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '..
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { launchInPane } from '../agents/panes.js';
 import { pick, t } from '../i18n/i18n.js';
+import { addNote, noteOrigin, originText } from '../model/notes.js';
 import { addNode, logToNode, moveNode, STATUS_LABEL, setStatus, updateNode } from '../model/ops.js';
 import { writeOverview } from '../model/overview.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
@@ -66,6 +68,7 @@ ${out.bold('Команды')}
                 [--done-when "…"] [--check "команда"] [--note "…"]
   treeyard set <id> ключ=значение…         status, title, who, done_when, check, waiting, until, parent
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
+  treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
   treeyard context <id> [--start plan|do|goal|chat]   что получит агент
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            сессия по узлу прямо из shell
@@ -91,6 +94,7 @@ ${out.bold('Commands')}
                 [--done-when "…"] [--check "command"] [--note "…"]
   treeyard set <id> key=value…             status, title, who, done_when, check, waiting, until, parent
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
+  treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
   treeyard context <id> [--start plan|do|goal|chat]   what an agent gets
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            a session for a node straight from the shell
@@ -129,6 +133,8 @@ async function main(argv: string[]): Promise<number> {
       return setCommand(rest);
     case 'log':
       return logCommand(rest);
+    case 'note':
+      return noteCommand(rest);
     case 'context':
       return contextCommand(rest);
     case 'open':
@@ -199,6 +205,11 @@ function statusArg(value: string): Status {
       p1: STATUSES.join(', '),
     }),
   );
+}
+
+/** An absolute folder; `~` too, which a quoted path brings unexpanded. */
+function folderArg(value: string): string {
+  return resolve(value.trim().replace(/^~(?=$|\/)/, homedir()));
 }
 
 function whoArg(value: string): Who {
@@ -627,6 +638,31 @@ function logCommand(args: string[]): number {
   return 0;
 }
 
+/** One line about what gets in the way, from any folder into «Замечания» of the `notes` tree. */
+function noteCommand(args: string[]): number {
+  const { values, positionals } = parse(args, { node: { type: 'string', short: 'n' }, as: { type: 'string' } });
+  const text = positionals.join(' ').trim();
+  if (!text) throw new UsageError(t('treeyard note "что мешает или чего не хватает" [--node id]'));
+  if (!settings().notes) throw new UsageError(t('куда писать замечания? treeyard config notes <папка с деревом>'));
+  const target = folderArg(settings().notes);
+  if (findProject(target) !== target)
+    throw new UsageError(t('в {dir} нет дерева — treeyard config notes <папка с деревом>', { dir: target }));
+  const here = findProject();
+  const tree = here ? loadTree(here) : undefined;
+  if (values.node && !tree) throw new UsageError(t('здесь нет дерева (.tree/) — --node не к чему отнести'));
+  const origin = noteOrigin(
+    tree,
+    process.cwd(),
+    process.env,
+    tree && values.node ? nodeArg(tree, values.node) : undefined,
+  );
+  const notes = loadTree(target);
+  const node = addNote(notes, text, origin, sourceOf(values.as));
+  const branch = notes.nodes.get(node.parent)?.title ?? '';
+  process.stdout.write(`${node.id} · ${notes.project.title} › ${branch} ← ${originText(origin)}\n`);
+  return 0;
+}
+
 function contextCommand(args: string[]): number {
   const { values, positionals } = parse(args, { start: { type: 'string' }, brain: { type: 'string' } });
   const tree = project();
@@ -752,6 +788,7 @@ const GLOBAL_KEYS = [
   'open',
   'sleepAfter',
   'maxPanes',
+  'notes',
 ] as const;
 /** Keys in settings.json and on the command line, where they differ from the code. */
 const SNAKE: Record<string, string> = { sleepAfter: 'sleep_after', maxPanes: 'max_panes', statusOrder: 'status_order' };
@@ -786,6 +823,7 @@ function configCommand(args: string[]): number {
   }
   function shown(name: (typeof GLOBAL_KEYS)[number]): string {
     const now = settings();
+    if (name === 'notes') return now.notes || '—';
     if (name !== 'statusOrder') return String(now[name]);
     // The order itself, so a preset says what it means.
     return `${now.statusOrder}  ${orderOf(now).join(',')}`;
@@ -828,6 +866,13 @@ function configCommand(args: string[]): number {
       if (!choices.includes(n))
         throw new UsageError(t('{key}: выбери {choices}', { key: requestedKey, choices: choices.join('/') }));
       updateSettings({ [key]: n });
+    } else if (key === 'notes') {
+      if (/^(off|none|-)$/i.test(value)) updateSettings({ notes: '' });
+      else {
+        const dir = folderArg(value);
+        if (findProject(dir) !== dir) throw new UsageError(t('в {dir} нет дерева (.tree/tree.md)', { dir }));
+        updateSettings({ notes: dir });
+      }
     } else updateSettings({ [key]: flag(value) });
     process.stdout.write(`${requestedKey} = ${shown(key as (typeof GLOBAL_KEYS)[number])}\n`);
     return 0;

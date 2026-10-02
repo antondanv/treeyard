@@ -708,4 +708,18 @@ export const EN: Record<string, string> = {
     "the project's big goal; the first milestone you can check in real life; the way there; what only you can do",
   'дерево и короткие документы (docs/vision.md, AGENTS.md) — только после твоего «да»':
     'the tree and short documents (docs/vision.md, AGENTS.md) — only after your «yes»',
+  'treeyard note "что мешает или чего не хватает" [--node id]':
+    'treeyard note "what gets in the way or is missing" [--node id]',
+  'куда писать замечания? treeyard config notes <папка с деревом>':
+    'where do notes go? treeyard config notes <folder with a tree>',
+  'в {dir} нет дерева — treeyard config notes <папка с деревом>':
+    'no tree in {dir} — treeyard config notes <folder with a tree>',
+  'здесь нет дерева (.tree/) — --node не к чему отнести': 'no tree here (.tree/) — --node has nothing to point to',
+  'в {dir} нет дерева (.tree/tree.md)': 'no tree in {dir} (.tree/tree.md)',
+  Замечания: 'Notes',
+  'каждое замечание разобрано: в работу, в «Идеи» или в отказ':
+    'every note is sorted out: into work, into «Ideas» or dropped',
+  'Сюда падает `treeyard note` из любого проекта. Разбор раз в 2–3 дня.':
+    '`treeyard note` from any project lands here. Sort them out every 2–3 days.',
+  'Откуда: {from}': 'From: {from}',
 };

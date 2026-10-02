@@ -24,6 +24,7 @@ import {
 } from '@antondanv/brainyard';
 
 import { t } from '../i18n/i18n.js';
+import { nodeEnv } from '../model/notes.js';
 import { attachSession, detachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import type { BrainId, SessionRef, Tree, TreeNode } from '../model/types.js';
@@ -88,6 +89,7 @@ export async function launchInPane(
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.worktree ? { worktree: true } : {}),
+    env: nodeEnv(id),
     width: size.width,
     height: size.height,
   });
@@ -138,6 +140,7 @@ export async function wakeInPane(tree: Tree, nodeId: string, ref: SessionRef, si
     cwd: tree.project.dir,
     resume: ref.id,
     ...(node ? { label: node.title } : {}),
+    env: nodeEnv(nodeId),
     width: size.width,
     height: size.height,
   });

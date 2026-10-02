@@ -6,6 +6,7 @@
  */
 import { liveSessions, type OpenResult, open, type SessionInfo, sessions } from '@antondanv/brainyard';
 import { t } from '../i18n/i18n.js';
+import { nodeEnv } from '../model/notes.js';
 import { attachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import type { BrainId, SessionRef, StartMode, Tree } from '../model/types.js';
@@ -63,6 +64,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.background ? { background: true } : {}),
     ...(options.worktree ? { worktree: true } : {}),
+    env: nodeEnv(id),
   });
   if (!result.sessionId) return { result };
   const ref: SessionRef = {
@@ -92,14 +94,15 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
 
 /** Opens a node's session again; a running background session is attached to. */
 export async function resume(tree: Tree, id: string, ref: SessionRef): Promise<OpenResult> {
-  const result = await open({ brain: ref.brain, cwd: tree.project.dir, resume: ref.id });
+  const result = await open({ brain: ref.brain, cwd: tree.project.dir, resume: ref.id, env: nodeEnv(id) });
   if (tree.nodes.has(id)) attachSession(tree, id, { ...ref, opened: nowIso() });
   return result;
 }
 
 /** Opens any session of the project (one that no node holds yet). */
 export async function resumeLoose(tree: Tree, session: SessionInfo): Promise<OpenResult> {
-  return open({ brain: session.brain, cwd: tree.project.dir, resume: session.id });
+  // No node's session: not even the one this process may have inherited.
+  return open({ brain: session.brain, cwd: tree.project.dir, resume: session.id, env: nodeEnv('') });
 }
 
 /** Live state of the sessions on this machine — Claude Code, Codex, Antigravity — by session id. */
@@ -113,9 +116,4 @@ export async function projectSessions(tree: Tree): Promise<SessionInfo[]> {
   return sessions({ cwd: tree.project.dir, limit: 100 });
 }
 
-/** Which node holds a session, by session id. */
-export function sessionOwners(tree: Tree): Map<string, string> {
-  const owners = new Map<string, string>();
-  for (const node of tree.nodes.values()) for (const ref of node.sessions) owners.set(ref.id, node.id);
-  return owners;
-}
+export { sessionOwners } from '../model/tree.js';

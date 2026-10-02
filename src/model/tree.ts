@@ -271,3 +271,10 @@ export function parents(tree: Tree): string[] {
   for (const node of tree.nodes.values()) if (node.parent !== ROOT) out.add(node.parent);
   return [...out];
 }
+
+/** Which node holds a session, by session id. */
+export function sessionOwners(tree: Tree): Map<string, string> {
+  const owners = new Map<string, string>();
+  for (const node of tree.nodes.values()) for (const ref of node.sessions) owners.set(ref.id, node.id);
+  return owners;
+}
