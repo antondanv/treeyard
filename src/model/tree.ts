@@ -2,7 +2,7 @@
  * Questions about the tree that do not change it: what is under a node, how
  * far along it is, what can be worked on right now and what is waiting.
  */
-import { ROOT, type Status, type Tree, type TreeNode } from './types.js';
+import { ROOT, STATUSES, type Status, type Tree, type TreeNode } from './types.js';
 
 /** Statuses that are over: they do not count as open work. */
 export const CLOSED: ReadonlySet<Status> = new Set(['done', 'dropped']);
@@ -10,24 +10,46 @@ export const CLOSED: ReadonlySet<Status> = new Set(['done', 'dropped']);
 export const OPEN: ReadonlySet<Status> = new Set(['todo', 'active', 'review']);
 
 /**
- * How siblings line up by status: work in progress on top, or ideas on top
- * and work in progress just above the finished part. Closed work stays last
- * either way, so the «Готовые · N» group keeps its place.
+ * Ready-made orders of statuses among siblings, top to bottom. Within one
+ * status the order is yours (`order`); the done ones gather in the
+ * «Готовые · N» group wherever `done` stands.
  */
-export type StatusOrder = 'active-first' | 'active-last';
+export const STATUS_ORDERS = {
+  'active-first': ['active', 'review', 'todo', 'waiting', 'idea', 'done', 'dropped'],
+  'done-first': ['done', 'active', 'review', 'todo', 'waiting', 'idea', 'dropped'],
+  'active-last': ['idea', 'waiting', 'todo', 'review', 'active', 'done', 'dropped'],
+} as const satisfies Record<string, readonly Status[]>;
 
-export const STATUS_ORDERS: readonly StatusOrder[] = ['active-first', 'active-last'];
+/** A ready-made order, or `custom` — your own, kept in the settings. */
+export type StatusOrderName = keyof typeof STATUS_ORDERS | 'custom';
 
-const STATUS_RANK: Record<StatusOrder, Record<Status, number>> = {
-  'active-first': { active: 0, review: 1, todo: 2, waiting: 3, idea: 4, done: 5, dropped: 6 },
-  'active-last': { idea: 0, waiting: 1, todo: 2, review: 3, active: 4, done: 5, dropped: 6 },
-};
+export const STATUS_ORDER_NAMES: readonly StatusOrderName[] = [
+  ...(Object.keys(STATUS_ORDERS) as StatusOrderName[]),
+  'custom',
+];
 
-let statusRank = STATUS_RANK['active-first'];
+/** Every status exactly once. */
+export function isStatusOrder(list: unknown): list is Status[] {
+  return Array.isArray(list) && list.length === STATUSES.length && STATUSES.every((status) => list.includes(status));
+}
+
+let statusRank = rankOf(STATUS_ORDERS['active-first']);
+let current: readonly Status[] = STATUS_ORDERS['active-first'];
+
+function rankOf(order: readonly Status[]): Record<Status, number> {
+  return Object.fromEntries(order.map((status, index) => [status, index])) as Record<Status, number>;
+}
 
 /** A personal setting: applied once per run and on every change of it. */
-export function setStatusOrder(order: StatusOrder): void {
-  statusRank = STATUS_RANK[order];
+export function setStatusOrder(order: readonly Status[]): void {
+  if (!isStatusOrder(order)) return;
+  current = [...order];
+  statusRank = rankOf(order);
+}
+
+/** Statuses top to bottom, as siblings are shown now. */
+export function statusOrder(): readonly Status[] {
+  return current;
 }
 
 export function childrenOf(tree: Tree, id: string): TreeNode[] {

@@ -8,7 +8,7 @@ import { paint, treeJson, treeText } from '../src/cli/print.js';
 import { addNode, attachSession, setStatus, shift } from '../src/model/ops.js';
 import { GLYPH, overviewText } from '../src/model/overview.js';
 import { loadTree, nodePath, TREE_DIR } from '../src/model/store.js';
-import { childrenOf, pathTo, progress } from '../src/model/tree.js';
+import { childrenOf, pathTo, progress, STATUS_ORDERS } from '../src/model/tree.js';
 import { ROOT, type Status, type Tree } from '../src/model/types.js';
 import { DEFAULTS, loadSettings, resetSettings, saveSettings } from '../src/settings.js';
 import { snapshot } from '../src/tui/snapshot.js';
@@ -212,96 +212,156 @@ describe('status order setting', () => {
   });
 
   const titles = (tree: Tree, parent = ROOT) => childrenOf(tree, parent).map((node) => node.title);
-  /** Each title appears in `text`, in this order. */
+  /** Each text appears in `text`, in this order. */
   const inOrder = (text: string, list: string[]) => {
-    const positions = list.map((title) => text.indexOf(title));
+    const positions = list.map((item) => text.indexOf(item));
     expect(positions.every((index) => index >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   };
-
-  it('reverses open statuses, keeps closed ones last and the manual order within a status everywhere', () => {
-    resetSettings({ ...DEFAULTS, statusOrder: 'active-last' });
+  /** One node per status at the root, plus a second todo moved above the first. */
+  const everyStatus = () => {
     const tree = emptyTree();
-    const statuses: Status[] = ['dropped', 'done', 'idea', 'waiting', 'todo', 'review', 'active'];
-    for (const status of statuses) addNode(tree, { title: status, status });
+    for (const status of ['dropped', 'done', 'idea', 'waiting', 'todo', 'review', 'active'] as Status[])
+      addNode(tree, { title: status, status });
     const another = addNode(tree, { title: 'other todo' });
     shift(tree, another.id, -1);
-    const expected = ['idea', 'waiting', 'other todo', 'todo', 'review', 'active', 'done', 'dropped'];
-    const reread = loadTree(tree.project.dir);
-    expect(titles(reread)).toEqual(expected);
-    expect((treeJson(reread) as { nodes: { title: string }[] }).nodes.map((node) => node.title)).toEqual(expected);
+    return tree;
+  };
+  const withTodos = (order: readonly Status[]) =>
+    order.flatMap((status) => (status === 'todo' ? ['other todo', 'todo'] : [status]));
+  const DOWN5 = Array.from({ length: STATUS_ORDER_ROW }, () => DOWN);
+
+  it.each([
+    ...Object.entries(STATUS_ORDERS).map(([name, order]) => ({
+      name,
+      statusOrder: name,
+      customOrder: undefined,
+      order,
+    })),
+    {
+      name: 'custom',
+      statusOrder: 'custom',
+      customOrder: ['waiting', 'done', 'idea', 'todo', 'dropped', 'review', 'active'] as Status[],
+      order: ['waiting', 'done', 'idea', 'todo', 'dropped', 'review', 'active'] as Status[],
+    },
+  ])('$name: siblings follow it in the CLI, JSON and the overview, the manual order within a status stays', (row) => {
+    resetSettings({
+      ...DEFAULTS,
+      statusOrder: row.statusOrder as typeof DEFAULTS.statusOrder,
+      ...(row.customOrder ? { customOrder: row.customOrder } : {}),
+    });
+    const tree = loadTree(everyStatus().project.dir);
+    const expected = withTodos(row.order);
+    expect(titles(tree)).toEqual(expected);
+    expect((treeJson(tree) as { nodes: { title: string }[] }).nodes.map((node) => node.title)).toEqual(expected);
     inOrder(
-      treeText(reread, paint(process.stdout)),
-      childrenOf(reread, ROOT).map((node) => `${GLYPH[node.status]} ${node.title}`),
+      treeText(tree, paint(process.stdout)),
+      childrenOf(tree, ROOT).map((node) => `${GLYPH[node.status]} ${node.title}`),
     );
     inOrder(
-      overviewText(reread),
+      overviewText(tree),
       expected.map((title) => `[${title}]`),
     );
-    // Only the view changes: the same files read in the default order.
-    resetSettings({ ...DEFAULTS });
-    expect(titles(loadTree(tree.project.dir))).toEqual([
-      'active',
-      'review',
-      'other todo',
-      'todo',
-      'waiting',
-      'idea',
-      'done',
-      'dropped',
-    ]);
   });
 
-  it('is saved as status_order in settings.json; anything else reads as the default', () => {
+  it('is saved as status_order and custom_order in settings.json; a broken one reads as the default', () => {
     const env = process.env as NodeJS.ProcessEnv & { TREEYARD_HOME: string };
+    const file = join(env.TREEYARD_HOME, 'settings.json');
     expect(loadSettings(env).statusOrder).toBe('active-first');
-    saveSettings({ ...DEFAULTS, statusOrder: 'active-last' }, env);
-    expect(JSON.parse(readFileSync(join(env.TREEYARD_HOME, 'settings.json'), 'utf8'))).toMatchObject({
-      status_order: 'active-last',
-    });
-    expect(loadSettings(env).statusOrder).toBe('active-last');
-    saveSettings({ ...DEFAULTS, statusOrder: 'sideways' as never }, env);
-    expect(loadSettings(env).statusOrder).toBe('active-first');
+    const mine: Status[] = ['done', 'idea', 'waiting', 'todo', 'review', 'active', 'dropped'];
+    saveSettings({ ...DEFAULTS, statusOrder: 'custom', customOrder: mine }, env);
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({ status_order: 'custom', custom_order: mine });
+    expect(loadSettings(env)).toMatchObject({ statusOrder: 'custom', customOrder: mine });
+    // A status twice, one missing, an unknown name: ignored.
+    const broken = ['done', 'done', 'idea', 'waiting', 'todo', 'review', 'active'] as Status[];
+    saveSettings({ ...DEFAULTS, statusOrder: 'sideways' as never, customOrder: broken }, env);
+    expect(loadSettings(env)).toMatchObject({ statusOrder: 'active-first', customOrder: DEFAULTS.customOrder });
   });
 
   it.each(['graph', 'list'] as const)(
-    'switches from the settings screen at once in %s: the tree and .tree/README.md follow, done stays last',
+    'a preset from the settings screen shows at once in %s, and .tree/README.md follows: done on top',
     async (treeMode) => {
       const { tree, branch } = sample();
       addNode(tree, { title: 'Задумка', status: 'idea', parent: branch.id });
       const ui = { treeMode, expanded: [branch.id], selected: branch.id };
       const before = await snapshot(tree.project.dir, { columns: 100, rows: 30, ui });
       inOrder(before, ['Работаю', 'Проверяю', 'Первый', 'Задумка', 'Готовые · 1']);
-      const keys = [',', ...Array.from({ length: STATUS_ORDER_ROW }, () => DOWN), RIGHT, ESC];
+      const keys = [',', ...DOWN5, RIGHT, ESC];
       const after = await snapshot(tree.project.dir, { columns: 100, rows: 30, ui, keys });
-      inOrder(after, ['Задумка', 'Первый', 'Второй', 'Проверяю', 'Работаю', 'Готовые · 1']);
-      expect(loadSettings().statusOrder).toBe('active-last');
+      inOrder(after, ['Готовые · 1', 'Работаю', 'Проверяю', 'Первый', 'Второй', 'Задумка']);
+      expect(loadSettings().statusOrder).toBe('done-first');
       const overview = readFileSync(join(tree.project.dir, TREE_DIR, 'README.md'), 'utf8');
-      inOrder(overview, ['[Задумка]', '[Первый]', '[Второй]', '[Проверяю]', '[Работаю]', '[Подтверждено]']);
+      inOrder(overview, ['[Подтверждено]', '[Работаю]', '[Проверяю]', '[Первый]', '[Второй]', '[Задумка]']);
     },
   );
 
-  it('keeps Shift+arrows and the menu within a status when active is at the bottom', async () => {
-    const { tree, branch, first, second, active } = sample();
-    const reversed = { statusOrder: 'active-last' as const };
+  it('your own order: ⏎ on the row opens it, K/J (Л/О) and Shift+arrows move a status, ⏎ keeps it', async () => {
+    const { tree, branch } = sample();
+    addNode(tree, { title: 'Задумка', status: 'idea', parent: branch.id });
+    const ui = { expanded: [branch.id], selected: branch.id };
+    const opts = { columns: 100, rows: 30, ui };
+    const editor = await snapshot(tree.project.dir, { ...opts, keys: [',', ...DOWN5, '\r'] });
+    expect(editor).toContain('Свой порядок статусов');
+    inOrder(editor, [
+      '1  ◐ в работе',
+      '2  ◎ на проверке',
+      '3  ○ к работе',
+      '4  ‖ ждёт',
+      '5  ◇ идея',
+      '6  ✓ готово',
+      '7  ✗ отказ',
+    ]);
+    // esc leaves it as it was and goes back to the same row of the settings.
+    const cancelled = await snapshot(tree.project.dir, { ...opts, keys: [',', ...DOWN5, '\r', 'J', ESC] });
+    expect(cancelled).toContain('❯ Порядок статусов');
+    expect(loadSettings().statusOrder).toBe('active-first');
+    // «идея» (5th) up to the top with К in both layouts and Shift+↑, then «готово» one down.
+    const keys = [
+      ',',
+      ...DOWN5,
+      '\r',
+      DOWN,
+      DOWN,
+      DOWN,
+      DOWN,
+      'K',
+      'Л',
+      SHIFT_UP,
+      SHIFT_UP,
+      DOWN,
+      DOWN,
+      DOWN,
+      DOWN,
+      DOWN,
+    ];
+    const saved = await snapshot(tree.project.dir, { ...opts, keys: [...keys, 'О', '\r'] });
+    expect(saved).toContain('❯ Порядок статусов');
+    expect(saved).toContain('идея → в работе → проверка → к работе → ждёт → отказ → готово');
+    expect(loadSettings()).toMatchObject({
+      statusOrder: 'custom',
+      customOrder: ['idea', 'active', 'review', 'todo', 'waiting', 'dropped', 'done'],
+    });
+    const shown = await snapshot(tree.project.dir, { ...opts, settings: loadSettings() });
+    inOrder(shown, ['Задумка', 'Работаю', 'Проверяю', 'Первый', 'Готовые · 1']);
+  });
+
+  it('keeps Shift+arrows and the menu within a status when done is on top', async () => {
+    const { tree, branch, first, second, done } = sample();
+    const onTop = { statusOrder: 'done-first' as const };
     const todo = () =>
       childrenOf(loadTree(tree.project.dir), branch.id)
         .filter((node) => node.status === 'todo')
         .map((node) => node.id);
     const ui = { selected: second.id, expanded: [branch.id] };
-    await snapshot(tree.project.dir, { ui, settings: reversed, keys: [SHIFT_UP] });
+    await snapshot(tree.project.dir, { ui, settings: onTop, keys: [SHIFT_UP] });
     expect(todo()).toEqual([second.id, first.id]);
-    await snapshot(tree.project.dir, { ui, settings: reversed, keys: ['\r', 'J'] });
+    await snapshot(tree.project.dir, { ui, settings: onTop, keys: ['\r', 'J'] });
     expect(todo()).toEqual([first.id, second.id]);
-    const edge = await snapshot(tree.project.dir, {
-      ui: { ...ui, selected: active.id },
-      settings: reversed,
-      keys: [SHIFT_UP],
-    });
-    expect(edge).toContain('Узел уже на краю среди соседей этого статуса');
+    resetSettings({ ...DEFAULTS, ...onTop });
+    expect(childrenOf(loadTree(tree.project.dir), branch.id)[0]?.id).toBe(done.id);
   });
 
-  it('treeyard config status_order changes it from the shell, and show and the overview follow', () => {
+  it('treeyard config status_order takes a preset or a list, and show and the overview follow', () => {
     const { tree } = sample();
     const home = process.env.TREEYARD_HOME;
     const run = (...args: string[]) =>
@@ -310,11 +370,18 @@ describe('status order setting', () => {
         env: { ...process.env, TREEYARD_HOME: home, TREEYARD_LANG: '', NO_COLOR: '1' },
         encoding: 'utf8',
       });
-    expect(run('config').stdout).toMatch(/status_order\s+active-first/);
-    expect(run('config', 'status_order', 'active-last').stdout).toContain('status_order = active-last');
-    inOrder(run('show').stdout, ['Первый', 'Второй', 'Проверяю', 'Работаю', 'Подтверждено']);
-    const overview = readFileSync(join(tree.project.dir, TREE_DIR, 'README.md'), 'utf8');
-    inOrder(overview, ['[Первый]', '[Второй]', '[Проверяю]', '[Работаю]', '[Подтверждено]']);
+    const overview = () => readFileSync(join(tree.project.dir, TREE_DIR, 'README.md'), 'utf8');
+    expect(run('config').stdout).toMatch(/status_order\s+active-first\s+active,review,todo/);
+    expect(run('config', 'status_order', 'done-first').stdout).toContain('status_order = done-first  done,active');
+    inOrder(run('show').stdout, ['Подтверждено', 'Работаю', 'Проверяю', 'Первый']);
+    inOrder(overview(), ['[Подтверждено]', '[Работаю]', '[Проверяю]', '[Первый]']);
+    const mine = 'todo,review,active,waiting,idea,done,dropped';
+    expect(run('config', 'status_order', mine).stdout).toContain(`status_order = custom  ${mine}`);
+    inOrder(run('show').stdout, ['Первый', 'Проверяю', 'Работаю', 'Подтверждено']);
+    inOrder(overview(), ['[Первый]', '[Проверяю]', '[Работаю]', '[Подтверждено]']);
+    expect(run('config', 'status_order', 'active-first').status).toBe(0);
+    expect(run('config', 'status_order', 'custom').stdout).toContain(`custom  ${mine}`);
+    expect(run('config', 'status_order', 'todo,todo').status).toBe(2);
     expect(run('config', 'status_order', 'sideways').status).toBe(2);
-  }, 30_000);
+  }, 40_000);
 });

@@ -21,6 +21,7 @@ import { addNode, logToNode, moveNode, STATUS_LABEL, setStatus, updateNode } fro
 import { writeOverview } from '../model/overview.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
 import { ago } from '../model/time.js';
+import { isStatusOrder, STATUS_ORDER_NAMES, type StatusOrderName } from '../model/tree.js';
 import {
   type BrainId,
   ROOT,
@@ -32,7 +33,7 @@ import {
   WHO,
   type Who,
 } from '../model/types.js';
-import { MAX_PANES, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
+import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
 import { nodeText, paint, treeJson, treeText } from './print.js';
@@ -760,14 +761,13 @@ function configCommand(args: string[]): number {
   const [requestedKey, ...rest] = args;
   const key = Object.keys(SNAKE).find((name) => SNAKE[name] === requestedKey) ?? requestedKey;
   const value = rest.join(' ').trim();
-  const current = settings();
   const dir = findProject();
   const tree = dir ? loadTree(dir) : undefined;
   if (!key) {
     process.stdout.write(`${out.bold(t('Для всех проектов'))}  ${out.dim(settingsPath())}\n`);
     for (const name of GLOBAL_KEYS) {
       const label = SNAKE[name] ?? name;
-      process.stdout.write(`  ${label.padEnd(13)} ${String(current[name])}\n`);
+      process.stdout.write(`  ${label.padEnd(13)} ${shown(name)}\n`);
     }
     if (tree) {
       process.stdout.write(`${out.bold(t('Этот проект'))}  ${out.dim('.tree/tree.md')}\n`);
@@ -784,6 +784,12 @@ function configCommand(args: string[]): number {
     process.stdout.write(`\n${out.dim(t('Изменить: treeyard config <ключ> <значение> · в дереве — клавиша «,»'))}\n`);
     return 0;
   }
+  function shown(name: (typeof GLOBAL_KEYS)[number]): string {
+    const now = settings();
+    if (name !== 'statusOrder') return String(now[name]);
+    // The order itself, so a preset says what it means.
+    return `${now.statusOrder}  ${orderOf(now).join(',')}`;
+  }
   const flag = (text: string) => {
     if (/^(on|yes|true|да|1)$/i.test(text)) return true;
     if (/^(off|no|false|нет|0)$/i.test(text)) return false;
@@ -791,7 +797,7 @@ function configCommand(args: string[]): number {
   };
   if ((GLOBAL_KEYS as readonly string[]).includes(key)) {
     if (!value) {
-      process.stdout.write(`${String(current[key as (typeof GLOBAL_KEYS)[number]])}\n`);
+      process.stdout.write(`${shown(key as (typeof GLOBAL_KEYS)[number])}\n`);
       return 0;
     }
     if (key === 'lang') {
@@ -804,9 +810,17 @@ function configCommand(args: string[]): number {
       if (value !== 'pane' && value !== 'terminal') throw new UsageError(t('где: pane или terminal'));
       updateSettings({ open: value });
     } else if (key === 'statusOrder') {
-      if (value !== 'active-first' && value !== 'active-last')
-        throw new UsageError(t('порядок статусов: active-first или active-last'));
-      updateSettings({ statusOrder: value });
+      const list = value.split(/[\s,]+/).filter(Boolean);
+      if ((STATUS_ORDER_NAMES as readonly string[]).includes(value))
+        updateSettings({ statusOrder: value as StatusOrderName });
+      else if (isStatusOrder(list)) updateSettings({ statusOrder: 'custom', customOrder: list });
+      else
+        throw new UsageError(
+          t('порядок статусов: {names} или все статусы через запятую: {statuses}', {
+            names: STATUS_ORDER_NAMES.join(', '),
+            statuses: STATUSES.join(','),
+          }),
+        );
       if (tree) writeOverview(tree);
     } else if (key === 'sleepAfter' || key === 'maxPanes') {
       const choices: readonly number[] = key === 'sleepAfter' ? SLEEP_AFTER : MAX_PANES;
@@ -815,7 +829,7 @@ function configCommand(args: string[]): number {
         throw new UsageError(t('{key}: выбери {choices}', { key: requestedKey, choices: choices.join('/') }));
       updateSettings({ [key]: n });
     } else updateSettings({ [key]: flag(value) });
-    process.stdout.write(`${requestedKey} = ${String(settings()[key as (typeof GLOBAL_KEYS)[number]])}\n`);
+    process.stdout.write(`${requestedKey} = ${shown(key as (typeof GLOBAL_KEYS)[number])}\n`);
     return 0;
   }
   if ((PROJECT_KEYS as readonly string[]).includes(key)) {

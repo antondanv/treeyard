@@ -1334,17 +1334,26 @@ export interface SettingRow {
   value: string;
   placeholder?: string | undefined;
   hint?: string | undefined;
+  /** What ⏎ does on this row instead of closing the settings. */
+  enter?: { label: string; run: () => void } | undefined;
 }
 
 export function SettingsDialog(props: {
   rows: SettingRow[];
   width: number;
   height: number;
+  /** The row to start on, by key. */
+  at?: string;
   onChange: (key: string, value: string) => void;
   onClose: () => void;
 }) {
   // Read through refs: a burst of keys arrives before the next render (see useLatest).
-  const [index, setIndex, indexRef] = useLatest(0);
+  const [index, setIndex, indexRef] = useLatest(() =>
+    Math.max(
+      0,
+      props.rows.findIndex((row) => row.key === props.at),
+    ),
+  );
   const [draft, setDraft, draftRef] = useLatest<Record<string, string>>({});
   const chosen = useRef<Record<string, string>>({});
   const closed = useRef(false);
@@ -1360,7 +1369,8 @@ export function SettingsDialog(props: {
     if (key.escape || key.return) {
       commit();
       closed.current = true;
-      return props.onClose();
+      const enter = key.return ? props.rows[indexRef.current]?.enter : undefined;
+      return enter ? enter.run() : props.onClose();
     }
     if (key.upArrow || (key.tab && key.shift)) {
       commit();
@@ -1408,7 +1418,8 @@ export function SettingsDialog(props: {
       footer={[
         { key: '↑↓', label: t('выбор') },
         { key: '←→', label: t('изменить') },
-        { key: '⏎', label: t('готово') },
+        { key: '⏎', label: props.rows[index]?.enter?.label ?? t('готово') },
+        ...(props.rows[index]?.enter ? [{ key: 'esc', label: t('готово') }] : []),
         { label: t('сохраняется сразу') },
       ]}
     >
@@ -1461,6 +1472,77 @@ export function SettingsDialog(props: {
           </Box>
         );
       })}
+    </Frame>
+  );
+}
+
+// ── Your own order of statuses ──────────────────────────────────────────────
+
+/** Statuses top to bottom: move one with K/J or Shift+arrows, ⏎ keeps the order. */
+export function StatusOrderDialog(props: {
+  order: readonly Status[];
+  width: number;
+  onSave: (order: Status[]) => void;
+  onCancel: () => void;
+}) {
+  const [order, setOrder, orderRef] = useLatest<Status[]>(() => [...props.order]);
+  const [index, setIndex, indexRef] = useLatest(0);
+  const done = useRef(false);
+  const move = (step: -1 | 1) => {
+    const from = indexRef.current;
+    const to = from + step;
+    if (to < 0 || to >= orderRef.current.length) return;
+    const next = [...orderRef.current];
+    [next[from], next[to]] = [next[to]!, next[from]!];
+    setOrder(next);
+    setIndex(to);
+  };
+  useInput((input, key) => {
+    if (done.current) return;
+    input = shortcutKey(input);
+    const n = orderRef.current.length;
+    if (key.escape) {
+      done.current = true;
+      return props.onCancel();
+    }
+    if (key.return) {
+      done.current = true;
+      return props.onSave(orderRef.current);
+    }
+    if ((key.shift && key.upArrow) || input === 'K') return move(-1);
+    if ((key.shift && key.downArrow) || input === 'J') return move(1);
+    if (key.upArrow || input === 'k') return setIndex((i) => (i - 1 + n) % n);
+    if (key.downArrow || input === 'j') return setIndex((i) => (i + 1) % n);
+  });
+  return (
+    <Frame
+      title={t('Свой порядок статусов')}
+      width={props.width}
+      footer={[
+        { key: '↑↓', label: t('выбор') },
+        { key: 'K J', label: t('выше · ниже'), press: ['K', 'J'] },
+        { key: '⏎', label: t('сохранить') },
+        { key: 'esc', label: t('отмена') },
+      ]}
+    >
+      <Text color={C.dim} wrap="wrap">
+        {t('У каждого родителя сверху вниз. Готовые собраны в группу «Готовые · N» там, где стоит «готово».')}
+      </Text>
+      <Box flexDirection="column" marginTop={1}>
+        {order.map((status, i) => {
+          const selected = i === index;
+          return (
+            <Box key={status}>
+              <Text color={selected ? C.brand : C.faint}>{selected ? '❯ ' : '  '}</Text>
+              <Text color={C.faint}>{`${i + 1}  `}</Text>
+              <Text color={STATUS_COLOR[status]}>{`${GLYPH[status]} `}</Text>
+              <Text color={selected ? C.brand : undefined} bold={selected}>
+                {STATUS_LABEL[status]}
+              </Text>
+            </Box>
+          );
+        })}
+      </Box>
     </Frame>
   );
 }

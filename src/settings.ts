@@ -11,7 +11,14 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { LANGS, type Lang, setLang } from './i18n/i18n.js';
-import { STATUS_ORDERS, type StatusOrder, setStatusOrder } from './model/tree.js';
+import {
+  isStatusOrder,
+  STATUS_ORDER_NAMES,
+  STATUS_ORDERS,
+  type StatusOrderName,
+  setStatusOrder,
+} from './model/tree.js';
+import type { Status } from './model/types.js';
 import { applyTheme, THEMES, type Theme } from './tui/theme.js';
 
 export interface Settings {
@@ -23,8 +30,10 @@ export interface Settings {
   animation: boolean;
   /** The selected node's title runs when it does not fit. */
   marquee: boolean;
-  /** Siblings by status: work in progress on top, or ideas on top. */
-  statusOrder: StatusOrder;
+  /** Siblings by status: a ready-made order or `custom`. */
+  statusOrder: StatusOrderName;
+  /** Your own order of statuses, top to bottom: used when `statusOrder` is `custom`. */
+  customOrder: Status[];
   /** Ask the CLIs every few seconds which sessions are running. */
   live: boolean;
   /** Where sessions open: in a pane next to the tree (tmux) or in this terminal. */
@@ -46,6 +55,7 @@ export const DEFAULTS: Settings = {
   animation: true,
   marquee: true,
   statusOrder: 'active-first',
+  customOrder: [...STATUS_ORDERS['active-first']],
   live: true,
   open: 'pane',
   sleepAfter: 30,
@@ -63,6 +73,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
       sleep_after?: unknown;
       max_panes?: unknown;
       status_order?: unknown;
+      custom_order?: unknown;
     };
     if (data.lang && (LANGS as readonly string[]).includes(data.lang)) settings.lang = data.lang;
     if (typeof data.confirm === 'boolean') settings.confirm = data.confirm;
@@ -76,7 +87,10 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     if ((SLEEP_AFTER as readonly unknown[]).includes(sleepAfter)) settings.sleepAfter = sleepAfter as number;
     if ((MAX_PANES as readonly unknown[]).includes(maxPanes)) settings.maxPanes = maxPanes as number;
     const statusOrder = data.status_order ?? data.statusOrder;
-    if ((STATUS_ORDERS as readonly unknown[]).includes(statusOrder)) settings.statusOrder = statusOrder as StatusOrder;
+    const customOrder = data.custom_order ?? data.customOrder;
+    if ((STATUS_ORDER_NAMES as readonly unknown[]).includes(statusOrder))
+      settings.statusOrder = statusOrder as StatusOrderName;
+    if (isStatusOrder(customOrder)) settings.customOrder = customOrder;
   } catch {
     // No file yet: the defaults.
   }
@@ -88,8 +102,14 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
 export function saveSettings(settings: Settings, env: NodeJS.ProcessEnv = process.env): void {
   const path = settingsPath(env);
   mkdirSync(dirname(path), { recursive: true });
-  const { sleepAfter, maxPanes, statusOrder, ...rest } = settings;
-  const data = { ...rest, status_order: statusOrder, sleep_after: sleepAfter, max_panes: maxPanes };
+  const { sleepAfter, maxPanes, statusOrder, customOrder, ...rest } = settings;
+  const data = {
+    ...rest,
+    status_order: statusOrder,
+    custom_order: customOrder,
+    sleep_after: sleepAfter,
+    max_panes: maxPanes,
+  };
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
@@ -97,7 +117,12 @@ export function saveSettings(settings: Settings, env: NodeJS.ProcessEnv = proces
 export function applySettings(settings: Settings): void {
   setLang(settings.lang);
   applyTheme(settings.theme);
-  setStatusOrder(settings.statusOrder);
+  setStatusOrder(orderOf(settings));
+}
+
+/** The statuses top to bottom that these settings ask for. */
+export function orderOf(settings: Pick<Settings, 'statusOrder' | 'customOrder'>): readonly Status[] {
+  return settings.statusOrder === 'custom' ? settings.customOrder : STATUS_ORDERS[settings.statusOrder];
 }
 
 let loaded: Settings | undefined;

@@ -73,7 +73,9 @@ import {
   pathTo,
   progress,
   type Row,
-  type StatusOrder,
+  STATUS_ORDER_NAMES,
+  type StatusOrderName,
+  statusOrder,
   summarize,
   waitingNodes,
 } from '../model/tree.js';
@@ -86,7 +88,7 @@ import {
   type Tree,
   type TreeNode,
 } from '../model/types.js';
-import { MAX_PANES, SLEEP_AFTER, settings, updateSettings } from '../settings.js';
+import { MAX_PANES, type Settings, SLEEP_AFTER, settings, updateSettings } from '../settings.js';
 import { catalogHint, effortOptions, effortsFor, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import { editText, type KeyHint, KeyHints } from './components/controls.js';
 import { NodeDetails, SessionDetails } from './details.js';
@@ -108,6 +110,7 @@ import {
   type SettingRow,
   SettingsDialog,
   StatusMenu,
+  StatusOrderDialog,
   StepsDialog,
   TextViewer,
   WaitingForm,
@@ -153,7 +156,8 @@ type Modal =
   | { kind: 'criterion'; node: string; doneWhen: string; check?: string }
   | { kind: 'check'; node: string; result: CheckResult }
   | { kind: 'confirm'; intent: Intent }
-  | { kind: 'settings' }
+  | { kind: 'settings'; at?: string }
+  | { kind: 'statusOrder' }
   | { kind: 'help' }
   | { kind: 'problems' };
 
@@ -558,7 +562,10 @@ export function App(props: AppProps) {
   const strip = (view === 'tree' || view === 'journal') && !side ? 2 : view === 'sessions' ? 0 : 1;
   const bodyHeight = height - headerHeight - strip - 1;
   const fullModal =
-    modal && ['context', 'help', 'link', 'problems', 'palette', 'check', 'settings', 'confirm'].includes(modal.kind);
+    modal &&
+    ['context', 'help', 'link', 'problems', 'palette', 'check', 'settings', 'statusOrder', 'confirm'].includes(
+      modal.kind,
+    );
   const listHeight = bodyHeight;
   const paneSize = { width: Math.max(20, (rightWidth || width) - 2), height: Math.max(5, bodyHeight - 4) };
   const graphWidth =
@@ -1826,8 +1833,21 @@ export function App(props: AppProps) {
             rows={settingRows()}
             width={Math.min(width - 2, 100)}
             height={bodyHeight}
+            {...(modal.at ? { at: modal.at } : {})}
             onClose={close}
             onChange={changeSetting}
+          />
+        );
+      case 'statusOrder':
+        return (
+          <StatusOrderDialog
+            order={statusOrder()}
+            width={Math.min(width - 2, 72)}
+            onSave={(order) => {
+              changeStatusOrder({ statusOrder: 'custom', customOrder: order });
+              setModal({ kind: 'settings', at: 'statusOrder' });
+            }}
+            onCancel={() => setModal({ kind: 'settings', at: 'statusOrder' })}
           />
         );
       case 'help':
@@ -2323,13 +2343,16 @@ export function App(props: AppProps) {
         label: t('Порядок статусов'),
         options: [
           { value: 'active-first', label: t('в работе сверху') },
+          { value: 'done-first', label: t('готовые сверху') },
           { value: 'active-last', label: t('в работе снизу') },
+          { value: 'custom', label: t('свой') },
         ],
         value: s.statusOrder,
-        hint:
-          s.statusOrder === 'active-first'
-            ? t('в работе → проверка → к работе → ждёт → идея · готовые внизу')
-            : t('идея → ждёт → к работе → проверка → в работе · готовые внизу'),
+        // The order itself: short words, so it fits a narrow terminal.
+        hint: statusOrder()
+          .map((status) => (status === 'review' ? t('проверка') : STATUS_LABEL[status]))
+          .join(' → '),
+        enter: { label: t('свой порядок'), run: () => setModal({ kind: 'statusOrder' }) },
       },
       {
         key: 'live',
@@ -2420,8 +2443,8 @@ export function App(props: AppProps) {
     ];
   };
 
-  const changeStatusOrder = (order: StatusOrder) => {
-    updateSettings({ statusOrder: order });
+  const changeStatusOrder = (patch: Partial<Pick<Settings, 'statusOrder' | 'customOrder'>>) => {
+    updateSettings(patch);
     // The overview in git follows the order you see.
     writeOverview(tree);
     stampRef.current = treeStamp(props.dir);
@@ -2434,7 +2457,8 @@ export function App(props: AppProps) {
     else if (key === 'theme' && (value === 'dark' || value === 'light')) updateSettings({ theme: value });
     else if (key === 'animation') updateSettings({ animation: on });
     else if (key === 'marquee') updateSettings({ marquee: on });
-    else if (key === 'statusOrder' && (value === 'active-first' || value === 'active-last')) changeStatusOrder(value);
+    else if (key === 'statusOrder' && STATUS_ORDER_NAMES.includes(value as StatusOrderName))
+      changeStatusOrder({ statusOrder: value as StatusOrderName });
     else if (key === 'live') updateSettings({ live: on });
     else if (key === 'open' && (value === 'pane' || value === 'terminal')) updateSettings({ open: value });
     else if (key === 'sleepAfter') updateSettings({ sleepAfter: Number(value) });

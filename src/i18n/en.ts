@@ -112,7 +112,8 @@ export const EN: Record<string, string> = {
   '{key}: да или нет (on/off)': '{key}: on or off',
   'язык: ru или en': 'language: ru or en',
   'тема: dark или light': 'theme: dark or light',
-  'порядок статусов: active-first или active-last': 'status order: active-first or active-last',
+  'порядок статусов: {names} или все статусы через запятую: {statuses}':
+    'status order: {names} or every status, comma-separated: {statuses}',
   'нет такой настройки «{key}» — treeyard config': 'no such setting «{key}» — treeyard config',
   ' — цель: {goal}': ' — goal: {goal}',
   '  готово {done}/{total} · в работе {active} · на проверке {review} · ждут {waiting} · идей {ideas}':
@@ -322,8 +323,14 @@ export const EN: Record<string, string> = {
   'Порядок статусов': 'Status order',
   'в работе сверху': 'active on top',
   'в работе снизу': 'active at the bottom',
-  'в работе → проверка → к работе → ждёт → идея · готовые внизу': 'active → review → todo → waiting → idea · done last',
-  'идея → ждёт → к работе → проверка → в работе · готовые внизу': 'idea → waiting → todo → review → active · done last',
+  'готовые сверху': 'done on top',
+  свой: 'custom',
+  проверка: 'review',
+  'свой порядок': 'custom order',
+  'Свой порядок статусов': 'Custom status order',
+  'выше · ниже': 'up · down',
+  'У каждого родителя сверху вниз. Готовые собраны в группу «Готовые · N» там, где стоит «готово».':
+    'Under every parent, top to bottom. Done nodes gather in the «Done · N» group where «done» stands.',
   'Живые статусы сессий': 'Live session status',
   'каждые 3 с: кто из Claude Code, Codex и Antigravity работает, а кто ждёт тебя':
     'every 3 s: which Claude Code, Codex and Antigravity sessions are working and which wait for you',
