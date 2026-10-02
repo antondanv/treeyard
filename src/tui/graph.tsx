@@ -11,7 +11,8 @@
  * drawn, so a large tree costs no more than the screen.
  */
 import type { SessionInfo } from '@antondanv/brainyard';
-import { Box, Text } from 'ink';
+import { Box, type DOMElement, Text } from 'ink';
+import { useRef } from 'react';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 
@@ -22,6 +23,7 @@ import { GLYPH } from '../model/overview.js';
 import { childrenOf, pathTo, progress, type Row } from '../model/tree.js';
 import { ROOT, type Tree } from '../model/types.js';
 import { marquee, overflows } from './marquee.js';
+import { type Click, useClick } from './mouse.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
 
 export type GraphStyle = 'line' | 'card';
@@ -225,6 +227,10 @@ export interface Cell {
   /** Continuation of a wide grapheme; emitting it would add an extra column. */
   continuation?: boolean;
   mask?: number;
+  /** The node drawn here: a click on it selects that node. */
+  node?: string;
+  /** The `›4` of a closed branch: a click on it opens the branch. */
+  fold?: boolean;
 }
 
 const N = 1;
@@ -289,6 +295,9 @@ export interface GraphProps {
   frame?: number;
   /** Milliseconds since the selected node got selected: the clock of its running title. */
   tick?: number;
+  /** A click on a node, or on the `›4` of a closed branch. */
+  onClick?: (hit: { node: string; fold: boolean } | undefined, click: Click) => void;
+  active?: boolean;
 }
 
 /** Draw only viewport cells, so a deep or large tree does not allocate a giant canvas. */
@@ -308,6 +317,14 @@ export function graphCells(props: GraphProps): Cell[][] {
     // A line on the selected path keeps its colour where it crosses another.
     const keep = cell.color === C.brand && cell.mask !== undefined;
     cells[y]![x] = { char: LINES[merged] ?? '─', mask: merged, color: keep ? C.brand : color };
+  };
+  /** Tags drawn cells, in layout coordinates, with what a click on them means. */
+  const mark = (x: number, y: number, size: number, tag: Pick<Cell, 'node' | 'fold'>, rows = 1) => {
+    for (let row = y; row < y + rows; row++)
+      for (let col = x; col < x + size; col++) {
+        const cell = cells[row - offset.y]?.[col - offset.x];
+        if (cell) Object.assign(cell, tag);
+      }
   };
   const horizontal = (x1: number, x2: number, y: number, color: string) => {
     for (let x = x1; x <= x2; x++) lineCell(x - offset.x, y - offset.y, (x > x1 ? W : 0) | (x < x2 ? E : 0), color);
@@ -380,6 +397,7 @@ export function graphCells(props: GraphProps): Cell[][] {
         bold: true,
         pill: true,
       });
+      markLine(item, title, tailWidth);
       return;
     }
     const titleColor = !node ? C.brand : held ? C.faint : closed ? C.dim : onPath ? C.brand : undefined;
@@ -395,6 +413,13 @@ export function graphCells(props: GraphProps): Cell[][] {
       text(item.x + item.width + 1, item.y, extra.text, Math.max(0, item.column - item.width + 2), {
         color: extra.color,
       });
+    markLine(item, title, tailWidth);
+  }
+
+  function markLine(item: GraphCard, title: string, tailWidth: number) {
+    if (!item.row) return;
+    mark(item.x - 1, item.y, item.width + 2, { node: item.id });
+    if (tailWidth) mark(item.x + 2 + stringWidth(title), item.y, tailWidth, { fold: true });
   }
 
   function liveNote(item: GraphCard): { text: string; color: string } | undefined {
@@ -488,7 +513,11 @@ export function graphCells(props: GraphProps): Cell[][] {
         }
       }
     }
-    text(item.x + 2, item.y + item.height - 2, clip(meta, inner), inner, { color });
+    const shown = clip(meta, inner);
+    text(item.x + 2, item.y + item.height - 2, shown, inner, { color });
+    if (!node) return;
+    mark(item.x, item.y, item.width, { node: item.id }, item.height);
+    if (shown.endsWith(' ›')) mark(item.x + 2 + stringWidth(shown) - 2, item.y + item.height - 2, 2, { fold: true });
   }
 
   if (offset.y > 0) put(0, 0, { char: '↑', color: C.faint });
@@ -500,8 +529,19 @@ export function graphCells(props: GraphProps): Cell[][] {
 
 export function Graph(props: GraphProps) {
   const cells = graphCells(props);
+  const box = useRef<DOMElement>(null);
+  const drawn = useRef(cells);
+  drawn.current = cells;
+  useClick(
+    box,
+    (click) => {
+      const cell = drawn.current[click.y]?.[click.x];
+      props.onClick?.(cell?.node ? { node: cell.node, fold: Boolean(cell.fold) } : undefined, click);
+    },
+    Boolean(props.onClick) && props.active !== false,
+  );
   return (
-    <Box flexDirection="column" width={props.width} height={props.height} overflow="hidden">
+    <Box ref={box} flexDirection="column" width={props.width} height={props.height} overflow="hidden">
       {cells.map((line, index) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: viewport coordinates are stable identities.
         <Text key={index}>

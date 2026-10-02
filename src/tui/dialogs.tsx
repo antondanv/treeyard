@@ -26,7 +26,19 @@ import {
   type Who,
 } from '../model/types.js';
 import { catalogHint, effortOptions, effortsFor, fitEffort, modelOptions, useCatalog } from './catalogs.js';
-import { Choice, Field, Frame, Menu, type MenuItem, Options, TextField, useLatest } from './components/controls.js';
+import {
+  Choice,
+  Field,
+  Frame,
+  type KeyHint,
+  KeyHints,
+  Menu,
+  type MenuItem,
+  Options,
+  TextField,
+  useLatest,
+} from './components/controls.js';
+import { Clickable } from './mouse.js';
 import { liveLabel, paneState } from './rows.js';
 import { C, STATUS_COLOR } from './theme.js';
 
@@ -76,7 +88,13 @@ export function NodeForm(props: {
           : t('Изменить узел')
       }
       width={props.width}
-      footer={t('⏎ сохранить · tab/↓ дальше · ←→ выбор · esc отмена · описание — E в редакторе')}
+      footer={[
+        { key: '⏎', label: t('сохранить') },
+        { key: 'tab/↓', label: t('дальше'), press: '\t' },
+        { key: '←→', label: t('выбор') },
+        { key: 'esc', label: t('отмена') },
+        { label: t('описание — E в редакторе') },
+      ]}
     >
       <Field label={t('Название')} active={focus === 0}>
         <TextField
@@ -157,7 +175,12 @@ export function WaitingForm(props: {
       })}
       width={props.width}
       color={C.warn}
-      footer={t('⏎ сохранить · tab дальше · esc отмена — остальные ветки дерева остаются в работе')}
+      footer={[
+        { key: '⏎', label: t('сохранить') },
+        { key: 'tab', label: t('дальше') },
+        { key: 'esc', label: t('отмена') },
+        { label: t('остальные ветки дерева остаются в работе') },
+      ]}
     >
       <Field label={t('Что мешает')} active={focus === 0}>
         <TextField
@@ -216,7 +239,7 @@ export function StatusMenu(props: {
         title: props.node.title,
       })}
       width={props.width}
-      footer={t('⏎ выбрать · буква — сразу · esc отмена')}
+      footer={[{ key: '⏎', label: t('выбрать') }, { label: t('буква — сразу') }, { key: 'esc', label: t('отмена') }]}
     >
       <Menu items={items} active onPick={(key) => props.onPick(key as Status)} onCancel={props.onCancel} />
     </Frame>
@@ -389,7 +412,12 @@ export function NodeMenu(props: {
     props.onChoose({ kind: 'new', options: { brain, start: mode, background, pane: defaults.pane && !background } });
   };
   return (
-    <Frame title={node.title} width={props.width} footer={t('⏎ выбрать · буква — сразу · esc закрыть')} color={C.brand}>
+    <Frame
+      title={node.title}
+      width={props.width}
+      footer={[{ key: '⏎', label: t('выбрать') }, { label: t('буква — сразу') }, { key: 'esc', label: t('закрыть') }]}
+      color={C.brand}
+    >
       <Menu
         items={items}
         active
@@ -597,7 +625,12 @@ export function LaunchForm(props: {
       })}
       width={props.width}
       color={C.agent}
-      footer={t('⏎ дальше — к подтверждению · ↑↓ поле · ←→ выбор · esc отмена')}
+      footer={[
+        { key: '⏎', label: t('дальше — к подтверждению') },
+        { key: '↑↓', label: t('поле') },
+        { key: '←→', label: t('выбор') },
+        { key: 'esc', label: t('отмена') },
+      ]}
     >
       {row(0)}
       {row(1)}
@@ -647,12 +680,13 @@ export function ConfirmDelete(props: {
       color={C.bad}
     >
       {props.count === 0 ? (
-        <Text>
-          <Text color={C.bad}>⏎</Text>
-          {t(' удалить · ')}
-          <Text color={C.dim}>esc</Text>
-          {t(' оставить')}
-        </Text>
+        <KeyHints
+          wrap
+          hints={[
+            { key: '⏎', label: t('удалить'), color: C.bad },
+            { key: 'esc', label: t('оставить'), color: C.dim },
+          ]}
+        />
       ) : (
         <Box flexDirection="column">
           <Text>
@@ -661,13 +695,14 @@ export function ConfirmDelete(props: {
               nodes: plural(props.count, ['узел', 'узла', 'узлов'], ['node', 'nodes']),
             })}
           </Text>
-          <Text>
-            <Text color={C.brand}>u</Text>
-            {t(' поднять их на уровень выше · ')}
-            <Text color={C.bad}>a</Text>
-            {t(' удалить всё ·')} <Text color={C.dim}>esc</Text>
-            {t(' оставить')}
-          </Text>
+          <KeyHints
+            wrap
+            hints={[
+              { key: 'u', label: t('поднять их на уровень выше'), color: C.brand },
+              { key: 'a', label: t('удалить всё'), color: C.bad },
+              { key: 'esc', label: t('оставить'), color: C.dim },
+            ]}
+          />
           <Text color={C.faint}>{t('Отказаться от узла без удаления — статус «отказ» (s, x).')}</Text>
         </Box>
       )}
@@ -696,7 +731,14 @@ export function NodePicker(props: {
     ),
   }));
   return (
-    <Frame title={props.title} width={props.width} footer={t('⏎ выбрать · esc отмена')}>
+    <Frame
+      title={props.title}
+      width={props.width}
+      footer={[
+        { key: '⏎', label: t('выбрать') },
+        { key: 'esc', label: t('отмена') },
+      ]}
+    >
       <Menu
         items={items}
         active
@@ -726,10 +768,12 @@ export function TextViewer(props: { title: string; text: string; width: number; 
     <Frame
       title={props.title}
       width={props.width}
-      footer={t('↑↓ листать · space страница · esc закрыть · {p1}/{length}', {
-        p1: Math.min(lines.length, top + rows),
-        length: lines.length,
-      })}
+      footer={[
+        { key: '↑↓', label: t('листать') },
+        { key: 'space', label: t('страница') },
+        { key: 'esc', label: t('закрыть') },
+        { label: `${Math.min(lines.length, top + rows)}/${lines.length}` },
+      ]}
     >
       {lines.slice(top, top + rows).map((line, index) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: lines of a text are positions, not items.
@@ -831,7 +875,10 @@ export function HelpDialog(props: { width: number; height: number; onClose: () =
     <Frame
       title={t('Клавиши')}
       width={props.width}
-      footer={t('esc закрыть · дерево — это md-файлы в .tree/, правь их чем угодно')}
+      footer={[
+        { key: 'esc', label: t('закрыть') },
+        { label: t('дерево — это md-файлы в .tree/, правь их чем угодно') },
+      ]}
     >
       {twoColumns ? (
         <Box>
@@ -912,7 +959,11 @@ export function Palette(props: {
     <Frame
       title={t('Найти узел или действие')}
       width={props.width}
-      footer={t('↑↓ выбор · ⏎ перейти или сделать · esc закрыть')}
+      footer={[
+        { key: '↑↓', label: t('выбор') },
+        { key: '⏎', label: t('перейти или сделать') },
+        { key: 'esc', label: t('закрыть') },
+      ]}
     >
       <Box marginBottom={1}>
         <Text color={C.brand}>❯ </Text>
@@ -931,7 +982,10 @@ export function Palette(props: {
       {matches.slice(first, first + rows).map((item, offset) => {
         const selected = first + offset === at;
         return (
-          <Box key={item.key}>
+          <Clickable
+            key={item.key}
+            onClick={(click) => (click.double ? props.onPick(item.key) : setIndex(first + offset))}
+          >
             <Box width={2} flexShrink={0}>
               <Text color={selected ? C.brand : C.faint}>{selected ? '❯' : ' '}</Text>
             </Box>
@@ -946,7 +1000,7 @@ export function Palette(props: {
                 {item.detail ? <Text color={C.faint}> {item.detail}</Text> : null}
               </Text>
             </Box>
-          </Box>
+          </Clickable>
         );
       })}
     </Frame>
@@ -989,9 +1043,12 @@ export function StepsDialog(props: {
       })}
       width={props.width}
       color={C.agent}
-      footer={t('space отметить · a все · ⏎ добавить {count} · esc выбросить', {
-        count,
-      })}
+      footer={[
+        { key: 'space', label: t('отметить') },
+        { key: 'a', label: t('все') },
+        { key: '⏎', label: t('добавить {count}', { count }) },
+        { key: 'esc', label: t('выбросить') },
+      ]}
     >
       {props.steps.map((step, i) => {
         const selected = i === index;
@@ -1050,7 +1107,11 @@ export function CriterionDialog(props: {
       })}
       width={props.width}
       color={C.agent}
-      footer={t('⏎ принять · e поправить · esc выбросить')}
+      footer={[
+        { key: '⏎', label: t('принять') },
+        { key: 'e', label: t('поправить') },
+        { key: 'esc', label: t('выбросить') },
+      ]}
     >
       <Text color={C.faint}>{t('предлагает агент')}</Text>
       <Text wrap="wrap">{props.doneWhen}</Text>
@@ -1107,7 +1168,16 @@ export function CheckDialog(props: {
       title={`${props.ok ? t('✓ Проверка прошла') : t('✗ Проверка не прошла')} · ${props.node.title}`}
       width={props.width}
       color={props.ok ? C.ok : C.bad}
-      footer={props.ok ? t('r на проверку · d готово · ↑↓ листать · esc закрыть') : t('↑↓ листать · esc закрыть')}
+      footer={[
+        ...(props.ok
+          ? [
+              { key: 'r', label: t('на проверку') },
+              { key: 'd', label: t('готово') },
+            ]
+          : []),
+        { key: '↑↓', label: t('листать') },
+        { key: 'esc', label: t('закрыть') },
+      ]}
     >
       <Text color={C.dim} wrap="truncate-end">
         $ {props.command}
@@ -1175,14 +1245,12 @@ export function ConfirmLaunch(props: {
         .split('\n')
         .slice(0, 5)
     : [];
-  const footer = [
-    t('⏎ запустить'),
-    props.configurable ? t('o настроить') : undefined,
-    t('esc отмена'),
-    t('! больше не спрашивать'),
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const footer: KeyHint[] = [
+    { key: '⏎', label: t('запустить') },
+    ...(props.configurable ? [{ key: 'o', label: t('настроить') }] : []),
+    { key: 'esc', label: t('отмена') },
+    { key: '!', label: t('больше не спрашивать') },
+  ];
   return (
     <Frame title={props.title} width={props.width} color={C.agent} footer={footer}>
       {props.rows.map((row) => (
@@ -1301,7 +1369,12 @@ export function SettingsDialog(props: {
     <Frame
       title={t('Настройки')}
       width={props.width}
-      footer={t('↑↓ выбор · ←→ изменить · ⏎ готово · сохраняется сразу')}
+      footer={[
+        { key: '↑↓', label: t('выбор') },
+        { key: '←→', label: t('изменить') },
+        { key: '⏎', label: t('готово') },
+        { label: t('сохраняется сразу') },
+      ]}
     >
       {props.rows.slice(first, last).map((item, offset) => {
         const i = first + offset;

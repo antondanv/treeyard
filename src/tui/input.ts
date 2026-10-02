@@ -131,6 +131,11 @@ export class TerminalInput extends Readable {
     done(error);
   }
 
+  /** A click on a key hint: the key arrives exactly as if it were typed. */
+  press(data: string): void {
+    this.deliver([{ kind: 'input', data, paste: false }]);
+  }
+
   private deliver(events: TerminalInputEvent[]): void {
     for (const event of events) {
       if (event.kind === 'mouse') this.emit('mouse', event);

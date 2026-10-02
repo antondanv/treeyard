@@ -2,10 +2,11 @@
  * Small building blocks: a frame for dialogs, a one-line text field, an
  * inline choice and a menu. Each takes the keyboard only while `active`.
  */
-import { Box, type Key, Text, useInput } from 'ink';
+import { Box, type DOMElement, type Key, Text, useInput } from 'ink';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import stringWidth from 'string-width';
 import { t } from '../../i18n/i18n.js';
+import { Clickable, useClick, usePress } from '../mouse.js';
 import { C } from '../theme.js';
 
 /**
@@ -24,7 +25,13 @@ export function useLatest<T>(initial: T | (() => T)): [T, (next: T | ((before: T
   return [value, set, ref];
 }
 
-export function Frame(props: { title: string; width: number; children: ReactNode; footer?: string; color?: string }) {
+export function Frame(props: {
+  title: string;
+  width: number;
+  children: ReactNode;
+  footer?: KeyHint[];
+  color?: string;
+}) {
   return (
     <Box
       flexDirection="column"
@@ -41,9 +48,126 @@ export function Frame(props: { title: string; width: number; children: ReactNode
       {props.children}
       {props.footer ? (
         <Box marginTop={1}>
-          <Text color={C.faint}>{props.footer}</Text>
+          <KeyHints hints={props.footer} wrap />
         </Box>
       ) : null}
+    </Box>
+  );
+}
+
+/** A key and what it does: `⏎ открыть`. Without a key it is a plain note. A click on it presses the key. */
+export interface KeyHint {
+  key?: string;
+  label?: string;
+  /** What a click types, when it is not the key itself; a list goes part by part: `< >`. */
+  press?: string | string[];
+  /** Instead of typing a key. */
+  onPress?: () => void;
+  color?: string;
+}
+
+const KEY_BYTES: Record<string, string> = { '⏎': '\r', esc: '\u001b', tab: '\t', space: ' ', '⌃Q': '\u0011' };
+const SEPARATOR = ' · ';
+
+function hintWidth(hint: KeyHint): number {
+  const label = hint.label ? stringWidth(hint.label) : 0;
+  return hint.key ? stringWidth(hint.key) + (label ? 1 + label : 0) : label;
+}
+
+/** What a click at column `x` of a hint does: a key to type or its own action. Keys like `← →` do nothing. */
+export function hintPress(hint: KeyHint, x: number): string | (() => void) | undefined {
+  if (!hint.key) return undefined;
+  if (hint.onPress) return hint.onPress;
+  if (!Array.isArray(hint.press))
+    return hint.press ?? KEY_BYTES[hint.key] ?? ([...hint.key].length === 1 ? hint.key : undefined);
+  let column = 0;
+  for (const [index, part] of hint.key.split(' ').entries()) {
+    const size = stringWidth(part);
+    if (x >= column && x < column + size) return hint.press[index];
+    column += size + 1;
+  }
+  return undefined;
+}
+
+/** The hint at column `x` of a line of hints, and the column inside it. */
+export function hintAt(hints: KeyHint[], x: number): { hint: KeyHint; x: number } | undefined {
+  let column = 0;
+  for (const [index, hint] of hints.entries()) {
+    if (index > 0) column += SEPARATOR.length;
+    const size = hintWidth(hint);
+    if (x >= column && x < column + size) return { hint, x: x - column };
+    column += size;
+  }
+  return undefined;
+}
+
+/**
+ * A line of key hints that are buttons too. One line cut at the edge, or
+ * (`wrap`) as many lines as it takes, breaking between hints.
+ */
+export function KeyHints(props: { hints: KeyHint[]; active?: boolean; keyColor?: string; wrap?: boolean }) {
+  const press = usePress();
+  const ref = useRef<DOMElement>(null);
+  const run = (hint: KeyHint, x: number) => {
+    const action = hintPress(hint, x);
+    if (typeof action === 'function') action();
+    else if (action) press(action);
+  };
+  useClick(
+    ref,
+    (click) => {
+      // A habitual double click must not press «d готово» twice.
+      if (click.double || click.y !== 0) return;
+      const at = hintAt(props.hints, click.x);
+      if (at) run(at.hint, at.x);
+    },
+    props.active !== false && !props.wrap,
+  );
+  const keyColor = props.keyColor ?? C.accent;
+  const body = (hint: KeyHint) => (
+    <>
+      {hint.key ? <Text color={hint.color ?? keyColor}>{hint.key}</Text> : null}
+      {hint.label ? (
+        <Text color={C.faint}>
+          {hint.key ? ' ' : ''}
+          {hint.label}
+        </Text>
+      ) : null}
+    </>
+  );
+  if (props.wrap) {
+    return (
+      <Box flexWrap="wrap">
+        {props.hints.map((hint, index) => (
+          <Clickable
+            // biome-ignore lint/suspicious/noArrayIndexKey: hints are positions in a fixed line.
+            key={index}
+            flexShrink={0}
+            active={props.active !== false}
+            onClick={(click) => {
+              if (!click.double) run(hint, click.x - (index > 0 ? SEPARATOR.length : 0));
+            }}
+          >
+            <Text>
+              {index > 0 ? <Text color={C.rule}>{SEPARATOR}</Text> : null}
+              {body(hint)}
+            </Text>
+          </Clickable>
+        ))}
+      </Box>
+    );
+  }
+  return (
+    <Box ref={ref} flexShrink={1} minWidth={0}>
+      <Text wrap="truncate-end">
+        {props.hints.map((hint, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: hints are positions in a fixed line.
+          <Text key={index}>
+            {index > 0 ? <Text color={C.rule}>{SEPARATOR}</Text> : null}
+            {body(hint)}
+          </Text>
+        ))}
+      </Text>
     </Box>
   );
 }
@@ -300,7 +424,16 @@ export function Menu(props: {
                 <Text color={C.faint}>{item.section}</Text>
               </Box>
             ) : null}
-            <Box>
+            <Clickable
+              active={props.active && !item.disabled}
+              onClick={(click) => {
+                if (done.current) return;
+                // A click highlights, a double click picks — like ↑↓ and then ⏎.
+                if (!click.double) return setIndex(choosable.indexOf(item));
+                done.current = true;
+                props.onPick(item.key);
+              }}
+            >
               <Text color={selected ? C.brand : C.faint}>{selected ? '❯ ' : '  '}</Text>
               <Box flexGrow={1}>
                 {typeof item.label === 'string' ? (
@@ -312,7 +445,7 @@ export function Menu(props: {
                 )}
               </Box>
               {item.hotkey ? <Text color={selected ? C.brand : C.faint}> {item.hotkey}</Text> : null}
-            </Box>
+            </Clickable>
             {selected && item.hint ? (
               <Box marginLeft={2}>
                 <Text color={C.faint} wrap="truncate-end">

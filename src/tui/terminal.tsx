@@ -7,7 +7,9 @@ import stringWidth from 'string-width';
 import { BRAIN_LABEL } from '../agents/launch.js';
 import { formatMemory, type Pane } from '../agents/panes.js';
 import { t } from '../i18n/i18n.js';
+import { type KeyHint, KeyHints } from './components/controls.js';
 import type { MouseEvent, TerminalInputEvent } from './input.js';
+import { useClick } from './mouse.js';
 import type { PaneState } from './rows.js';
 import { C } from './theme.js';
 
@@ -131,19 +133,22 @@ export function TerminalPane(props: {
     };
   }, [pane.pane, pane.attached, width, height]);
 
+  // A click inside starts typing there; the buttons in the footer are clicks of their own.
+  useClick(box, () => {
+    if (!callbacks.current.focused) callbacks.current.onFocus();
+  });
   useEffect(() => {
     const mouse = (event: MouseEvent) => {
       if (event.release || !box.current) return;
       const bounds = measureElement(box.current);
-      // A click inside starts typing there, a click outside goes back to the tree.
+      // A click outside goes back to the tree.
       if (!(event.button & 64) && (event.button & 3) === 0) {
         const inside =
           event.x >= bounds.x &&
           event.x < bounds.x + bounds.width &&
           event.y >= bounds.y &&
           event.y < bounds.y + bounds.height;
-        if (inside && !callbacks.current.focused) callbacks.current.onFocus();
-        else if (!inside && callbacks.current.focused) callbacks.current.onBlur();
+        if (!inside && callbacks.current.focused) callbacks.current.onBlur();
         return;
       }
       if (!(event.button & 64) || (event.button & 3) > 1) return;
@@ -211,22 +216,23 @@ export function TerminalPane(props: {
   const memory = formatMemory(pane.memory);
   const waiting = props.state.color === C.you;
   const border = focused ? C.brand : waiting ? C.you : C.rule;
-  const keys: [string, string][] = scrollOffset
+  const keys: KeyHint[] = scrollOffset
     ? [
-        ['End', t('к живому экрану')],
-        ['PgUp PgDn', t('листать')],
+        // Without focus End belongs to the tree: the button scrolls the panel itself.
+        { key: 'End', label: t('к живому экрану'), onPress: () => controls.current.scrollTo(0) },
+        { key: 'PgUp PgDn', label: t('листать') },
       ]
     : focused
       ? [
-          ['⌃Q', t('к дереву')],
-          [t('колесо, PgUp'), t('история')],
+          { key: '⌃Q', label: t('к дереву') },
+          { key: t('колесо, PgUp'), label: t('история') },
         ]
       : [
-          ['f', t('печатать')],
-          ['F', t('весь экран')],
-          ['x', t('усыпить')],
-          ['p', t('скрыть')],
-          ['< >', t('ширина')],
+          { key: 'f', label: t('печатать') },
+          { key: 'F', label: t('весь экран') },
+          { key: 'x', label: t('усыпить') },
+          { key: 'p', label: t('скрыть') },
+          { key: '< >', label: t('ширина'), press: ['<', '>'] },
         ];
   return (
     <Box
@@ -270,23 +276,19 @@ export function TerminalPane(props: {
           <Text color={C.faint}>{t('читаю экран…')}</Text>
         )}
       </Box>
-      <Text wrap="truncate-end">
+      <Box>
         {scrollOffset ? (
-          <Text color={C.warn}>
-            {t('история ↑{rows}', {
-              rows: scrollOffset,
-            })}
-            {'  '}
-          </Text>
+          <Box flexShrink={0}>
+            <Text color={C.warn}>
+              {t('история ↑{rows}', {
+                rows: scrollOffset,
+              })}
+              {'  '}
+            </Text>
+          </Box>
         ) : null}
-        {keys.map(([key, what], index) => (
-          <Text key={key}>
-            {index > 0 ? <Text color={C.rule}> · </Text> : null}
-            <Text color={focused ? C.brand : C.accent}>{key}</Text>
-            <Text color={C.faint}> {what}</Text>
-          </Text>
-        ))}
-      </Text>
+        <KeyHints hints={keys} keyColor={focused ? C.brand : C.accent} />
+      </Box>
     </Box>
   );
 }

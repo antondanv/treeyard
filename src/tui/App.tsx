@@ -88,7 +88,7 @@ import {
 } from '../model/types.js';
 import { MAX_PANES, SLEEP_AFTER, settings, updateSettings } from '../settings.js';
 import { catalogHint, effortOptions, effortsFor, fitEffort, modelOptions, useCatalog } from './catalogs.js';
-import { editText } from './components/controls.js';
+import { editText, type KeyHint, KeyHints } from './components/controls.js';
 import { NodeDetails, SessionDetails } from './details.js';
 import {
   CheckDialog,
@@ -116,6 +116,7 @@ import { follow, Graph, type GraphStyle, layoutGraph, neighbour, selectedOverflo
 import { History } from './history.js';
 import { Logo, logoSize, WORDMARK } from './logo.js';
 import { MARQUEE_TICK } from './marquee.js';
+import { type Click, Clickable, MouseProvider, usePress } from './mouse.js';
 import { ListRow, paneState, rowOverflow, SessionRow, TreeRow, treePrefix } from './rows.js';
 import { TerminalPane } from './terminal.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
@@ -1298,6 +1299,68 @@ export function App(props: AppProps) {
     q: 'quit',
   };
 
+  /** ⏎ in the list: a node's actions, a session, the node of a journal entry. */
+  const enter = () => {
+    if (view === 'sessions') {
+      const session = currentSession;
+      if (!session) return;
+      // A live pane is shown, not resumed: nothing to confirm.
+      if (paneFor(session, panes)) return focusPane();
+      return request({ kind: 'loose', session });
+    }
+    if (view === 'journal') {
+      const event = events[cursor];
+      if (event) reveal(event.node.id);
+      return;
+    }
+    actions.open!.run();
+  };
+
+  // ── Mouse: a click selects, a double click is ⏎ ─────────────────────────
+  const press = usePress();
+  /** The keys of the list work now: no dialog, no prompt, no search, no typing into a session. */
+  const listKeys = !modal && !searching && !prompt && !paneFocused;
+  /** Clicks that only select: they also take the keyboard back from a session. */
+  const clicks = !modal && !prompt;
+  const clickRow = (index: number, click: Click) => {
+    if (click.double) return enter();
+    setSearching(false);
+    select(index);
+  };
+  const clickTreeRow = (row: Row, index: number, click: Click) => {
+    // The ▸ ▾ of a branch, with a column of slack on each side.
+    const marker = treePrefix(row) - 1;
+    if (row.hasChildren && click.x >= marker - 1 && click.x <= marker + 1) {
+      if (!click.double) expandTo(row.node.id, !row.expanded);
+      return;
+    }
+    clickRow(index, click);
+  };
+  const graphClick = useRef<{ node: string; fold: boolean } | undefined>(undefined);
+  const clickGraph = (hit: { node: string; fold: boolean } | undefined, click: Click) => {
+    if (click.double) {
+      // The layout may have moved under the pointer: the first click says what was meant.
+      if (graphClick.current && !graphClick.current.fold) enter();
+      return;
+    }
+    graphClick.current = hit;
+    if (!hit) return;
+    setSearching(false);
+    setSelected(hit.node);
+    const row = treeRows.find((item) => item.node.id === hit.node);
+    if (!hit.fold || !row?.hasChildren || row.expanded) return;
+    // The ›4 of a closed branch: open it and step in, as → does.
+    const opened = new Set(expanded).add(row.node.id);
+    setExpanded(opened);
+    const layout = layoutGraph(flatten(tree, { expanded: opened, showClosed, filter }), {
+      style: graphStyle,
+      width: graphWidth,
+      tree,
+    });
+    const next = neighbour(layout, row.node.id, 'right');
+    if (next) setSelected(next);
+  };
+
   const moveCursor = (delta: number) => select(cursorIndex() + delta);
   const cursorIndex = () => (view === 'sessions' ? sessionIndex : cursor);
   const count = view === 'sessions' ? sessionList.length : view === 'journal' ? events.length : nodesInView.length;
@@ -1485,29 +1548,23 @@ export function App(props: AppProps) {
         if (input === 'f') return focusPane();
         if (input === 'F' || input === '<' || input === '>') return actions[KEY_ACTIONS[input]!]!.run();
         if (input === 'x') return putToSleep(session);
-        // A live pane is shown, not resumed: nothing to confirm.
-        if (key.return && paneFor(session, panes)) return focusPane();
-        if (key.return) return request({ kind: 'loose', session });
+        if (key.return) return enter();
         if (input === 'l') return setModal({ kind: 'link', session });
         return;
       }
       if (view === 'journal') {
         if (key.upArrow || input === 'k') return select(cursor - 1);
         if (key.downArrow || input === 'j') return select(cursor + 1);
-        if (key.return) {
-          const event = events[cursor];
-          if (event) reveal(event.node.id);
-          return;
-        }
+        if (key.return) return enter();
       }
 
       if (arrows(input, key)) return;
-      if (key.return) return actions.open!.run();
+      if (key.return) return enter();
       if (key.delete) return actions.remove!.run();
       const name = KEY_ACTIONS[input];
       if (name) actions[name]!.run();
     },
-    { isActive: !modal && !searching && !prompt && !paneFocused },
+    { isActive: listKeys },
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1528,8 +1585,14 @@ export function App(props: AppProps) {
           const busy = group.filter((session) => session.live?.status === 'busy').length;
           const waiting = group.filter((session) => session.live?.status === 'waiting').length;
           const mine = currentSession?.brain === line.brain;
+          const first = sessionList.findIndex((session) => session.brain === line.brain);
           return (
-            <Box key={`head:${line.brain}`} width={leftWidth}>
+            <Clickable
+              key={`head:${line.brain}`}
+              width={leftWidth}
+              active={clicks && first >= 0}
+              onClick={(click) => clickRow(first, click)}
+            >
               <Text wrap="truncate-end">
                 <Text color={mine ? C.brand : C.dim}>{mine ? '▌' : '▏'}</Text>
                 <Text bold color={mine ? C.brand : undefined}>
@@ -1559,7 +1622,7 @@ export function App(props: AppProps) {
                   </Text>
                 ) : null}
               </Text>
-            </Box>
+            </Clickable>
           );
         }
         if (line.kind === 'empty')
@@ -1569,27 +1632,29 @@ export function App(props: AppProps) {
             </Text>
           );
         const item = sessionList[line.index]!;
+        const index = line.index;
         return (
-          <SessionRow
-            key={keyOf(item)}
-            session={item}
-            selected={line.index === sessionIndex}
-            width={leftWidth}
-            frame={frame}
-            grouped
-            project={tree.project.title}
-            pane={paneFor(item, panes)}
-            sleeping={Boolean(
-              owners.get(item.id) &&
-                tree.nodes.get(owners.get(item.id)!)?.sessions.find((s) => s.id === item.id && s.mode === 'pane') &&
-                !paneFor(item, panes),
-            )}
-            {...(owners.get(item.id) ? { owner: tree.nodes.get(owners.get(item.id)!)?.title ?? '' } : {})}
-          />
+          <Clickable key={keyOf(item)} active={clicks} onClick={(click) => clickRow(index, click)}>
+            <SessionRow
+              session={item}
+              selected={line.index === sessionIndex}
+              width={leftWidth}
+              frame={frame}
+              grouped
+              project={tree.project.title}
+              pane={paneFor(item, panes)}
+              sleeping={Boolean(
+                owners.get(item.id) &&
+                  tree.nodes.get(owners.get(item.id)!)?.sessions.find((s) => s.id === item.id && s.mode === 'pane') &&
+                  !paneFor(item, panes),
+              )}
+              {...(owners.get(item.id) ? { owner: tree.nodes.get(owners.get(item.id)!)?.title ?? '' } : {})}
+            />
+          </Clickable>
         );
       });
     }
-    if (view === 'journal') return journal(events, cursor, leftWidth, listHeight);
+    if (view === 'journal') return journal(events, cursor, leftWidth, listHeight, clicks, clickRow);
     if (view === 'tree') {
       if (treeRows.length === 0) {
         return (
@@ -1618,18 +1683,15 @@ export function App(props: AppProps) {
             panes={paneNodes}
             frame={frame}
             tick={tick}
+            active={clicks}
+            onClick={clickGraph}
           />
         );
       }
       return windowed(treeRows, cursor, listHeight).map(({ item, index }) => (
-        <TreeRow
-          tick={tick}
-          key={item.node.id}
-          row={item}
-          selected={index === cursor}
-          width={leftWidth}
-          badges={badgesFor(item.node)}
-        />
+        <Clickable key={item.node.id} active={clicks} onClick={(click) => clickTreeRow(item, index, click)}>
+          <TreeRow tick={tick} row={item} selected={index === cursor} width={leftWidth} badges={badgesFor(item.node)} />
+        </Clickable>
       ));
     }
     const nodes = nodesInView;
@@ -1660,15 +1722,16 @@ export function App(props: AppProps) {
         });
       }
       return (
-        <ListRow
-          tick={tick}
-          key={item.id}
-          node={item}
-          selected={index === cursor}
-          width={leftWidth}
-          badges={badgesFor(item)}
-          note={note}
-        />
+        <Clickable key={item.id} active={clicks} onClick={(click) => clickRow(index, click)}>
+          <ListRow
+            tick={tick}
+            node={item}
+            selected={index === cursor}
+            width={leftWidth}
+            badges={badgesFor(item)}
+            note={note}
+          />
+        </Clickable>
       );
     });
   };
@@ -2419,26 +2482,37 @@ export function App(props: AppProps) {
               {waitingYou}{' '}
             </Text>
           ) : null}
-          {tree.problems.length ? (
+        </Text>
+        {tree.problems.length ? (
+          <Clickable active={listKeys} onClick={(click) => click.double || press('!')}>
             <Text color={C.bad}>
               {t('! проблем в файлах: ')}
               {tree.problems.length} (!){'  '}
             </Text>
-          ) : null}
-          {infoWidth >= 72 ? (
-            <Text>
-              <Text color={C.accent} inverse bold>
-                {' , '}
+          </Clickable>
+        ) : null}
+        {infoWidth >= 72 ? (
+          <>
+            <Clickable active={listKeys} onClick={(click) => click.double || press(',')}>
+              <Text>
+                <Text color={C.accent} inverse bold>
+                  {' , '}
+                </Text>
+                <Text color={C.dim}>{t(' настройки')}</Text>
               </Text>
-              <Text color={C.dim}>{t(' настройки')}</Text>
-              <Text color={C.faint}>{'  '}</Text>
-              <Text color={C.accent} inverse bold>
-                {' ? '}
+            </Clickable>
+            <Text color={C.faint}>{'  '}</Text>
+            {/* ? closes the help too: its own footer may be below a short screen. */}
+            <Clickable active={listKeys || modal?.kind === 'help'} onClick={(click) => click.double || press('?')}>
+              <Text>
+                <Text color={C.accent} inverse bold>
+                  {' ? '}
+                </Text>
+                <Text color={C.dim}>{t(' клавиши')}</Text>
               </Text>
-              <Text color={C.dim}>{t(' клавиши')}</Text>
-            </Text>
-          ) : null}
-        </Text>
+            </Clickable>
+          </>
+        ) : null}
       </Box>
     </Box>
   );
@@ -2474,7 +2548,16 @@ export function App(props: AppProps) {
         const active = v === view;
         const n = counts[v];
         return (
-          <Box key={v} marginRight={width < 90 ? 1 : 3} flexShrink={0}>
+          <Clickable
+            key={v}
+            marginRight={width < 90 ? 1 : 3}
+            flexShrink={0}
+            active={clicks}
+            onClick={() => {
+              setSearching(false);
+              setView(v);
+            }}
+          >
             <Text>
               <Text color={active ? C.brand : C.faint}>{index + 1} </Text>
               <Text color={active ? C.brand : C.dim} bold={active} underline={active}>
@@ -2482,163 +2565,169 @@ export function App(props: AppProps) {
               </Text>
               {n !== undefined && n > 0 ? <Text color={active ? C.brand : C.faint}> {n}</Text> : null}
             </Text>
-          </Box>
+          </Clickable>
         );
       })}
       {view === 'tree' ? (
         <Box flexGrow={1} justifyContent="flex-end">
           <Text color={C.faint}>
             {treeMode === 'graph' ? (graphStyle === 'line' ? t('граф') : t('карточки')) : t('список')}
-            {filter || searching ? '' : ' · v z'}
+            {filter || searching ? '' : ' · '}
           </Text>
+          {filter || searching ? null : (
+            <KeyHints hints={[{ key: 'v z', press: ['v', 'z'] }]} keyColor={C.faint} active={listKeys} />
+          )}
         </Box>
       ) : null}
     </Box>
   );
 
   return (
-    <Box flexDirection="column" width={width} height={height}>
-      {/* Header: the mark, the project, the tabs. */}
-      <Box width={width} height={mark.rows} paddingX={1}>
-        <Logo compact={compact} {...(busyAgents > 0 ? { pulse: frame } : {})} />
-        <Box flexDirection="column" marginLeft={2} width={infoWidth}>
-          {titleLine}
-          {compact ? null : goalLine}
-          {progressLine}
-          {tabs}
+    <MouseProvider>
+      <Box flexDirection="column" width={width} height={height}>
+        {/* Header: the mark, the project, the tabs. */}
+        <Box width={width} height={mark.rows} paddingX={1}>
+          <Logo compact={compact} {...(busyAgents > 0 ? { pulse: frame } : {})} />
+          <Box flexDirection="column" marginLeft={2} width={infoWidth}>
+            {titleLine}
+            {compact ? null : goalLine}
+            {progressLine}
+            {tabs}
+          </Box>
+        </Box>
+        <Box width={width} paddingX={1}>
+          <Text color={C.rule}>{'─'.repeat(Math.max(0, width - 2))}</Text>
+        </Box>
+
+        {/* Body */}
+        <Box width={width} height={bodyHeight}>
+          {fullModal ? (
+            <Box width={width} height={bodyHeight} justifyContent="center" alignItems="flex-start">
+              {dialog()}
+            </Box>
+          ) : (
+            <>
+              {!side && (modal || terminalVisible) ? null : (
+                <Box flexDirection="column" width={leftWidth} height={bodyHeight} overflow="hidden">
+                  {body()}
+                </Box>
+              )}
+              {side ? (
+                <Box width={1} height={bodyHeight} flexDirection="column" overflow="hidden">
+                  {/* The session pane and dialogs draw their own frames: a rule next to them would double the line. */}
+                  {terminalVisible || modal ? null : <Text color={C.rule}>{'│\n'.repeat(bodyHeight).trimEnd()}</Text>}
+                </Box>
+              ) : null}
+              {modal ? (
+                <Box width={side ? rightWidth : width} height={bodyHeight} flexDirection="column">
+                  {dialog()}
+                </Box>
+              ) : terminalVisible && selectedPane ? (
+                <TerminalPane
+                  key={selectedPane.pane}
+                  pane={selectedPane}
+                  title={current?.title ?? selectedPane.label ?? currentSession?.title ?? ''}
+                  state={paneState(selectedPane, live.get(selectedPane.sessionId ?? ''), frame)}
+                  width={side ? rightWidth : width}
+                  height={bodyHeight}
+                  focused={paneFocused}
+                  onFocus={() => setPaneFocused(true)}
+                  onBlur={() => setPaneFocused(false)}
+                  onGone={() => {
+                    setPanes((list) => list.filter((p) => p.pane !== selectedPane.pane));
+                    setPaneFocused(false);
+                  }}
+                  onError={(message) => say(message, C.bad)}
+                />
+              ) : side ? (
+                view === 'sessions' ? (
+                  <SessionDetails
+                    session={currentSession}
+                    owner={
+                      currentSession && owners.get(currentSession.id)
+                        ? tree.nodes.get(owners.get(currentSession.id)!)
+                        : undefined
+                    }
+                    width={rightWidth}
+                    height={bodyHeight}
+                  />
+                ) : (
+                  <NodeDetails
+                    tree={tree}
+                    node={current}
+                    width={rightWidth}
+                    height={bodyHeight}
+                    live={live}
+                    frame={frame}
+                  />
+                )
+              ) : null}
+            </>
+          )}
+        </Box>
+
+        {/* Where you are, and what done means here. */}
+        {strip > 0 ? (
+          <SelectionStrip tree={tree} node={current} width={width} full={strip === 2} live={live} frame={frame} />
+        ) : null}
+
+        {/* Footer: a prompt, a job, news or keys. */}
+        <Box width={width} paddingX={1}>
+          {paneFocused ? (
+            <Text color={C.agent} wrap="truncate-end">
+              {t('✎ печатаешь в {brain} · ⌃Q или клик по дереву — обратно', {
+                brain: selectedPane?.brain ? BRAIN_LABEL[selectedPane.brain] : 'CLI',
+              })}
+            </Text>
+          ) : prompt ? (
+            <Text wrap="truncate-end">
+              <Text color={C.brand} bold>
+                {prompt.kind === 'add' ? '＋ ' : '✎ '}
+                {prompt.label}:{' '}
+              </Text>
+              <Text>{prompt.value.slice(0, prompt.cursor)}</Text>
+              <Text inverse>{prompt.value[prompt.cursor] ?? ' '}</Text>
+              <Text>{prompt.value.slice(prompt.cursor + 1)}</Text>
+              <Text color={C.faint}>
+                {'   '}⏎ {prompt.kind === 'add' ? t('добавить · tab с критерием') : t('сохранить')}
+                {t(' · esc отмена')}
+              </Text>
+            </Text>
+          ) : searching ? (
+            <Text wrap="truncate-end">
+              <Text color={C.brand} bold>
+                /{' '}
+              </Text>
+              <Text>{filter}</Text>
+              <Text inverse> </Text>
+              <Text color={C.faint}>
+                {'   '}
+                {t('найдено узлов: ')}
+                {treeRows.filter((row) => row.match).length}
+                {t(' · ⏎ готово · esc сбросить')}
+              </Text>
+            </Text>
+          ) : job ? (
+            <Text color={C.agent} wrap="truncate-end">
+              {SPINNER[frame % SPINNER.length]} {job.label}
+              {job.detail ? <Text color={C.faint}> · {job.detail}</Text> : null}
+            </Text>
+          ) : toast ? (
+            <Text color={toast.color ?? C.brand} wrap="truncate-end">
+              {toast.text}
+            </Text>
+          ) : (
+            <Hints
+              view={view}
+              has={Boolean(current)}
+              filter={filter}
+              pane={!terminalVisible && current && sleepingRef(current, panes) ? 'sleeping' : undefined}
+              active={listKeys}
+            />
+          )}
         </Box>
       </Box>
-      <Box width={width} paddingX={1}>
-        <Text color={C.rule}>{'─'.repeat(Math.max(0, width - 2))}</Text>
-      </Box>
-
-      {/* Body */}
-      <Box width={width} height={bodyHeight}>
-        {fullModal ? (
-          <Box width={width} height={bodyHeight} justifyContent="center" alignItems="flex-start">
-            {dialog()}
-          </Box>
-        ) : (
-          <>
-            {!side && (modal || terminalVisible) ? null : (
-              <Box flexDirection="column" width={leftWidth} height={bodyHeight} overflow="hidden">
-                {body()}
-              </Box>
-            )}
-            {side ? (
-              <Box width={1} height={bodyHeight} flexDirection="column" overflow="hidden">
-                {/* The session pane and dialogs draw their own frames: a rule next to them would double the line. */}
-                {terminalVisible || modal ? null : <Text color={C.rule}>{'│\n'.repeat(bodyHeight).trimEnd()}</Text>}
-              </Box>
-            ) : null}
-            {modal ? (
-              <Box width={side ? rightWidth : width} height={bodyHeight} flexDirection="column">
-                {dialog()}
-              </Box>
-            ) : terminalVisible && selectedPane ? (
-              <TerminalPane
-                key={selectedPane.pane}
-                pane={selectedPane}
-                title={current?.title ?? selectedPane.label ?? currentSession?.title ?? ''}
-                state={paneState(selectedPane, live.get(selectedPane.sessionId ?? ''), frame)}
-                width={side ? rightWidth : width}
-                height={bodyHeight}
-                focused={paneFocused}
-                onFocus={() => setPaneFocused(true)}
-                onBlur={() => setPaneFocused(false)}
-                onGone={() => {
-                  setPanes((list) => list.filter((p) => p.pane !== selectedPane.pane));
-                  setPaneFocused(false);
-                }}
-                onError={(message) => say(message, C.bad)}
-              />
-            ) : side ? (
-              view === 'sessions' ? (
-                <SessionDetails
-                  session={currentSession}
-                  owner={
-                    currentSession && owners.get(currentSession.id)
-                      ? tree.nodes.get(owners.get(currentSession.id)!)
-                      : undefined
-                  }
-                  width={rightWidth}
-                  height={bodyHeight}
-                />
-              ) : (
-                <NodeDetails
-                  tree={tree}
-                  node={current}
-                  width={rightWidth}
-                  height={bodyHeight}
-                  live={live}
-                  frame={frame}
-                />
-              )
-            ) : null}
-          </>
-        )}
-      </Box>
-
-      {/* Where you are, and what done means here. */}
-      {strip > 0 ? (
-        <SelectionStrip tree={tree} node={current} width={width} full={strip === 2} live={live} frame={frame} />
-      ) : null}
-
-      {/* Footer: a prompt, a job, news or keys. */}
-      <Box width={width} paddingX={1}>
-        {paneFocused ? (
-          <Text color={C.agent} wrap="truncate-end">
-            {t('✎ печатаешь в {brain} · ⌃Q или клик по дереву — обратно', {
-              brain: selectedPane?.brain ? BRAIN_LABEL[selectedPane.brain] : 'CLI',
-            })}
-          </Text>
-        ) : prompt ? (
-          <Text wrap="truncate-end">
-            <Text color={C.brand} bold>
-              {prompt.kind === 'add' ? '＋ ' : '✎ '}
-              {prompt.label}:{' '}
-            </Text>
-            <Text>{prompt.value.slice(0, prompt.cursor)}</Text>
-            <Text inverse>{prompt.value[prompt.cursor] ?? ' '}</Text>
-            <Text>{prompt.value.slice(prompt.cursor + 1)}</Text>
-            <Text color={C.faint}>
-              {'   '}⏎ {prompt.kind === 'add' ? t('добавить · tab с критерием') : t('сохранить')}
-              {t(' · esc отмена')}
-            </Text>
-          </Text>
-        ) : searching ? (
-          <Text wrap="truncate-end">
-            <Text color={C.brand} bold>
-              /{' '}
-            </Text>
-            <Text>{filter}</Text>
-            <Text inverse> </Text>
-            <Text color={C.faint}>
-              {'   '}
-              {t('найдено узлов: ')}
-              {treeRows.filter((row) => row.match).length}
-              {t(' · ⏎ готово · esc сбросить')}
-            </Text>
-          </Text>
-        ) : job ? (
-          <Text color={C.agent} wrap="truncate-end">
-            {SPINNER[frame % SPINNER.length]} {job.label}
-            {job.detail ? <Text color={C.faint}> · {job.detail}</Text> : null}
-          </Text>
-        ) : toast ? (
-          <Text color={toast.color ?? C.brand} wrap="truncate-end">
-            {toast.text}
-          </Text>
-        ) : (
-          <Hints
-            view={view}
-            has={Boolean(current)}
-            filter={filter}
-            pane={!terminalVisible && current && sleepingRef(current, panes) ? 'sleeping' : undefined}
-          />
-        )}
-      </Box>
-    </Box>
+    </MouseProvider>
   );
 }
 
@@ -2752,7 +2841,7 @@ function SelectionStrip(props: {
   );
 }
 
-function Hints(props: { view: View; has: boolean; filter: string; pane?: 'sleeping' | undefined }) {
+function Hints(props: { view: View; has: boolean; filter: string; pane?: 'sleeping' | undefined; active: boolean }) {
   // The session on the right comes first: it is what the person looks at.
   // A sleeping session is one key away; a live one shows its own keys in its panel.
   const pane: [string, string][] = props.pane === 'sleeping' ? [['f', t('разбудить сессию')]] : [];
@@ -2797,26 +2886,30 @@ function Hints(props: { view: View; has: boolean; filter: string; pane?: 'sleepi
               [',', t('настройки')],
               ['?', t('всё')],
             ];
+  const hints: KeyHint[] = keys.map(([key, label]) => ({ key, label }));
   return (
-    <Text wrap="truncate-end">
+    <Box>
       {props.filter ? (
-        <Text color={C.brand}>
-          / {props.filter}
-          <Text color={C.faint}> (esc){'   '}</Text>
-        </Text>
+        <Box flexShrink={0}>
+          <Text color={C.brand}>
+            / {props.filter}
+            <Text color={C.faint}> (esc){'   '}</Text>
+          </Text>
+        </Box>
       ) : null}
-      {keys.map(([key, what], index) => (
-        <Text key={key}>
-          {index > 0 ? <Text color={C.rule}> · </Text> : null}
-          <Text color={C.accent}>{key}</Text>
-          <Text color={C.faint}> {what}</Text>
-        </Text>
-      ))}
-    </Text>
+      <KeyHints hints={hints} active={props.active} />
+    </Box>
   );
 }
 
-function journal(events: Event[], cursor: number, width: number, height: number): ReactNode {
+function journal(
+  events: Event[],
+  cursor: number,
+  width: number,
+  height: number,
+  active: boolean,
+  onClick: (index: number, click: Click) => void,
+): ReactNode {
   if (events.length === 0) {
     return (
       <Box paddingX={2} paddingY={1}>
@@ -2832,7 +2925,12 @@ function journal(events: Event[], cursor: number, width: number, height: number)
         : `${item.when.slice(8, 10)}.${item.when.slice(5, 7)}`;
     const agent = !['ты', 'you', 'treeyard'].includes(item.who);
     return (
-      <Box key={`${item.node.id}:${item.time}`} width={width}>
+      <Clickable
+        key={`${item.node.id}:${item.time}`}
+        width={width}
+        active={active}
+        onClick={(click) => onClick(index, click)}
+      >
         <Text color={C.brand}>{selected ? '❯' : ' '}</Text>
         <Box width={12} flexShrink={0}>
           <Text color={C.faint}>{when}</Text>
@@ -2853,7 +2951,7 @@ function journal(events: Event[], cursor: number, width: number, height: number)
             {item.text}
           </Text>
         </Box>
-      </Box>
+      </Clickable>
     );
   });
 }
