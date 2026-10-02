@@ -6,6 +6,7 @@ import { Box, type DOMElement, type Key, Text, useInput } from 'ink';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import stringWidth from 'string-width';
 import { t } from '../../i18n/i18n.js';
+import { shortcutKey } from '../keys.js';
 import { Clickable, useClick, usePress } from '../mouse.js';
 import { C } from '../theme.js';
 
@@ -179,15 +180,16 @@ export function editText(
   input: string,
   key: Key,
 ): { value: string; cursor: number } | null {
+  const shortcut = shortcutKey(input);
   if (key.return || key.escape || key.tab || key.upArrow || key.downArrow) return null;
   if (key.leftArrow)
     return { value, cursor: Math.max(0, cursor - (key.ctrl || key.meta ? wordLeft(value, cursor) : 1)) };
   if (key.rightArrow) return { value, cursor: Math.min(value.length, cursor + 1) };
-  if (key.home || (key.ctrl && input === 'a')) return { value, cursor: 0 };
-  if (key.end || (key.ctrl && input === 'e')) return { value, cursor: value.length };
-  if (key.ctrl && input === 'u') return { value: value.slice(cursor), cursor: 0 };
-  if (key.ctrl && input === 'k') return { value: value.slice(0, cursor), cursor };
-  if ((key.ctrl && input === 'w') || (key.meta && key.backspace)) {
+  if (key.home || (key.ctrl && shortcut === 'a')) return { value, cursor: 0 };
+  if (key.end || (key.ctrl && shortcut === 'e')) return { value, cursor: value.length };
+  if (key.ctrl && shortcut === 'u') return { value: value.slice(cursor), cursor: 0 };
+  if (key.ctrl && shortcut === 'k') return { value: value.slice(0, cursor), cursor };
+  if ((key.ctrl && shortcut === 'w') || (key.meta && key.backspace)) {
     const from = cursor - wordLeft(value, cursor);
     return { value: value.slice(0, from) + value.slice(cursor), cursor: from };
   }
@@ -387,6 +389,7 @@ export function Menu(props: {
   useInput(
     (input, key) => {
       if (done.current) return;
+      input = shortcutKey(input);
       const n = Math.max(1, choosable.length);
       const highlighted = choosable[Math.min(indexRef.current, choosable.length - 1)];
       if (props.onKey?.(input, key, highlighted?.key)) return;

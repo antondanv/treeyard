@@ -135,9 +135,9 @@ describe('terminal panes in the tree', () => {
     backend.listPanes.mockResolvedValue([app.pane, { ...app.pane, pane: 'claude-unwatched', sessionId: 'other' }]);
     await until(() => app.stdout.frame.includes('hello from the CLI'));
     expect(app.stdout.frame).toContain('180 МБ');
-    app.stdin.write('f');
+    app.stdin.write('а');
     await until(() => app.stdout.frame.includes('печатаешь в Claude Code'));
-    const chunks = ['привет', '\u001b[A', '\u001b[200~paste\ntext\u001b[201~', '\u0003', 'q'];
+    const chunks = ['привет', 'й', 'о', 'л', 'ф', '\u001b[A', '\u001b[200~paste\ntext\u001b[201~', '\u0003', 'q'];
     for (const chunk of chunks) app.stdin.write(chunk);
     await until(() => backend.sendToPane.mock.calls.length === chunks.length);
     expect(backend.sendToPane.mock.calls.map((call) => call[1])).toEqual(chunks);

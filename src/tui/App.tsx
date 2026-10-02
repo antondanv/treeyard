@@ -114,6 +114,7 @@ import {
 } from './dialogs.js';
 import { follow, Graph, type GraphStyle, layoutGraph, neighbour, selectedOverflow, type Viewport } from './graph.js';
 import { History } from './history.js';
+import { shortcutKey } from './keys.js';
 import { Logo, logoSize, WORDMARK } from './logo.js';
 import { MARQUEE_TICK } from './marquee.js';
 import { type Click, Clickable, MouseProvider, usePress } from './mouse.js';
@@ -1524,6 +1525,7 @@ export function App(props: AppProps) {
 
   useInput(
     (input, key) => {
+      input = shortcutKey(input);
       if (key.pageUp) return moveCursor(-Math.max(1, listHeight - 2));
       if (key.pageDown) return moveCursor(Math.max(1, listHeight - 2));
       if (key.home) return select(0);

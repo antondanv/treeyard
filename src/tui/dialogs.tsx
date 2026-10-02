@@ -38,6 +38,7 @@ import {
   TextField,
   useLatest,
 } from './components/controls.js';
+import { shortcutKey } from './keys.js';
 import { Clickable } from './mouse.js';
 import { liveLabel, paneState } from './rows.js';
 import { C, STATUS_COLOR } from './theme.js';
@@ -666,10 +667,11 @@ export function ConfirmDelete(props: {
   onCancel: () => void;
 }) {
   useInput((input, key) => {
-    if (key.escape || input === 'n' || input === 'т') return props.onCancel();
-    if (props.count === 0 && (key.return || input === 'y' || input === 'д')) return props.onConfirm(false);
-    if (props.count > 0 && (input === 'u' || input === 'п')) return props.onConfirm(false);
-    if (props.count > 0 && (input === 'a' || input === 'в')) return props.onConfirm(true);
+    const shortcut = shortcutKey(input);
+    if (key.escape || shortcut === 'n') return props.onCancel();
+    if (props.count === 0 && (key.return || shortcut === 'y' || input === 'д')) return props.onConfirm(false);
+    if (props.count > 0 && (shortcut === 'u' || input === 'п')) return props.onConfirm(false);
+    if (props.count > 0 && (shortcut === 'a' || input === 'в')) return props.onConfirm(true);
   });
   return (
     <Frame
@@ -758,6 +760,7 @@ export function TextViewer(props: { title: string; text: string; width: number; 
   const [top, setTop] = useState(0);
   const max = Math.max(0, lines.length - rows);
   useInput((input, key) => {
+    input = shortcutKey(input);
     if (key.escape || input === 'q' || key.return) return props.onClose();
     if (key.downArrow || input === 'j') setTop((t) => Math.min(max, t + 1));
     if (key.upArrow || input === 'k') setTop((t) => Math.max(0, t - 1));
@@ -852,6 +855,7 @@ const help = (): [string, [string, string][]][] => [
 
 export function HelpDialog(props: { width: number; height: number; onClose: () => void }) {
   useInput((input, key) => {
+    input = shortcutKey(input);
     if (key.escape || key.return || input === '?' || input === 'q') props.onClose();
   });
   const twoColumns = props.width >= 96;
@@ -1029,6 +1033,7 @@ export function StepsDialog(props: {
   useInput((input, key) => {
     if (key.escape) return props.onCancel();
     if (key.return) return props.onAccept(props.steps.filter((_, i) => chosen[i]));
+    input = shortcutKey(input);
     if (key.upArrow || input === 'k') return setIndex((i) => Math.max(0, i - 1));
     if (key.downArrow || input === 'j') return setIndex((i) => Math.min(props.steps.length - 1, i + 1));
     if (input === ' ') return setChosen((all) => all.map((value, i) => (i === index ? !value : value)));
@@ -1098,6 +1103,7 @@ export function CriterionDialog(props: {
   useInput((input, key) => {
     if (key.escape) return props.onCancel();
     if (key.return) return props.onAccept();
+    input = shortcutKey(input);
     if (input === 'e') return props.onEdit();
   });
   return (
@@ -1155,6 +1161,7 @@ export function CheckDialog(props: {
   const [top, setTop] = useState(Math.max(0, lines.length - rows));
   const max = Math.max(0, lines.length - rows);
   useInput((input, key) => {
+    input = shortcutKey(input);
     if (key.escape || input === 'q') return props.onClose();
     if (props.ok && input === 'r') return props.onStatus('review');
     if (props.ok && input === 'd') return props.onStatus('done');
@@ -1226,16 +1233,17 @@ export function ConfirmLaunch(props: {
   const answered = useRef(false);
   useInput((input, key) => {
     if (answered.current) return;
+    const shortcut = shortcutKey(input);
     const answer = (act: () => void) => {
       answered.current = true;
       act();
     };
-    if (key.escape || input === 'n' || input === 'т') return answer(props.onCancel);
-    if (key.return || input === 'y' || input === 'д') {
+    if (key.escape || shortcut === 'n') return answer(props.onCancel);
+    if (key.return || shortcut === 'y' || input === 'д') {
       if (Date.now() - opened.current < CONFIRM_GUARD_MS) return;
       return answer(props.onConfirm);
     }
-    if (props.configurable && input === 'o') return answer(props.onConfigure);
+    if (props.configurable && shortcut === 'o') return answer(props.onConfigure);
     if (input === '!') return answer(props.onNever);
   });
   const inner = props.width - 6;
