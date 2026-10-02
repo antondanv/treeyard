@@ -92,9 +92,12 @@ afterEach(() => {
   resetSettings({ ...DEFAULTS });
 });
 
-function mount(columns = 120, rows = 30) {
+function mount(columns = 120, rows = 30, options: { nested?: boolean } = {}) {
   const tree = emptyTree();
-  const node = addNode(tree, { title: 'Pane work', status: 'active' });
+  // Nested: a milestone above, so ← has somewhere to go.
+  const milestone = options.nested ? addNode(tree, { title: 'Milestone', status: 'active' }) : undefined;
+  if (milestone) addNode(tree, { title: 'Quiet sibling', status: 'todo', parent: milestone.id });
+  const node = addNode(tree, { title: 'Pane work', status: 'active', ...(milestone ? { parent: milestone.id } : {}) });
   attachSession(tree, node.id, { brain: 'claude', id: 'conversation', pane: 'claude-one', mode: 'pane' });
   const pane = {
     pane: 'claude-one',
@@ -111,7 +114,12 @@ function mount(columns = 120, rows = 30) {
   const input = new TerminalInput(stdin as unknown as NodeJS.ReadStream);
   const action = vi.fn<(action: Action) => void>();
   const instance = render(
-    <App dir={tree.project.dir} ui={{ ...defaultUi(), selected: node.id }} persist={false} onAction={action} />,
+    <App
+      dir={tree.project.dir}
+      ui={{ ...defaultUi(), selected: node.id, ...(milestone ? { expanded: [milestone.id] } : {}) }}
+      persist={false}
+      onAction={action}
+    />,
     {
       stdout: stdout as unknown as NodeJS.WriteStream,
       stdin: input as unknown as NodeJS.ReadStream,
@@ -222,6 +230,50 @@ describe('terminal panes in the tree', () => {
     await until(() => app.stdout.frame.includes('hello from the CLI'));
     expect(app.stdout.frame.split('\n').length).toBeLessThanOrEqual(20);
     expect(backend.resizePane.mock.lastCall?.slice(1)).toEqual([58, 9]);
+  });
+
+  it('⇧← ⇧→ move the border of the pane and keep the selection on the node', async () => {
+    const app = mount(120, 30, { nested: true });
+    await until(() => app.stdout.frame.includes('hello from the CLI'));
+    expect(app.stdout.frame).toContain('⇧← ⇧→ ширина');
+    const width = () => backend.resizePane.mock.lastCall?.[1];
+    expect(width()).toBe(67);
+    app.stdin.write('\u001b[1;2D');
+    await until(() => width() === 77);
+    app.stdin.write('\u001b[1;2C');
+    app.stdin.write('\u001b[1;2C');
+    await until(() => width() === 58);
+    expect(app.stdout.frame).toContain('Milestone › ◐ Pane work');
+    // The keys it had keep working; on the Russian layout too.
+    app.stdin.write('Б');
+    await until(() => width() === 67);
+    app.stdin.write('>');
+    await until(() => width() === 58);
+    // A node without a session says so instead of walking away.
+    app.stdin.write('\u001b[B');
+    await until(() => app.stdout.frame.includes('◯ Quiet sibling') || !app.stdout.frame.includes('hello from the CLI'));
+    app.stdin.write('\u001b[1;2D');
+    await until(() => app.stdout.frame.includes('у узла нет живой сессии'));
+    expect(app.stdout.frame).toContain('Milestone › ○ Quiet sibling');
+  });
+
+  it('clicks on ⇧← in one place keep widening: the button stays under the pointer', async () => {
+    const app = mount(120, 30, { nested: true });
+    await until(() => app.stdout.frame.includes('hello from the CLI'));
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: strip colours to find the button.
+    const lines = app.stdout.frame.replace(/\u001b\[[0-9;]*m/gu, '').split('\n');
+    const y = lines.findIndex((line) => line.includes('⇧← ⇧→ ширина'));
+    const x = [...lines[y]!].indexOf('⇧');
+    const click = () => app.stdin.write(`\u001b[<0;${x + 1};${y + 1}M\u001b[<0;${x + 1};${y + 1}m`);
+    click();
+    await until(() => backend.resizePane.mock.lastCall?.[1] === 77);
+    // Past the double-click window: two separate presses.
+    await pause(450);
+    click();
+    await until(() => backend.resizePane.mock.lastCall?.[1] === 86);
+    expect(app.stdout.frame).toContain('hello from the CLI');
+    expect(app.stdout.frame).toContain('Milestone › ◐ Pane work');
+    expect(backend.closePane).not.toHaveBeenCalled();
   });
 
   function history() {

@@ -834,11 +834,15 @@ export function App(props: AppProps) {
 
   const SPLITS = [0.42, 0.5, 0.58, 0.66, 0.74];
   const resizeSplit = (step: number) => {
-    const at = SPLITS.reduce(
-      (best, value, index) => (Math.abs(value - split) < Math.abs(SPLITS[best]! - split) ? index : best),
-      0,
-    );
-    setSplit(SPLITS[Math.max(0, Math.min(SPLITS.length - 1, at + step))]!);
+    if (!selectedPane) return say(t('у узла нет живой сессии'), C.warn);
+    // From the latest value: a held key may deliver several presses before a render.
+    setSplit((now) => {
+      const at = SPLITS.reduce(
+        (best, value, index) => (Math.abs(value - now) < Math.abs(SPLITS[best]! - now) ? index : best),
+        0,
+      );
+      return SPLITS[Math.max(0, Math.min(SPLITS.length - 1, at + step))]!;
+    });
   };
 
   const putToSleep = (ref: SessionRef | SessionInfo) => {
@@ -1279,8 +1283,8 @@ export function App(props: AppProps) {
         selectedPane ? handOver({ type: 'attach-pane', pane: selectedPane.pane }) : say(t('у узла нет живой сессии')),
     },
     paneSleep: { label: t('Усыпить сессию справа'), keys: 'x', run: () => sleepVisible() },
-    paneWider: { label: t('Сессия справа шире'), keys: '<', run: () => resizeSplit(1) },
-    paneNarrower: { label: t('Сессия справа уже'), keys: '>', run: () => resizeSplit(-1) },
+    paneWider: { label: t('Сессия справа шире'), keys: '⇧← <', run: () => resizeSplit(1) },
+    paneNarrower: { label: t('Сессия справа уже'), keys: '⇧→ >', run: () => resizeSplit(-1) },
     closed: {
       label: t('Показать или скрыть готовое'),
       keys: '.',
@@ -1468,6 +1472,11 @@ export function App(props: AppProps) {
 
   const arrows = (input: string, key: Key): boolean => {
     const node = current;
+    // ← → walk the tree; with Shift they move the border of the session on the right.
+    if (key.shift && !key.meta && (key.leftArrow || key.rightArrow)) {
+      resizeSplit(key.leftArrow ? 1 : -1);
+      return true;
+    }
     if (view !== 'tree') {
       if (key.upArrow || input === 'k') {
         moveCursor(-1);
@@ -1591,6 +1600,7 @@ export function App(props: AppProps) {
       if (view === 'sessions') {
         if (key.upArrow || input === 'k') return moveCursor(-1);
         if (key.downArrow || input === 'j') return moveCursor(1);
+        if (key.shift && (key.leftArrow || key.rightArrow)) return resizeSplit(key.leftArrow ? 1 : -1);
         if (key.leftArrow || key.rightArrow)
           return select(nextGroup(sessionList, sessionIndex, key.rightArrow ? 1 : -1));
         const session = currentSession;

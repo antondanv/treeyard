@@ -232,8 +232,10 @@ export function TerminalPane(props: {
           { key: 'F', label: t('весь экран') },
           { key: 'x', label: t('усыпить') },
           { key: 'p', label: t('скрыть') },
-          { key: '< >', label: t('ширина'), press: ['<', '>'] },
         ];
+  // At the right edge, which stays put while the pane grows and shrinks: clicks in a row land on it again.
+  const resize: KeyHint | undefined =
+    focused || scrollOffset ? undefined : { key: '⇧← ⇧→', label: t('ширина'), press: ['\u001b[1;2D', '\u001b[1;2C'] };
   return (
     <Box
       ref={box}
@@ -276,7 +278,7 @@ export function TerminalPane(props: {
           <Text color={C.faint}>{t('читаю экран…')}</Text>
         )}
       </Box>
-      <Box>
+      <Box width={width - 2}>
         {scrollOffset ? (
           <Box flexShrink={0}>
             <Text color={C.warn}>
@@ -288,6 +290,11 @@ export function TerminalPane(props: {
           </Box>
         ) : null}
         <KeyHints hints={keys} keyColor={focused ? C.brand : C.accent} />
+        {resize ? (
+          <Box flexGrow={1} flexShrink={0} justifyContent="flex-end" marginLeft={2}>
+            <KeyHints hints={[resize]} keyColor={C.accent} />
+          </Box>
+        ) : null}
       </Box>
     </Box>
   );
