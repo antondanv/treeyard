@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="treeyard">
+  <rect width="160" height="160" rx="32" fill="#16181c"/>
+  <g transform="translate(12 24)" fill="none" stroke="#7ee2a8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 10 V38 H72 V10"/>
+    <path d="M40 38 V66"/>
+    <path d="M136 10 V66"/>
+    <path d="M40 66 H136"/>
+    <path d="M88 66 V108"/>
+  </g>
+  <g transform="translate(12 24)">
+    <circle cx="8" cy="8" r="9" fill="#5fd38d"/>
+    <circle cx="72" cy="8" r="9" fill="#8ab4ff"/>
+    <circle cx="136" cy="8" r="9" fill="#ffcf70"/>
+  </g>
+</svg>

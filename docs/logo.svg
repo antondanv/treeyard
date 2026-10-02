@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="160" viewBox="0 0 560 160" role="img" aria-label="treeyard">
+  <rect width="560" height="160" rx="22" fill="#16181c"/>
+  <g transform="translate(48 32)" fill="none" stroke="#7ee2a8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <!-- a branch with two leaves, a lone leaf, both into one trunk -->
+    <path d="M8 10 V38 H72 V10"/>
+    <path d="M40 38 V66"/>
+    <path d="M136 10 V66"/>
+    <path d="M40 66 H136"/>
+    <path d="M88 66 V100"/>
+  </g>
+  <g transform="translate(48 32)">
+    <circle cx="8" cy="8" r="9" fill="#5fd38d"/>
+    <circle cx="72" cy="8" r="9" fill="#8ab4ff"/>
+    <circle cx="136" cy="8" r="9" fill="#ffcf70"/>
+  </g>
+  <text x="232" y="98" fill="#7ee2a8" font-family="'SF Mono','JetBrains Mono',Menlo,monospace" font-size="54" font-weight="700" letter-spacing="1">treeyard</text>
+</svg>

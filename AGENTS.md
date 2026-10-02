@@ -1,0 +1,49 @@
+# Treeyard
+
+Дерево целей проекта в терминале (TUI + CLI): узлы с критерием «готово, когда», из узлов
+открываются сессии Claude Code, Codex и Antigravity — в этом терминале, в фоне или в
+панели tmux рядом с деревом. Зачем и куда идём — [docs/vision.md](docs/vision.md),
+как устроено — [docs/architecture.md](docs/architecture.md).
+
+## Стек
+
+TypeScript (ESM, strict), Node.js 22+, Ink 7 + React 19, `yaml`. Тесты — Vitest
+(+ ink-testing-library), lint и формат — Biome. Сессии и tmux — через
+`@antondanv/brainyard` из соседней папки `../Brainyard` (`file:` зависимость).
+
+## Команды
+
+```sh
+npm install                        # нужен ../Brainyard (собранный: npm run build там)
+npm run dev -- <args>              # treeyard из исходников (tsx)
+npm run typecheck && npm test && npm run lint && npm run build   # перед «на проверке»
+npm run format                     # biome check --write
+npm link                           # команда treeyard из dist/
+FORCE_COLOR=2 npx tsx scripts/screenshot.ts <папка-с-деревом> shot.png 130x36   # PNG интерфейса
+```
+
+## Правила
+
+- Запуск CLI, панели, сессии, модели — это Brainyard. Нужна правка там — правь в
+  `../Brainyard` (с его тестами) и скажи об этом; не обходи его из treeyard.
+- Живые проверки сессий и панелей — только на временной копии дерева, никогда на
+  настоящем Factoyard или другом рабочем проекте. Тестовые панели закрывай за собой.
+- tmux в тестах — только на отдельном сокете; тесты не трогают `~/.treeyard`
+  (`TREEYARD_HOME` задан в `vitest.config.ts`).
+- Тексты интерфейса — через `t('Русский текст')`, русский — ключ. Новая строка —
+  перевод в `src/i18n/en.ts`; без него падает `test/i18n.test.ts`.
+- Новый шаблон или правка шаблона — в обоих языках: `templates/*.yaml` и `templates/en/`.
+- Комментарии в коде — по-английски, коротко и про «зачем»; стиль — как в соседнем коде.
+- Всё, что видит человек, проверяй в TUI (`npm run dev` в копии дерева или
+  `scripts/screenshot.ts`), а не только тестами; на узком экране (≈100×30) тоже.
+- Изменилось поведение или клавиши — поправь README.
+- Git: коммиты по смыслу (Conventional Commits), только своё; push и PR — по просьбе.
+
+<!-- treeyard -->
+## Дерево задач
+
+Проект ведётся деревом целей в `.tree/` (treeyard): обзор — `.tree/README.md`, узлы — `.tree/nodes/<id>.md`.
+Работаешь над задачей — найди её узел (`treeyard show`) и держись его. Итог — в журнал узла
+(`treeyard log <id> "что сделано; что осталось"`), всплывшие идеи — новыми узлами
+(`treeyard add "…" --parent <id> --status idea`). Критерий выполнен — `treeyard set <id> status=review`; готово ставит человек.
+<!-- /treeyard -->
