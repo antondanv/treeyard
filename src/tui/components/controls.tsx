@@ -7,6 +7,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import stringWidth from 'string-width';
 import { t } from '../../i18n/i18n.js';
 import { shortcutKey } from '../keys.js';
+import { columns } from '../marquee.js';
 import { Clickable, useClick, usePress } from '../mouse.js';
 import { C } from '../theme.js';
 
@@ -212,12 +213,135 @@ function wordLeft(value: string, cursor: number): number {
   return cursor - i;
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/** A row of text being edited; `at` is the cell under the cursor when the cursor is in this row. */
+export interface EditRow {
+  before: string;
+  at?: string;
+  after: string;
+}
+
+/**
+ * A text being edited, broken into rows of `width` columns — between words
+ * where it can, so the whole text is in sight. A cursor past the end gets a
+ * blank cell of its own. With more than `max` rows, the ones up to the cursor.
+ */
+export function editRows(value: string, cursor: number, width: number, max = Number.POSITIVE_INFINITY): EditRow[] {
+  const parts = [...graphemes.segment(value)].map(({ segment, index }) => ({
+    text: segment,
+    index,
+    size: stringWidth(segment),
+  }));
+  if (cursor >= value.length) parts.push({ text: ' ', index: value.length, size: 1 });
+  const at = parts.findIndex((part) => cursor < part.index + part.text.length);
+  const bounds: [number, number][] = [];
+  let from = 0;
+  let used = 0;
+  let space = -1;
+  for (const [i, part] of parts.entries()) {
+    while (used + part.size > width && i > from) {
+      // After the last space of the row, or inside a word longer than the row.
+      const end = space >= from ? space + 1 : i;
+      bounds.push([from, end]);
+      from = end;
+      used = parts.slice(from, i).reduce((sum, p) => sum + p.size, 0);
+    }
+    used += part.size;
+    if (part.text === ' ' && part.index < value.length) space = i;
+  }
+  bounds.push([from, parts.length]);
+  const text = (a: number, b: number) =>
+    parts
+      .slice(a, b)
+      .map((part) => part.text)
+      .join('');
+  const rows = bounds.map(([a, b]): EditRow => {
+    if (at < a || at >= b) return { before: text(a, b), after: '' };
+    return { before: text(a, at), at: parts[at]!.text, after: text(at + 1, b) };
+  });
+  if (rows.length <= max) return rows;
+  const row = Math.max(
+    0,
+    rows.findIndex((r) => r.at !== undefined),
+  );
+  const first = Math.min(Math.max(0, row - max + 1), rows.length - max);
+  return rows.slice(first, first + max);
+}
+
+function EditRowText(props: { row: EditRow; active: boolean; children?: ReactNode }) {
+  const { row } = props;
+  return (
+    <Text>
+      {row.before}
+      {row.at === undefined ? null : props.active ? <Text inverse>{row.at}</Text> : row.at}
+      {row.after}
+      {props.children}
+    </Text>
+  );
+}
+
+export interface PromptLayout {
+  lead: string;
+  rows: EditRow[];
+  /** Columns of the text, right of the lead. */
+  width: number;
+  /** The hints follow the text while the text is one short row. */
+  hints: string;
+}
+
+/**
+ * A line you type into at the bottom of the screen: a lead, then the text in
+ * as many rows as it takes (up to `max`) under its own start. A lead wider
+ * than half the line is cut, so the text keeps room.
+ */
+export function promptLayout(props: {
+  lead: string;
+  value: string;
+  cursor: number;
+  hints: string;
+  width: number;
+  max: number;
+}): PromptLayout {
+  const half = Math.max(1, Math.floor(props.width / 2) - 1);
+  const lead = stringWidth(props.lead) > half ? `${columns(props.lead, 0, half - 1)}…` : props.lead;
+  const width = Math.max(1, props.width - stringWidth(lead) - 1);
+  const rows = editRows(props.value, props.cursor, width, Math.max(1, props.max));
+  const hints = `   ${props.hints}`;
+  const fits =
+    rows.length === 1 && stringWidth(rows[0]!.before + (rows[0]!.at ?? '') + rows[0]!.after + hints) <= width;
+  return { lead, rows, width, hints: fits ? hints : '' };
+}
+
+export function PromptLine(props: { layout: PromptLayout }) {
+  const { lead, rows, width, hints } = props.layout;
+  return (
+    <Box>
+      <Box flexShrink={0} width={stringWidth(lead) + 1}>
+        <Text color={C.brand} bold>
+          {lead}
+        </Text>
+      </Box>
+      <Box flexDirection="column" width={width}>
+        {rows.map((row, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: rows are positions in the text.
+          <EditRowText key={index} row={row} active>
+            {index === rows.length - 1 && hints ? <Text color={C.faint}>{hints}</Text> : null}
+          </EditRowText>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
 export function TextField(props: {
   value: string;
   onChange: (value: string) => void;
   active: boolean;
   placeholder?: string;
   width?: number;
+  /** Rows a long text may take; one row scrolls sideways with the cursor. */
+  lines?: number;
 }) {
   const [cursor, setCursor] = useState(props.value.length);
   useEffect(() => {
@@ -246,6 +370,16 @@ export function TextField(props: {
         <Text inverse> </Text>
         <Text color={C.faint}>{props.placeholder ?? ''}</Text>
       </Text>
+    );
+  }
+  if ((props.lines ?? 1) > 1) {
+    return (
+      <Box flexDirection="column" width={width}>
+        {editRows(props.value, props.active ? cursor : 0, width, props.lines).map((row, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: rows are positions in the text.
+          <EditRowText key={index} row={row} active={props.active} />
+        ))}
+      </Box>
     );
   }
   // Keep the cursor in view: show a window of the text around it.

@@ -287,9 +287,10 @@ export function Wizard(props: { dir: string; templateId?: string; onDone: (resul
                     onChange={(value) => setAnswers((all) => ({ ...all, [q.key]: value }))}
                     active
                     width={column - 4}
+                    lines={3}
                   />
                 ) : (
-                  <TextField value={title} onChange={setTitle} active width={column - 4} />
+                  <TextField value={title} onChange={setTitle} active width={column - 4} lines={3} />
                 )}
               </Box>
             </>

@@ -90,7 +90,7 @@ import {
 } from '../model/types.js';
 import { MAX_PANES, type Settings, SLEEP_AFTER, settings, updateSettings } from '../settings.js';
 import { catalogHint, effortOptions, effortsFor, fitEffort, modelOptions, useCatalog } from './catalogs.js';
-import { editText, type KeyHint, KeyHints } from './components/controls.js';
+import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './components/controls.js';
 import { NodeDetails, SessionDetails } from './details.js';
 import {
   CheckDialog,
@@ -119,7 +119,7 @@ import { follow, Graph, type GraphStyle, layoutGraph, neighbour, selectedOverflo
 import { History } from './history.js';
 import { shortcutKey } from './keys.js';
 import { Logo, logoSize, WORDMARK } from './logo.js';
-import { MARQUEE_TICK } from './marquee.js';
+import { MARQUEE_TICK, marquee } from './marquee.js';
 import { type Click, Clickable, MouseProvider, usePress } from './mouse.js';
 import { ListRow, paneState, rowOverflow, SessionRow, TreeRow, treePrefix } from './rows.js';
 import { TerminalPane } from './terminal.js';
@@ -560,7 +560,33 @@ export function App(props: AppProps) {
     : 0;
   const leftWidth = width - rightWidth - (side ? 1 : 0);
   const strip = (view === 'tree' || view === 'journal') && !side ? 2 : view === 'sessions' ? 0 : 1;
-  const bodyHeight = height - headerHeight - strip - 1;
+  // A long line typed at the bottom shows all of itself: it takes the strip's
+  // rows first, then the tree's — never a session pane's, whose size is the agent's screen.
+  const promptMax = terminalVisible ? strip + 1 : Math.max(strip + 1, Math.min(8, Math.floor(height / 4)));
+  const footerPrompt = paneFocused
+    ? undefined
+    : prompt
+      ? promptLayout({
+          lead: `${prompt.kind === 'add' ? '＋ ' : '✎ '}${prompt.label}:`,
+          value: prompt.value,
+          cursor: prompt.cursor,
+          hints: `⏎ ${prompt.kind === 'add' ? t('добавить · tab с критерием') : t('сохранить')}${t(' · esc отмена')}`,
+          width: width - 2,
+          max: promptMax,
+        })
+      : searching
+        ? promptLayout({
+            lead: '/',
+            value: filter,
+            cursor: searchCursor,
+            hints: `${t('найдено узлов: ')}${treeRows.filter((row) => row.match).length}${t(' · ⏎ готово · esc сбросить')}`,
+            width: width - 2,
+            max: promptMax,
+          })
+        : undefined;
+  const footerHeight = footerPrompt?.rows.length ?? 1;
+  const stripShown = Math.max(0, strip - (footerHeight - 1));
+  const bodyHeight = height - headerHeight - stripShown - footerHeight;
   const fullModal =
     modal &&
     ['context', 'help', 'link', 'problems', 'palette', 'check', 'settings', 'statusOrder', 'confirm'].includes(
@@ -976,12 +1002,14 @@ export function App(props: AppProps) {
 
   const quickAdd = (node: TreeNode | undefined, sibling: boolean) => {
     if (!node) return setPrompt({ kind: 'add', label: t('Новая ветка'), value: '', cursor: 0, parent: ROOT });
+    // A long branch name would take the line from what you type; the marquee at rest cuts it with an ellipsis.
+    const short = (title = '') => marquee(title, Math.max(12, Math.floor(width / 5)), 0);
     if (sibling) {
       const parent = node.parent === ROOT ? tree.project.title : tree.nodes.get(node.parent)?.title;
       return setPrompt({
         kind: 'add',
         label: t('Рядом, в «{parent}»', {
-          parent,
+          parent: short(parent),
         }),
         value: '',
         cursor: 0,
@@ -992,7 +1020,7 @@ export function App(props: AppProps) {
     setPrompt({
       kind: 'add',
       label: t('Внутрь «{title}»', {
-        title: node.title,
+        title: short(node.title),
       }),
       value: '',
       cursor: 0,
@@ -2785,13 +2813,13 @@ export function App(props: AppProps) {
         </Box>
 
         {/* Where you are, and what done means here. */}
-        {strip > 0 ? (
+        {stripShown > 0 ? (
           <SelectionStrip
             tree={tree}
             node={current}
             group={currentGroup}
             width={width}
-            full={strip === 2}
+            full={stripShown === 2}
             live={live}
             frame={frame}
           />
@@ -2805,34 +2833,8 @@ export function App(props: AppProps) {
                 brain: selectedPane?.brain ? BRAIN_LABEL[selectedPane.brain] : 'CLI',
               })}
             </Text>
-          ) : prompt ? (
-            <Text wrap="truncate-end">
-              <Text color={C.brand} bold>
-                {prompt.kind === 'add' ? '＋ ' : '✎ '}
-                {prompt.label}:{' '}
-              </Text>
-              <Text>{prompt.value.slice(0, prompt.cursor)}</Text>
-              <Text inverse>{prompt.value[prompt.cursor] ?? ' '}</Text>
-              <Text>{prompt.value.slice(prompt.cursor + 1)}</Text>
-              <Text color={C.faint}>
-                {'   '}⏎ {prompt.kind === 'add' ? t('добавить · tab с критерием') : t('сохранить')}
-                {t(' · esc отмена')}
-              </Text>
-            </Text>
-          ) : searching ? (
-            <Text wrap="truncate-end">
-              <Text color={C.brand} bold>
-                /{' '}
-              </Text>
-              <Text>{filter}</Text>
-              <Text inverse> </Text>
-              <Text color={C.faint}>
-                {'   '}
-                {t('найдено узлов: ')}
-                {treeRows.filter((row) => row.match).length}
-                {t(' · ⏎ готово · esc сбросить')}
-              </Text>
-            </Text>
+          ) : footerPrompt ? (
+            <PromptLine layout={footerPrompt} />
           ) : job ? (
             <Text color={C.agent} wrap="truncate-end">
               {SPINNER[frame % SPINNER.length]} {job.label}

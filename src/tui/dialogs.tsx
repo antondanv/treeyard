@@ -104,6 +104,7 @@ export function NodeForm(props: {
           active={focus === 0}
           width={inputWidth}
           placeholder={t('что сделать')}
+          lines={5}
         />
       </Field>
       <Field label={t('Готово, когда')} active={focus === 1}>
@@ -113,6 +114,7 @@ export function NodeForm(props: {
           active={focus === 1}
           width={inputWidth}
           placeholder={t('что можно увидеть или запустить')}
+          lines={5}
         />
       </Field>
       <Field label={t('Проверка')} active={focus === 2}>
@@ -122,6 +124,7 @@ export function NodeForm(props: {
           active={focus === 2}
           width={inputWidth}
           placeholder={t('команда, например npm test')}
+          lines={3}
         />
       </Field>
       <Field label={t('Делает')} active={focus === 3}>
@@ -190,6 +193,7 @@ export function WaitingForm(props: {
           active={focus === 0}
           width={inputWidth}
           placeholder={t('нет сервера, ждём юриста, нет доступа к API…')}
+          lines={3}
         />
       </Field>
       <Field label={t('Вернуться, когда')} active={focus === 1}>
@@ -199,6 +203,7 @@ export function WaitingForm(props: {
           active={focus === 1}
           width={inputWidth}
           placeholder={t('появится VPS, юрист пришлёт тексты…')}
+          lines={3}
         />
       </Field>
     </Frame>
