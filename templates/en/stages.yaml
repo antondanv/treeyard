@@ -1,0 +1,61 @@
+id: stages
+name: Stages
+tagline: Stages with a "done when"; the next one starts after the previous one is checked
+for: A new project with a clear goal — an MVP, a product, a service.
+order: 1
+questions:
+  - key: goal
+    label: Goal
+    ask: How will you know the first version did its job? Describe something you can see in real life.
+    hint: '"for a week I run the channel only through the bot", "the first real customer left a review"'
+    required: true
+  - key: loop
+    label: Main scenario
+    ask: Which one scenario has to work first — from start to finish?
+    hint: '"link → review with consent → published in the widget"'
+  - key: appetite
+    label: Appetite
+    ask: How much time are you willing to give the first version? The scope adapts to the time, not the other way round.
+    hint: '"3 weeks"'
+method: |
+  The project grows in stages. Each stage has a "done when" and an appetite — the time it is worth.
+  Inside a stage the order of tasks is free; the next stage starts once the previous one is checked against its criterion.
+  First close the main scenario{{loop_suffix}} in its simplest form, then everything around it.
+  It does not fit the appetite — cut scope, do not move the date. New ideas go to "Ideas", not into the current stage.
+rules: |
+  - A stage is closed when its criterion is checked: by a command, a scenario or a screenshot. A person or a separate reviewing session checks it.
+  - Do not start tasks of the next stage while the current one is not in review.
+nodes:
+  - title: Stage 0 — Skeleton
+    who: agent
+    done_when: The project starts with one command, tests and the linter pass, the README says how to run it.
+    body: |
+      The foundation everything else stands on: structure, environment, startup, first tests.
+      What is expensive to change later (the data model, isolation, config) is decided here and written into "Decisions".
+    children:
+      - title: Repository structure and one-command startup
+        who: agent
+      - title: Data model and what is expensive to change later
+        who: agent
+      - title: Tests, linter and CI
+        who: agent
+  - title: Stage 1 — Main scenario
+    who: agent
+    done_when: "{{loop_done}}"
+    body: |
+      The shortest path on which the product is already useful. No polish, nothing around it — but end to end.
+  - title: Stage 2 — Around the scenario
+    who: agent
+    done_when: The scenario is comfortable for an outsider — without hints from the author.
+    body: |
+      Interface, errors, empty states, roles, limits — everything without which the main scenario is awkward to use.
+  - title: Stage 3 — Launch
+    who: human
+    done_when: "{{goal}}"
+    body: |
+      Everything between "works for me" and "works for people": a server, a domain, texts, legal things,
+      the first real user. Many tasks here only a person can do.
+  - title: Ideas
+    status: idea
+    body: |
+      Everything that comes up along the way and is not needed for the goal. We come back once the goal is reached.

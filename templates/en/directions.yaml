@@ -1,0 +1,47 @@
+id: directions
+name: Directions
+tagline: Independent branches — one waits, you work in another
+for: A living project with several fronts of work, some blocked by things outside (a server, access, people).
+order: 2
+questions:
+  - key: goal
+    label: Goal
+    ask: What is the project for — what should be happening in real life when everything works?
+    hint: '"for a week I run the channel only through the bot"'
+    required: true
+  - key: directions
+    label: Directions
+    ask: What fronts of work does the project have? Comma-separated — or leave empty for the standard ones.
+    hint: '"Product, Publishing, Content, Quality"'
+method: |
+  The project is a few independent directions. Each moves on its own and has its own criterion.
+  When a direction is blocked by something outside, its node is "waiting" with a reason and a condition to come back, and work goes on in the others.
+  The "Now" tab shows everything you can do right now, across all directions at once.
+  Once a week — go through "Waiting": has the condition to come back happened?
+rules: |
+  - Before you start, check whether the node or its direction waits for something outside.
+  - If a task is blocked by something outside, do not work around it with a hack: set "waiting" and say what is needed from a person.
+nodes:
+  - title: Product
+    who: agent
+    done_when: The main scenario works end to end for an outsider.
+    body: |
+      What the project exists for: features, interface, scenarios.
+  - title: Quality and checks
+    who: agent
+    done_when: Tests for the main scenario are green, errors make sense to a person, everything can be checked with one command.
+  - title: Launch and infrastructure
+    who: any
+    done_when: "{{goal}}"
+    body: |
+      Server, domain, deploys, backups, monitoring. Waiting for things outside is normal here.
+  - title: People and content
+    who: human
+    done_when: The first real users came and use it.
+    body: |
+      Texts, marketing, showing it to real people, collecting feedback.
+  - title: Ideas
+    status: idea
+    body: |
+      Everything that came up and is not needed right now. Once a week — sort it: some into directions, some dropped.
+directions_from: directions

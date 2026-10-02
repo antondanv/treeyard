@@ -1,0 +1,46 @@
+id: client
+name: Client work
+tagline: Stages with sign-off and a preview link after each one
+for: A project for a client — a website, a landing page, a revision.
+order: 5
+questions:
+  - key: goal
+    label: Result
+    ask: What does the client get in the end — and how will you both know the work is accepted?
+    hint: '"the site on the client''s domain, content filled in, the client signed off"'
+    required: true
+  - key: client
+    label: Client
+    ask: What is the client's or the company's name?
+    hint: '"Acme Corp"'
+  - key: preview
+    label: Preview
+    ask: Where does the client look at the result after a stage?
+    hint: '"http://127.0.0.1:3000", "a Vercel preview"'
+method: |
+  Work goes in stages. Before a stage, its scope and expected result are agreed with the client.
+  After a stage, the preview is up, the client has the link, and the stage is "in review" until they confirm it.
+  A bug or a regression in an accepted stage — fix it first, then go on with the plan.
+  No broken links between stages: if a button leads to a new page, the page appears in the same stage.
+rules: |
+  - After a stage, bring the preview up and give the link: {{preview_or_default}}. Briefly: what changed, what to look at.
+  - Not enough data — the client's old materials first, then realistic placeholders marked as placeholders.
+  - New blocks and pages are modular, so that the client's real data can be put in later.
+nodes:
+  - title: Brief and agreements
+    who: human
+    done_when: The client confirmed the scope of work and the stages.
+    body: |
+      What we do, what we do not, deadlines, who provides what (texts, photos, access). {{client_line}}
+  - title: Stage 1
+    who: agent
+    done_when: The client looked at the link and confirmed the stage.
+  - title: Launch
+    who: human
+    done_when: "{{goal}}"
+    body: |
+      Domain, hosting, moving the content, the final check with the client, sign-off.
+  - title: Client's wishes for later
+    status: idea
+    body: |
+      What the client asked for along the way that is outside the current scope. A separate agreement.

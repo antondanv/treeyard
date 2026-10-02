@@ -1,0 +1,32 @@
+id: mikado
+name: Mikado
+tagline: A big change as a tree of prerequisites — done from the leaves up
+for: A refactoring, a migration, a move to a new stack — a change where everything hangs on everything.
+order: 3
+questions:
+  - key: goal
+    label: Change
+    ask: What change has to be made? One sentence — as a goal you can see in the result.
+    hint: '"all database access goes through the tenant layer", "the project builds on Node 24"'
+    required: true
+  - key: check
+    label: Check
+    ask: Which command shows that everything still works?
+    hint: '"npm test", "pytest -q"'
+method: |
+  The Mikado Method. The root is the change we want. We try to make it head-on.
+  If something breaks — we do NOT fix it on the spot: we roll everything back and write down what is in the way as child nodes, the prerequisites.
+  We repeat for each prerequisite until we reach leaves that can be done cleanly.
+  We do the leaves, each as its own green commit, and climb up until the root is done.
+rules: |
+  - Try the node head-on. It broke — roll back your changes (`git restore` / `git stash`), add the prerequisites as children and stop.
+  - Do only nodes without open children. Every finished node is a green check and its own commit.
+  - The project's check: {{check_or_default}}
+nodes:
+  - title: "Try head-on: {{goal}}"
+    who: agent
+    done_when: Either the change is made and the check is green, or it is rolled back and the prerequisites are added as children.
+    check: "{{check}}"
+    body: |
+      The first attempt: try to make the whole change and see what breaks.
+      Everything that broke is a prerequisite. We write them down as children and roll the changes back.

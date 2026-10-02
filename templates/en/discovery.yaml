@@ -1,0 +1,41 @@
+id: discovery
+name: Finding improvements
+tagline: Outcome → opportunities → solutions → tests
+for: The product works, but it is unclear what to do next. Teresa Torres's opportunity solution tree.
+order: 4
+questions:
+  - key: goal
+    label: Outcome
+    ask: Which result do you want to move? A number or people's behaviour works best.
+    hint: '"half of those who open the link leave a review", "a post gets 1.4× the channel median"'
+    required: true
+  - key: users
+    label: Who
+    ask: Who are we improving it for — who are these people?
+    hint: '"owners of small cafes", "me as the author of the channel"'
+method: |
+  An opportunity tree. The root is the outcome we want to move.
+  Under it — opportunities: people's pains, wishes and needs (not features, but what people want to get done).
+  Under an opportunity — several solutions, at least three, so there is something to choose from.
+  Under a solution — tests: the riskiest assumption of a solution is tested cheaply before building it.
+  One opportunity at a time; we build only what passed its tests.
+rules: |
+  - Tree levels: opportunity → solution → test. Do not add a solution without an opportunity above it.
+  - A test is the cheapest thing that confirms or refutes an assumption: a conversation, a mock-up, a manual run, a measurement.
+  - The outcome of a test goes into the node's journal: what we expected, what happened, what we decided.
+nodes:
+  - title: Opportunities
+    who: any
+    body: |
+      Pains, wishes and needs of {{users_or_people}}. Phrase them from a person's side: "I want…", "I can't…", "I'm afraid…".
+    children:
+      - title: Talk to people and write down their pains
+        who: human
+        done_when: 5+ conversations or observations are written down, and opportunities are extracted from them.
+      - title: Look at the numbers — where people drop off
+        who: any
+        done_when: The step that loses the most people is found, with numbers.
+  - title: Solutions without an opportunity
+    status: idea
+    body: |
+      Solutions that came to mind before it was clear which pain they relieve. We will find them a place or drop them.
