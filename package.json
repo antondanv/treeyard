@@ -1,0 +1,64 @@
+{
+  "name": "@antondanv/treeyard",
+  "version": "0.1.0",
+  "description": "A goal tree for a project, right in the terminal: stages and branches with finish criteria, and Claude Code, Codex and Antigravity sessions launched from its nodes.",
+  "keywords": [
+    "tree",
+    "planning",
+    "tui",
+    "claude-code",
+    "codex",
+    "antigravity",
+    "agents",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "Anton Danilov",
+  "type": "module",
+  "bin": {
+    "treeyard": "dist/cli/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "templates",
+    "skills",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/chmod.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/cli/main.ts"
+  },
+  "dependencies": {
+    "@antondanv/brainyard": "file:../Brainyard",
+    "ink": "^7.1.1",
+    "react": "^19.2.0",
+    "string-width": "^8.3.0",
+    "wrap-ansi": "^10.0.2",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.2.0",
+    "ink-testing-library": "^4.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
