@@ -68,7 +68,6 @@ import {
   actionable,
   childrenOf,
   descendants,
-  flatten,
   ideaNodes,
   parents,
   pathTo,
@@ -121,6 +120,7 @@ import { type Click, Clickable, MouseProvider, usePress } from './mouse.js';
 import { ListRow, paneState, rowOverflow, SessionRow, TreeRow, treePrefix } from './rows.js';
 import { TerminalPane } from './terminal.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
+import { doneGroupId, doneGroupParent, doneGroupsOnPath, isDoneGroup, treeViewRows } from './tree-view.js';
 import { saveUi, type UiState, VIEWS, type View } from './ui-state.js';
 
 /** What the runner does after the app steps aside. */
@@ -416,7 +416,7 @@ export function App(props: AppProps) {
 
   // Recomputed on every render: the tree is mutated in place, and a few
   // hundred nodes flatten in well under a millisecond.
-  const treeRows: Row[] = flatten(tree, { expanded, showClosed, filter });
+  const treeRows: Row[] = treeViewRows(tree, { expanded, showClosed, filter });
   const nowList = actionable(tree);
   const waitingList = waitingNodes(tree);
   const ideasList = ideaNodes(tree);
@@ -486,7 +486,24 @@ export function App(props: AppProps) {
     const byId = nodesInView.findIndex((node) => node.id === selected);
     cursor = byId >= 0 ? byId : Math.min(listIndex[view] ?? 0, Math.max(0, nodesInView.length - 1));
   }
-  const current: TreeNode | undefined = view === 'sessions' ? undefined : nodesInView[cursor];
+  const currentItem = view === 'sessions' ? undefined : nodesInView[cursor];
+  const current = currentItem ? tree.nodes.get(currentItem.id) : undefined;
+  const currentGroup = view === 'tree' && isDoneGroup(currentItem?.id) ? currentItem : undefined;
+
+  // A node that just became done moves into its folded group; keep the selection nearby.
+  useEffect(() => {
+    if (view !== 'tree' || filter || !selected || treeRows.some((row) => row.node.id === selected)) return;
+    const path = pathTo(tree, isDoneGroup(selected) ? doneGroupParent(selected) : selected).reverse();
+    for (const node of path) {
+      const group = node.status === 'done' ? doneGroupId(node.parent) : undefined;
+      const target = [group, node.id].find((id) => id && treeRows.some((row) => row.node.id === id));
+      if (target) {
+        setSelected(target);
+        return;
+      }
+    }
+    if (treeRows[0]) setSelected(treeRows[0].node.id);
+  });
   const currentSession = view === 'sessions' ? sessionList[Math.min(sessionIndex, sessionList.length - 1)] : undefined;
   const pinned = pinnedPane ? panes.find((p) => p.pane === pinnedPane) : undefined;
   const selectedPane = currentSession
@@ -550,7 +567,7 @@ export function App(props: AppProps) {
       ? layoutGraph(treeRows, { style: graphStyle, width: graphWidth, tree })
       : undefined;
   if (graphLayout) {
-    viewportRef.current = follow(graphLayout, current?.id, { x: leftWidth, y: bodyHeight }, viewportRef.current);
+    viewportRef.current = follow(graphLayout, currentItem?.id, { x: leftWidth, y: bodyHeight }, viewportRef.current);
   }
 
   const paneNodes = useMemo(() => {
@@ -646,6 +663,7 @@ export function App(props: AppProps) {
           ...pathTo(tree, id)
             .slice(0, -1)
             .map((step) => step.id),
+          ...doneGroupsOnPath(pathTo(tree, id)),
         ]),
     );
     if (!showClosed && (node.status === 'done' || node.status === 'dropped')) setShowClosed(true);
@@ -1138,8 +1156,16 @@ export function App(props: AppProps) {
       run: () => current && request({ kind: 'criterion', node: current.id }),
     },
     check: { label: t('Запустить проверку узла'), keys: 't', needs: 'node', run: () => current && check(current) },
-    add: { label: t('Новый узел внутрь'), keys: 'a', run: () => quickAdd(current, false) },
-    sibling: { label: t('Новый узел рядом'), keys: 'A', run: () => quickAdd(current, true) },
+    add: {
+      label: t('Новый узел внутрь'),
+      keys: 'a',
+      run: () => quickAdd(current ?? tree.nodes.get(currentGroup?.parent ?? ''), false),
+    },
+    sibling: {
+      label: t('Новый узел рядом'),
+      keys: 'A',
+      run: () => quickAdd(current ?? tree.nodes.get(currentGroup?.parent ?? ''), !currentGroup),
+    },
     rename: {
       label: t('Переименовать'),
       keys: 'r',
@@ -1255,7 +1281,11 @@ export function App(props: AppProps) {
         say(showClosed ? t('готовое и отказы скрыты — . чтобы показать') : t('готовое снова видно'));
       },
     },
-    expandAll: { label: t('Раскрыть всё'), keys: '+', run: () => setExpanded(new Set(parents(tree))) },
+    expandAll: {
+      label: t('Раскрыть всё'),
+      keys: '+',
+      run: () => setExpanded(new Set([...parents(tree), ...doneGroupsOnPath([...tree.nodes.values()])])),
+    },
     collapseAll: {
       label: t('Свернуть всё'),
       keys: '−',
@@ -1328,6 +1358,7 @@ export function App(props: AppProps) {
 
   /** ⏎ in the list: a node's actions, a session, the node of a journal entry. */
   const enter = () => {
+    if (currentGroup) return expandTo(currentGroup.id, !expanded.has(currentGroup.id));
     if (view === 'sessions') {
       const session = currentSession;
       if (!session) return;
@@ -1375,11 +1406,12 @@ export function App(props: AppProps) {
     setSearching(false);
     setSelected(hit.node);
     const row = treeRows.find((item) => item.node.id === hit.node);
+    if (hit.fold && row && isDoneGroup(row.node.id)) return expandTo(row.node.id, !row.expanded);
     if (!hit.fold || !row?.hasChildren || row.expanded) return;
     // The ›4 of a closed branch: open it and step in, as → does.
     const opened = new Set(expanded).add(row.node.id);
     setExpanded(opened);
-    const layout = layoutGraph(flatten(tree, { expanded: opened, showClosed, filter }), {
+    const layout = layoutGraph(treeViewRows(tree, { expanded: opened, showClosed, filter }), {
       style: graphStyle,
       width: graphWidth,
       tree,
@@ -1461,7 +1493,7 @@ export function App(props: AppProps) {
       return true;
     }
     if (graphLayout && (key.upArrow || key.downArrow)) {
-      const next = neighbour(graphLayout, node?.id, key.upArrow ? 'up' : 'down');
+      const next = neighbour(graphLayout, currentItem?.id, key.upArrow ? 'up' : 'down');
       if (next) setSelected(next);
       return true;
     }
@@ -1480,7 +1512,7 @@ export function App(props: AppProps) {
         setExpanded(opened);
         if (graphLayout) {
           // Step into the branch as it opens: one key, not two.
-          const layout = layoutGraph(flatten(tree, { expanded: opened, showClosed, filter }), {
+          const layout = layoutGraph(treeViewRows(tree, { expanded: opened, showClosed, filter }), {
             style: graphStyle,
             width: graphWidth,
             tree,
@@ -1689,7 +1721,7 @@ export function App(props: AppProps) {
           <Graph
             tree={tree}
             layout={graphLayout}
-            selected={current?.id}
+            selected={currentItem?.id}
             width={leftWidth}
             height={bodyHeight}
             offset={viewportRef.current}
@@ -2674,6 +2706,13 @@ export function App(props: AppProps) {
                     width={rightWidth}
                     height={bodyHeight}
                   />
+                ) : currentGroup ? (
+                  <Box flexDirection="column" paddingX={2} paddingY={1}>
+                    <Text color={C.ok} bold>
+                      {currentGroup.title}
+                    </Text>
+                    <Text color={C.faint}>{t('space — раскрыть или свернуть · ⏎ на узле — сессии и действия')}</Text>
+                  </Box>
                 ) : (
                   <NodeDetails
                     tree={tree}
@@ -2691,7 +2730,15 @@ export function App(props: AppProps) {
 
         {/* Where you are, and what done means here. */}
         {strip > 0 ? (
-          <SelectionStrip tree={tree} node={current} width={width} full={strip === 2} live={live} frame={frame} />
+          <SelectionStrip
+            tree={tree}
+            node={current}
+            group={currentGroup}
+            width={width}
+            full={strip === 2}
+            live={live}
+            frame={frame}
+          />
         ) : null}
 
         {/* Footer: a prompt, a job, news or keys. */}
@@ -2743,6 +2790,7 @@ export function App(props: AppProps) {
             <Hints
               view={view}
               has={Boolean(current)}
+              group={Boolean(currentGroup)}
               filter={filter}
               pane={!terminalVisible && current && sleepingRef(current, panes) ? 'sleeping' : undefined}
               active={listKeys}
@@ -2758,12 +2806,28 @@ export function App(props: AppProps) {
 function SelectionStrip(props: {
   tree: Tree;
   node: TreeNode | undefined;
+  group?: TreeNode | undefined;
   width: number;
   full: boolean;
   live: Map<string, SessionInfo>;
   frame: number;
 }) {
   const { tree, node } = props;
+  if (props.group) {
+    const path = [tree.project.title, ...pathTo(tree, props.group.parent).map((step) => step.title), props.group.title];
+    return (
+      <Box flexDirection="column" width={props.width} paddingX={1}>
+        <Text color={C.ok} wrap="truncate-end">
+          {path.join(' › ')}
+        </Text>
+        {props.full ? (
+          <Text color={C.faint} wrap="truncate-end">
+            {t('space — раскрыть или свернуть · ⏎ на узле — сессии и действия')}
+          </Text>
+        ) : null}
+      </Box>
+    );
+  }
   if (!node) {
     return (
       <Box width={props.width} paddingX={1} height={props.full ? 2 : 1}>
@@ -2864,7 +2928,14 @@ function SelectionStrip(props: {
   );
 }
 
-function Hints(props: { view: View; has: boolean; filter: string; pane?: 'sleeping' | undefined; active: boolean }) {
+function Hints(props: {
+  view: View;
+  has: boolean;
+  group: boolean;
+  filter: string;
+  pane?: 'sleeping' | undefined;
+  active: boolean;
+}) {
   // The session on the right comes first: it is what the person looks at.
   // A sleeping session is one key away; a live one shows its own keys in its panel.
   const pane: [string, string][] = props.pane === 'sleeping' ? [['f', t('разбудить сессию')]] : [];
@@ -2887,29 +2958,36 @@ function Hints(props: { view: View; has: boolean; filter: string; pane?: 'sleepi
             [',', t('настройки')],
             ['?', t('клавиши')],
           ]
-        : !props.has
+        : props.group
           ? [
-              ['a', t('добавить')],
+              ['space', t('раскрыть или свернуть готовые')],
               [':', t('найти')],
-              [',', t('настройки')],
+              ['.', t('скрыть готовое')],
               ['?', t('клавиши')],
-              ['q', t('выход')],
             ]
-          : [
-              ...pane,
-              ['⏎', t('действия')],
-              ['K J', t('приоритет')],
-              [',', t('настройки')],
-              ['c', 'claude'],
-              ['a', t('добавить')],
-              ['r', t('имя')],
-              ['d', t('готово')],
-              ['w', t('ждёт')],
-              ['S', t('разбить')],
-              ['u', t('отмена')],
-              [':', t('найти')],
-              ['?', t('всё')],
-            ];
+          : !props.has
+            ? [
+                ['a', t('добавить')],
+                [':', t('найти')],
+                [',', t('настройки')],
+                ['?', t('клавиши')],
+                ['q', t('выход')],
+              ]
+            : [
+                ...pane,
+                ['⏎', t('действия')],
+                ['K J', t('приоритет')],
+                [',', t('настройки')],
+                ['c', 'claude'],
+                ['a', t('добавить')],
+                ['r', t('имя')],
+                ['d', t('готово')],
+                ['w', t('ждёт')],
+                ['S', t('разбить')],
+                ['u', t('отмена')],
+                [':', t('найти')],
+                ['?', t('всё')],
+              ];
   const hints: KeyHint[] = keys.map(([key, label]) => ({
     key,
     label,

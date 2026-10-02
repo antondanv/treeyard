@@ -20,11 +20,12 @@ import { BRAIN_SHORT } from '../agents/launch.js';
 import { t } from '../i18n/i18n.js';
 import { STATUS_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
-import { childrenOf, pathTo, progress, type Row } from '../model/tree.js';
+import { childrenOf, progress, type Row } from '../model/tree.js';
 import { ROOT, type Tree } from '../model/types.js';
 import { marquee, overflows } from './marquee.js';
 import { type Click, useClick } from './mouse.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
+import { isDoneGroup } from './tree-view.js';
 
 export type GraphStyle = 'line' | 'card';
 
@@ -68,6 +69,7 @@ export interface Label {
 /** The text of a node in `line` style: status mark, title, and how much is folded inside. */
 export function lineLabel(tree: Tree, row: Row | undefined): Label {
   if (!row) return { glyph: '◆', title: tree.project.title, tail: '' };
+  if (isDoneGroup(row.node.id)) return { glyph: row.expanded ? '▾' : '▸', title: row.node.title, tail: '' };
   const folded = row.hasChildren && !row.expanded ? childrenOf(tree, row.node.id).length : 0;
   return { glyph: GLYPH[row.node.status], title: row.node.title, tail: folded ? ` ›${folded}` : '' };
 }
@@ -179,7 +181,16 @@ export function follow(
   if (card.y + card.height + marginY > y + size.y) y = card.y + card.height + marginY - size.y;
   let x = previous.x;
   // The whole label and a little of what grows out of it.
-  const right = card.x + card.column + 4;
+  const childRight =
+    isDoneGroup(card.id) && card.row?.expanded
+      ? Math.max(
+          0,
+          ...layout.cards
+            .filter((child) => child.row?.node.parent === card.id)
+            .map((child) => child.x + child.column + 2),
+        )
+      : 0;
+  const right = Math.max(card.x + card.column + 4, childRight);
   if (right > x + size.x) x = right - size.x;
   // Keep the parent's column in view when there is room for it.
   const parent = card.row ? layout.byId.get(card.row.node.parent) : undefined;
@@ -304,7 +315,12 @@ export interface GraphProps {
 export function graphCells(props: GraphProps): Cell[][] {
   const { tree, layout, width, height, selected, offset } = props;
   const cells: Cell[][] = Array.from({ length: height }, () => Array.from({ length: width }, () => ({ char: ' ' })));
-  const path = new Set([ROOT, ...(selected ? pathTo(tree, selected).map((node) => node.id) : [])]);
+  const path = new Set([ROOT]);
+  let ancestor = selected;
+  while (ancestor && !path.has(ancestor)) {
+    path.add(ancestor);
+    ancestor = layout.byId.get(ancestor)?.row?.node.parent;
+  }
   const card = layout.style === 'card';
 
   const put = (x: number, y: number, cell: Cell) => {
@@ -419,6 +435,7 @@ export function graphCells(props: GraphProps): Cell[][] {
   function markLine(item: GraphCard, title: string, tailWidth: number) {
     if (!item.row) return;
     mark(item.x - 1, item.y, item.width + 2, { node: item.id });
+    if (isDoneGroup(item.id)) mark(item.x, item.y, 1, { fold: true });
     if (tailWidth) mark(item.x + 2 + stringWidth(title), item.y, tailWidth, { fold: true });
   }
 
@@ -466,7 +483,7 @@ export function graphCells(props: GraphProps): Cell[][] {
       put(left + item.width - 1, top + 2, { char: isSelected ? '┣' : '├', color });
 
     const inner = item.width - 4;
-    const title = node ? `${GLYPH[node.status]} ${node.title}` : `◆ ${tree.project.title}`;
+    const title = node ? `${lineLabel(tree, item.row).glyph} ${node.title}` : `◆ ${tree.project.title}`;
     const running = isSelected ? selectedOverflow(layout, tree, item.id) : undefined;
     const lines =
       item.height < 5
@@ -490,6 +507,8 @@ export function graphCells(props: GraphProps): Cell[][] {
         done: p.done,
         total: p.total,
       });
+    } else if (isDoneGroup(node.id)) {
+      meta = t('space — раскрыть или свернуть');
     } else {
       const sessions = node.sessions.map((ref) => props.live?.get(ref.id)).filter(Boolean);
       const waiting = sessions.find((session) => session?.live?.status === 'waiting');

@@ -1,9 +1,15 @@
 /** English for every `t()` key, in the order the keys appear in the code. `scripts/i18n-keys.mjs` lists them. */
 export const EN: Record<string, string> = {
+  'Готовые · {n}': 'Done · {n}',
   'Узел уже на краю среди соседей этого статуса': 'The node is already at the edge among siblings of this status',
   '{label} · u — отменить': '{label} · u — undo',
   'Поднять приоритет среди соседей этого статуса': 'Raise priority among siblings of this status',
   'Опустить приоритет среди соседей этого статуса': 'Lower priority among siblings of this status',
+  'space — раскрыть или свернуть · ⏎ на узле — сессии и действия':
+    'space — expand or collapse · ⏎ on a node — sessions and actions',
+  'space — раскрыть или свернуть': 'space — expand or collapse',
+  'раскрыть или свернуть готовые': 'expand or collapse done nodes',
+  'скрыть готовое': 'hide finished work',
   приоритет: 'priority',
   Приоритет: 'Priority',
   '↑ Поднять приоритет': '↑ Raise priority',

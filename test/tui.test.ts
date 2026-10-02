@@ -35,7 +35,8 @@ describe('TUI', () => {
     expect(frame).toContain('цель  всё работает');
     expect(frame).toMatch(/1 Дерево\s+2 Сейчас 2\s+3 Ждёт\s+4 Идеи 1\s+5 Сессии\s+6 Журнал/);
     expect(frame).toContain('◆ Тест');
-    expect(frame).toContain('✓ Каталог');
+    expect(frame).toContain('▸ Готовые · 1');
+    expect(frame).not.toContain('Каталог');
     expect(frame).toContain('◐ Корзина');
     // It starts on the first thing to do, and says where that is.
     expect(frame).toMatch(/Тест › Продукт › ◐ Корзина/);
@@ -44,13 +45,13 @@ describe('TUI', () => {
   it('moves by arrows through the picture: up and down in the column, left to the parent', async () => {
     const { tree } = sample();
     const down = await shot(tree.project.dir, [DOWN]);
-    expect(down).toMatch(/Тест › Продукт › ✓ Каталог/);
+    expect(down).toContain('Тест › Продукт › Готовые · 1');
     const up = await shot(tree.project.dir, [DOWN, UP]);
     expect(up).toMatch(/Тест › Продукт › ◐ Корзина/);
     const left = await shot(tree.project.dir, [LEFT]);
     expect(left).toMatch(/Тест › ○ Продукт/);
     const back = await shot(tree.project.dir, [LEFT, RIGHT]);
-    expect(back).toMatch(/Продукт › (✓ Каталог|◐ Корзина)/);
+    expect(back).toMatch(/Продукт › (Готовые · 1|◐ Корзина)/);
   });
 
   it('shows what done means for the selection, and its sessions', async () => {
@@ -169,7 +170,7 @@ describe('TUI', () => {
       rows: 20,
       ui: { selected: leaf.id, expanded: [product.id, child.id] },
     });
-    expect(frame).toContain('◇');
+    expect(frame).toContain('‹');
     expect(frame).toContain('Проверка оплаты');
     expect(frame.split('\n').length).toBeLessThanOrEqual(20);
   });
