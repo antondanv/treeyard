@@ -4,8 +4,10 @@ title: Сессии Claude Code / Codex / Antigravity из узлов; пане�
 parent: ykwt
 order: 30
 status: done
+needs:
+  - ../Brainyard#5n6f
 created: 2026-10-02
-updated: 2026-10-02T15:53:30+03:00
+updated: 2026-10-03T20:53:39+03:00
 closed: 2026-10-02
 ---
 
@@ -17,3 +19,4 @@ closed: 2026-10-02
 - 2026-10-02 15:53 · агент · Память: читается экран только видимой панели; автосон через sleep_after (30 мин) и при превышении max_panes (5) — только при положительном подтверждении простоя (Codex — завершённый ход в rollout, Antigravity — IDLE и not_fully_idle=0); busy/waiting/видимая/первая минута защищены. Замеры: Claude ~180–300 МБ, Codex ~80, Antigravity ~350.
 - 2026-10-02 15:53 · агент · Исправлено после живой проверки: утечка CLAUDE_CODE_* в панели (withoutSessionVars в Brainyard), потеря быстрых нажатий, Enter в подтверждении первые 300 мс, пустые сессии Claude закрываются, а не усыпляются. Прокрутка: колесо над панелью — история tmux, дерево неподвижно.
 - 2026-10-02 15:53 · агент · Проверено: Codex и Claude Code — запуск, ввод, сон, resume (на временном дереве). Не проверено: Antigravity — CLI не авторизован (узел 7k6s). Тесты: 130 Treeyard, 175 Brainyard.
+- 2026-10-03 20:53 · claude · ждёт: Brainyard › «Сессии и open(), панели tmux для Treeyard» (5n6f)
