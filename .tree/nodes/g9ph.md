@@ -2,7 +2,7 @@
 id: g9ph
 title: "Связи между деревьями: узел ссылается на узел другого проекта"
 parent: 8gtc
-order: 60
+order: 220
 status: todo
 who: agent
 done_when: узел Treeyard «Зависимость `file:../Brainyard` → версия с npm» показывает статус узла «Brainyard 0.2» из дерева Brainyard

@@ -2,7 +2,7 @@
 id: gr8x
 title: Устранить утечку памяти React при анимации TUI
 parent: 8gtc
-order: 160
+order: 120
 status: done
 who: agent
 done_when: Treeyard по умолчанию загружает React и Ink в production до любых импортов; при работающей бегущей строке куча после GC и PerformanceMeasure не растут; ui.json сохраняется только при изменении состояния; проверки и TUI 100×30 пройдены

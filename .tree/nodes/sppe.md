@@ -2,7 +2,7 @@
 id: sppe
 title: "«Сессии»: видно, какие сессии открыты мимо дерева"
 parent: 8gtc
-order: 30
+order: 190
 status: todo
 who: agent
 done_when: во вкладке «Сессии» и в `treeyard sessions` сессии папки без узла помечены, видно их число за последние 14 дней
