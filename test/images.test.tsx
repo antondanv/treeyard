@@ -233,7 +233,7 @@ describe('pictures in Apple Terminal', () => {
     expect(appleTerminal({ TERM_PROGRAM: 'tmux' })).toBe(false);
   });
 
-  it('offers the full-size picture on ⏎ instead of the mosaic', async () => {
+  it('shows one hint for the full-size picture in every terminal', async () => {
     const tree = emptyTree();
     const node = addNode(tree, { title: 'Экран входа' });
     addImage(tree.project.dir, node.id, RED_OVER_BLUE);
@@ -248,12 +248,11 @@ describe('pictures in Apple Terminal', () => {
     };
     const apple = render(<ImagesDialog {...props} external />);
     await pause();
-    expect(apple.lastFrame()).toContain('⏎ o открыть в полном размере');
+    expect(apple.lastFrame()).toContain('o на весь экран');
     apple.unmount();
     const other = render(<ImagesDialog {...props} external={false} />);
     await pause();
-    expect(other.lastFrame()).toContain('на весь экран');
-    expect(other.lastFrame()).toContain('o в полном размере');
+    expect(other.lastFrame()).toContain('o на весь экран');
   });
 });
 

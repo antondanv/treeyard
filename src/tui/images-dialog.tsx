@@ -194,11 +194,8 @@ export function ImagesDialog(props: {
             { key: 'v', label: t('из буфера') },
             ...(current
               ? [
-                  // In Apple Terminal ⏎ does what o does: both are shown, so o is not a secret there.
-                  external
-                    ? { key: '⏎ o', label: t('открыть в полном размере'), press: 'o' }
-                    : { key: '⏎', label: mode === 'full' ? t('к списку') : t('на весь экран'), press: '\r' },
-                  ...(external ? [] : [{ key: 'o', label: t('в полном размере'), press: 'o' }]),
+                  // One hint in every terminal; ⏎ still works, the mosaic or Preview depending on the terminal.
+                  { key: 'o', label: t('на весь экран'), press: 'o' },
                   { key: '←→', label: t('листать') },
                   { key: 'n', label: t('подпись') },
                   { key: 'D', label: t('удалить') },
