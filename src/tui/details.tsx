@@ -6,10 +6,12 @@
 import type { SessionInfo } from '@antondanv/brainyard';
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
+import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 
 import { BRAIN_SHORT } from '../agents/launch.js';
 import { t } from '../i18n/i18n.js';
+import { daysLeft, imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
@@ -17,6 +19,7 @@ import { GLYPH } from '../model/overview.js';
 import { ago } from '../model/time.js';
 import { childrenOf, heldBy, pathTo, progress } from '../model/tree.js';
 import type { SessionRef, Tree, TreeNode } from '../model/types.js';
+import { pictureLines } from './image-view.js';
 import { liveLabel } from './rows.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
 
@@ -151,6 +154,49 @@ export function NodeDetails(props: {
         <Text color={C.accent}>{node.check}</Text>
       </Text>,
     );
+  }
+
+  const images = listImages(tree.project.dir, node.id);
+  if (images.length > 0) {
+    gap();
+    const left = daysLeft(node);
+    heading(
+      t('КАРТИНКИ · {count}{gone}', {
+        count: images.length,
+        gone: left === undefined ? '' : t(' · уйдут через {days} дн.', { days: left }),
+      }),
+    );
+    // Thumbnails only where there is room for a caption beside them.
+    const thumb = inner >= 40 ? { cols: 12, rows: 3 } : undefined;
+    for (const image of images.slice(0, 3)) {
+      const picture = thumb && pictureLines(imagePath(tree.project.dir, node.id, image.file), thumb.cols, thumb.rows);
+      const caption = [image.file, image.note ?? ''];
+      if (!picture) {
+        push(
+          <Text wrap="truncate-end">
+            <Text color={C.accent}>▣ {image.file}</Text>
+            {image.note ? <Text color={C.dim}> · {image.note}</Text> : null}
+          </Text>,
+        );
+        continue;
+      }
+      const width = Math.max(...picture.map((line) => stringWidth(line)));
+      const textWidth = Math.max(1, inner - width - 1);
+      const noteLines = image.note ? wrapAnsi(image.note, textWidth, { hard: true }).split('\n') : [];
+      for (let row = 0; row < Math.max(picture.length, 1 + noteLines.length); row++) {
+        const line = picture[row] ?? '';
+        const text = row === 0 ? caption[0] : (noteLines[row - 1] ?? '');
+        push(
+          <Text wrap="truncate-end">
+            {line}
+            {' '.repeat(width - stringWidth(line) + 1)}
+            <Text color={row === 0 ? C.accent : C.dim}>{text}</Text>
+          </Text>,
+        );
+      }
+    }
+    if (images.length > 3) wrap(t('… и ещё {p1}', { p1: images.length - 3 }), C.faint);
+    wrap(t('I — все картинки, подписи, на весь экран'), C.faint);
   }
 
   const kids = childrenOf(tree, node.id);

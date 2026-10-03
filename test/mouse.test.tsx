@@ -41,7 +41,8 @@ class Output extends EventEmitter {
     super();
   }
   write = (text: string) => {
-    this.frame = text;
+    // Bracketed paste switching on and off is a mode, not a frame.
+    if (text !== '\u001b[?2004h' && text !== '\u001b[?2004l') this.frame = text;
     return true;
   };
 }

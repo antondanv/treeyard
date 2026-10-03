@@ -7,6 +7,7 @@
 import { realpathSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { labels, pick, t } from '../i18n/i18n.js';
+import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
@@ -149,6 +150,9 @@ const TEXT = {
     needs: 'Ждёт',
     neededBy: 'Нужен для',
     done: 'Статус done ставит человек.',
+    images: 'Картинки узла — открой файлы, чтобы посмотреть:',
+    image: 'файл.png',
+    imageWhat: 'приложить к узлу картинку или скрин (например, доказательство для проверки); без файла — список',
   },
   en: {
     heading: '# You are working on a node of the project tree',
@@ -194,6 +198,9 @@ const TEXT = {
     needs: 'Waits for',
     neededBy: 'Needed for',
     done: 'Status done is set by a person.',
+    images: 'Pictures of the node — open the files to look at them:',
+    image: 'file.png',
+    imageWhat: 'attach a picture or a screenshot to the node (evidence for review, say); without a file — the list',
   },
 };
 
@@ -226,6 +233,14 @@ export function contextText(tree: Tree, id: string): string {
   for (const link of links.neededBy) lines.push(`${L.neededBy}: ${linkLine(link)}`);
   const about = clip(description(node.body), 2500);
   if (about) lines.push('', about);
+  const images = listImages(project.dir, node.id);
+  if (images.length > 0) {
+    lines.push('', L.images);
+    for (const image of images) {
+      const path = imagePath(project.dir, node.id, image.file);
+      lines.push(`- \`${path}\`${image.note ? ` — ${image.note}` : ''}`);
+    }
+  }
   const journal = journalEntries(node.body).slice(-6);
   if (journal.length > 0) lines.push('', L.journal, ...journal.map((line) => `- ${line}`));
   lines.push('');
@@ -265,6 +280,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} set ${node.id} status=waiting ${L.wait}\` — ${L.waitWhat}`);
   lines.push(`- \`${self} add "${L.other}" --project ../X --for ${node.id}\` — ${L.otherWhat}`);
   lines.push(`- \`${self} set <id> status=done --project ../X\` — ${L.closeOther}`);
+  lines.push(`- \`${self} image ${node.id} ${L.image} --note "…"\` — ${L.imageWhat}`);
   // Read, not applied: the context must not switch the language or the theme of whoever asks.
   if (loadSettings().notes) lines.push(`- \`${self} note "${L.note}"\` — ${L.noteWhat}`);
   lines.push(`- ${L.done}`);

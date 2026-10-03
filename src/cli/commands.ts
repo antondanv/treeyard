@@ -31,6 +31,8 @@ import {
   syncIssues,
 } from '../github.js';
 import { pick, t } from '../i18n/i18n.js';
+import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
+import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
 import { addLinkedNode, setNeeds } from '../model/links.js';
 import { addNote, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import { addNode, logToNode, moveNode, STATUS_LABEL, setStatus, updateNode } from '../model/ops.js';
@@ -93,6 +95,8 @@ ${out.bold('Команды')}
                                            needs=../X#id (ждёт узла другого проекта); --project ../X — узел там
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
+  treeyard image <id> [файл…|--paste] [--note "…"]   картинки узла: список, приложить файл или из буфера
+  treeyard image <id> 001.png --note "…" | --rm 001.png   подпись к картинке · удалить её
   treeyard context <id> [--start plan|do|goal|chat]   что получит агент
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            сессия по узлу прямо из shell
@@ -124,6 +128,8 @@ ${out.bold('Commands')}
                                            needs=../X#id (waits for a node of another project); --project ../X — a node there
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
+  treeyard image <id> [file…|--paste] [--note "…"]   a node's pictures: the list, attach a file or the clipboard
+  treeyard image <id> 001.png --note "…" | --rm 001.png   caption a picture · remove it
   treeyard context <id> [--start plan|do|goal|chat]   what an agent gets
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            a session for a node straight from the shell
@@ -169,6 +175,9 @@ async function main(argv: string[]): Promise<number> {
       return logCommand(rest);
     case 'note':
       return noteCommand(rest);
+    case 'image':
+    case 'images':
+      return imageCommand(rest);
     case 'context':
       return contextCommand(rest);
     case 'open':
@@ -210,7 +219,9 @@ function parse<T extends NonNullable<Parameters<typeof parseArgs>[0]>['options']
 function project(): Tree {
   const dir = findProject();
   if (!dir) throw new UsageError(t('здесь нет дерева (.tree/) — treeyard init, чтобы посадить'));
-  return loadTree(dir);
+  const tree = loadTree(dir);
+  purgeImages(tree);
+  return tree;
 }
 
 function nodeArg(tree: Tree, id: string | undefined): string {
@@ -846,6 +857,61 @@ function logCommand(args: string[]): number {
       id,
     }),
   );
+  return 0;
+}
+
+/** Pictures of a node: list, attach (files or the clipboard), caption, remove. */
+function imageCommand(args: string[]): number {
+  const { values, positionals } = parse(args, {
+    note: { type: 'string' },
+    paste: { type: 'boolean' },
+    rm: { type: 'string' },
+    as: { type: 'string' },
+  });
+  const tree = project();
+  const id = nodeArg(tree, positionals[0]);
+  const { dir } = tree.project;
+  const source = sourceOf(values.as);
+  const files = positionals.slice(1);
+  const known = new Set(listImages(dir, id).map((image) => image.file));
+  if (values.rm) {
+    if (!known.has(values.rm)) throw new UsageError(t('у узла {id} нет картинки {file}', { id, file: values.rm }));
+    removeImage(dir, id, values.rm);
+    logToNode(tree, id, t('картинка удалена: {file}', { file: values.rm }), source);
+    process.stdout.write(t('{id} · удалена {file}\n', { id, file: values.rm }));
+    return 0;
+  }
+  if (files.length === 1 && known.has(files[0]!) && values.note !== undefined) {
+    const image = setImageNote(dir, id, files[0]!, values.note);
+    if (image.note) logToNode(tree, id, t('подпись к {file}: {note}', { file: image.file, note: image.note }), source);
+    process.stdout.write(t('{id} · подпись к {file} сохранена\n', { id, file: image.file }));
+    return 0;
+  }
+  const sources: (Buffer | string)[] = [...files];
+  const found = values.paste ? clipboardImage() : undefined;
+  if (values.paste && !found) throw new UsageError(t('в буфере нет картинки'));
+  if (found) sources.push(found.kind === 'png' ? found.data : found.path);
+  try {
+    for (const item of sources) {
+      const image = addImage(dir, id, item, values.note);
+      logToNode(
+        tree,
+        id,
+        t('картинка добавлена: {file}', { file: image.file }) + (image.note ? ` — ${image.note}` : ''),
+        source,
+      );
+    }
+  } finally {
+    if (found) forgetClipboard(found);
+  }
+  const images = listImages(dir, id);
+  if (images.length === 0) {
+    process.stdout.write(t('{id} · картинок нет — treeyard image {id} <файл> или --paste\n', { id }));
+    return 0;
+  }
+  for (const image of images) {
+    process.stdout.write(`${imagePath(dir, id, image.file)}${image.note ? ` — ${image.note}` : ''}\n`);
+  }
   return 0;
 }
 

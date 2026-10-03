@@ -14,7 +14,7 @@
 import { spawnSync } from 'node:child_process';
 
 import type { SessionInfo } from '@antondanv/brainyard';
-import { Box, type Key, Text, useAnimation, useApp, useInput, useWindowSize } from 'ink';
+import { Box, type Key, Text, useAnimation, useApp, useInput, usePaste, useWindowSize } from 'ink';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -70,6 +70,7 @@ import {
 } from '../github.js';
 import { labels, plural, t } from '../i18n/i18n.js';
 import { activity, type Event } from '../model/activity.js';
+import { addImage, droppedPath } from '../model/images.js';
 import { description } from '../model/journal.js';
 import { linkLabel, linksOf } from '../model/links.js';
 import { homeShort, notesFolder } from '../model/notes.js';
@@ -148,6 +149,7 @@ import {
 import { type AgentTask, GithubConnect } from './github-connect.js';
 import { follow, Graph, type GraphStyle, layoutGraph, neighbour, selectedOverflow, type Viewport } from './graph.js';
 import { History } from './history.js';
+import { ImagesDialog } from './images-dialog.js';
 import { shortcutKey } from './keys.js';
 import { Logo, logoSize, WORDMARK } from './logo.js';
 import { MARQUEE_TICK, marquee } from './marquee.js';
@@ -200,6 +202,7 @@ type Modal =
   | { kind: 'statusOrder' }
   | { kind: 'help' }
   | { kind: 'github' }
+  | { kind: 'images'; node: string; paste?: boolean }
   | { kind: 'problems' };
 
 /** Something that starts a session or spends an agent's time: asked about first, unless turned off. */
@@ -664,6 +667,7 @@ export function App(props: AppProps) {
       'statusOrder',
       'confirm',
       'github',
+      'images',
     ].includes(modal.kind);
   const listHeight = bodyHeight;
   const paneSize = { width: Math.max(20, (rightWidth || width) - 2), height: Math.max(5, bodyHeight - 4) };
@@ -1464,6 +1468,12 @@ export function App(props: AppProps) {
       needs: 'node',
       run: () => current && setModal({ kind: 'delete', node: current.id }),
     },
+    images: {
+      label: t('Картинки узла: из буфера, подписи, на весь экран'),
+      keys: 'I',
+      needs: 'node',
+      run: () => current && setModal({ kind: 'images', node: current.id, paste: true }),
+    },
     copy: {
       label: t('Скопировать id узла'),
       keys: 'y',
@@ -1586,6 +1596,7 @@ export function App(props: AppProps) {
     v: 'mode',
     z: 'style',
     i: 'inspector',
+    I: 'images',
     '.': 'closed',
     '+': 'expandAll',
     '=': 'expandAll',
@@ -1621,6 +1632,23 @@ export function App(props: AppProps) {
   const press = usePress();
   /** The keys of the list work now: no dialog, no prompt, no search, no typing into a session. */
   const listKeys = !modal && !searching && !prompt && !paneFocused;
+  // A file dropped on the tree: the terminal pastes its path, and a picture goes to the selected node.
+  usePaste(
+    (text) => {
+      const path = droppedPath(text);
+      if (!current || !path) return;
+      try {
+        const image = addImage(props.dir, current.id, path);
+        logToNode(tree, current.id, t('картинка добавлена: {file}', { file: image.file }));
+        reload();
+        say(t('картинка {file} → «{title}» · I — посмотреть', { file: image.file, title: current.title }));
+      } catch (error) {
+        say((error as Error).message, C.warn);
+      }
+    },
+    // Only on the tree: while it listens, Ink hands no paste to the fields of a prompt or a dialog.
+    { isActive: listKeys && view === 'tree' },
+  );
   /** Clicks that only select: they also take the keyboard back from a session. */
   const clicks = !modal && !prompt;
   const clickRow = (index: number, click: Click) => {
@@ -2125,6 +2153,25 @@ export function App(props: AppProps) {
         );
       case 'help':
         return <HelpDialog width={w} height={bodyHeight} onClose={close} />;
+      case 'images': {
+        if (!modalNode) return null;
+        return (
+          <ImagesDialog
+            dir={props.dir}
+            node={modalNode}
+            width={w}
+            height={bodyHeight}
+            pasteOnOpen={modal.paste}
+            onChange={(journal, message) => {
+              if (journal) logToNode(tree, modalNode.id, journal);
+              reload();
+              say(message);
+            }}
+            onError={(message) => say(message, C.warn)}
+            onClose={close}
+          />
+        );
+      }
       case 'github':
         return (
           <GithubConnect
