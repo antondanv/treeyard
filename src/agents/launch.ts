@@ -10,7 +10,7 @@ import { nodeEnv } from '../model/notes.js';
 import { attachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import type { BrainId, SessionRef, StartMode, Tree } from '../model/types.js';
-import { sessionPlan } from './context.js';
+import { fullAccess, sessionPlan } from './context.js';
 
 export const BRAIN_LABEL: Record<BrainId, string> = {
   claude: 'Claude Code',
@@ -94,7 +94,13 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
 
 /** Opens a node's session again; a running background session is attached to. */
 export async function resume(tree: Tree, id: string, ref: SessionRef): Promise<OpenResult> {
-  const result = await open({ brain: ref.brain, cwd: tree.project.dir, resume: ref.id, env: nodeEnv(id) });
+  const result = await open({
+    brain: ref.brain,
+    cwd: tree.project.dir,
+    resume: ref.id,
+    ...fullAccess(ref.brain),
+    env: nodeEnv(id),
+  });
   if (tree.nodes.has(id)) attachSession(tree, id, { ...ref, opened: nowIso() });
   return result;
 }
@@ -102,7 +108,13 @@ export async function resume(tree: Tree, id: string, ref: SessionRef): Promise<O
 /** Opens any session of the project (one that no node holds yet). */
 export async function resumeLoose(tree: Tree, session: SessionInfo): Promise<OpenResult> {
   // No node's session: not even the one this process may have inherited.
-  return open({ brain: session.brain, cwd: tree.project.dir, resume: session.id, env: nodeEnv('') });
+  return open({
+    brain: session.brain,
+    cwd: tree.project.dir,
+    resume: session.id,
+    ...fullAccess(session.brain),
+    env: nodeEnv(''),
+  });
 }
 
 /** Live state of the sessions on this machine — Claude Code, Codex, Antigravity — by session id. */

@@ -24,6 +24,7 @@ import { pick } from '../i18n/i18n.js';
 import { nodeEnv } from '../model/notes.js';
 import type { BrainId } from '../model/types.js';
 import { settings } from '../settings.js';
+import { fullAccess } from './context.js';
 import type { Pane, PaneSize } from './panes.js';
 
 export const SKILL = 'treeyard-init';
@@ -142,6 +143,7 @@ export async function plantWithAgent(dir: string, brain: BrainId, size?: PaneSiz
     } Do not ask them to launch treeyard again.`,
     prompt: plantingPrompt(facts),
     ...(brain === 'claude' ? { name } : {}),
+    ...fullAccess(brain),
     env: nodeEnv(''),
   };
   if (!pane) return { mode: 'terminal', result: await open(options) };

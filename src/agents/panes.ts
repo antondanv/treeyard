@@ -28,7 +28,7 @@ import { nodeEnv } from '../model/notes.js';
 import { attachSession, detachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import type { BrainId, SessionRef, Tree, TreeNode } from '../model/types.js';
-import { sessionPlan } from './context.js';
+import { fullAccess, sessionPlan } from './context.js';
 import type { LaunchOptions } from './launch.js';
 
 export { panesAvailable };
@@ -139,6 +139,7 @@ export async function wakeInPane(tree: Tree, nodeId: string, ref: SessionRef, si
     brain: ref.brain,
     cwd: tree.project.dir,
     resume: ref.id,
+    ...fullAccess(ref.brain),
     ...(node ? { label: node.title } : {}),
     env: nodeEnv(nodeId),
     width: size.width,

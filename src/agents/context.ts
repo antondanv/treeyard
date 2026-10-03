@@ -23,7 +23,7 @@ export interface SessionPlan {
   system: string;
   /** The first message; none for `chat`. */
   prompt?: string;
-  /** Claude Code permission mode to start in. */
+  /** Permission mode to start in: Claude Code `plan`, Antigravity full access. */
   permissionMode?: string;
   /** The start mode actually used (`goal` falls back to `do` outside Claude Code). */
   start: StartMode;
@@ -43,6 +43,16 @@ export const START_HINT: Record<StartMode, string> = labels(() => ({
   chat: t('сессия с контекстом узла, первое сообщение — твоё'),
 }));
 
+/**
+ * Codex and Claude Code take their access from their own settings; agy has
+ * only plan and accept-edits there, and asks before every command — an agent
+ * from a node has to run treeyard and the project's tests. The flag lives for
+ * one run, so a resumed session needs it again.
+ */
+export function fullAccess(brain: BrainId): { permissionMode?: string } {
+  return brain === 'antigravity' ? { permissionMode: 'bypassPermissions' } : {};
+}
+
 export function sessionName(tree: Tree, node: TreeNode): string {
   const name = `${tree.project.title} · ${node.title}`;
   return name.length > 64 ? `${name.slice(0, 63)}…` : name;
@@ -52,7 +62,12 @@ export function sessionPlan(tree: Tree, id: string, start: StartMode, brain: Bra
   const node = tree.nodes.get(id);
   if (!node) throw new Error(t('нет узла {id}', { id }));
   const mode: StartMode = start === 'goal' && (brain !== 'claude' || !node.doneWhen) ? 'do' : start;
-  const plan: SessionPlan = { name: sessionName(tree, node), system: contextText(tree, id), start: mode };
+  const plan: SessionPlan = {
+    name: sessionName(tree, node),
+    system: contextText(tree, id),
+    start: mode,
+    ...fullAccess(brain),
+  };
   const title = `«${node.title}» (${node.id})`;
   const check = node.check ? `\`${node.check}\`` : '';
   const self = selfCommand();

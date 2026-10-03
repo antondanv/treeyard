@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { contextText, sessionPlan } from '../src/agents/context.js';
+import { contextText, fullAccess, sessionPlan } from '../src/agents/context.js';
 import { countNodes, parseProposal, plant } from '../src/agents/importer.js';
 import { addNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
@@ -115,6 +115,17 @@ describe('what an agent gets', () => {
     } finally {
       process.env.TREEYARD_HOME = home;
     }
+  });
+
+  it('gives Antigravity full access in every mode; Claude Code and Codex keep their own settings', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'X' });
+    for (const start of ['plan', 'do', 'chat'] as const)
+      expect(sessionPlan(tree, node.id, start, 'antigravity').permissionMode).toBe('bypassPermissions');
+    expect(sessionPlan(tree, node.id, 'do', 'codex').permissionMode).toBeUndefined();
+    expect(sessionPlan(tree, node.id, 'do', 'claude').permissionMode).toBeUndefined();
+    expect(fullAccess('antigravity')).toEqual({ permissionMode: 'bypassPermissions' });
+    expect(fullAccess('codex')).toEqual({});
   });
 
   it('starts with a plan by default, and /goal only in Claude Code with a criterion', () => {
