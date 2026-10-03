@@ -197,6 +197,10 @@ export function nodeFromText(text: string, fallbackId: string, problems: string[
   if (waiting) node.waiting = waiting;
   const until = str(take('until'));
   if (until) node.until = until;
+  const needs = strList(take('needs'));
+  if (needs.length) node.needs = needs;
+  const neededBy = strList(take('for'));
+  if (neededBy.length) node.neededBy = neededBy;
   const created = dateStr(take('created'));
   if (created) node.created = created;
   const updated = dateStr(take('updated'));
@@ -243,6 +247,8 @@ export function nodeToText(node: TreeNode): string {
     check: node.check,
     waiting: node.status === 'waiting' ? node.waiting : undefined,
     until: node.status === 'waiting' ? node.until : undefined,
+    needs: node.needs,
+    for: node.neededBy,
     sessions: node.sessions.map((ref) => ({
       brain: ref.brain,
       id: ref.id,
@@ -330,6 +336,12 @@ function str(value: unknown): string {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return '';
+}
+
+/** A list, or one value written without brackets by hand. */
+function strList(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : [value];
+  return items.map(str).filter(Boolean);
 }
 
 /** YAML turns `2026-10-01` into a Date; we keep the text. */

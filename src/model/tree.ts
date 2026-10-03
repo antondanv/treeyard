@@ -2,6 +2,7 @@
  * Questions about the tree that do not change it: what is under a node, how
  * far along it is, what can be worked on right now and what is waiting.
  */
+import { needsMet } from './links.js';
 import { ROOT, STATUSES, type Status, type Tree, type TreeNode } from './types.js';
 
 /** Statuses that are over: they do not count as open work. */
@@ -135,12 +136,13 @@ export function heldBy(tree: Tree, id: string): TreeNode | undefined {
 /**
  * What can be worked on now: open nodes with no open work under them and
  * nothing above them waiting. When one branch is stuck, these are the other
- * branches — the reason to keep a tree and not a list.
+ * branches — the reason to keep a tree and not a list. A node waiting for
+ * other projects comes back here once all of that is done: it can go on.
  */
 export function actionable(tree: Tree): TreeNode[] {
   const out: TreeNode[] = [];
   for (const node of tree.nodes.values()) {
-    if (!OPEN.has(node.status)) continue;
+    if (!OPEN.has(node.status) && !(node.status === 'waiting' && node.needs && needsMet(tree, node))) continue;
     const openKids = childrenOf(tree, node.id).some((kid) => OPEN.has(kid.status) || kid.status === 'waiting');
     if (openKids) continue;
     if (heldBy(tree, node.id)) continue;

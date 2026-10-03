@@ -743,4 +743,26 @@ export const EN: Record<string, string> = {
   'Сюда падает `treeyard note` из любого проекта. Разбор раз в 2–3 дня.':
     '`treeyard note` from any project lands here. Sort them out every 2–3 days.',
   'Откуда: {from}': 'From: {from}',
+  '--for связывает с узлом другого проекта: добавь --project ../Проект':
+    '--for links to a node of another project: add --project ../Project',
+  '--project нужен вместе с --for <id> — узлом, который ждёт эту работу':
+    '--project goes with --for <id> — the node that waits for this work',
+  'в {dir} нет дерева (.tree/tree.md) — сначала treeyard init там':
+    'no tree in {dir} (.tree/tree.md) — run treeyard init there first',
+  '--project указывает на этот же проект': '--project points at this same project',
+  '{p1} {ref} — не найдено, связь записана\n': '{p1} {ref} — not found, the link is written\n',
+  'нужен для:': 'needed for:',
+  '{ref} — не найдено': '{ref} — not found',
+  'ждёт: {link}': 'waits for: {link}',
+  'нужен для: {link}': 'needed for: {link}',
+  'больше не нужен для: {link}': 'no longer needed for: {link}',
+  'закрыт вместе с {link}': 'closed along with {link}',
+  'Совместные узлы': 'Shared nodes',
+  'Сюда падают узлы, заведённые из других проектов (`treeyard add "…" --project … --for <id>`): там их ждут. Каждый закрывается по своему критерию.':
+    'Nodes added from other projects land here (`treeyard add "…" --project … --for <id>`): they are waited for there. Each closes by its own criterion.',
+  '«{ref}» — нужно ../Проект#id': '«{ref}» — expected ../Project#id',
+  'можно продолжать: всё, чего ждал, готово · {path}': 'can go on: everything it waited for is done · {path}',
+  'НУЖЕН ДЛЯ': 'NEEDED FOR',
+  'ждёт: ': 'waits for: ',
+  'нужен для: ': 'needed for: ',
 };

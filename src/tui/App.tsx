@@ -56,6 +56,7 @@ import {
 import { labels, plural, t } from '../i18n/i18n.js';
 import { activity, type Event } from '../model/activity.js';
 import { description } from '../model/journal.js';
+import { linkLabel, linksOf } from '../model/links.js';
 import {
   addNode,
   attachSession,
@@ -650,6 +651,7 @@ export function App(props: AppProps) {
       frame,
       pane: nodePane(node, panes)?.pane.brain,
       ...(kids.length > 0 ? { progress: progress(tree, node.id) } : {}),
+      ...(node.needs ? { needs: linksOf(tree, node).needs } : {}),
     };
   };
 
@@ -1872,6 +1874,8 @@ export function App(props: AppProps) {
         .map((step) => step.title)
         .join(' › ');
       let note = path || t('верхний уровень');
+      if (view === 'now' && item.status === 'waiting')
+        note = t('можно продолжать: всё, чего ждал, готово · {path}', { path: note });
       if (view === 'waiting') {
         note = t('{p1}{p2} · ждёт {p3}', {
           p1: item.waiting ?? 'причина не записана',
@@ -3008,7 +3012,29 @@ function SelectionStrip(props: {
     );
   }
   let second: ReactNode;
-  if (node.status === 'waiting') {
+  const links = linksOf(tree, node);
+  // Another project's node speaks first: it is what this one waits for, or what it is for.
+  const link = links.needs.find((item) => item.node?.status !== 'done') ?? links.needs[0] ?? links.neededBy[0];
+  if (link) {
+    const waits = links.needs.includes(link);
+    second = (
+      <Text wrap="truncate-end">
+        <Text color={waits ? C.warn : C.faint}>{waits ? t('ждёт: ') : t('нужен для: ')}</Text>
+        {link.node ? (
+          <>
+            <Text color={STATUS_COLOR[link.node.status]}>{GLYPH[link.node.status]} </Text>
+            <Text>{linkLabel(link)}</Text>
+            <Text color={C.dim}> · {STATUS_LABEL[link.node.status]}</Text>
+          </>
+        ) : (
+          <Text color={C.faint}>{linkLabel(link)}</Text>
+        )}
+        {(waits ? links.needs : links.neededBy).length > 1 ? (
+          <Text color={C.faint}> +{(waits ? links.needs : links.neededBy).length - 1}</Text>
+        ) : null}
+      </Text>
+    );
+  } else if (node.status === 'waiting') {
     second = (
       <Text color={C.warn} wrap="truncate-end">
         {t('‖ ждёт: ')}

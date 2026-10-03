@@ -18,6 +18,7 @@ import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '..
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { launchInPane } from '../agents/panes.js';
 import { pick, t } from '../i18n/i18n.js';
+import { addLinkedNode, setNeeds } from '../model/links.js';
 import { addNote, noteOrigin, originText } from '../model/notes.js';
 import { addNode, logToNode, moveNode, STATUS_LABEL, setStatus, updateNode } from '../model/ops.js';
 import { writeOverview } from '../model/overview.js';
@@ -66,7 +67,9 @@ ${out.bold('Команды')}
   treeyard show [id] [--json] [--open]     дерево или узел текстом (--open — без готового)
   treeyard add "<название>" [--parent id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]
-  treeyard set <id> ключ=значение…         status, title, who, done_when, check, waiting, until, parent
+  treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
+  treeyard set <id> ключ=значение…         status, title, who, done_when, check, waiting, until, parent,
+                                           needs=../X#id (ждёт узла другого проекта); --project ../X — узел там
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
   treeyard context <id> [--start plan|do|goal|chat]   что получит агент
@@ -92,7 +95,9 @@ ${out.bold('Commands')}
   treeyard show [id] [--json] [--open]     the tree or a node as text (--open hides finished work)
   treeyard add "<title>" [--parent id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]
-  treeyard set <id> key=value…             status, title, who, done_when, check, waiting, until, parent
+  treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
+  treeyard set <id> key=value…             status, title, who, done_when, check, waiting, until, parent,
+                                           needs=../X#id (waits for a node of another project); --project ../X — a node there
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
   treeyard context <id> [--start plan|do|goal|chat]   what an agent gets
@@ -540,35 +545,64 @@ function addCommand(args: string[]): number {
     waiting: { type: 'string' },
     until: { type: 'string' },
     after: { type: 'string' },
+    project: { type: 'string' },
+    for: { type: 'string' },
     as: { type: 'string' },
   });
   const title = positionals.join(' ').trim();
   if (!title) throw new UsageError(t('treeyard add "<название>" [--parent id]'));
-  const tree = project();
-  const parent = values.parent ? nodeArg(tree, values.parent) : ROOT;
-  const node = addNode(
-    tree,
-    {
-      title,
-      parent,
-      status: values.status ? statusArg(values.status) : 'todo',
-      ...(values.who ? { who: whoArg(values.who) } : {}),
-      ...(values['done-when'] ? { doneWhen: values['done-when'] } : {}),
-      ...(values.check ? { check: values.check } : {}),
-      ...(values.note ? { body: values.note } : {}),
-      ...(values.waiting ? { waiting: values.waiting } : {}),
-      ...(values.until ? { until: values.until } : {}),
-      ...(values.after ? { after: nodeArg(tree, values.after) } : {}),
-    },
-    sourceOf(values.as),
-  );
+  if (values.for && !values.project)
+    throw new UsageError(t('--for связывает с узлом другого проекта: добавь --project ../Проект'));
+  if (values.project && !values.for)
+    throw new UsageError(t('--project нужен вместе с --for <id> — узлом, который ждёт эту работу'));
+  const here = project();
+  // The node goes into the other tree; `--for` names the node here that waits for it.
+  const tree = values.project ? otherProject(here, values.project) : here;
+  const parent = values.parent ? nodeArg(tree, values.parent) : values.project ? undefined : ROOT;
+  const input = {
+    title,
+    ...(parent ? { parent } : {}),
+    status: values.status ? statusArg(values.status) : ('todo' as Status),
+    ...(values.who ? { who: whoArg(values.who) } : {}),
+    ...(values['done-when'] ? { doneWhen: values['done-when'] } : {}),
+    ...(values.check ? { check: values.check } : {}),
+    ...(values.note ? { body: values.note } : {}),
+    ...(values.waiting ? { waiting: values.waiting } : {}),
+    ...(values.until ? { until: values.until } : {}),
+    ...(values.after ? { after: nodeArg(tree, values.after) } : {}),
+  };
+  if (values.project && values.for) {
+    const waiter = nodeArg(here, values.for);
+    const node = addLinkedNode(here, waiter, tree, input, sourceOf(values.as));
+    const branch = tree.nodes.get(node.parent)?.title;
+    process.stdout.write(
+      `${node.id} · ${tree.project.title}${branch ? ` › ${branch}` : ''} ← ${here.project.title} › ${waiter}\n`,
+    );
+    return 0;
+  }
+  const node = addNode(tree, input, sourceOf(values.as));
   process.stdout.write(`${node.id}\n`);
   return 0;
 }
 
+/** Another project's tree, by its folder relative to this project's — the way refs are written. */
+function otherProject(here: Tree, folder: string): Tree {
+  const dir = resolve(here.project.dir, folder.trim().replace(/^~(?=$|\/)/, homedir()));
+  if (findProject(dir) !== dir)
+    throw new UsageError(t('в {dir} нет дерева (.tree/tree.md) — сначала treeyard init там', { dir }));
+  if (dir === here.project.dir) throw new UsageError(t('--project указывает на этот же проект'));
+  return loadTree(dir);
+}
+
 function setCommand(args: string[]): number {
-  const { values, positionals } = parse(args, { as: { type: 'string' }, note: { type: 'string' } });
-  const tree = project();
+  const { values, positionals } = parse(args, {
+    as: { type: 'string' },
+    note: { type: 'string' },
+    project: { type: 'string' },
+  });
+  const here = project();
+  // `--project ../X`: a node of another tree, the way an agent closes the shared node it made there.
+  const tree = values.project ? otherProject(here, values.project) : here;
   const id = nodeArg(tree, positionals[0]);
   const pairs = positionals.slice(1);
   if (pairs.length === 0) throw new UsageError('treeyard set <id> status=review [waiting="…"] …');
@@ -584,7 +618,7 @@ function setCommand(args: string[]): number {
     fields[pair.slice(0, cut).trim().replace(/-/g, '_')] = pair.slice(cut + 1);
   }
   const source = sourceOf(values.as);
-  const known = new Set(['status', 'title', 'who', 'done_when', 'check', 'waiting', 'until', 'parent']);
+  const known = new Set(['status', 'title', 'who', 'done_when', 'check', 'waiting', 'until', 'parent', 'needs']);
   for (const key of Object.keys(fields))
     if (!known.has(key))
       throw new UsageError(
@@ -605,11 +639,30 @@ function setCommand(args: string[]): number {
       ...(fields.check !== undefined ? { check: fields.check } : {}),
     });
   }
+  if (fields.needs !== undefined) {
+    const refs = fields.needs
+      .split(',')
+      .map((ref) => ref.trim())
+      .filter(Boolean);
+    let links: ReturnType<typeof setNeeds>;
+    try {
+      links = setNeeds(tree, id, refs, source);
+    } catch (error) {
+      throw new UsageError((error as Error).message);
+    }
+    for (const link of links.filter((item) => item.missing))
+      process.stderr.write(
+        t('{p1} {ref} — не найдено, связь записана\n', { p1: err.c('#ffcf70', '!'), ref: link.ref }),
+      );
+  }
   if (fields.parent !== undefined) moveNode(tree, id, fields.parent === ROOT ? ROOT : nodeArg(tree, fields.parent));
   if (fields.status !== undefined || fields.waiting !== undefined || fields.until !== undefined) {
     const node = tree.nodes.get(id)!;
     const status = fields.status !== undefined ? statusArg(fields.status) : node.status;
-    const agentDone = status === 'done' && !byPerson(values.as);
+    // A shared node (made from another project) is closed by the agent that did the work:
+    // nobody comes to this tree to close it by hand.
+    const shared = Boolean(tree.nodes.get(id)?.neededBy?.length);
+    const agentDone = status === 'done' && !shared && !byPerson(values.as);
     if (agentDone) {
       process.stderr.write(
         t('{p1} готово ставит человек — ставлю «на проверке»\n', {

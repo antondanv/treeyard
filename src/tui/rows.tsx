@@ -10,6 +10,7 @@ import stringWidth from 'string-width';
 import { BRAIN_SHORT } from '../agents/launch.js';
 import { formatMemory, type Pane } from '../agents/panes.js';
 import { t } from '../i18n/i18n.js';
+import type { Link } from '../model/links.js';
 import { GLYPH } from '../model/overview.js';
 import { ago, duration } from '../model/time.js';
 import type { Progress, Row } from '../model/tree.js';
@@ -25,6 +26,8 @@ export interface Badges {
   frame: number;
   /** The brain of a session that runs in a pane. */
   pane?: BrainId | undefined;
+  /** Nodes of other projects it waits for. */
+  needs?: Link[];
 }
 
 const RIGHT = 24;
@@ -185,6 +188,25 @@ function badgeFor(node: TreeNode, badges: Badges, dim: boolean | undefined): Rea
     return (
       <Text color={C.ok} wrap="truncate-end">
         ▣ {BRAIN_SHORT[badges.pane]}
+      </Text>
+    );
+  }
+  if (badges.needs?.length) {
+    // The first one not done yet speaks for all; when all are done, the work can go on.
+    const open = badges.needs.filter((link) => link.node?.status !== 'done');
+    const shown = open[0] ?? badges.needs[0]!;
+    const mark = shown.node ? GLYPH[shown.node.status] : '?';
+    const color = props.dim
+      ? C.faint
+      : open.length === 0
+        ? C.ok
+        : shown.node
+          ? (STATUS_COLOR[shown.node.status] ?? C.warn)
+          : C.faint;
+    return (
+      <Text color={color} wrap="truncate-end">
+        → {shown.project} {mark}
+        {open.length > 1 ? ` +${open.length - 1}` : ''}
       </Text>
     );
   }

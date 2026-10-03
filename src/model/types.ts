@@ -56,6 +56,10 @@ export interface TreeNode {
   waiting?: string;
   /** Status `waiting`: when to come back to it. */
   until?: string;
+  /** Nodes in other projects' trees this one waits for: `../Brainyard#hv95`, the path from the project's folder. */
+  needs?: string[];
+  /** The other side of `needs`: nodes elsewhere that wait for this one (`for` in the file). */
+  neededBy?: string[];
   sessions: SessionRef[];
   /** YYYY-MM-DD. */
   created?: string;

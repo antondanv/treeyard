@@ -5,6 +5,7 @@
 
 import { t } from '../i18n/i18n.js';
 import { description, journalEntries } from '../model/journal.js';
+import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { ago } from '../model/time.js';
@@ -91,6 +92,8 @@ export function treeText(tree: Tree, p: Paint, options: { closed?: boolean; unde
         if (total > 0) line += p.dim(`  ${done}/${total}`);
       }
       if (node.who === 'human' && node.status !== 'done') line += p.c('#ffcf70', t('  · ты'));
+      for (const link of linksOf(tree, node).needs)
+        line += link.node ? p.dim(`  → ${link.project} ${GLYPH[link.node.status]}`) : p.dim(`  → ${link.project} ?`);
       if (node.status === 'waiting') {
         line += p.c(
           '#ffcf70',
@@ -155,6 +158,13 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint): string {
       }`,
     );
   }
+  const links = linksOf(tree, node);
+  const linkLine = (link: Link) =>
+    link.node
+      ? `${GLYPH[link.node.status]} ${linkLabel(link)} · ${STATUS_LABEL[link.node.status]}`
+      : p.dim(linkLabel(link));
+  for (const link of links.needs) lines.push(`${p.dim(t('ждёт:'))} ${linkLine(link)}`);
+  for (const link of links.neededBy) lines.push(`${p.dim(t('нужен для:'))} ${linkLine(link)}`);
   const kids = childrenOf(tree, node.id);
   if (kids.length > 0) {
     lines.push('', p.dim(t('внутри:')));
@@ -189,6 +199,8 @@ export function treeJson(tree: Tree): unknown {
     ...(node.check ? { check: node.check } : {}),
     ...(node.waiting ? { waiting: node.waiting } : {}),
     ...(node.until ? { until: node.until } : {}),
+    ...(node.needs ? { needs: node.needs } : {}),
+    ...(node.neededBy ? { for: node.neededBy } : {}),
     ...(node.sessions.length ? { sessions: node.sessions } : {}),
     children: childrenOf(tree, node.id).map(nodeJson),
   });

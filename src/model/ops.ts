@@ -6,6 +6,7 @@
 
 import { labels, t } from '../i18n/i18n.js';
 import { appendJournal, replaceDescription } from './journal.js';
+import { closeNeeds, forgetLinked } from './links.js';
 import { writeOverview } from './overview.js';
 import { removeNode, writeNode } from './store.js';
 import { nowIso, stamp, today } from './time.js';
@@ -164,6 +165,7 @@ export function setStatus(tree: Tree, id: string, status: Status, change: Status
     node.body = appendJournal(node.body, line);
   }
   save(tree, node);
+  if (status === 'done' && before !== 'done' && node.needs) closeNeeds(tree, node, change.source ?? t('ты'));
   return node;
 }
 
@@ -281,6 +283,7 @@ function renumber(tree: Tree, parent: string): void {
 function save(tree: Tree, node: TreeNode): void {
   writeNode(tree.project.dir, node);
   writeOverview(tree);
+  forgetLinked(tree.project.dir);
 }
 
 function need(tree: Tree, id: string): TreeNode {

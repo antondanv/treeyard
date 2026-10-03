@@ -18,6 +18,7 @@ import wrapAnsi from 'wrap-ansi';
 
 import { BRAIN_SHORT } from '../agents/launch.js';
 import { t } from '../i18n/i18n.js';
+import { linksOf } from '../model/links.js';
 import { STATUS_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { childrenOf, progress, type Row } from '../model/tree.js';
@@ -447,6 +448,17 @@ export function graphCells(props: GraphProps): Cell[][] {
     if (sessions.some((session) => session?.live?.status === 'busy'))
       return { text: SPINNER[(props.frame ?? 0) % SPINNER.length]!, color: C.agent };
     if (props.panes?.has(node.id)) return { text: '▣', color: C.ok };
+    if (node.needs) {
+      // What it waits for in another project: the first one not done yet, green when all are.
+      const needs = linksOf(props.tree, node).needs;
+      const open = needs.filter((link) => link.node?.status !== 'done');
+      const shown = open[0] ?? needs[0];
+      if (shown)
+        return {
+          text: `→ ${shown.project} ${shown.node ? GLYPH[shown.node.status] : '?'}`,
+          color: open.length === 0 ? C.ok : shown.node ? C.warn : C.faint,
+        };
+    }
     return undefined;
   }
 

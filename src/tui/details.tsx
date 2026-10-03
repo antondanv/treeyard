@@ -11,6 +11,7 @@ import wrapAnsi from 'wrap-ansi';
 import { BRAIN_SHORT } from '../agents/launch.js';
 import { t } from '../i18n/i18n.js';
 import { description, journalEntries } from '../model/journal.js';
+import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { ago } from '../model/time.js';
@@ -104,17 +105,39 @@ export function NodeDetails(props: {
     );
   }
 
-  if (node.status === 'waiting') {
+  const links = linksOf(tree, node);
+  const linkLine = (link: Link) =>
+    push(
+      link.node ? (
+        <Text wrap="truncate-end">
+          <Text color={STATUS_COLOR[link.node.status]}>{GLYPH[link.node.status]} </Text>
+          <Text>{linkLabel(link)}</Text>
+          <Text color={C.dim}> · {STATUS_LABEL[link.node.status]}</Text>
+        </Text>
+      ) : (
+        <Text color={C.faint} wrap="truncate-end">
+          ? {linkLabel(link)}
+        </Text>
+      ),
+    );
+  if (node.status === 'waiting' || links.needs.length > 0) {
     gap();
     heading(t('ЖДЁТ'));
-    wrap(node.waiting ?? t('причина не записана'), C.warn);
-    if (node.until)
+    if (node.status === 'waiting' && (node.waiting || links.needs.length === 0))
+      wrap(node.waiting ?? t('причина не записана'), C.warn);
+    for (const link of links.needs) linkLine(link);
+    if (node.status === 'waiting' && node.until)
       wrap(
         t('вернуться, когда: {until}', {
           until: node.until,
         }),
         C.dim,
       );
+  }
+  if (links.neededBy.length > 0) {
+    gap();
+    heading(t('НУЖЕН ДЛЯ'));
+    for (const link of links.neededBy) linkLine(link);
   }
 
   gap();
