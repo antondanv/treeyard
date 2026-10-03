@@ -13,10 +13,14 @@ import {
   ghReady,
   ghState,
   guessColumns,
+  issueOf,
   linkBoard,
+  linkedRepo,
+  linkRepo,
   listBoards,
   offerShown,
   parseBoardRef,
+  parseRepoRef,
   parseRepoUrl,
   repoExists,
   repoOf,
@@ -24,6 +28,7 @@ import {
   settlePushes,
   statusFor,
   syncBoard,
+  syncIssues,
 } from '../src/github.js';
 import { addNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
@@ -69,6 +74,57 @@ function fakeBoard(columns = ['Todo', 'In Progress', 'Review', 'Done']) {
     run,
     items,
     calls,
+    failing: (value: boolean) => {
+      fail = value;
+    },
+  };
+}
+
+/** A repository in memory, answering the `gh repo view` and `gh issue …` calls treeyard makes. */
+function fakeRepo(repo = 'anton/app') {
+  const issues: { number: number; title: string; state: 'OPEN' | 'CLOSED'; reason?: string }[] = [];
+  const calls: string[][] = [];
+  let fail = false;
+  const url = (number: number) => `https://github.com/${repo}/issues/${number}`;
+  const find = (args: string[]) => issues.find((issue) => issue.number === Number(args[2]));
+  const run: Gh = async (args) => {
+    calls.push(args);
+    if (fail) throw new Error('HTTP 502\nmore');
+    if (args[0] === 'repo' && args[1] === 'view') {
+      if (args[2] !== repo) throw new Error(`GraphQL: Could not resolve to a Repository with the name '${args[2]}'.`);
+      return '{"name":"app"}';
+    }
+    expect(args.slice(args.indexOf('-R'), args.indexOf('-R') + 2)).toEqual(['-R', repo]);
+    if (args[1] === 'list')
+      return JSON.stringify(
+        issues
+          .filter((issue) => issue.state === 'OPEN')
+          .map((issue) => ({ number: issue.number, title: issue.title, url: url(issue.number) })),
+      );
+    const issue = find(args);
+    if (!issue)
+      throw new Error(`GraphQL: Could not resolve to an issue or pull request with the number of ${args[2]}.`);
+    if (args[1] === 'view') return JSON.stringify({ state: issue.state, stateReason: issue.reason ?? '' });
+    if (args[1] === 'close') {
+      issue.state = 'CLOSED';
+      issue.reason = args.includes('not planned') ? 'NOT_PLANNED' : 'COMPLETED';
+      return '';
+    }
+    if (args[1] === 'reopen') {
+      issue.state = 'OPEN';
+      issue.reason = 'REOPENED';
+      return '';
+    }
+    throw new Error(`unexpected gh ${args.join(' ')}`);
+  };
+  const open = (number: number, title: string) => issues.push({ number, title, state: 'OPEN' });
+  return {
+    run,
+    issues,
+    calls,
+    open,
+    url,
+    issue: (number: number) => issues.find((issue) => issue.number === number)!,
     failing: (value: boolean) => {
       fail = value;
     },
@@ -210,6 +266,181 @@ describe('github board', () => {
 
   it('sync without a board says how to link one', async () => {
     await expect(syncBoard(emptyTree(), fakeBoard().run)).rejects.toThrow('github link');
+  });
+});
+
+describe('github issues', () => {
+  it('reads a repository from owner/name or its URL, and not a board', () => {
+    expect(parseRepoRef('anton/app')).toEqual({ owner: 'anton', name: 'app' });
+    expect(parseRepoRef('https://github.com/anton/app/issues')).toEqual({ owner: 'anton', name: 'app' });
+    expect(parseRepoRef('https://github.com/anton/app.git')).toEqual({ owner: 'anton', name: 'app' });
+    expect(parseRepoRef('anton/1')).toBeUndefined();
+    expect(parseRepoRef('https://github.com/users/anton/projects/1')).toBeUndefined();
+  });
+
+  it('links the tree to a repository next to a board, and to one GitHub has', async () => {
+    const tree = emptyTree();
+    const board = await linkBoard(tree, 'anton/1', undefined, fakeBoard().run);
+    const repo = fakeRepo();
+    expect(await linkRepo(tree, 'anton/app', undefined, repo.run)).toEqual({ owner: 'anton', name: 'app' });
+    const again = loadTree(tree.project.dir);
+    expect(linkedRepo(again)).toEqual({ owner: 'anton', name: 'app' });
+    // The board stays, and issues go where the cards go.
+    expect(boardOf(again)).toMatchObject({ owner: 'anton', number: 1, parent: board.parent });
+    // Linking the board again keeps the repository.
+    await linkBoard(again, 'anton/1', undefined, fakeBoard().run);
+    expect(linkedRepo(loadTree(tree.project.dir))).toEqual({ owner: 'anton', name: 'app' });
+    await expect(linkRepo(emptyTree(), 'anton/nope', undefined, repo.run)).rejects.toThrow('anton/nope');
+    expect(offerShown(again)).toBe(false);
+  });
+
+  it('brings open issues in once, as ideas', async () => {
+    const tree = emptyTree();
+    const repo = fakeRepo();
+    await linkRepo(tree, 'anton/app', undefined, repo.run);
+    // gh gives the newest first.
+    repo.open(2, 'Тёмная тема');
+    repo.open(1, 'Падает вход');
+    const first = await syncIssues(tree, repo.run);
+    expect(first.added.map((node) => [node.title, node.status])).toEqual([
+      ['Падает вход', 'idea'],
+      ['Тёмная тема', 'idea'],
+    ]);
+    const login = loadTree(tree.project.dir).nodes.get(first.added[0]!.id)!;
+    expect(issueOf(login)).toEqual({ number: 1, url: repo.url(1), state: 'open' });
+    expect(login.body).toContain(repo.url(1));
+    expect(login.parent).toBe((loadTree(tree.project.dir).project.extra.github as { parent: string }).parent);
+
+    const second = await syncIssues(loadTree(tree.project.dir), repo.run);
+    expect(second).toMatchObject({ added: [], pulled: [], pushed: [], failed: [] });
+    // Two issues and the GitHub node they went into; nothing asked about issues that are open.
+    expect(loadTree(tree.project.dir).nodes.size).toBe(3);
+    expect(repo.calls.filter((args) => args[1] === 'view' && args[0] === 'issue')).toEqual([]);
+  });
+
+  it('an issue closed on GitHub closes its node, as done or dropped, and is not closed back', async () => {
+    const tree = emptyTree();
+    const repo = fakeRepo();
+    await linkRepo(tree, 'anton/app', undefined, repo.run);
+    repo.open(1, 'Сделали');
+    repo.open(2, 'Не будем');
+    const [done, dropped] = (await syncIssues(tree, repo.run)).added;
+    repo.issue(1).state = 'CLOSED';
+    repo.issue(1).reason = 'COMPLETED';
+    repo.issue(2).state = 'CLOSED';
+    repo.issue(2).reason = 'NOT_PLANNED';
+    unfollow = followStatuses(repo.run);
+    const result = await syncIssues(tree, repo.run);
+    expect(result.pulled.map((node) => node.id)).toEqual([done!.id, dropped!.id]);
+    expect(await settlePushes()).toEqual([]);
+    const after = loadTree(tree.project.dir);
+    expect(after.nodes.get(done!.id)!.status).toBe('done');
+    expect(after.nodes.get(dropped!.id)!.status).toBe('dropped');
+    expect(issueOf(after.nodes.get(done!.id)!)?.state).toBe('closed');
+    expect(after.nodes.get(done!.id)!.body).toContain('github');
+    expect(repo.calls.filter((args) => args[1] === 'close')).toEqual([]);
+
+    // Closed on both sides: the next sync does not ask about it again.
+    const views = repo.calls.length;
+    await syncIssues(after, repo.run);
+    expect(repo.calls.length - views).toBe(1);
+
+    // Reopened on GitHub: the node is back to work.
+    repo.issue(1).state = 'OPEN';
+    const reopened = await syncIssues(loadTree(tree.project.dir), repo.run);
+    expect(reopened.pulled.map((node) => [node.id, node.status])).toEqual([[done!.id, 'todo']]);
+  });
+
+  it('a node done in the tree closes its issue at once; dropped closes it as not planned', async () => {
+    const tree = emptyTree();
+    const repo = fakeRepo();
+    await linkRepo(tree, 'anton/app', undefined, repo.run);
+    repo.open(1, 'Вход');
+    repo.open(2, 'Лишнее');
+    const [one, two] = (await syncIssues(tree, repo.run)).added;
+    unfollow = followStatuses(repo.run);
+    // Review does not close it: done is the person's word.
+    setStatus(tree, one!.id, 'review');
+    expect(await settlePushes()).toEqual([]);
+    setStatus(tree, one!.id, 'done');
+    expect(await settlePushes()).toMatchObject([{ text: 'issue #1 закрыта' }]);
+    expect(repo.issue(1)).toMatchObject({ state: 'CLOSED', reason: 'COMPLETED' });
+    expect(issueOf(loadTree(tree.project.dir).nodes.get(one!.id)!)?.state).toBe('closed');
+    setStatus(tree, two!.id, 'dropped');
+    await settlePushes();
+    expect(repo.issue(2)).toMatchObject({ state: 'CLOSED', reason: 'NOT_PLANNED' });
+    // Back to work in the tree: the issue opens again.
+    setStatus(tree, one!.id, 'active');
+    expect(await settlePushes()).toMatchObject([{ text: 'issue #1 открыта снова' }]);
+    expect(repo.issue(1).state).toBe('OPEN');
+    // And sync has nothing to add.
+    const result = await syncIssues(loadTree(tree.project.dir), repo.run);
+    expect(result).toMatchObject({ added: [], pulled: [], pushed: [] });
+  });
+
+  it('a failed close goes to the journal, and the next sync makes up for it', async () => {
+    const tree = emptyTree();
+    const repo = fakeRepo();
+    await linkRepo(tree, 'anton/app', undefined, repo.run);
+    repo.open(1, 'Вход');
+    const [node] = (await syncIssues(tree, repo.run)).added;
+    unfollow = followStatuses(repo.run);
+    repo.failing(true);
+    setStatus(tree, node!.id, 'done');
+    expect(await settlePushes()).toMatchObject([{ text: 'issue #1 закрыта', error: 'HTTP 502' }]);
+    const failed = loadTree(tree.project.dir);
+    expect(failed.nodes.get(node!.id)!.body).toContain('HTTP 502');
+    expect(repo.issue(1).state).toBe('OPEN');
+
+    repo.failing(false);
+    const result = await syncIssues(failed, repo.run);
+    expect(result.pushed.map((item) => item.id)).toEqual([node!.id]);
+    expect(repo.issue(1).state).toBe('CLOSED');
+    expect(loadTree(tree.project.dir).nodes.get(node!.id)!.status).toBe('done');
+  });
+
+  it('an issue deleted on GitHub is noted once, and its node stays', async () => {
+    const tree = emptyTree();
+    const repo = fakeRepo();
+    await linkRepo(tree, 'anton/app', undefined, repo.run);
+    repo.open(1, 'Вход');
+    const [node] = (await syncIssues(tree, repo.run)).added;
+    repo.issues.length = 0;
+    const result = await syncIssues(tree, repo.run);
+    expect(result.gone.map((item) => item.id)).toEqual([node!.id]);
+    const after = loadTree(tree.project.dir).nodes.get(node!.id)!;
+    expect(after.status).toBe('idea');
+    expect(after.body).toContain('#1');
+    expect((await syncIssues(loadTree(tree.project.dir), repo.run)).gone).toEqual([]);
+  });
+
+  it('an issue that is a card on the board is one node, whichever came first', async () => {
+    const issueFirst = emptyTree();
+    const board = fakeBoard();
+    const repo = fakeRepo();
+    await linkBoard(issueFirst, 'anton/1', undefined, board.run);
+    await linkRepo(issueFirst, 'anton/app', undefined, repo.run);
+    repo.open(1, 'Вход');
+    const [node] = (await syncIssues(issueFirst, repo.run)).added;
+    board.items.push({ id: 'I1', title: 'Вход', status: 'In Progress', url: repo.url(1) });
+    const cards = await syncBoard(issueFirst, board.run);
+    expect(cards.added).toEqual([]);
+    const joined = loadTree(issueFirst.project.dir).nodes.get(node!.id)!;
+    expect(cardOf(joined)).toEqual({ item: 'I1', url: repo.url(1), column: 'In Progress' });
+    expect(issueOf(joined)).toMatchObject({ number: 1, state: 'open' });
+    expect(joined.status).toBe('active');
+
+    const cardFirst = emptyTree();
+    await linkBoard(cardFirst, 'anton/1', undefined, board.run);
+    await linkRepo(cardFirst, 'anton/app', undefined, repo.run);
+    const [card] = (await syncBoard(cardFirst, board.run)).added;
+    expect((await syncIssues(cardFirst, repo.run)).added).toEqual([]);
+    expect(issueOf(loadTree(cardFirst.project.dir).nodes.get(card!.id)!)).toMatchObject({ number: 1 });
+    expect(loadTree(cardFirst.project.dir).nodes.size).toBe(2);
+  });
+
+  it('sync without a repository says how to link one', async () => {
+    await expect(syncIssues(emptyTree(), fakeRepo().run)).rejects.toThrow('github link');
   });
 });
 

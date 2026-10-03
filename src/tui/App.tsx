@@ -53,7 +53,21 @@ import {
   sleepPane,
   wakeInPane,
 } from '../agents/panes.js';
-import { boardOf, ensureHub, hubNode, linkBoard, offerShown, setOffer, syncBoard } from '../github.js';
+import {
+  boardOf,
+  ensureHub,
+  hubNode,
+  type IssueSyncResult,
+  linkBoard,
+  linkedRepo,
+  linkRepo,
+  offerShown,
+  parseBoardRef,
+  type SyncResult,
+  setOffer,
+  syncBoard,
+  syncIssues,
+} from '../github.js';
 import { labels, plural, t } from '../i18n/i18n.js';
 import { activity, type Event } from '../model/activity.js';
 import { description } from '../model/journal.js';
@@ -1142,22 +1156,35 @@ export function App(props: AppProps) {
     return created;
   };
 
-  /** G: connect a board when there is none, otherwise check the tree against it. */
+  /** G: connect a board or issues when there are none, otherwise check the tree against them. */
   const github = () => {
     if (job) return say(t('подожди: {label}', { label: job.label }), C.warn);
     const board = boardOf(treeRef.current);
-    if (!board) return setModal({ kind: 'github' });
-    githubJob(t('сверяюсь с доской {board}', { board: `${board.owner}/${board.number}` }), async (current) => {
-      const result = await syncBoard(current);
-      return t('доска: новых {added} · с доски {pulled} · на доску {pushed}', {
-        added: result.added.length,
-        pulled: result.pulled.length,
-        pushed: result.pushed.length + (result.failed.length ? ` · ✗ ${result.failed.length}` : ''),
-      });
+    const repo = linkedRepo(treeRef.current);
+    if (!board && !repo) return setModal({ kind: 'github' });
+    githubJob(t('сверяюсь с GitHub'), async (current) => {
+      const said: string[] = [];
+      if (board) said.push(boardSummary(await syncBoard(current)));
+      if (repo) said.push(issuesSummary(await syncIssues(current)));
+      return said.join(' · ');
     });
   };
 
   const connectGithub = (ref: string) => {
+    if (!parseBoardRef(ref))
+      return githubJob(t('подключаю issues {ref}', { ref }), async (current) => {
+        const repo = await linkRepo(current, ref);
+        const result = await syncIssues(current);
+        const parent = String((current.project.extra.github as { parent?: unknown }).parent);
+        if (current.nodes.has(parent)) {
+          setExpanded((set) => new Set(set).add(parent));
+          setSelected(parent);
+        }
+        return t('issues {repo} подключены · узлов из issues: {n}', {
+          repo: `${repo.owner}/${repo.name}`,
+          n: result.added.length,
+        });
+      });
     githubJob(t('подключаю доску {ref}', { ref }), async (current) => {
       const board = await linkBoard(current, ref);
       const result = await syncBoard(current);
@@ -1516,7 +1543,7 @@ export function App(props: AppProps) {
         setView('tree');
       },
     },
-    github: { label: t('GitHub: подключить доску или свериться с ней'), keys: 'G', run: github },
+    github: { label: t('GitHub: подключить доску или issues, свериться с ними'), keys: 'G', run: github },
     help: { label: t('Все клавиши'), keys: '?', run: () => setModal({ kind: 'help' }) },
     settings: { label: t('Настройки'), keys: ',', run: () => setModal({ kind: 'settings' }) },
     reload: {
@@ -1573,7 +1600,8 @@ export function App(props: AppProps) {
   /** ⏎ in the list: a node's actions, a session, the node of a journal entry. */
   const enter = () => {
     if (currentGroup) return expandTo(currentGroup.id, !expanded.has(currentGroup.id));
-    if (currentOffer || (current && current.id === hubNode(tree)?.id && !boardOf(tree))) return github();
+    if (currentOffer || (current && current.id === hubNode(tree)?.id && !boardOf(tree) && !linkedRepo(tree)))
+      return github();
     if (view === 'sessions') {
       const session = currentSession;
       if (!session) return;
@@ -2686,13 +2714,13 @@ export function App(props: AppProps) {
         value: p.assistModel ?? '',
         hint: t('для «разбить на шаги» и критерия — можно дешевле и быстрее'),
       },
-      boardOf(tree)
+      boardOf(tree) || linkedRepo(tree)
         ? {
             key: 'github',
-            label: t('Доска GitHub'),
-            options: [{ value: 'linked', label: `${boardOf(tree)!.owner}/${boardOf(tree)!.number}` }],
+            label: 'GitHub',
+            options: [{ value: 'linked', label: githubLabel(tree) }],
             value: 'linked',
-            hint: t('G — свериться с доской · колонки — в .tree/tree.md, github.columns'),
+            hint: t('G — свериться с GitHub · колонки доски — в .tree/tree.md, github.columns'),
           }
         : {
             key: 'github',
@@ -3138,7 +3166,7 @@ function SelectionStrip(props: {
         </Text>
         {props.full ? (
           <Text color={C.faint} wrap="truncate-end">
-            {t('не подключено · ⏎ — подключить доску · скрыть — в настройках «,»')}
+            {t('не подключено · ⏎ — подключить доску или issues · скрыть — в настройках «,»')}
           </Text>
         ) : null}
       </Box>
@@ -3315,7 +3343,7 @@ function Hints(props: {
           ]
         : props.offer
           ? [
-              ['⏎', t('подключить доску GitHub')],
+              ['⏎', t('подключить доску или issues GitHub')],
               [',', t('настройки — скрыть узел')],
               ['?', t('клавиши')],
               ['q', t('выход')],
@@ -3475,6 +3503,34 @@ function copy(text: string): void {
   }
 }
 
+function boardSummary(result: SyncResult): string {
+  return t('доска: новых {added} · с доски {pulled} · на доску {pushed}', {
+    added: result.added.length,
+    pulled: result.pulled.length,
+    pushed: result.pushed.length + (result.failed.length ? ` · ✗ ${result.failed.length}` : ''),
+  });
+}
+
+function issuesSummary(result: IssueSyncResult): string {
+  return t('issues: новых {added} · с GitHub {pulled} · на GitHub {pushed}', {
+    added: result.added.length,
+    pulled: result.pulled.length,
+    pushed: result.pushed.length + (result.failed.length ? ` · ✗ ${result.failed.length}` : ''),
+  });
+}
+
+/** What the tree is linked to: `anton/1 · anton/app`. */
+function githubLabel(tree: Tree): string {
+  const board = boardOf(tree);
+  const repo = linkedRepo(tree);
+  return [
+    board ? `${board.owner}/${board.number}` : '',
+    repo ? t('issues {repo}', { repo: `${repo.owner}/${repo.name}` }) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 /** The «GitHub» node of a tree with no board: what connecting one gives. */
 function GithubOffer() {
   return (
@@ -3495,7 +3551,9 @@ function GithubOffer() {
         {t('подключить: gh → репозиторий → доска (выбрать или создать — самому или агентом)')}
       </Text>
       <Text wrap="wrap" color={C.faint}>
-        {t('Issues репозитория без доски — скоро. Не нужно — скрой узел в настройках «,».')}
+        {t(
+          'Без доски — только issues репозитория: открытые станут идеями, закрытие ходит в обе стороны. Не нужно — скрой узел в настройках «,».',
+        )}
       </Text>
     </Box>
   );

@@ -43,7 +43,7 @@ export function GithubConnect(props: {
   dir: string;
   width: number;
   height: number;
-  /** A board is chosen: link it and bring its cards in. */
+  /** A board (`owner/N`) or, without one, the repository (`owner/name`): link it and bring its cards or issues in. */
   onLink: (ref: string) => void;
   /** Give the job to an agent: a node and a session for it. */
   onAgent: (task: AgentTask) => void;
@@ -385,6 +385,13 @@ export function GithubConnect(props: {
           hotkey: 'a',
           label: <Text>{t('Агентом — узел и сессия: колонки под статусы дерева, подключит сам')}</Text>,
         },
+        {
+          key: 'issues',
+          hotkey: 'i',
+          section: t('Без доски'),
+          label: <Text>{t('Только issues {repo}', { repo: `${repo.owner}/${repo.name}` })}</Text>,
+          hint: t('открытые — идеи в дереве; закрыл issue — узел закрыт, «готово» в дереве — issue закрыта'),
+        },
       );
       return frame(
         t('GitHub · шаг 3 из 3 — доска'),
@@ -403,6 +410,7 @@ export function GithubConnect(props: {
         (key) => {
           if (key === 'self') return show({ kind: 'boardName', repo, title: repo.name });
           if (key === 'agent') return props.onAgent({ kind: 'board', repo });
+          if (key === 'issues') return props.onLink(`${repo.owner}/${repo.name}`);
           props.onLink(key);
         },
         true,

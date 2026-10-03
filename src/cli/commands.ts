@@ -17,7 +17,19 @@ import { contextText, START_HINT, START_LABEL, sessionPlan } from '../agents/con
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { launchInPane } from '../agents/panes.js';
-import { type Board, boardOf, cardOf, followStatuses, linkBoard, settlePushes, syncBoard } from '../github.js';
+import {
+  type Board,
+  boardOf,
+  cardOf,
+  followStatuses,
+  linkBoard,
+  linkedRepo,
+  linkRepo,
+  parseBoardRef,
+  settlePushes,
+  syncBoard,
+  syncIssues,
+} from '../github.js';
 import { pick, t } from '../i18n/i18n.js';
 import { addLinkedNode, setNeeds } from '../model/links.js';
 import { addNote, noteOrigin, notesFolder, originText } from '../model/notes.js';
@@ -85,8 +97,9 @@ ${out.bold('Команды')}
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            сессия по узлу прямо из shell
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они
-  treeyard github [link <owner>/<N> [--parent id] | sync]
-                                           доска GitHub Project: карточки — узлы, колонки — статусы, в обе стороны
+  treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
+                                           доска GitHub Project (карточки — узлы, колонки — статусы) или issues
+                                           репозитория (открытые — узлы, закрытие — в обе стороны)
   treeyard config [ключ [значение]]        настройки: lang ru|en, confirm, theme…
 
 ${out.bold('Статусы')}  ${statuses}
@@ -115,8 +128,9 @@ ${out.bold('Commands')}
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            a session for a node straight from the shell
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are
-  treeyard github [link <owner>/<N> [--parent id] | sync]
-                                           a GitHub Project board: cards are nodes, columns are statuses, both ways
+  treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
+                                           a GitHub Project board (cards are nodes, columns are statuses) or a
+                                           repository's issues (open ones are nodes, closing goes both ways)
   treeyard config [key [value]]            settings: lang ru|en, confirm, theme…
 
 ${out.bold('Statuses')}  ${statuses}
@@ -704,13 +718,13 @@ async function reportPushes(code: number): Promise<number> {
   for (const push of await settlePushes()) {
     if (push.error)
       process.stderr.write(
-        t('{p1} github: карточку не сдвинуть в «{column}» — {error}\n', {
+        t('{p1} github: не вышло: {text} — {error}\n', {
           p1: err.c('#ffcf70', '!'),
-          column: push.column,
+          text: push.text,
           error: push.error,
         }),
       );
-    else process.stdout.write(t('github: карточка в «{column}»\n', { column: push.column }));
+    else process.stdout.write(`github: ${push.text}\n`);
   }
   return code;
 }
@@ -720,45 +734,93 @@ async function githubCommand(args: string[]): Promise<number> {
   const tree = project();
   const [action, ref] = positionals;
   if (action === 'link') {
-    if (!ref) throw new UsageError(t('treeyard github link <owner>/<номер> [--parent id]'));
+    if (!ref) throw new UsageError(t('treeyard github link <owner>/<номер>|<owner>/<репозиторий> [--parent id]'));
     const parent = values.parent ? nodeArg(tree, values.parent) : undefined;
-    let board: Board;
     try {
-      board = await linkBoard(tree, ref, parent);
+      // owner/N or a project link is a board; anything else is a repository.
+      if (parseBoardRef(ref)) {
+        const board = await linkBoard(tree, ref, parent);
+        process.stdout.write(t('дерево привязано к доске {board}\n', { board: `${board.owner}/${board.number}` }));
+        printBoard(board, tree);
+      } else {
+        const repo = await linkRepo(tree, ref, parent);
+        process.stdout.write(t('дерево привязано к репозиторию {repo}\n', { repo: `${repo.owner}/${repo.name}` }));
+        printRepo(tree);
+      }
     } catch (error) {
       throw new UsageError((error as Error).message);
     }
-    process.stdout.write(t('дерево привязано к доске {board}\n', { board: `${board.owner}/${board.number}` }));
-    printBoard(board, tree);
     return 0;
   }
   if (action === 'sync') {
-    const result = await syncBoard(tree);
+    const board = boardOf(tree);
+    const repo = linkedRepo(tree);
+    if (!board && !repo)
+      throw new UsageError(
+        t('дерево не привязано к GitHub — treeyard github link <owner>/<номер>|<owner>/<репозиторий>'),
+      );
     const line = (mark: string, node: TreeNode, text: string) =>
       process.stdout.write(`${mark} ${out.dim(node.id)} ${node.title}${text ? out.dim(` · ${text}`) : ''}\n`);
-    for (const node of result.added) line(out.c('#7ee2a8', '+'), node, STATUS_LABEL[node.status]);
-    for (const node of result.pulled) line('←', node, STATUS_LABEL[node.status]);
-    for (const node of result.pushed) line('→', node, cardOf(node)?.column ?? '');
-    for (const { node, error } of result.failed) line(err.c('#ff7b72', '✗'), node, error);
-    process.stdout.write(
-      t('новых {added} · с доски {pulled} · на доску {pushed} · готовых карточек без узла {skipped}\n', {
-        added: result.added.length,
-        pulled: result.pulled.length,
-        pushed: result.pushed.length,
-        skipped: result.skipped,
-      }),
-    );
-    return result.failed.length ? 1 : 0;
+    let failed = 0;
+    if (board) {
+      const result = await syncBoard(tree);
+      for (const node of result.added) line(out.c('#7ee2a8', '+'), node, STATUS_LABEL[node.status]);
+      for (const node of result.pulled) line('←', node, STATUS_LABEL[node.status]);
+      for (const node of result.pushed) line('→', node, cardOf(node)?.column ?? '');
+      for (const { node, error } of result.failed) line(err.c('#ff7b72', '✗'), node, error);
+      process.stdout.write(
+        t('новых {added} · с доски {pulled} · на доску {pushed} · готовых карточек без узла {skipped}\n', {
+          added: result.added.length,
+          pulled: result.pulled.length,
+          pushed: result.pushed.length,
+          skipped: result.skipped,
+        }),
+      );
+      failed += result.failed.length;
+    }
+    if (repo) {
+      const result = await syncIssues(tree);
+      for (const node of result.added) line(out.c('#7ee2a8', '+'), node, STATUS_LABEL[node.status]);
+      for (const node of result.pulled) line('←', node, STATUS_LABEL[node.status]);
+      for (const node of result.pushed) line('→', node, STATUS_LABEL[node.status]);
+      for (const node of result.gone) line(err.c('#ffcf70', '?'), node, t('issue больше нет'));
+      for (const { node, error } of result.failed) line(err.c('#ff7b72', '✗'), node, error);
+      process.stdout.write(
+        t('issues: новых {added} · с GitHub {pulled} · на GitHub {pushed}\n', {
+          added: result.added.length,
+          pulled: result.pulled.length,
+          pushed: result.pushed.length,
+        }),
+      );
+      failed += result.failed.length;
+    }
+    return failed ? 1 : 0;
   }
-  if (action) throw new UsageError(t('treeyard github [link <owner>/<номер> | sync]'));
+  if (action) throw new UsageError(t('treeyard github [link <owner>/<номер>|<owner>/<репозиторий> | sync]'));
   const board = boardOf(tree);
-  if (!board) {
-    process.stdout.write(`${out.dim(t('дерево не привязано к доске — treeyard github link <owner>/<номер>'))}\n`);
+  if (!board && !linkedRepo(tree)) {
+    process.stdout.write(
+      `${out.dim(t('дерево не привязано к GitHub — treeyard github link <owner>/<номер>|<owner>/<репозиторий>'))}\n`,
+    );
     return 0;
   }
-  process.stdout.write(t('доска {board}\n', { board: `${board.owner}/${board.number}` }));
-  printBoard(board, tree);
+  if (board) {
+    process.stdout.write(t('доска {board}\n', { board: `${board.owner}/${board.number}` }));
+    printBoard(board, tree);
+  }
+  if (linkedRepo(tree)) printRepo(tree);
   return 0;
+}
+
+function printRepo(tree: Tree): void {
+  const repo = linkedRepo(tree)!;
+  const parent = tree.nodes.get(String((tree.project.extra.github as { parent?: unknown }).parent))?.title;
+  process.stdout.write(
+    t('issues {repo} → узлы в «{parent}»: открытые — идеи, закрытая issue закрывает узел, «готово» закрывает issue\n', {
+      repo: `${repo.owner}/${repo.name}`,
+      parent: parent ?? t('корень'),
+    }),
+  );
 }
 
 function printBoard(board: Board, tree: Tree): void {

@@ -773,14 +773,52 @@ export const EN: Record<string, string> = {
   'без узла': 'no node',
   ' · без узла': ' · no node',
   'за {days} дней: {total}, мимо дерева — {off}': 'last {days} days: {total}, past the tree — {off}',
-  '{p1} github: карточку не сдвинуть в «{column}» — {error}\n':
-    "{p1} github: couldn't move the card to «{column}» — {error}\n",
-  'github: карточка в «{column}»\n': 'github: the card is in «{column}»\n',
-  'treeyard github link <owner>/<номер> [--parent id]': 'treeyard github link <owner>/<number> [--parent id]',
+  '{p1} github: не вышло: {text} — {error}\n': "{p1} github: didn't work: {text} — {error}\n",
+  'treeyard github link <owner>/<номер>|<owner>/<репозиторий> [--parent id]':
+    'treeyard github link <owner>/<number>|<owner>/<repo> [--parent id]',
+  'дерево привязано к репозиторию {repo}\n': 'the tree is linked to repository {repo}\n',
+  'дерево не привязано к GitHub — treeyard github link <owner>/<номер>|<owner>/<репозиторий>':
+    'the tree is not linked to GitHub — treeyard github link <owner>/<number>|<owner>/<repo>',
+  'issue больше нет': 'the issue is gone',
+  'issues: новых {added} · с GitHub {pulled} · на GitHub {pushed}':
+    'issues: new {added} · from GitHub {pulled} · to GitHub {pushed}',
+  'issues: новых {added} · с GitHub {pulled} · на GitHub {pushed}\n':
+    'issues: new {added} · from GitHub {pulled} · to GitHub {pushed}\n',
+  'treeyard github [link <owner>/<номер>|<owner>/<репозиторий> | sync]':
+    'treeyard github [link <owner>/<number>|<owner>/<repo> | sync]',
+  'issues {repo} → узлы в «{parent}»: открытые — идеи, закрытая issue закрывает узел, «готово» закрывает issue\n':
+    'issues {repo} → nodes in «{parent}»: open ones are ideas, a closed issue closes its node, «done» closes the issue\n',
+  'репозиторий: owner/имя или ссылка на него — «{ref}»': 'repository: owner/name or a link to it — «{ref}»',
+  'на GitHub нет репозитория {repo} (или он тебе не виден)':
+    "there is no repository {repo} on GitHub (or you can't see it)",
+  'Issues репозитория {repo} — в узлах внутри. Свериться: treeyard github sync.':
+    'Issues of repository {repo} are the nodes inside. Check against GitHub: treeyard github sync.',
+  'issue #{number} открыта снова': 'issue #{number} reopened',
+  'issue #{number} закрыта': 'issue #{number} closed',
+  '{p1} · github · не вышло: {text} — {message}': "{p1} · github · didn't work: {text} — {message}",
+  'дерево не привязано к репозиторию — treeyard github link <owner>/<репозиторий>':
+    'the tree is not linked to a repository — treeyard github link <owner>/<repo>',
+  'Issue: {url}': 'Issue: {url}',
+  '{p1} · github · issue #{number} больше нет в {repo}: удалена или перенесена':
+    '{p1} · github · issue #{number} is no longer in {repo}: deleted or transferred',
+  'issue открыта снова': 'the issue was reopened',
+  'issue закрыта': 'the issue was closed',
+  'сверяюсь с GitHub': 'checking against GitHub',
+  'подключаю issues {ref}': 'connecting issues of {ref}',
+  'issues {repo} подключены · узлов из issues: {n}': 'issues of {repo} connected · nodes from issues: {n}',
+  'GitHub: подключить доску или issues, свериться с ними': 'GitHub: connect a board or issues, check against them',
+  'G — свериться с GitHub · колонки доски — в .tree/tree.md, github.columns':
+    "G — check against GitHub · the board's columns are in .tree/tree.md, github.columns",
+  'issues {repo}': 'issues {repo}',
+  'Без доски — только issues репозитория: открытые станут идеями, закрытие ходит в обе стороны. Не нужно — скрой узел в настройках «,».':
+    "Without a board — just the repository's issues: open ones become ideas, closing goes both ways. Not needed — hide the node in settings «,».",
+  'Без доски': 'Without a board',
+  'Только issues {repo}': 'Only the issues of {repo}',
+  'открытые — идеи в дереве; закрыл issue — узел закрыт, «готово» в дереве — issue закрыта':
+    'open ones are ideas in the tree; close the issue — the node closes, «done» in the tree — the issue closes',
   'дерево привязано к доске {board}\n': 'the tree is linked to board {board}\n',
   'новых {added} · с доски {pulled} · на доску {pushed} · готовых карточек без узла {skipped}\n':
     'new {added} · from the board {pulled} · to the board {pushed} · done cards without a node {skipped}\n',
-  'treeyard github [link <owner>/<номер> | sync]': 'treeyard github [link <owner>/<number> | sync]',
   'дерево не привязано к доске — treeyard github link <owner>/<номер>':
     'the tree is not linked to a board — treeyard github link <owner>/<number>',
   'доска {board}\n': 'board {board}\n',
@@ -798,7 +836,6 @@ export const EN: Record<string, string> = {
   'Карточки доски {board} — в узлах внутри. Свериться с доской: treeyard github sync.':
     'Cards of board {board} are the nodes inside. Check against the board: treeyard github sync.',
   'репозиторий: owner/имя — «{repo}»': 'repository: owner/name — «{repo}»',
-  'сверяюсь с доской {board}': 'checking against board {board}',
   'доска: новых {added} · с доски {pulled} · на доску {pushed}':
     'board: new {added} · from the board {pulled} · to the board {pushed}',
   'подключаю доску {ref}': 'connecting board {ref}',
@@ -812,24 +849,18 @@ export const EN: Record<string, string> = {
     'treeyard github shows the connected board {owner}/<number>',
   'Создай доску у {owner} (gh project create), привяжи к {repo} (gh project link), настрой колонки поля Status под статусы дерева — Backlog, Todo, In Progress, Review, Done — и подключи: treeyard github link {owner}/<номер>, потом treeyard github sync.':
     "Create a board for {owner} (gh project create), link it to {repo} (gh project link), set the Status field's columns to the tree's statuses — Backlog, Todo, In Progress, Review, Done — and connect it: treeyard github link {owner}/<number>, then treeyard github sync.",
-  'GitHub: подключить доску или свериться с ней': 'GitHub: connect a board or check against it',
-  'Доска GitHub': 'GitHub board',
-  'G — свериться с доской · колонки — в .tree/tree.md, github.columns':
-    'G — check against the board · columns are in .tree/tree.md, github.columns',
   'Узел GitHub': 'GitHub node',
   показывать: 'show',
   'пока доска не подключена, узел в дереве предлагает подключить доску и issues':
     'while no board is connected, a node in the tree offers to connect a board and issues',
   'узел GitHub': 'the GitHub node',
-  'не подключено · ⏎ — подключить доску · скрыть — в настройках «,»':
-    'not connected · ⏎ — connect a board · hide it in settings «,»',
-  'подключить доску GitHub': 'connect a GitHub board',
+  'не подключено · ⏎ — подключить доску или issues · скрыть — в настройках «,»':
+    'not connected · ⏎ — connect a board or issues · hide it in settings «,»',
+  'подключить доску или issues GitHub': 'connect a GitHub board or issues',
   'настройки — скрыть узел': 'settings — hide the node',
   'не подключено': 'not connected',
   'подключить: gh → репозиторий → доска (выбрать или создать — самому или агентом)':
     'connect: gh → repository → board (pick one or create it — yourself or with an agent)',
-  'Issues репозитория без доски — скоро. Не нужно — скрой узел в настройках «,».':
-    "Repository issues without a board — coming. Don't need it? Hide the node in settings «,».",
   'проверяю gh': 'checking gh',
   'ищу доски {owner}': "looking for {owner}'s boards",
   'ищу твои репозитории': 'looking for your repositories',
