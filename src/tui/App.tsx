@@ -1185,7 +1185,7 @@ export function App(props: AppProps) {
               parent: hub.id,
               doneWhen: t('git remote -v показывает репозиторий на github.com; без push, пока человек не попросит'),
               body: t(
-                'Спроси человека имя и видимость (приватный или публичный), создай через gh repo create --source . --remote origin. Потом в treeyard: G на узле GitHub — выбрать или создать доску.',
+                'Спроси человека имя и видимость (приватный или публичный), создай через gh repo create <имя> --private|--public и направь на него remote: если origin уже указывает на github.com (старый репозиторий мог быть удалён) — git remote set-url origin <url>, иначе git remote add origin <url>. Потом в treeyard: G на узле GitHub — выбрать или создать доску.',
               ),
             })
           : addNode(tree, {

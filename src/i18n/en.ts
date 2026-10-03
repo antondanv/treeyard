@@ -798,8 +798,6 @@ export const EN: Record<string, string> = {
   'Карточки доски {board} — в узлах внутри. Свериться с доской: treeyard github sync.':
     'Cards of board {board} are the nodes inside. Check against the board: treeyard github sync.',
   'репозиторий: owner/имя — «{repo}»': 'repository: owner/name — «{repo}»',
-  'репозиторий создан, но remote не найден — git remote -v':
-    'the repository is created, but no remote found — git remote -v',
   'сверяюсь с доской {board}': 'checking against board {board}',
   'доска: новых {added} · с доски {pulled} · на доску {pushed}':
     'board: new {added} · from the board {pulled} · to the board {pushed}',
@@ -809,8 +807,6 @@ export const EN: Record<string, string> = {
   'Создать репозиторий на GitHub и подключить его': 'Create a GitHub repository and connect it',
   'git remote -v показывает репозиторий на github.com; без push, пока человек не попросит':
     'git remote -v shows a repository on github.com; no push until the person asks',
-  'Спроси человека имя и видимость (приватный или публичный), создай через gh repo create --source . --remote origin. Потом в treeyard: G на узле GitHub — выбрать или создать доску.':
-    'Ask the person for the name and visibility (private or public), create it with gh repo create --source . --remote origin. Then in treeyard: G on the GitHub node — pick or create a board.',
   'Создать доску GitHub Project и подключить её': 'Create a GitHub Project board and connect it',
   'treeyard github показывает подключённую доску {owner}/<номер>':
     'treeyard github shows the connected board {owner}/<number>',
@@ -889,4 +885,13 @@ export const EN: Record<string, string> = {
     "Why: tasks on the GitHub board become nodes of the tree, and status goes both ways — move a card on GitHub and the node's status changes; set a node to «in progress» or «done» here and the card moves to its column. One picture of the work in the tree and on GitHub, nothing copied by hand.",
   'У проекта нет репозитория на GitHub (git remote). Он нужен, чтобы узнать аккаунт: доска GitHub Project принадлежит не репозиторию, а аккаунту — тебе или организации. По репозиторию мастер покажет доски этого аккаунта, а новую доску привяжет к репозиторию.':
     "The project has no GitHub repository (git remote). It tells which account to use: a GitHub Project board belongs not to a repository but to an account — yours or an organization's. From the repository the wizard shows that account's boards and links a new board to the repository.",
+  'Спроси человека имя и видимость (приватный или публичный), создай через gh repo create <имя> --private|--public и направь на него remote: если origin уже указывает на github.com (старый репозиторий мог быть удалён) — git remote set-url origin <url>, иначе git remote add origin <url>. Потом в treeyard: G на узле GitHub — выбрать или создать доску.':
+    'Ask the person for the name and visibility (private or public), create it with gh repo create <name> --private|--public and point a remote at it: if origin already points to github.com (the old repository may be deleted) — git remote set-url origin <url>, else git remote add origin <url>. Then in treeyard: G on the GitHub node — pick or create a board.',
+  'gh не сказал, где новый репозиторий: {out}': "gh didn't say where the new repository is: {out}",
+  'проверяю репозиторий {repo}': 'checking repository {repo}',
+  'В git remote указан {repo}, но на GitHub его нет — удалён, переименован или нет доступа у этого входа gh.':
+    "git remote names {repo}, but it is not on GitHub — deleted, renamed, or this gh login can't see it.",
+  'Создать заново — «{name}»': 'Create it again — «{name}»',
+  'remote переставится на новый · ничего не пушится': 'the remote moves to the new one · nothing is pushed',
+  'Выбрать другой из моих репозиториев': 'Pick another of my repositories',
 };

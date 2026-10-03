@@ -260,17 +260,33 @@ function git(dir: string, args: string[]): { ok: boolean; out: string; err: stri
   return { ok: got.status === 0, out: got.stdout ?? '', err: (got.stderr ?? '').trim() };
 }
 
-/** The project's GitHub repository: origin first, then any remote on github.com. */
-export function repoOf(dir: string): Repo | undefined {
+/** The remote that points to GitHub, and its repository: origin first, then any remote on github.com. */
+function githubRemote(dir: string): { remote: string; repo: Repo } | undefined {
   const remotes = git(dir, ['remote', '-v']).out.split('\n');
   const urls = remotes.map((line) => line.split(/\s+/)).filter(([, url]) => url);
   const origin = urls.find(([name]) => name === 'origin');
   const ordered = origin ? [origin, ...urls] : urls;
-  for (const [, url] of ordered) {
+  for (const [remote, url] of ordered) {
     const repo = parseRepoUrl(url!);
-    if (repo) return repo;
+    if (repo) return { remote: remote!, repo };
   }
   return undefined;
+}
+
+/** The project's GitHub repository, as git remotes name it — it may be gone from GitHub since. */
+export function repoOf(dir: string): Repo | undefined {
+  return githubRemote(dir)?.repo;
+}
+
+/** Is it on GitHub, and can this login see it? A remote outlives a deleted repository. */
+export async function repoExists(repo: Repo, run: Gh = gh): Promise<boolean> {
+  try {
+    await run(['repo', 'view', `${repo.owner}/${repo.name}`, '--json', 'name']);
+    return true;
+  } catch (error) {
+    if (/could not resolve to a repository|not found|404/i.test((error as Error).message)) return false;
+    throw error;
+  }
 }
 
 export async function listRepos(run: Gh = gh): Promise<{ nameWithOwner: string; isPrivate: boolean }[]> {
@@ -279,50 +295,44 @@ export async function listRepos(run: Gh = gh): Promise<{ nameWithOwner: string; 
   ) as { nameWithOwner: string; isPrivate: boolean }[];
 }
 
-/** A git repository here, if there is none yet, and a remote to `owner/name`: origin, or `github` when origin is taken. */
+/**
+ * Points the project at `repo`: a git repository here if there is none yet; the
+ * remote that already points to GitHub is moved (its repository may be gone),
+ * else origin, or `github` when origin belongs to another host.
+ */
+function pointRemote(dir: string, repo: Repo): void {
+  if (!git(dir, ['rev-parse', '--git-dir']).ok) {
+    const init = git(dir, ['init']);
+    if (!init.ok) throw new Error(init.err);
+  }
+  const url = `https://github.com/${repo.owner}/${repo.name}.git`;
+  const current = githubRemote(dir);
+  const taken = git(dir, ['remote']).out.split('\n').includes('origin');
+  const done = current
+    ? git(dir, ['remote', 'set-url', current.remote, url])
+    : git(dir, ['remote', 'add', taken ? 'github' : 'origin', url]);
+  if (!done.ok) throw new Error(done.err);
+}
+
+/** One of your repositories becomes this project's. */
 export function connectRepo(dir: string, nameWithOwner: string): Repo {
   const repo = parseRepoUrl(`github.com/${nameWithOwner}`);
   if (!repo) throw new Error(t('репозиторий: owner/имя — «{repo}»', { repo: nameWithOwner }));
-  if (!git(dir, ['rev-parse', '--git-dir']).ok) {
-    const init = git(dir, ['init']);
-    if (!init.ok) throw new Error(init.err);
-  }
-  const taken = git(dir, ['remote']).out.split('\n').includes('origin');
-  const added = git(dir, [
-    'remote',
-    'add',
-    taken ? 'github' : 'origin',
-    `https://github.com/${repo.owner}/${repo.name}.git`,
-  ]);
-  if (!added.ok) throw new Error(added.err);
+  pointRemote(dir, repo);
   return repo;
 }
 
-/** A new repository on GitHub for this folder, private unless asked; nothing is pushed. */
+/** A new repository on GitHub for this folder; nothing is pushed. */
 export async function createRepo(dir: string, name: string, isPrivate = true, run: Gh = gh): Promise<Repo> {
-  if (!git(dir, ['rev-parse', '--git-dir']).ok) {
-    const init = git(dir, ['init']);
-    if (!init.ok) throw new Error(init.err);
-  }
-  const taken = git(dir, ['remote']).out.split('\n').includes('origin');
-  const out = await run([
-    'repo',
-    'create',
-    name,
-    isPrivate ? '--private' : '--public',
-    '--source',
-    dir,
-    '--remote',
-    taken ? 'github' : 'origin',
-  ]);
-  const repo =
-    parseRepoUrl(
-      out
-        .trim()
-        .split('\n')
-        .find((line) => line.includes('github.com')) ?? '',
-    ) ?? repoOf(dir);
-  if (!repo) throw new Error(t('репозиторий создан, но remote не найден — git remote -v'));
+  const out = await run(['repo', 'create', name, isPrivate ? '--private' : '--public']);
+  const repo = parseRepoUrl(
+    out
+      .trim()
+      .split('\n')
+      .find((line) => line.includes('github.com')) ?? '',
+  );
+  if (!repo) throw new Error(t('gh не сказал, где новый репозиторий: {out}', { out: out.trim() }));
+  pointRemote(dir, repo);
   return repo;
 }
 

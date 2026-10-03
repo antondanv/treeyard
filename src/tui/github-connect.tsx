@@ -19,6 +19,7 @@ import {
   listBoards,
   listRepos,
   type Repo,
+  repoExists,
   repoOf,
 } from '../github.js';
 import { t } from '../i18n/i18n.js';
@@ -31,6 +32,7 @@ type Step =
   | { kind: 'loading'; label: string }
   | { kind: 'gh'; state: GhState }
   | { kind: 'repo' }
+  | { kind: 'gone'; repo: Repo }
   | { kind: 'repos'; list: { nameWithOwner: string; isPrivate: boolean }[] }
   | { kind: 'repoName'; name: string; isPrivate: boolean }
   | { kind: 'boards'; repo: Repo; list: BoardInfo[] }
@@ -97,10 +99,19 @@ export function GithubConnect(props: {
       (state) => {
         if (!ghReady(state)) return show({ kind: 'gh', state });
         const repo = repoOf(props.dir);
-        if (repo) return boards(repo);
+        if (repo) return verify(repo);
         show({ kind: 'repo' });
       },
       check,
+    );
+
+  /** The remote says where the repository was; GitHub says whether it still is. */
+  const verify = (repo: Repo) =>
+    wait(
+      t('проверяю репозиторий {repo}', { repo: `${repo.owner}/${repo.name}` }),
+      repoExists(repo),
+      (exists) => (exists ? boards(repo) : show({ kind: 'gone', repo })),
+      () => verify(repo),
     );
 
   const startOver = () => {
@@ -277,6 +288,44 @@ export function GithubConnect(props: {
         },
         true,
       );
+    case 'gone': {
+      const { repo } = step;
+      const full = `${repo.owner}/${repo.name}`;
+      return frame(
+        t('GitHub · шаг 2 из 3 — репозиторий'),
+        note(
+          t(
+            'В git remote указан {repo}, но на GitHub его нет — удалён, переименован или нет доступа у этого входа gh.',
+            {
+              repo: full,
+            },
+          ),
+          C.warn,
+        ),
+        [
+          {
+            key: 'again',
+            hotkey: 'n',
+            label: <Text>{t('Создать заново — «{name}»', { name: repo.name })}</Text>,
+            hint: t('remote переставится на новый · ничего не пушится'),
+          },
+          { key: 'pick', hotkey: 'p', label: <Text>{t('Выбрать другой из моих репозиториев')}</Text> },
+          {
+            key: 'agent',
+            hotkey: 'a',
+            label: <Text>{t('Агентом — узел и сессия: спросит имя и видимость, создаст и подключит')}</Text>,
+          },
+          { key: 'check', hotkey: 'r', label: <Text>{t('Проверить снова')}</Text> },
+        ],
+        (key) => {
+          if (key === 'again') return show({ kind: 'repoName', name: repo.name, isPrivate: true });
+          if (key === 'pick') return repos();
+          if (key === 'agent') return props.onAgent({ kind: 'repo' });
+          verify(repo);
+        },
+        true,
+      );
+    }
     case 'repos':
       return frame(
         t('GitHub · шаг 2 из 3 — выбери репозиторий'),

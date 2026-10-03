@@ -6,6 +6,7 @@ import {
   cardOf,
   connectRepo,
   createBoard,
+  createRepo,
   ensureHub,
   followStatuses,
   type Gh,
@@ -17,6 +18,7 @@ import {
   offerShown,
   parseBoardRef,
   parseRepoUrl,
+  repoExists,
   repoOf,
   setOffer,
   settlePushes,
@@ -249,6 +251,38 @@ describe('connecting github', () => {
       'https://github.com/antondanv/b.git',
     );
     expect(repoOf(other)).toEqual({ owner: 'antondanv', name: 'b' });
+  });
+
+  it('a repository deleted on GitHub is told apart from one that is there', async () => {
+    const repo = { owner: 'antondanv', name: 'Treeyard' };
+    expect(await repoExists(repo, async () => '{"name":"Treeyard"}')).toBe(true);
+    const gone: Gh = async () => {
+      throw new Error("GraphQL: Could not resolve to a Repository with the name 'antondanv/Treeyard'. (repository)");
+    };
+    expect(await repoExists(repo, gone)).toBe(false);
+    // Anything else (no network) is an error, not a missing repository.
+    const offline: Gh = async () => {
+      throw new Error('error connecting to api.github.com');
+    };
+    await expect(repoExists(repo, offline)).rejects.toThrow('api.github.com');
+  });
+
+  it('a new or chosen repository takes over the remote of a deleted one', async () => {
+    const dir = tempDir();
+    connectRepo(dir, 'antondanv/Treeyard');
+    const calls: string[][] = [];
+    const run: Gh = async (args) => {
+      calls.push(args);
+      return 'https://github.com/antondanv/Treeyard2\n';
+    };
+    expect(await createRepo(dir, 'Treeyard2', false, run)).toEqual({ owner: 'antondanv', name: 'Treeyard2' });
+    expect(calls).toEqual([['repo', 'create', 'Treeyard2', '--public']]);
+    const remotes = () => spawnSync('git', ['remote', '-v'], { cwd: dir, encoding: 'utf8' }).stdout;
+    expect(remotes()).toContain('origin\thttps://github.com/antondanv/Treeyard2.git');
+    expect(remotes()).not.toMatch(/^github\t/m);
+    connectRepo(dir, 'antondanv/brainyard');
+    expect(repoOf(dir)).toEqual({ owner: 'antondanv', name: 'brainyard' });
+    expect(remotes().trim().split('\n')).toHaveLength(2);
   });
 
   it('lists open boards and creates one linked to the repository', async () => {
