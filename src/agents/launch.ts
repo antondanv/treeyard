@@ -107,7 +107,7 @@ export async function resumeLoose(tree: Tree, session: SessionInfo): Promise<Ope
 
 /** Live state of the sessions on this machine — Claude Code, Codex, Antigravity — by session id. */
 export async function liveById(): Promise<Map<string, SessionInfo>> {
-  const list = await liveSessions({ all: true });
+  const list = await liveSessions({ panes: {} });
   return new Map(list.map((session) => [session.id, session]));
 }
 
