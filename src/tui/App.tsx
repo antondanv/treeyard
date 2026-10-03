@@ -28,6 +28,7 @@ import {
   liveById,
   projectSessions,
   sessionOwners,
+  sleepBackground,
 } from '../agents/launch.js';
 import { withPaneIdle } from '../agents/pane-idle.js';
 import {
@@ -433,18 +434,23 @@ export function App(props: AppProps) {
   const owners = sessionOwners(tree);
   const sessionList: SessionInfo[] = (allSessions ?? []).map((session) => ({
     ...session,
-    live: live.get(session.id)?.live,
+    live: watching ? live.get(session.id)?.live : session.live,
   }));
   // Include panes and sleeping references even before the CLI lists them.
   for (const node of tree.nodes.values())
     for (const ref of node.sessions) {
-      if (ref.mode === 'pane' && !sessionList.some((s) => s.brain === ref.brain && s.id === ref.id)) {
+      if (
+        (ref.mode === 'pane' || ref.mode === 'background') &&
+        !sessionList.some((s) => s.brain === ref.brain && s.id === ref.id)
+      ) {
         sessionList.push({
           brain: ref.brain,
           id: ref.id,
           title: ref.name ?? node.title,
           startedAt: ref.started,
           interactive: true,
+          live: live.get(ref.id)?.live,
+          ...(ref.mode === 'background' ? { background: true } : {}),
         });
       }
     }
@@ -468,6 +474,15 @@ export function App(props: AppProps) {
       recency(b) - recency(a),
   );
   const keyOf = (session: SessionInfo) => `${session.brain}:${session.id}`;
+  const sessionSleeping = (session: SessionInfo) =>
+    !session.live &&
+    !paneFor(session, panes) &&
+    Boolean(
+      session.background ||
+        tree.nodes
+          .get(owners.get(session.id) ?? '')
+          ?.sessions.some((ref) => ref.id === session.id && (ref.mode === 'pane' || ref.mode === 'background')),
+    );
   const sessionIndex = Math.max(
     0,
     sessionList.findIndex((session) => keyOf(session) === sessionKey),
@@ -757,6 +772,7 @@ export function App(props: AppProps) {
       const owner = owners.get(intent.session.id);
       const ref = owner ? tree.nodes.get(owner)?.sessions.find((s) => s.id === intent.session.id) : undefined;
       if (owner && ref?.mode === 'pane') return wakeSession(owner, ref);
+      if (owner && ref) return handOver({ type: 'resume', node: owner, ref });
       return handOver({ type: 'resume-loose', session: intent.session });
     }
     if (!node) return;
@@ -881,8 +897,30 @@ export function App(props: AppProps) {
   };
 
   const putToSleep = (ref: SessionRef | SessionInfo) => {
+    if (view === 'sessions') setSessionKey(`${ref.brain}:${ref.id}`);
     const pane = paneFor(ref, panes);
-    if (pane) sleepOne(pane);
+    if (pane) return sleepOne(pane);
+    const state = live.get(ref.id) ?? ('live' in ref ? ref : undefined);
+    const background =
+      ('mode' in ref && ref.mode === 'background') ||
+      ('background' in ref && ref.background) ||
+      state?.live?.kind === 'background';
+    if (ref.brain !== 'claude' || !background)
+      return say(
+        state?.live ? t('сессия открыта в другом терминале — закрой её там') : t('сессия уже закрыта · ⏎ — продолжить'),
+        C.warn,
+      );
+    if (job) return say(t('подожди: {label}', { label: job.label }), C.warn);
+    setJob({ label: t('усыпляю сессию') });
+    void sleepBackground(treeRef.current, ref)
+      .then(async () => {
+        const [map, list] = await Promise.all([liveById(), projectSessions(treeRef.current)]);
+        setLive(map);
+        setAllSessions(list);
+        say(t('сессия спит · ⏎ — продолжить'));
+      })
+      .catch((error: Error) => say(error.message, C.bad))
+      .finally(() => setJob(undefined));
   };
 
   /** A proposal or a result: shown now, or as soon as the open dialog closes. */
@@ -1319,7 +1357,11 @@ export function App(props: AppProps) {
       run: () =>
         selectedPane ? handOver({ type: 'attach-pane', pane: selectedPane.pane }) : say(t('у узла нет живой сессии')),
     },
-    paneSleep: { label: t('Усыпить сессию справа'), keys: 'x', run: () => sleepVisible() },
+    paneSleep: {
+      label: t('Усыпить выбранную сессию'),
+      keys: 'x',
+      run: () => (currentSession ? putToSleep(currentSession) : sleepVisible()),
+    },
     paneWider: { label: t('Сессия справа шире'), keys: '⇧← <', run: () => resizeSplit(1) },
     paneNarrower: { label: t('Сессия справа уже'), keys: '⇧→ >', run: () => resizeSplit(-1) },
     closed: {
@@ -1744,11 +1786,7 @@ export function App(props: AppProps) {
               grouped
               project={tree.project.title}
               pane={paneFor(item, panes)}
-              sleeping={Boolean(
-                owners.get(item.id) &&
-                  tree.nodes.get(owners.get(item.id)!)?.sessions.find((s) => s.id === item.id && s.mode === 'pane') &&
-                  !paneFor(item, panes),
-              )}
+              sleeping={sessionSleeping(item)}
               {...(owners.get(item.id) ? { owner: tree.nodes.get(owners.get(item.id)!)?.title ?? '' } : {})}
             />
           </Clickable>
@@ -2795,6 +2833,7 @@ export function App(props: AppProps) {
                 view === 'sessions' ? (
                   <SessionDetails
                     session={currentSession}
+                    sleeping={Boolean(currentSession && sessionSleeping(currentSession))}
                     owner={
                       currentSession && owners.get(currentSession.id)
                         ? tree.nodes.get(owners.get(currentSession.id)!)
@@ -3015,6 +3054,7 @@ function Hints(props: {
       ? [
           ...pane,
           ['⏎', t('открыть')],
+          ['x', t('усыпить')],
           ['← →', t('к другому CLI')],
           ['l', t('привязать к узлу')],
           ['1–6', t('вкладки')],

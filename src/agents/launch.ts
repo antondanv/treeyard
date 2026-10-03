@@ -4,7 +4,7 @@
  * Claude Code's picker show it — and the node remembers it, so the next time
  * you come to the node, the conversation is one key away.
  */
-import { liveSessions, type OpenResult, open, type SessionInfo, sessions } from '@antondanv/brainyard';
+import { liveSessions, type OpenResult, open, type SessionInfo, sessions, stopSession } from '@antondanv/brainyard';
 import { t } from '../i18n/i18n.js';
 import { nodeEnv } from '../model/notes.js';
 import { attachSession, setStatus } from '../model/ops.js';
@@ -109,6 +109,11 @@ export async function resumeLoose(tree: Tree, session: SessionInfo): Promise<Ope
 export async function liveById(): Promise<Map<string, SessionInfo>> {
   const list = await liveSessions({ all: true });
   return new Map(list.map((session) => [session.id, session]));
+}
+
+/** Native background sessions stop through their CLI, without removing the node's conversation. */
+export async function sleepBackground(tree: Tree, session: SessionRef | SessionInfo): Promise<void> {
+  await stopSession({ brain: session.brain, sessionId: session.id, cwd: tree.project.dir });
 }
 
 /** Every session of the project folder, across the CLIs, with live state. */

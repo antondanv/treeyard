@@ -9,15 +9,15 @@ const backend = vi.hoisted(() => ({
   listPanes: vi.fn(),
   startPane: vi.fn(),
   closePane: vi.fn(),
+  liveSessions: vi.fn(),
+  sessions: vi.fn(),
+  stopSession: vi.fn(),
 }));
 vi.mock('@antondanv/brainyard', async (original) => ({
   ...(await original<typeof import('@antondanv/brainyard')>()),
   ...backend,
   panesAvailable: () => true,
   paneMemory: async () => new Map([['claude-one', 180 * 1024 * 1024]]),
-  liveSessions: async () => [],
-  // The pane's conversation is in the CLI's history, so it can sleep and wake.
-  sessions: async () => [{ brain: 'claude', id: 'conversation' }],
 }));
 
 import { addNode, attachSession } from '../src/model/ops.js';
@@ -76,6 +76,9 @@ beforeEach(() => {
   resetSettings({ ...DEFAULTS, confirm: false, sleepAfter: 0, maxPanes: 0 });
   backend.sendToPane.mockResolvedValue(undefined);
   backend.resizePane.mockResolvedValue(true);
+  backend.liveSessions.mockResolvedValue([]);
+  // The conversation is in the CLI's history, so it can sleep and wake.
+  backend.sessions.mockResolvedValue([{ brain: 'claude', id: 'conversation', interactive: true }]);
   backend.capturePane.mockResolvedValue({
     lines: ['hello from the CLI', '', 'colours'],
     width: 60,
@@ -92,13 +95,18 @@ afterEach(() => {
   resetSettings({ ...DEFAULTS });
 });
 
-function mount(columns = 120, rows = 30, options: { nested?: boolean } = {}) {
+function mount(columns = 120, rows = 30, options: { nested?: boolean; background?: boolean; loose?: boolean } = {}) {
   const tree = emptyTree();
   // Nested: a milestone above, so ← has somewhere to go.
   const milestone = options.nested ? addNode(tree, { title: 'Milestone', status: 'active' }) : undefined;
   if (milestone) addNode(tree, { title: 'Quiet sibling', status: 'todo', parent: milestone.id });
   const node = addNode(tree, { title: 'Pane work', status: 'active', ...(milestone ? { parent: milestone.id } : {}) });
-  attachSession(tree, node.id, { brain: 'claude', id: 'conversation', pane: 'claude-one', mode: 'pane' });
+  if (!options.loose)
+    attachSession(tree, node.id, {
+      brain: 'claude',
+      id: 'conversation',
+      ...(options.background ? { mode: 'background' } : { pane: 'claude-one', mode: 'pane' }),
+    });
   const pane = {
     pane: 'claude-one',
     brain: 'claude' as const,
@@ -108,7 +116,19 @@ function mount(columns = 120, rows = 30, options: { nested?: boolean } = {}) {
     width: 60,
     height: 12,
   };
-  backend.listPanes.mockResolvedValue([pane]);
+  backend.listPanes.mockResolvedValue(options.background ? [] : [pane]);
+  if (options.background) {
+    const session = {
+      brain: 'claude',
+      id: 'conversation',
+      cwd: tree.project.dir,
+      title: 'Background work',
+      background: true,
+      interactive: true,
+    };
+    backend.sessions.mockResolvedValue([session]);
+    backend.liveSessions.mockResolvedValue([{ ...session, live: { kind: 'background', status: 'busy' } }]);
+  }
   const stdout = new Output(columns, rows);
   const stdin = new Input();
   const input = new TerminalInput(stdin as unknown as NodeJS.ReadStream);
@@ -230,6 +250,93 @@ describe('terminal panes in the tree', () => {
     await until(() => app.stdout.frame.includes('hello from the CLI'));
     expect(app.stdout.frame.split('\n').length).toBeLessThanOrEqual(20);
     expect(backend.resizePane.mock.lastCall?.slice(1)).toEqual([57, 9]);
+  });
+
+  it.each([false, true])('sleeps a background session in Sessions at 100×30 (unlinked: %s)', async (loose) => {
+    const app = mount(100, 30, { background: true, loose });
+    app.stdin.write('5');
+    await until(() => app.stdout.frame.includes('Background work') && app.stdout.frame.includes('1 работает'));
+    expect(app.stdout.frame).toContain('x усыпить');
+    backend.stopSession.mockImplementation(async () => {
+      backend.liveSessions.mockResolvedValue([]);
+      return 'stopped';
+    });
+    app.stdin.write('x');
+    await until(() => app.stdout.frame.includes('сессия спит · ⏎ — продолжить'));
+    expect(app.stdout.frame).toContain('☾');
+    expect(app.stdout.frame.split('\n').slice(5).join('\n')).not.toContain('работает');
+    expect(app.stdout.frame.split('\n').length).toBeLessThanOrEqual(30);
+    expect(backend.stopSession).toHaveBeenCalledWith({
+      brain: 'claude',
+      sessionId: 'conversation',
+      cwd: app.tree.project.dir,
+    });
+    expect(backend.closePane).not.toHaveBeenCalled();
+    expect(loadTree(app.tree.project.dir).nodes.get(app.node.id)!.sessions).toHaveLength(loose ? 0 : 1);
+    app.stdin.write('\r');
+    await until(() => app.action.mock.calls.length === 1);
+    expect(app.action.mock.lastCall?.[0]).toMatchObject(
+      loose
+        ? { type: 'resume-loose', session: { id: 'conversation' } }
+        : { type: 'resume', node: app.node.id, ref: { id: 'conversation', mode: 'background' } },
+    );
+  });
+
+  it('keeps a background session live when the CLI refuses to stop it', async () => {
+    const app = mount(100, 30, { background: true });
+    app.stdin.write('5');
+    await until(() => app.stdout.frame.includes('Background work') && app.stdout.frame.includes('1 работает'));
+    backend.stopSession.mockRejectedValue(new Error('stop failed'));
+    app.stdin.write('x');
+    await until(() => app.stdout.frame.includes('stop failed'));
+    expect(app.stdout.frame).toContain('1 работает');
+    expect(app.stdout.frame).not.toContain('сессия спит');
+  });
+
+  it('keeps the selection on the sleeping conversation when other sessions move ahead of it', async () => {
+    const app = mount(100, 30, { background: true });
+    app.stdin.write('5');
+    await until(() => app.stdout.frame.includes('1 работает'));
+    const other = {
+      brain: 'claude',
+      id: 'other',
+      title: 'Other background',
+      interactive: true,
+      background: true,
+      live: { kind: 'background', status: 'busy' },
+    };
+    backend.stopSession.mockImplementation(async () => {
+      backend.liveSessions.mockResolvedValue([other]);
+      backend.sessions.mockResolvedValue([
+        { ...other, id: 'conversation', title: 'Background work', live: undefined },
+        other,
+      ]);
+      return 'stopped';
+    });
+    app.stdin.write('x');
+    await until(() => app.stdout.frame.includes('сессия спит · ⏎ — продолжить'));
+    expect(app.stdout.frame).toContain('❯☾ Background work');
+    expect(app.stdout.frame).toContain('Other background');
+    app.stdin.write('\r');
+    await until(() => app.action.mock.calls.length === 1);
+    expect(app.action.mock.lastCall?.[0]).toMatchObject({ type: 'resume', ref: { id: 'conversation' } });
+  });
+
+  it('sleeps the selected pane even when it is hidden in Sessions', async () => {
+    const app = mount();
+    await until(() => app.stdout.frame.includes('hello from the CLI'));
+    app.stdin.write('5');
+    await pause(60);
+    app.stdin.write('p');
+    await until(() => !app.stdout.frame.includes('hello from the CLI'));
+    backend.closePane.mockImplementation(async () => {
+      backend.listPanes.mockResolvedValue([]);
+      return true;
+    });
+    app.stdin.write('x');
+    await until(() => app.stdout.frame.includes('сессия спит'));
+    expect(backend.closePane).toHaveBeenCalledWith('claude-one');
+    expect(backend.stopSession).not.toHaveBeenCalled();
   });
 
   it('⇧← ⇧→ move the border of the pane and keep the selection on the node', async () => {

@@ -1,5 +1,11 @@
 /** English for every `t()` key, in the order the keys appear in the code. `scripts/i18n-keys.mjs` lists them. */
 export const EN: Record<string, string> = {
+  'Усыпить выбранную сессию': 'Put the selected session to sleep',
+  'усыпляю сессию': 'putting the session to sleep',
+  'сессия спит · ⏎ — продолжить': 'the session sleeps · ⏎ to continue',
+  'сессия уже закрыта · ⏎ — продолжить': 'the session is already closed · ⏎ to continue',
+  'сессия открыта в другом терминале — закрой её там': 'the session is open in another terminal — close it there',
+  'в «Сессиях»: усыпить выбранную, включая фоновую': 'in Sessions: sleep the selected session, including background',
   'в панели рядом — дерево появится само · ⌃Q — к дереву':
     'in a pane beside it — the tree appears automatically · ⌃Q to the tree',
   'Сажаем дерево с агентом': 'Planting the tree with an agent',

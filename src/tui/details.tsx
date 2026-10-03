@@ -215,6 +215,7 @@ export function NodeDetails(props: {
 
 export function SessionDetails(props: {
   session: SessionInfo | undefined;
+  sleeping?: boolean;
   owner: TreeNode | undefined;
   width: number;
   height: number;
@@ -246,6 +247,8 @@ export function SessionDetails(props: {
         <Text color={session.live.status === 'waiting' ? C.you : C.agent} wrap="truncate-end">
           {liveLabel(session)}
         </Text>
+      ) : props.sleeping ? (
+        <Text color={C.faint}>☾ {t('спит')}</Text>
       ) : null}
       <Text> </Text>
       <Text color={C.faint} bold>
