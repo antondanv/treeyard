@@ -202,7 +202,7 @@ type Modal =
   | { kind: 'statusOrder' }
   | { kind: 'help' }
   | { kind: 'github' }
-  | { kind: 'images'; node: string; paste?: boolean }
+  | { kind: 'images'; node: string }
   | { kind: 'problems' };
 
 /** Something that starts a session or spends an agent's time: asked about first, unless turned off. */
@@ -1472,7 +1472,7 @@ export function App(props: AppProps) {
       label: t('Картинки узла: из буфера, подписи, на весь экран'),
       keys: 'I',
       needs: 'node',
-      run: () => current && setModal({ kind: 'images', node: current.id, paste: true }),
+      run: () => current && setModal({ kind: 'images', node: current.id }),
     },
     copy: {
       label: t('Скопировать id узла'),
@@ -2161,7 +2161,6 @@ export function App(props: AppProps) {
             node={modalNode}
             width={w}
             height={bodyHeight}
-            pasteOnOpen={modal.paste}
             onChange={(journal, message) => {
               if (journal) logToNode(tree, modalNode.id, journal);
               reload();

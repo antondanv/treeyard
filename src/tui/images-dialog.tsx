@@ -76,8 +76,6 @@ export function ImagesDialog(props: {
   node: TreeNode;
   width: number;
   height: number;
-  /** Tried once when the dialog opens on a node with no pictures. */
-  pasteOnOpen?: boolean;
   /** A line for the node's journal and a message: something was added, captioned or removed. */
   onChange: (journal: string | undefined, message: string) => void;
   onError: (message: string) => void;
@@ -86,13 +84,8 @@ export function ImagesDialog(props: {
   external?: boolean;
 }) {
   const { dir, node } = props;
-  const [images, setImages] = useState(() => {
-    if (props.pasteOnOpen && listImages(dir, node.id).length === 0) {
-      const { image } = attachFromClipboard(dir, node.id, clipboardImage);
-      if (image) queueMicrotask(() => props.onChange(added(image), t('картинка из буфера добавлена')));
-    }
-    return listImages(dir, node.id);
-  });
+  // Opening only looks: a screenshot left in the clipboard must not land on every node opened.
+  const [images, setImages] = useState(() => listImages(dir, node.id));
   const [cursor, setCursor] = useState(Math.max(0, images.length - 1));
   const [mode, setMode] = useState<Mode>('list');
   // Where a mosaic is all the terminal can do, ⏎ shows the real picture instead.
