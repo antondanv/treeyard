@@ -6,7 +6,7 @@
  */
 import { basename } from 'node:path';
 import { Box, Text, useInput } from 'ink';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   type BoardInfo,
@@ -22,7 +22,7 @@ import {
   repoOf,
 } from '../github.js';
 import { t } from '../i18n/i18n.js';
-import { Frame, Menu, type MenuItem, TextField } from './components/controls.js';
+import { Frame, type KeyHint, Menu, type MenuItem, TextField } from './components/controls.js';
 import { C } from './theme.js';
 
 export type AgentTask = { kind: 'repo' } | { kind: 'board'; repo: Repo };
@@ -32,7 +32,7 @@ type Step =
   | { kind: 'gh'; state: GhState }
   | { kind: 'repo' }
   | { kind: 'repos'; list: { nameWithOwner: string; isPrivate: boolean }[] }
-  | { kind: 'repoName'; name: string }
+  | { kind: 'repoName'; name: string; isPrivate: boolean }
   | { kind: 'boards'; repo: Repo; list: BoardInfo[] }
   | { kind: 'boardName'; repo: Repo; title: string }
   | { kind: 'error'; message: string; retry: () => void };
@@ -50,65 +50,139 @@ export function GithubConnect(props: {
   onCancel: () => void;
 }) {
   const [step, setStep] = useState<Step>({ kind: 'loading', label: t('проверяю gh') });
+  // The steps behind the one shown, for going back; loading and errors are never in it.
+  const trail = useRef<Step[]>([]);
+  const shown = useRef<Step | undefined>(undefined);
+  // Going back makes an answer still on its way from gh stale.
+  const ticket = useRef(0);
 
-  const failed = (retry: () => void) => (error: unknown) =>
-    setStep({ kind: 'error', message: (error as Error).message.split('\n')[0] ?? '', retry });
-
-  const check = () => {
-    setStep({ kind: 'loading', label: t('проверяю gh') });
-    ghState().then((state) => {
-      if (!ghReady(state)) return setStep({ kind: 'gh', state });
-      const repo = repoOf(props.dir);
-      if (repo) return boards(repo);
-      setStep({ kind: 'repo' });
-    }, failed(check));
+  /** A step you can stand on: the one you leave goes on the trail, unless it is the same step changing. */
+  const show = (next: Step) => {
+    if (shown.current && shown.current.kind !== next.kind) trail.current.push(shown.current);
+    shown.current = next;
+    setStep(next);
   };
 
-  const boards = (repo: Repo) => {
-    setStep({ kind: 'loading', label: t('ищу доски {owner}', { owner: repo.owner }) });
-    listBoards(repo.owner).then(
-      (list) => setStep({ kind: 'boards', repo, list }),
-      failed(() => boards(repo)),
+  /** Work with gh: a loading line now, then `done` — unless the person went back meanwhile. */
+  const wait = <T,>(label: string, work: Promise<T>, done: (value: T) => void, retry: () => void) => {
+    const mine = ++ticket.current;
+    setStep({ kind: 'loading', label });
+    work.then(
+      (value) => mine === ticket.current && done(value),
+      (error: unknown) =>
+        mine === ticket.current &&
+        setStep({ kind: 'error', message: (error as Error).message.split('\n')[0] ?? '', retry }),
     );
   };
 
-  const repos = () => {
-    setStep({ kind: 'loading', label: t('ищу твои репозитории') });
-    listRepos().then((list) => setStep({ kind: 'repos', list }), failed(repos));
+  /** esc or ←: from loading or an error to the step it started from, else one step back; from the first one, out. */
+  const back = () => {
+    ticket.current++;
+    if (step.kind === 'loading' || step.kind === 'error') {
+      if (shown.current) return setStep(shown.current);
+      return props.onCancel();
+    }
+    const previous = trail.current.pop();
+    if (!previous) return props.onCancel();
+    shown.current = previous;
+    setStep(previous);
   };
+  const canGoBack =
+    step.kind === 'loading' || step.kind === 'error' ? Boolean(shown.current) : trail.current.length > 0;
 
-  const makeRepo = (name: string) => {
-    setStep({ kind: 'loading', label: t('создаю приватный репозиторий {name}', { name }) });
-    createRepo(props.dir, name).then(
-      boards,
-      failed(() => makeRepo(name)),
+  const check = () =>
+    wait(
+      t('проверяю gh'),
+      ghState(),
+      (state) => {
+        if (!ghReady(state)) return show({ kind: 'gh', state });
+        const repo = repoOf(props.dir);
+        if (repo) return boards(repo);
+        show({ kind: 'repo' });
+      },
+      check,
     );
+
+  const startOver = () => {
+    trail.current = [];
+    shown.current = undefined;
+    check();
   };
 
-  const makeBoard = (repo: Repo, title: string) => {
-    setStep({ kind: 'loading', label: t('создаю доску «{title}»', { title }) });
-    createBoard(repo, title).then(
+  const boards = (repo: Repo) =>
+    wait(
+      t('ищу доски {owner}', { owner: repo.owner }),
+      listBoards(repo.owner),
+      (list) => show({ kind: 'boards', repo, list }),
+      () => boards(repo),
+    );
+
+  const repos = () => wait(t('ищу твои репозитории'), listRepos(), (list) => show({ kind: 'repos', list }), repos);
+
+  const makeRepo = (name: string, isPrivate: boolean) =>
+    wait(
+      isPrivate
+        ? t('создаю приватный репозиторий {name}', { name })
+        : t('создаю публичный репозиторий {name}', { name }),
+      createRepo(props.dir, name, isPrivate),
+      (repo) => {
+        // The repository exists now: there is no going back to making it.
+        trail.current = [];
+        shown.current = undefined;
+        boards(repo);
+      },
+      () => makeRepo(name, isPrivate),
+    );
+
+  const makeBoard = (repo: Repo, title: string) =>
+    wait(
+      t('создаю доску «{title}»', { title }),
+      createBoard(repo, title),
       (board) => props.onLink(`${board.owner}/${board.number}`),
-      failed(() => makeBoard(repo, title)),
+      () => makeBoard(repo, title),
     );
-  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the check runs once, when the dialog opens.
   useEffect(check, []);
 
-  const frame = (title: string, body: React.ReactNode, items?: MenuItem[], onPick?: (key: string) => void) => (
+  const escHint = canGoBack
+    ? { key: 'esc ←', label: t('назад'), press: '\u001b' }
+    : { key: 'esc', label: t('закрыть') };
+
+  const frame = (
+    title: string,
+    body: React.ReactNode,
+    items?: MenuItem[],
+    onPick?: (key: string) => void,
+    why = false,
+  ) => (
     <Frame
       title={title}
       width={props.width}
-      footer={
-        items
-          ? [{ key: '⏎', label: t('выбрать') }, { label: t('буква — сразу') }, { key: 'esc', label: t('закрыть') }]
-          : [{ key: 'esc', label: t('закрыть') }]
-      }
+      footer={items ? [{ key: '⏎', label: t('выбрать') }, { label: t('буква — сразу') }, escHint] : [escHint]}
     >
+      {why
+        ? note(
+            t(
+              'Зачем: задачи с доски GitHub становятся узлами дерева, а статус ходит в обе стороны — сдвинул карточку на GitHub, узел сменил статус; поставил узлу «в работе» или «готово» здесь — карточка переехала в свою колонку. Одна картина работы и в дереве, и на GitHub, без ручного переноса.',
+            ),
+            C.faint,
+          )
+        : null}
       {body}
       {items && onPick ? (
-        <Menu items={items} active onPick={onPick} onCancel={props.onCancel} maxRows={Math.max(5, props.height - 12)} />
+        <Menu
+          items={items}
+          active
+          onPick={onPick}
+          onCancel={back}
+          onKey={(_, key) => {
+            if (!key.leftArrow) return false;
+            back();
+            return true;
+          }}
+          maxRows={Math.max(5, props.height - 12)}
+        />
       ) : null}
     </Frame>
   );
@@ -123,7 +197,7 @@ export function GithubConnect(props: {
 
   switch (step.kind) {
     case 'loading':
-      return <Waiting width={props.width} label={step.label} onCancel={props.onCancel} />;
+      return <Waiting width={props.width} label={step.label} hint={escHint} onBack={back} />;
     case 'error':
       return frame(
         t('GitHub · не вышло'),
@@ -132,7 +206,7 @@ export function GithubConnect(props: {
           { key: 'retry', hotkey: 'r', label: <Text>{t('Попробовать снова')}</Text> },
           { key: 'start', hotkey: 's', label: <Text>{t('Начать сначала')}</Text> },
         ],
-        (key) => (key === 'retry' ? step.retry() : check()),
+        (key) => (key === 'retry' ? step.retry() : startOver()),
       );
     case 'gh': {
       const { state } = step;
@@ -157,23 +231,37 @@ export function GithubConnect(props: {
         });
       }
       items.push({ key: 'again', hotkey: 'r', label: <Text>{t('Проверить снова')}</Text> });
-      return frame(t('GitHub · шаг 1 из 3 — gh'), note(text, C.text), items, (key) => {
-        if (key === 'login') return props.onGh(['auth', 'login', '--scopes', 'project']);
-        if (key === 'refresh') return props.onGh(['auth', 'refresh', '--scopes', 'project']);
-        check();
-      });
+      return frame(
+        t('GitHub · шаг 1 из 3 — gh'),
+        note(text, C.text),
+        items,
+        (key) => {
+          if (key === 'login') return props.onGh(['auth', 'login', '--scopes', 'project']);
+          if (key === 'refresh') return props.onGh(['auth', 'refresh', '--scopes', 'project']);
+          // The same step again, not a step forward.
+          trail.current = [];
+          shown.current = undefined;
+          check();
+        },
+        true,
+      );
     }
     case 'repo':
       return frame(
         t('GitHub · шаг 2 из 3 — репозиторий'),
-        note(t('У проекта нет репозитория на GitHub (git remote). Доски живут у владельца репозитория.'), C.text),
+        note(
+          t(
+            'У проекта нет репозитория на GitHub (git remote). Он нужен, чтобы узнать аккаунт: доска GitHub Project принадлежит не репозиторию, а аккаунту — тебе или организации. По репозиторию мастер покажет доски этого аккаунта, а новую доску привяжет к репозиторию.',
+          ),
+          C.text,
+        ),
         [
           { key: 'pick', hotkey: 'p', label: <Text>{t('Выбрать из моих репозиториев')}</Text> },
           {
             key: 'self',
             hotkey: 'n',
             section: t('Создать новый'),
-            label: <Text>{t('Сам — приватный, с именем папки')}</Text>,
+            label: <Text>{t('Сам — с именем папки, приватный или публичный')}</Text>,
             hint: t('gh repo create · ничего не пушится'),
           },
           {
@@ -184,9 +272,10 @@ export function GithubConnect(props: {
         ],
         (key) => {
           if (key === 'pick') return repos();
-          if (key === 'self') return setStep({ kind: 'repoName', name: basename(props.dir) });
+          if (key === 'self') return show({ kind: 'repoName', name: basename(props.dir), isPrivate: true });
           props.onAgent({ kind: 'repo' });
         },
+        true,
       );
     case 'repos':
       return frame(
@@ -205,7 +294,7 @@ export function GithubConnect(props: {
           try {
             boards(connectRepo(props.dir, key));
           } catch (error) {
-            failed(repos)(error);
+            setStep({ kind: 'error', message: (error as Error).message.split('\n')[0] ?? '', retry: repos });
           }
         },
       );
@@ -213,12 +302,13 @@ export function GithubConnect(props: {
       return (
         <NameStep
           width={props.width}
-          title={t('GitHub · новый приватный репозиторий')}
+          title={t('GitHub · новый репозиторий')}
           label={t('Имя')}
           value={step.name}
-          onChange={(name) => setStep({ kind: 'repoName', name })}
-          onSubmit={(name) => makeRepo(name)}
-          onBack={() => setStep({ kind: 'repo' })}
+          onChange={(name) => show({ ...step, name })}
+          onSubmit={(name) => makeRepo(name, step.isPrivate)}
+          visibility={{ isPrivate: step.isPrivate, onToggle: () => show({ ...step, isPrivate: !step.isPrivate }) }}
+          onBack={back}
         />
       );
     case 'boards': {
@@ -262,10 +352,11 @@ export function GithubConnect(props: {
         ),
         items,
         (key) => {
-          if (key === 'self') return setStep({ kind: 'boardName', repo, title: repo.name });
+          if (key === 'self') return show({ kind: 'boardName', repo, title: repo.name });
           if (key === 'agent') return props.onAgent({ kind: 'board', repo });
           props.onLink(key);
         },
+        true,
       );
     }
     case 'boardName':
@@ -275,20 +366,20 @@ export function GithubConnect(props: {
           title={t('GitHub · новая доска у {owner}', { owner: step.repo.owner })}
           label={t('Название')}
           value={step.title}
-          onChange={(title) => setStep({ ...step, title })}
+          onChange={(title) => show({ ...step, title })}
           onSubmit={(title) => makeBoard(step.repo, title)}
-          onBack={() => boards(step.repo)}
+          onBack={back}
         />
       );
   }
 }
 
-function Waiting(props: { width: number; label: string; onCancel: () => void }) {
+function Waiting(props: { width: number; label: string; hint: KeyHint; onBack: () => void }) {
   useInput((_, key) => {
-    if (key.escape) props.onCancel();
+    if (key.escape || key.leftArrow) props.onBack();
   });
   return (
-    <Frame title="GitHub" width={props.width} footer={[{ key: 'esc', label: t('закрыть') }]}>
+    <Frame title="GitHub" width={props.width} footer={[props.hint]}>
       <Text color={C.agent}>… {props.label}</Text>
     </Frame>
   );
@@ -302,17 +393,22 @@ function NameStep(props: {
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
   onBack: () => void;
+  /** A new repository: private or public, tab switches. */
+  visibility?: { isPrivate: boolean; onToggle: () => void };
 }) {
   useInput((_, key) => {
     if (key.escape) props.onBack();
+    else if (key.tab && props.visibility) props.visibility.onToggle();
     else if (key.return && props.value.trim()) props.onSubmit(props.value.trim());
   });
+  const visibility = props.visibility;
   return (
     <Frame
       title={props.title}
       width={props.width}
       footer={[
         { key: '⏎', label: t('создать') },
+        ...(visibility ? [{ key: 'tab', label: t('видимость') }] : []),
         { key: 'esc', label: t('назад') },
       ]}
     >
@@ -320,6 +416,19 @@ function NameStep(props: {
         <Text color={C.dim}>{props.label} </Text>
         <TextField value={props.value} onChange={props.onChange} active width={props.width - 12} />
       </Box>
+      {visibility ? (
+        <Box marginTop={1}>
+          <Text color={C.dim}>{t('Видимость')} </Text>
+          <Text inverse={visibility.isPrivate} bold={visibility.isPrivate}>
+            {` ${t('приватный')} `}
+          </Text>
+          <Text> </Text>
+          <Text inverse={!visibility.isPrivate} bold={!visibility.isPrivate}>
+            {` ${t('публичный')} `}
+          </Text>
+          <Text color={C.faint}>{t('  · публичный видят все; поменять можно и потом на GitHub')}</Text>
+        </Box>
+      ) : null}
     </Frame>
   );
 }

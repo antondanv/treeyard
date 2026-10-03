@@ -809,8 +809,8 @@ export const EN: Record<string, string> = {
   'Создать репозиторий на GitHub и подключить его': 'Create a GitHub repository and connect it',
   'git remote -v показывает репозиторий на github.com; без push, пока человек не попросит':
     'git remote -v shows a repository on github.com; no push until the person asks',
-  'Спроси человека имя и видимость (по умолчанию приватный), создай через gh repo create --source . --remote origin. Потом в treeyard: G на узле GitHub — выбрать или создать доску.':
-    'Ask the person for the name and visibility (private by default), create it with gh repo create --source . --remote origin. Then in treeyard: G on the GitHub node — pick or create a board.',
+  'Спроси человека имя и видимость (приватный или публичный), создай через gh repo create --source . --remote origin. Потом в treeyard: G на узле GitHub — выбрать или создать доску.':
+    'Ask the person for the name and visibility (private or public), create it with gh repo create --source . --remote origin. Then in treeyard: G on the GitHub node — pick or create a board.',
   'Создать доску GitHub Project и подключить её': 'Create a GitHub Project board and connect it',
   'treeyard github показывает подключённую доску {owner}/<номер>':
     'treeyard github shows the connected board {owner}/<number>',
@@ -830,8 +830,6 @@ export const EN: Record<string, string> = {
   'подключить доску GitHub': 'connect a GitHub board',
   'настройки — скрыть узел': 'settings — hide the node',
   'не подключено': 'not connected',
-  'Если задачи проекта лежат на доске GitHub Project, подключи её: карточки станут узлами здесь, колонки — статусами, в обе стороны.':
-    "If the project's tasks live on a GitHub Project board, connect it: cards become nodes here, columns become statuses, both ways.",
   'подключить: gh → репозиторий → доска (выбрать или создать — самому или агентом)':
     'connect: gh → repository → board (pick one or create it — yourself or with an agent)',
   'Issues репозитория без доски — скоро. Не нужно — скрой узел в настройках «,».':
@@ -855,18 +853,16 @@ export const EN: Record<string, string> = {
   'Проверить снова': 'Check again',
   'GitHub · шаг 1 из 3 — gh': 'GitHub · step 1 of 3 — gh',
   'GitHub · шаг 2 из 3 — репозиторий': 'GitHub · step 2 of 3 — repository',
-  'У проекта нет репозитория на GitHub (git remote). Доски живут у владельца репозитория.':
-    "The project has no GitHub repository (git remote). Boards live with the repository's owner.",
   'Выбрать из моих репозиториев': 'Pick one of my repositories',
   'Создать новый': 'Create a new one',
-  'Сам — приватный, с именем папки': 'Myself — private, named after the folder',
+  'Сам — с именем папки, приватный или публичный': 'Myself — named after the folder, private or public',
   'gh repo create · ничего не пушится': 'gh repo create · nothing is pushed',
   'Агентом — узел и сессия: спросит имя и видимость, создаст и подключит':
     'With an agent — a node and a session: it asks the name and visibility, creates and connects it',
   'GitHub · шаг 2 из 3 — выбери репозиторий': 'GitHub · step 2 of 3 — pick a repository',
   'репозиториев не нашлось': 'no repositories found',
   ' · приватный': ' · private',
-  'GitHub · новый приватный репозиторий': 'GitHub · a new private repository',
+  'GitHub · новый репозиторий': 'GitHub · a new repository',
   Имя: 'Name',
   Подключить: 'Connect',
   'Создать доску': 'Create a board',
@@ -882,4 +878,15 @@ export const EN: Record<string, string> = {
   создать: 'create',
   'gh: готово · G — продолжить подключение GitHub': 'gh: done · G — continue connecting GitHub',
   'gh завершился с ошибкой · G — попробовать снова': 'gh failed · G — try again',
+  'создаю публичный репозиторий {name}': 'creating public repository {name}',
+  видимость: 'visibility',
+  Видимость: 'Visibility',
+  приватный: 'private',
+  публичный: 'public',
+  '  · публичный видят все; поменять можно и потом на GitHub':
+    '  · anyone can see a public one; you can change it on GitHub later',
+  'Зачем: задачи с доски GitHub становятся узлами дерева, а статус ходит в обе стороны — сдвинул карточку на GitHub, узел сменил статус; поставил узлу «в работе» или «готово» здесь — карточка переехала в свою колонку. Одна картина работы и в дереве, и на GitHub, без ручного переноса.':
+    "Why: tasks on the GitHub board become nodes of the tree, and status goes both ways — move a card on GitHub and the node's status changes; set a node to «in progress» or «done» here and the card moves to its column. One picture of the work in the tree and on GitHub, nothing copied by hand.",
+  'У проекта нет репозитория на GitHub (git remote). Он нужен, чтобы узнать аккаунт: доска GitHub Project принадлежит не репозиторию, а аккаунту — тебе или организации. По репозиторию мастер покажет доски этого аккаунта, а новую доску привяжет к репозиторию.':
+    "The project has no GitHub repository (git remote). It tells which account to use: a GitHub Project board belongs not to a repository but to an account — yours or an organization's. From the repository the wizard shows that account's boards and links a new board to the repository.",
 };
