@@ -83,6 +83,12 @@ async function perform(dir: string, action: Exclude<Action, { type: 'quit' }>): 
       await attachPane(action.pane, { hint: t('⌃Q — обратно к дереву') });
       return { text: t('вернулся из панели'), color: C.brand };
     }
+    if (action.type === 'gh') {
+      const got = spawnSync('gh', action.args, { stdio: 'inherit' });
+      return got.status === 0
+        ? { text: t('gh: готово · G — продолжить подключение GitHub'), color: C.brand }
+        : { text: t('gh завершился с ошибкой · G — попробовать снова'), color: C.bad };
+    }
     if (action.type === 'editor') {
       const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
       spawnSync(editor, [nodePath(dir, action.node)], { stdio: 'inherit', shell: true });

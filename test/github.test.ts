@@ -1,20 +1,31 @@
+import { spawnSync } from 'node:child_process';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   boardOf,
   cardOf,
+  connectRepo,
+  createBoard,
+  ensureHub,
   followStatuses,
   type Gh,
+  ghReady,
+  ghState,
   guessColumns,
   linkBoard,
+  listBoards,
+  offerShown,
   parseBoardRef,
+  parseRepoUrl,
+  repoOf,
+  setOffer,
   settlePushes,
   statusFor,
   syncBoard,
 } from '../src/github.js';
 import { addNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
-import { emptyTree } from './helpers.js';
+import { emptyTree, tempDir } from './helpers.js';
 
 /** A board in memory, answering the `gh project …` calls treeyard makes. */
 function fakeBoard(columns = ['Todo', 'In Progress', 'Review', 'Done']) {
@@ -132,7 +143,8 @@ describe('github board', () => {
     expect(second.added).toEqual([]);
     expect(second.pulled).toEqual([]);
     expect(second.pushed).toEqual([]);
-    expect(loadTree(tree.project.dir).nodes.size).toBe(3);
+    // Three cards and the GitHub node they went into.
+    expect(loadTree(tree.project.dir).nodes.size).toBe(4);
   });
 
   it('a card moved on the board moves its node, and is not pushed back', async () => {
@@ -196,5 +208,93 @@ describe('github board', () => {
 
   it('sync without a board says how to link one', async () => {
     await expect(syncBoard(emptyTree(), fakeBoard().run)).rejects.toThrow('github link');
+  });
+});
+
+describe('connecting github', () => {
+  it('reads gh: missing, logged out, without the project scope, ready', async () => {
+    const missing: Gh = async () => {
+      throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' });
+    };
+    expect(await ghState(missing)).toEqual({ installed: false });
+    const out: Gh = async () => {
+      throw Object.assign(new Error('gh: To get started with GitHub CLI, please run:  gh auth login'), { code: 4 });
+    };
+    expect(ghReady(await ghState(out))).toBe(false);
+    const noScope: Gh = async () => 'HTTP/2.0 200 OK\r\nX-Oauth-Scopes: repo, gist\r\n\r\n{"login":"anton"}';
+    const state = await ghState(noScope);
+    expect(state).toEqual({ installed: true, user: 'anton', scopes: ['repo', 'gist'] });
+    expect(ghReady(state)).toBe(false);
+    const ready: Gh = async () => 'HTTP/2.0 200 OK\r\nX-Oauth-Scopes: repo, project\r\n\r\n{"login":"anton"}';
+    expect(ghReady(await ghState(ready))).toBe(true);
+    // A fine-grained token has no scopes header: gh's own errors will say what is missing.
+    expect(ghReady(await ghState(async () => 'HTTP/2.0 200 OK\r\n\r\n{"login":"anton"}'))).toBe(true);
+  });
+
+  it('finds the repository in git remotes and connects a chosen one', () => {
+    expect(parseRepoUrl('git@github.com:antondanv/brainyard.git')).toEqual({ owner: 'antondanv', name: 'brainyard' });
+    expect(parseRepoUrl('https://github.com/antondanv/SMHUB')).toEqual({ owner: 'antondanv', name: 'SMHUB' });
+    expect(parseRepoUrl('https://gitlab.com/a/b.git')).toBeUndefined();
+    const dir = tempDir();
+    expect(repoOf(dir)).toBeUndefined();
+    // No git yet: connecting makes one and adds origin.
+    expect(connectRepo(dir, 'antondanv/treeyard')).toEqual({ owner: 'antondanv', name: 'treeyard' });
+    expect(repoOf(dir)).toEqual({ owner: 'antondanv', name: 'treeyard' });
+    // Origin taken by another host: the GitHub one goes next to it.
+    const other = tempDir();
+    spawnSync('git', ['init'], { cwd: other });
+    spawnSync('git', ['remote', 'add', 'origin', 'https://gitlab.com/a/b.git'], { cwd: other });
+    connectRepo(other, 'antondanv/b');
+    expect(spawnSync('git', ['remote', 'get-url', 'github'], { cwd: other, encoding: 'utf8' }).stdout.trim()).toBe(
+      'https://github.com/antondanv/b.git',
+    );
+    expect(repoOf(other)).toEqual({ owner: 'antondanv', name: 'b' });
+  });
+
+  it('lists open boards and creates one linked to the repository', async () => {
+    const calls: string[][] = [];
+    const run: Gh = async (args) => {
+      calls.push(args);
+      if (args[1] === 'list')
+        return JSON.stringify({
+          projects: [
+            { number: 1, title: 'Delivery', closed: false },
+            { number: 2, title: 'Old', closed: true },
+          ],
+        });
+      if (args[1] === 'create') return JSON.stringify({ number: 3 });
+      return '{}';
+    };
+    expect(await listBoards('anton', run)).toEqual([{ number: 1, title: 'Delivery', owner: 'anton' }]);
+    expect(await createBoard({ owner: 'anton', name: 'app' }, 'app', run)).toEqual({
+      number: 3,
+      title: 'app',
+      owner: 'anton',
+    });
+    expect(calls.at(-1)).toEqual(['project', 'link', '3', '--owner', 'anton', '--repo', 'anton/app']);
+  });
+
+  it('the offer shows until there is a GitHub node or a board, and can be hidden', async () => {
+    const tree = emptyTree();
+    expect(offerShown(tree)).toBe(true);
+    setOffer(tree, false);
+    expect(loadTree(tree.project.dir).project.extra.github).toBe('off');
+    expect(offerShown(loadTree(tree.project.dir))).toBe(false);
+    setOffer(tree, true);
+    expect(offerShown(loadTree(tree.project.dir))).toBe(true);
+    const hub = ensureHub(tree);
+    expect(ensureHub(tree).id).toBe(hub.id);
+    expect(offerShown(tree)).toBe(false);
+    // Linking without --parent puts the cards into that node.
+    const board = await linkBoard(tree, 'antondanv/1', undefined, fakeBoard().run);
+    expect(board.parent).toBe(hub.id);
+  });
+
+  it('linking with no GitHub node makes one at the top', async () => {
+    const tree = emptyTree();
+    const board = await linkBoard(tree, 'antondanv/1', undefined, fakeBoard().run);
+    const hub = loadTree(tree.project.dir).nodes.get(board.parent!)!;
+    expect(hub).toMatchObject({ title: 'GitHub', parent: 'root' });
+    expect(hub.extra.github).toBe('hub');
   });
 });

@@ -795,4 +795,91 @@ export const EN: Record<string, string> = {
     "{p1} · github · couldn't move the card to «{column}»: {message}",
   'Карточка: {url}': 'Card: {url}',
   'карточка в «{column}»': 'the card is in «{column}»',
+  'Карточки доски {board} — в узлах внутри. Свериться с доской: treeyard github sync.':
+    'Cards of board {board} are the nodes inside. Check against the board: treeyard github sync.',
+  'репозиторий: owner/имя — «{repo}»': 'repository: owner/name — «{repo}»',
+  'репозиторий создан, но remote не найден — git remote -v':
+    'the repository is created, but no remote found — git remote -v',
+  'сверяюсь с доской {board}': 'checking against board {board}',
+  'доска: новых {added} · с доски {pulled} · на доску {pushed}':
+    'board: new {added} · from the board {pulled} · to the board {pushed}',
+  'подключаю доску {ref}': 'connecting board {ref}',
+  'доска {board} подключена · узлов с доски: {n}': 'board {board} connected · nodes from the board: {n}',
+  'узел для агента: GitHub': 'a node for an agent: GitHub',
+  'Создать репозиторий на GitHub и подключить его': 'Create a GitHub repository and connect it',
+  'git remote -v показывает репозиторий на github.com; без push, пока человек не попросит':
+    'git remote -v shows a repository on github.com; no push until the person asks',
+  'Спроси человека имя и видимость (по умолчанию приватный), создай через gh repo create --source . --remote origin. Потом в treeyard: G на узле GitHub — выбрать или создать доску.':
+    'Ask the person for the name and visibility (private by default), create it with gh repo create --source . --remote origin. Then in treeyard: G on the GitHub node — pick or create a board.',
+  'Создать доску GitHub Project и подключить её': 'Create a GitHub Project board and connect it',
+  'treeyard github показывает подключённую доску {owner}/<номер>':
+    'treeyard github shows the connected board {owner}/<number>',
+  'Создай доску у {owner} (gh project create), привяжи к {repo} (gh project link), настрой колонки поля Status под статусы дерева — Backlog, Todo, In Progress, Review, Done — и подключи: treeyard github link {owner}/<номер>, потом treeyard github sync.':
+    "Create a board for {owner} (gh project create), link it to {repo} (gh project link), set the Status field's columns to the tree's statuses — Backlog, Todo, In Progress, Review, Done — and connect it: treeyard github link {owner}/<number>, then treeyard github sync.",
+  'GitHub: подключить доску или свериться с ней': 'GitHub: connect a board or check against it',
+  'Доска GitHub': 'GitHub board',
+  'G — свериться с доской · колонки — в .tree/tree.md, github.columns':
+    'G — check against the board · columns are in .tree/tree.md, github.columns',
+  'Узел GitHub': 'GitHub node',
+  показывать: 'show',
+  'пока доска не подключена, узел в дереве предлагает подключить доску и issues':
+    'while no board is connected, a node in the tree offers to connect a board and issues',
+  'узел GitHub': 'the GitHub node',
+  'не подключено · ⏎ — подключить доску · скрыть — в настройках «,»':
+    'not connected · ⏎ — connect a board · hide it in settings «,»',
+  'подключить доску GitHub': 'connect a GitHub board',
+  'настройки — скрыть узел': 'settings — hide the node',
+  'не подключено': 'not connected',
+  'Если задачи проекта лежат на доске GitHub Project, подключи её: карточки станут узлами здесь, колонки — статусами, в обе стороны.':
+    "If the project's tasks live on a GitHub Project board, connect it: cards become nodes here, columns become statuses, both ways.",
+  'подключить: gh → репозиторий → доска (выбрать или создать — самому или агентом)':
+    'connect: gh → repository → board (pick one or create it — yourself or with an agent)',
+  'Issues репозитория без доски — скоро. Не нужно — скрой узел в настройках «,».':
+    "Repository issues without a board — coming. Don't need it? Hide the node in settings «,».",
+  'проверяю gh': 'checking gh',
+  'ищу доски {owner}': "looking for {owner}'s boards",
+  'ищу твои репозитории': 'looking for your repositories',
+  'создаю приватный репозиторий {name}': 'creating private repository {name}',
+  'создаю доску «{title}»': 'creating board «{title}»',
+  'GitHub · не вышло': "GitHub · that didn't work",
+  'Попробовать снова': 'Try again',
+  'Начать сначала': 'Start over',
+  'Нужен gh — GitHub CLI: через него treeyard видит репозитории и доски. Поставь: brew install gh':
+    'gh — the GitHub CLI — is needed: treeyard sees repositories and boards through it. Install: brew install gh',
+  'gh есть, но вход не выполнен.': 'gh is there, but not logged in.',
+  'Войти: gh auth login — здесь, в терминале': 'Log in: gh auth login — here, in the terminal',
+  'с доступом к доскам (scope project)': 'with access to boards (scope project)',
+  'gh вошёл как {user}, но без доступа к доскам (scope project).':
+    'gh is logged in as {user}, but without access to boards (scope project).',
+  'Дать доступ: gh auth refresh -s project': 'Grant access: gh auth refresh -s project',
+  'Проверить снова': 'Check again',
+  'GitHub · шаг 1 из 3 — gh': 'GitHub · step 1 of 3 — gh',
+  'GitHub · шаг 2 из 3 — репозиторий': 'GitHub · step 2 of 3 — repository',
+  'У проекта нет репозитория на GitHub (git remote). Доски живут у владельца репозитория.':
+    "The project has no GitHub repository (git remote). Boards live with the repository's owner.",
+  'Выбрать из моих репозиториев': 'Pick one of my repositories',
+  'Создать новый': 'Create a new one',
+  'Сам — приватный, с именем папки': 'Myself — private, named after the folder',
+  'gh repo create · ничего не пушится': 'gh repo create · nothing is pushed',
+  'Агентом — узел и сессия: спросит имя и видимость, создаст и подключит':
+    'With an agent — a node and a session: it asks the name and visibility, creates and connects it',
+  'GitHub · шаг 2 из 3 — выбери репозиторий': 'GitHub · step 2 of 3 — pick a repository',
+  'репозиториев не нашлось': 'no repositories found',
+  ' · приватный': ' · private',
+  'GitHub · новый приватный репозиторий': 'GitHub · a new private repository',
+  Имя: 'Name',
+  Подключить: 'Connect',
+  'Создать доску': 'Create a board',
+  'Сам — «{title}», колонки по умолчанию': 'Myself — «{title}», default columns',
+  'Todo · In Progress · Done; поправить можно на GitHub': 'Todo · In Progress · Done; change them on GitHub',
+  'Агентом — узел и сессия: колонки под статусы дерева, подключит сам':
+    "With an agent — a node and a session: columns for the tree's statuses, it connects the board itself",
+  'GitHub · шаг 3 из 3 — доска': 'GitHub · step 3 of 3 — board',
+  'Репозиторий {repo}. Выбери доску — её карточки станут узлами в «GitHub».':
+    'Repository {repo}. Pick a board — its cards become nodes under «GitHub».',
+  'Репозиторий {repo}. Досок у {owner} пока нет.': 'Repository {repo}. {owner} has no boards yet.',
+  'GitHub · новая доска у {owner}': 'GitHub · a new board for {owner}',
+  создать: 'create',
+  'gh: готово · G — продолжить подключение GitHub': 'gh: done · G — continue connecting GitHub',
+  'gh завершился с ошибкой · G — попробовать снова': 'gh failed · G — try again',
 };

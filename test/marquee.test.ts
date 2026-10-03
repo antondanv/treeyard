@@ -1,5 +1,6 @@
 import stringWidth from 'string-width';
 import { describe, expect, it } from 'vitest';
+import { setOffer } from '../src/github.js';
 
 import { addNode } from '../src/model/ops.js';
 import { columns, marquee, marqueeOffset } from '../src/tui/marquee.js';
@@ -57,6 +58,8 @@ describe('running title', () => {
 
   it('runs on the selected node in the TUI, and only there', async () => {
     const tree = emptyTree();
+    // One chain in the graph: the GitHub offer would be a second branch on the root's line.
+    setOffer(tree, false);
     const branch = addNode(tree, { title: 'Ветка' });
     addNode(tree, {
       title: 'Длинное название задачи, которое не помещается в колонку целиком',

@@ -53,6 +53,7 @@ import {
   sleepPane,
   wakeInPane,
 } from '../agents/panes.js';
+import { boardOf, ensureHub, hubNode, linkBoard, offerShown, setOffer, syncBoard } from '../github.js';
 import { labels, plural, t } from '../i18n/i18n.js';
 import { activity, type Event } from '../model/activity.js';
 import { description } from '../model/journal.js';
@@ -130,6 +131,7 @@ import {
   TextViewer,
   WaitingForm,
 } from './dialogs.js';
+import { type AgentTask, GithubConnect } from './github-connect.js';
 import { follow, Graph, type GraphStyle, layoutGraph, neighbour, selectedOverflow, type Viewport } from './graph.js';
 import { History } from './history.js';
 import { shortcutKey } from './keys.js';
@@ -139,7 +141,14 @@ import { type Click, Clickable, MouseProvider, usePress } from './mouse.js';
 import { ListRow, paneState, rowOverflow, SessionRow, TreeRow, treePrefix } from './rows.js';
 import { TerminalPane } from './terminal.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
-import { doneGroupId, doneGroupParent, doneGroupsOnPath, isDoneGroup, treeViewRows } from './tree-view.js';
+import {
+  doneGroupId,
+  doneGroupParent,
+  doneGroupsOnPath,
+  isDoneGroup,
+  isGithubOffer,
+  treeViewRows,
+} from './tree-view.js';
 import { saveUi, type UiState, VIEWS, type View } from './ui-state.js';
 
 /** What the runner does after the app steps aside. */
@@ -149,7 +158,9 @@ export type Action =
   | { type: 'resume'; node: string; ref: SessionRef }
   | { type: 'resume-loose'; session: SessionInfo }
   | { type: 'attach-pane'; pane: string }
-  | { type: 'editor'; node: string };
+  | { type: 'editor'; node: string }
+  /** gh asks its own questions (a login): it gets the terminal, then the tree is back. */
+  | { type: 'gh'; args: string[] };
 
 export interface Toast {
   text: string;
@@ -174,6 +185,7 @@ type Modal =
   | { kind: 'settings'; at?: string }
   | { kind: 'statusOrder' }
   | { kind: 'help' }
+  | { kind: 'github' }
   | { kind: 'problems' };
 
 /** Something that starts a session or spends an agent's time: asked about first, unless turned off. */
@@ -526,6 +538,7 @@ export function App(props: AppProps) {
   const currentItem = view === 'sessions' ? undefined : nodesInView[cursor];
   const current = currentItem ? tree.nodes.get(currentItem.id) : undefined;
   const currentGroup = view === 'tree' && isDoneGroup(currentItem?.id) ? currentItem : undefined;
+  const currentOffer = view === 'tree' && isGithubOffer(currentItem?.id);
 
   // A node that just became done moves into its folded group; keep the selection nearby.
   useEffect(() => {
@@ -626,9 +639,18 @@ export function App(props: AppProps) {
   const bodyHeight = height - headerHeight - stripShown - footerHeight;
   const fullModal =
     modal &&
-    ['context', 'help', 'link', 'problems', 'palette', 'check', 'settings', 'statusOrder', 'confirm'].includes(
-      modal.kind,
-    );
+    [
+      'context',
+      'help',
+      'link',
+      'problems',
+      'palette',
+      'check',
+      'settings',
+      'statusOrder',
+      'confirm',
+      'github',
+    ].includes(modal.kind);
   const listHeight = bodyHeight;
   const paneSize = { width: Math.max(20, (rightWidth || width) - 2), height: Math.max(5, bodyHeight - 4) };
   const graphWidth =
@@ -1120,6 +1142,80 @@ export function App(props: AppProps) {
     return created;
   };
 
+  /** G: connect a board when there is none, otherwise check the tree against it. */
+  const github = () => {
+    if (job) return say(t('подожди: {label}', { label: job.label }), C.warn);
+    const board = boardOf(treeRef.current);
+    if (!board) return setModal({ kind: 'github' });
+    githubJob(t('сверяюсь с доской {board}', { board: `${board.owner}/${board.number}` }), async (current) => {
+      const result = await syncBoard(current);
+      return t('доска: новых {added} · с доски {pulled} · на доску {pushed}', {
+        added: result.added.length,
+        pulled: result.pulled.length,
+        pushed: result.pushed.length + (result.failed.length ? ` · ✗ ${result.failed.length}` : ''),
+      });
+    });
+  };
+
+  const connectGithub = (ref: string) => {
+    githubJob(t('подключаю доску {ref}', { ref }), async (current) => {
+      const board = await linkBoard(current, ref);
+      const result = await syncBoard(current);
+      if (board.parent) {
+        setExpanded((set) => new Set(set).add(board.parent!));
+        setSelected(board.parent);
+      }
+      return t('доска {board} подключена · узлов с доски: {n}', {
+        board: `${board.owner}/${board.number}`,
+        n: result.added.length,
+      });
+    });
+  };
+
+  /** Creating a repository or a board is an agent's job on its own node under «GitHub». */
+  const githubAgent = (task: AgentTask) => {
+    setModal(undefined);
+    let created: TreeNode | undefined;
+    change(t('узел для агента: GitHub'), () => {
+      const hub = ensureHub(tree);
+      created =
+        task.kind === 'repo'
+          ? addNode(tree, {
+              title: t('Создать репозиторий на GitHub и подключить его'),
+              parent: hub.id,
+              doneWhen: t('git remote -v показывает репозиторий на github.com; без push, пока человек не попросит'),
+              body: t(
+                'Спроси человека имя и видимость (по умолчанию приватный), создай через gh repo create --source . --remote origin. Потом в treeyard: G на узле GitHub — выбрать или создать доску.',
+              ),
+            })
+          : addNode(tree, {
+              title: t('Создать доску GitHub Project и подключить её'),
+              parent: hub.id,
+              doneWhen: t('treeyard github показывает подключённую доску {owner}/<номер>', { owner: task.repo.owner }),
+              body: t(
+                'Создай доску у {owner} (gh project create), привяжи к {repo} (gh project link), настрой колонки поля Status под статусы дерева — Backlog, Todo, In Progress, Review, Done — и подключи: treeyard github link {owner}/<номер>, потом treeyard github sync.',
+                { owner: task.repo.owner, repo: `${task.repo.owner}/${task.repo.name}` },
+              ),
+            });
+    });
+    if (!created) return;
+    setExpanded((set) => new Set(set).add(created!.parent));
+    setSelected(created.id);
+    request({ kind: 'new', node: created.id, options: withProject({ ...defaults(), start: 'do' }) });
+  };
+
+  const githubJob = (label: string, work: (tree: Tree) => Promise<string>) => {
+    setJob({ label });
+    void work(treeRef.current)
+      .then((text) => say(text))
+      .catch((error: Error) => say(error.message.split('\n')[0] ?? '', C.bad))
+      .finally(() => {
+        // What `gh` brought in is on disk already: read it back as an agent's edit would be.
+        reload();
+        setJob(undefined);
+      });
+  };
+
   const submitPrompt = (full: boolean) => {
     if (!prompt) return;
     const value = prompt.value.trim();
@@ -1420,6 +1516,7 @@ export function App(props: AppProps) {
         setView('tree');
       },
     },
+    github: { label: t('GitHub: подключить доску или свериться с ней'), keys: 'G', run: github },
     help: { label: t('Все клавиши'), keys: '?', run: () => setModal({ kind: 'help' }) },
     settings: { label: t('Настройки'), keys: ',', run: () => setModal({ kind: 'settings' }) },
     reload: {
@@ -1456,6 +1553,7 @@ export function App(props: AppProps) {
     '<': 'paneWider',
     '>': 'paneNarrower',
     D: 'remove',
+    G: 'github',
     y: 'copy',
     u: 'undo',
     v: 'mode',
@@ -1475,6 +1573,7 @@ export function App(props: AppProps) {
   /** ⏎ in the list: a node's actions, a session, the node of a journal entry. */
   const enter = () => {
     if (currentGroup) return expandTo(currentGroup.id, !expanded.has(currentGroup.id));
+    if (currentOffer || (current && current.id === hubNode(tree)?.id && !boardOf(tree))) return github();
     if (view === 'sessions') {
       const session = currentSession;
       if (!session) return;
@@ -1998,6 +2097,24 @@ export function App(props: AppProps) {
         );
       case 'help':
         return <HelpDialog width={w} height={bodyHeight} onClose={close} />;
+      case 'github':
+        return (
+          <GithubConnect
+            dir={props.dir}
+            width={w}
+            height={bodyHeight}
+            onLink={(ref) => {
+              close();
+              connectGithub(ref);
+            }}
+            onAgent={githubAgent}
+            onGh={(args) => {
+              close();
+              handOver({ type: 'gh', args });
+            }}
+            onCancel={close}
+          />
+        );
       case 'problems':
         return (
           <TextViewer
@@ -2569,6 +2686,24 @@ export function App(props: AppProps) {
         value: p.assistModel ?? '',
         hint: t('для «разбить на шаги» и критерия — можно дешевле и быстрее'),
       },
+      boardOf(tree)
+        ? {
+            key: 'github',
+            label: t('Доска GitHub'),
+            options: [{ value: 'linked', label: `${boardOf(tree)!.owner}/${boardOf(tree)!.number}` }],
+            value: 'linked',
+            hint: t('G — свериться с доской · колонки — в .tree/tree.md, github.columns'),
+          }
+        : {
+            key: 'github',
+            label: t('Узел GitHub'),
+            options: [
+              { value: 'on', label: t('показывать') },
+              { value: 'off', label: t('скрыть') },
+            ],
+            value: offerShown(tree) ? 'on' : 'off',
+            hint: t('пока доска не подключена, узел в дереве предлагает подключить доску и issues'),
+          },
       {
         key: 'view',
         section: t('ВИД'),
@@ -2605,7 +2740,9 @@ export function App(props: AppProps) {
     else if (key === 'open' && (value === 'pane' || value === 'terminal')) updateSettings({ open: value });
     else if (key === 'sleepAfter') updateSettings({ sleepAfter: Number(value) });
     else if (key === 'maxPanes') updateSettings({ maxPanes: Number(value) });
-    else if (key === 'notes') {
+    else if (key === 'github') {
+      if (value !== 'linked') change(t('узел GitHub'), () => setOffer(tree, on));
+    } else if (key === 'notes') {
       try {
         const dir = notesFolder(value, props.dir);
         updateSettings({ notes: dir });
@@ -2907,6 +3044,8 @@ export function App(props: AppProps) {
                     width={rightWidth}
                     height={bodyHeight}
                   />
+                ) : currentOffer ? (
+                  <GithubOffer />
                 ) : currentGroup ? (
                   <Box flexDirection="column" paddingX={2} paddingY={1}>
                     <Text color={C.ok} bold>
@@ -2935,6 +3074,7 @@ export function App(props: AppProps) {
             tree={tree}
             node={current}
             group={currentGroup}
+            offer={currentOffer}
             width={width}
             full={stripShown === 2}
             live={live}
@@ -2966,6 +3106,7 @@ export function App(props: AppProps) {
               view={view}
               has={Boolean(current)}
               group={Boolean(currentGroup)}
+              offer={currentOffer}
               filter={filter}
               pane={!terminalVisible && current && sleepingRef(current, panes) ? 'sleeping' : undefined}
               active={listKeys}
@@ -2982,12 +3123,27 @@ function SelectionStrip(props: {
   tree: Tree;
   node: TreeNode | undefined;
   group?: TreeNode | undefined;
+  offer?: boolean;
   width: number;
   full: boolean;
   live: Map<string, SessionInfo>;
   frame: number;
 }) {
   const { tree, node } = props;
+  if (props.offer) {
+    return (
+      <Box flexDirection="column" width={props.width} paddingX={1}>
+        <Text color={C.brand} wrap="truncate-end">
+          {`${tree.project.title} › GitHub`}
+        </Text>
+        {props.full ? (
+          <Text color={C.faint} wrap="truncate-end">
+            {t('не подключено · ⏎ — подключить доску · скрыть — в настройках «,»')}
+          </Text>
+        ) : null}
+      </Box>
+    );
+  }
   if (props.group) {
     const path = [tree.project.title, ...pathTo(tree, props.group.parent).map((step) => step.title), props.group.title];
     return (
@@ -3129,6 +3285,7 @@ function Hints(props: {
   view: View;
   has: boolean;
   group: boolean;
+  offer?: boolean;
   filter: string;
   pane?: 'sleeping' | undefined;
   active: boolean;
@@ -3156,36 +3313,43 @@ function Hints(props: {
             [',', t('настройки')],
             ['?', t('клавиши')],
           ]
-        : props.group
+        : props.offer
           ? [
-              ['space', t('раскрыть или свернуть готовые')],
-              [':', t('найти')],
-              ['.', t('скрыть готовое')],
+              ['⏎', t('подключить доску GitHub')],
+              [',', t('настройки — скрыть узел')],
               ['?', t('клавиши')],
+              ['q', t('выход')],
             ]
-          : !props.has
+          : props.group
             ? [
-                ['a', t('добавить')],
+                ['space', t('раскрыть или свернуть готовые')],
                 [':', t('найти')],
-                [',', t('настройки')],
+                ['.', t('скрыть готовое')],
                 ['?', t('клавиши')],
-                ['q', t('выход')],
               ]
-            : [
-                ...pane,
-                ['⏎', t('действия')],
-                ['K J', t('приоритет')],
-                [',', t('настройки')],
-                ['c', 'claude'],
-                ['a', t('добавить')],
-                ['r', t('имя')],
-                ['d', t('готово')],
-                ['w', t('ждёт')],
-                ['S', t('разбить')],
-                ['u', t('отмена')],
-                [':', t('найти')],
-                ['?', t('всё')],
-              ];
+            : !props.has
+              ? [
+                  ['a', t('добавить')],
+                  [':', t('найти')],
+                  [',', t('настройки')],
+                  ['?', t('клавиши')],
+                  ['q', t('выход')],
+                ]
+              : [
+                  ...pane,
+                  ['⏎', t('действия')],
+                  ['K J', t('приоритет')],
+                  [',', t('настройки')],
+                  ['c', 'claude'],
+                  ['a', t('добавить')],
+                  ['r', t('имя')],
+                  ['d', t('готово')],
+                  ['w', t('ждёт')],
+                  ['S', t('разбить')],
+                  ['u', t('отмена')],
+                  [':', t('найти')],
+                  ['?', t('всё')],
+                ];
   const hints: KeyHint[] = keys.map(([key, label]) => ({
     key,
     label,
@@ -3309,4 +3473,30 @@ function copy(text: string): void {
   } catch {
     // No clipboard: the id is on screen anyway.
   }
+}
+
+/** The «GitHub» node of a tree with no board: what connecting one gives. */
+function GithubOffer() {
+  return (
+    <Box flexDirection="column" paddingX={2} paddingY={1}>
+      <Text color={C.brand} bold>
+        GitHub
+      </Text>
+      <Text color={C.faint}>{t('не подключено')}</Text>
+      <Text> </Text>
+      <Text wrap="wrap">
+        {t(
+          'Если задачи проекта лежат на доске GitHub Project, подключи её: карточки станут узлами здесь, колонки — статусами, в обе стороны.',
+        )}
+      </Text>
+      <Text> </Text>
+      <Text wrap="wrap">
+        <Text color={C.brand}>⏎</Text>{' '}
+        {t('подключить: gh → репозиторий → доска (выбрать или создать — самому или агентом)')}
+      </Text>
+      <Text wrap="wrap" color={C.faint}>
+        {t('Issues репозитория без доски — скоро. Не нужно — скрой узел в настройках «,».')}
+      </Text>
+    </Box>
+  );
 }

@@ -7,7 +7,7 @@
  *
  * Everything goes through `gh`: its login and its scopes, no tokens of ours.
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 import { t } from './i18n/i18n.js';
@@ -24,8 +24,11 @@ export type Gh = (args: string[]) => Promise<string>;
 export const gh: Gh = (args) =>
   new Promise((resolve, reject) => {
     execFile('gh', args, { maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) reject(new Error(stderr.trim() || error.message));
-      else resolve(stdout);
+      if (!error) return resolve(stdout);
+      const failure = new Error(stderr.trim() || error.message) as Error & { code?: unknown };
+      // ENOENT: there is no gh at all, not a failed call.
+      failure.code = (error as { code?: unknown }).code;
+      reject(failure);
     });
   });
 
@@ -164,10 +167,198 @@ export async function linkBoard(tree: Tree, ref: string, parent?: string, run: G
     columns: guessColumns(field.options.map((option) => option.name)),
     options,
   };
-  if (parent && parent !== ROOT) board.parent = parent;
+  board.parent = parent && parent !== ROOT ? parent : githubNode(tree, board).id;
   tree.project.extra.github = boardData(board);
   writeProject(tree.project);
   return board;
+}
+
+/** The «GitHub» node at the top that holds what comes from GitHub: the one there, or a new one. */
+function githubNode(tree: Tree, board: Board): TreeNode {
+  const found = hubNode(tree);
+  if (found) return found;
+  const node = ensureHub(tree);
+  node.body = t('Карточки доски {board} — в узлах внутри. Свериться с доской: treeyard github sync.', {
+    board: `${board.owner}/${board.number}`,
+  });
+  writeNode(tree.project.dir, node);
+  return node;
+}
+
+/** The node that holds what comes from GitHub, once there is one: `github: hub`. */
+export function hubNode(tree: Tree): TreeNode | undefined {
+  return [...tree.nodes.values()].find((node) => node.extra.github === 'hub');
+}
+
+export function ensureHub(tree: Tree): TreeNode {
+  const found = hubNode(tree);
+  if (found) return found;
+  const node = addNode(tree, { title: GITHUB_TITLE });
+  node.extra.github = 'hub';
+  writeNode(tree.project.dir, node, false);
+  return node;
+}
+
+export const GITHUB_TITLE = 'GitHub';
+
+/**
+ * No board yet, and nobody said no: the tree shows a «GitHub» node that offers
+ * to connect one. `github: off` in tree.md hides it.
+ */
+export function offerShown(tree: Tree): boolean {
+  return !boardOf(tree) && !hubNode(tree) && tree.project.extra.github !== 'off' && tree.project.extra.github !== false;
+}
+
+// ── Connecting: gh, then a repository, then a board ─────────────────────────
+
+export interface GhState {
+  installed: boolean;
+  /** Logged in as. */
+  user?: string;
+  /** Classic token scopes; undefined when gh does not say (a fine-grained token). */
+  scopes?: string[];
+}
+
+export async function ghState(run: Gh = gh): Promise<GhState> {
+  let out: string;
+  try {
+    // Headers and body: the login, and the scopes in X-Oauth-Scopes.
+    out = await run(['api', '-i', 'user']);
+  } catch (error) {
+    return { installed: (error as { code?: unknown }).code !== 'ENOENT' };
+  }
+  const state: GhState = { installed: true };
+  const user = /"login"\s*:\s*"([^"]+)"/.exec(out)?.[1];
+  if (user) state.user = user;
+  const scopes = /^x-oauth-scopes:[ \t]*(.*)$/im.exec(out)?.[1];
+  if (scopes !== undefined)
+    state.scopes = scopes
+      .split(',')
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+  return state;
+}
+
+/** gh is there, logged in, and may read and move cards on boards. */
+export function ghReady(state: GhState): boolean {
+  return Boolean(state.installed && state.user && (!state.scopes || state.scopes.includes('project')));
+}
+
+export interface Repo {
+  owner: string;
+  name: string;
+}
+
+/** `git@github.com:o/r.git`, `https://github.com/o/r` → o/r. */
+export function parseRepoUrl(url: string): Repo | undefined {
+  const match = /github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(url.trim());
+  return match ? { owner: match[1]!, name: match[2]! } : undefined;
+}
+
+function git(dir: string, args: string[]): { ok: boolean; out: string; err: string } {
+  const got = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+  return { ok: got.status === 0, out: got.stdout ?? '', err: (got.stderr ?? '').trim() };
+}
+
+/** The project's GitHub repository: origin first, then any remote on github.com. */
+export function repoOf(dir: string): Repo | undefined {
+  const remotes = git(dir, ['remote', '-v']).out.split('\n');
+  const urls = remotes.map((line) => line.split(/\s+/)).filter(([, url]) => url);
+  const origin = urls.find(([name]) => name === 'origin');
+  const ordered = origin ? [origin, ...urls] : urls;
+  for (const [, url] of ordered) {
+    const repo = parseRepoUrl(url!);
+    if (repo) return repo;
+  }
+  return undefined;
+}
+
+export async function listRepos(run: Gh = gh): Promise<{ nameWithOwner: string; isPrivate: boolean }[]> {
+  return JSON.parse(
+    await run(['repo', 'list', '--limit', '200', '--json', 'nameWithOwner,isPrivate', '--no-archived']),
+  ) as { nameWithOwner: string; isPrivate: boolean }[];
+}
+
+/** A git repository here, if there is none yet, and a remote to `owner/name`: origin, or `github` when origin is taken. */
+export function connectRepo(dir: string, nameWithOwner: string): Repo {
+  const repo = parseRepoUrl(`github.com/${nameWithOwner}`);
+  if (!repo) throw new Error(t('репозиторий: owner/имя — «{repo}»', { repo: nameWithOwner }));
+  if (!git(dir, ['rev-parse', '--git-dir']).ok) {
+    const init = git(dir, ['init']);
+    if (!init.ok) throw new Error(init.err);
+  }
+  const taken = git(dir, ['remote']).out.split('\n').includes('origin');
+  const added = git(dir, [
+    'remote',
+    'add',
+    taken ? 'github' : 'origin',
+    `https://github.com/${repo.owner}/${repo.name}.git`,
+  ]);
+  if (!added.ok) throw new Error(added.err);
+  return repo;
+}
+
+/** A new repository on GitHub for this folder, private unless asked; nothing is pushed. */
+export async function createRepo(dir: string, name: string, isPrivate = true, run: Gh = gh): Promise<Repo> {
+  if (!git(dir, ['rev-parse', '--git-dir']).ok) {
+    const init = git(dir, ['init']);
+    if (!init.ok) throw new Error(init.err);
+  }
+  const taken = git(dir, ['remote']).out.split('\n').includes('origin');
+  const out = await run([
+    'repo',
+    'create',
+    name,
+    isPrivate ? '--private' : '--public',
+    '--source',
+    dir,
+    '--remote',
+    taken ? 'github' : 'origin',
+  ]);
+  const repo =
+    parseRepoUrl(
+      out
+        .trim()
+        .split('\n')
+        .find((line) => line.includes('github.com')) ?? '',
+    ) ?? repoOf(dir);
+  if (!repo) throw new Error(t('репозиторий создан, но remote не найден — git remote -v'));
+  return repo;
+}
+
+export interface BoardInfo {
+  number: number;
+  title: string;
+  owner: string;
+}
+
+export async function listBoards(owner: string, run: Gh = gh): Promise<BoardInfo[]> {
+  const raw = JSON.parse(await run(['project', 'list', '--owner', owner, '--format', 'json', '--limit', '100'])) as {
+    projects: { number: number; title: string; closed?: boolean }[];
+  };
+  return raw.projects
+    .filter((project) => !project.closed)
+    .map((project) => ({ number: project.number, title: project.title, owner }));
+}
+
+/** A new board, linked to the repository so it shows on the repo's Projects tab. */
+export async function createBoard(repo: Repo, title: string, run: Gh = gh): Promise<BoardInfo> {
+  const made = JSON.parse(
+    await run(['project', 'create', '--owner', repo.owner, '--title', title, '--format', 'json']),
+  ) as { number: number };
+  try {
+    await run(['project', 'link', String(made.number), '--owner', repo.owner, '--repo', `${repo.owner}/${repo.name}`]);
+  } catch {
+    // Linking only shows the board on the repo's tab; the board works without it.
+  }
+  return { number: made.number, title, owner: repo.owner };
+}
+
+export function setOffer(tree: Tree, shown: boolean): void {
+  if (boardOf(tree)) return;
+  if (shown) delete tree.project.extra.github;
+  else tree.project.extra.github = 'off';
+  writeProject(tree.project);
 }
 
 export async function boardItems(board: Board, run: Gh = gh): Promise<BoardItem[]> {
