@@ -248,7 +248,7 @@ describe('pictures in Apple Terminal', () => {
     };
     const apple = render(<ImagesDialog {...props} external />);
     await pause();
-    expect(apple.lastFrame()).toContain('открыть в полном размере');
+    expect(apple.lastFrame()).toContain('⏎ o открыть в полном размере');
     apple.unmount();
     const other = render(<ImagesDialog {...props} external={false} />);
     await pause();

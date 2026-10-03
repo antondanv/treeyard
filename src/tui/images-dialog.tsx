@@ -194,10 +194,11 @@ export function ImagesDialog(props: {
             { key: 'v', label: t('из буфера') },
             ...(current
               ? [
+                  // In Apple Terminal ⏎ does what o does: both are shown, so o is not a secret there.
                   external
-                    ? { key: '⏎', label: t('открыть в полном размере'), press: '\r' }
+                    ? { key: '⏎ o', label: t('открыть в полном размере'), press: 'o' }
                     : { key: '⏎', label: mode === 'full' ? t('к списку') : t('на весь экран'), press: '\r' },
-                  ...(external ? [] : [{ key: 'o', label: t('в полном размере') }]),
+                  ...(external ? [] : [{ key: 'o', label: t('в полном размере'), press: 'o' }]),
                   { key: '←→', label: t('листать') },
                   { key: 'n', label: t('подпись') },
                   { key: 'D', label: t('удалить') },
