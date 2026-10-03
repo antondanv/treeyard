@@ -1,5 +1,11 @@
 /** English for every `t()` key, in the order the keys appear in the code. `scripts/i18n-keys.mjs` lists them. */
 export const EN: Record<string, string> = {
+  Описание: 'Description',
+  'подробности узла': 'node details',
+  'новая строка': 'new line',
+  курсор: 'cursor',
+  'Раздел «Журнал» заполняется отдельно — убери его из описания':
+    'The Journal section is managed separately — remove its heading from the description',
   'Усыпить выбранную сессию': 'Put the selected session to sleep',
   'усыпляю сессию': 'putting the session to sleep',
   'сессия спит · ⏎ — продолжить': 'the session sleeps · ⏎ to continue',

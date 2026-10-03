@@ -21,6 +21,8 @@ class FakeOut extends EventEmitter {
     super();
   }
   write = (text: string) => {
+    // Paste mode changes the terminal, not the rendered frame.
+    if (text === '\u001b[?2004h' || text === '\u001b[?2004l') return true;
     this.frame = text;
     return true;
   };

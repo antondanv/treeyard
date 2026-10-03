@@ -5,7 +5,7 @@
  */
 
 import { labels, t } from '../i18n/i18n.js';
-import { appendJournal } from './journal.js';
+import { appendJournal, replaceDescription } from './journal.js';
 import { writeOverview } from './overview.js';
 import { removeNode, writeNode } from './store.js';
 import { nowIso, stamp, today } from './time.js';
@@ -110,10 +110,12 @@ export interface NodePatch {
   doneWhen?: string | null;
   check?: string | null;
   body?: string;
+  description?: string;
 }
 
 export function updateNode(tree: Tree, id: string, patch: NodePatch): TreeNode {
   const node = need(tree, id);
+  const body = patch.description === undefined ? patch.body : replaceDescription(node.body, patch.description);
   if (patch.title?.trim()) node.title = patch.title.trim();
   if (patch.who !== undefined) {
     if (patch.who) node.who = patch.who;
@@ -127,7 +129,7 @@ export function updateNode(tree: Tree, id: string, patch: NodePatch): TreeNode {
     if (patch.check?.trim()) node.check = patch.check.trim();
     else delete node.check;
   }
-  if (patch.body !== undefined) node.body = patch.body;
+  if (body !== undefined) node.body = body;
   save(tree, node);
   return node;
 }

@@ -48,6 +48,7 @@ import {
 } from '../agents/panes.js';
 import { labels, plural, t } from '../i18n/i18n.js';
 import { activity, type Event } from '../model/activity.js';
+import { description } from '../model/journal.js';
 import {
   addNode,
   attachSession,
@@ -1137,18 +1138,24 @@ export function App(props: AppProps) {
     if (!modal) return;
     if (modal.kind === 'add') addFromForm(values, modal.parent, modal.after);
     else if (modal.kind === 'edit') {
-      change(
+      const saved = change(
         t('изменение «{title}»', {
           title: values.title,
         }),
-        () =>
-          updateNode(tree, modal.node, {
+        () => {
+          // A journal entry may arrive while the form is open, before the next poll.
+          const latest = loadTree(props.dir);
+          updateNode(latest, modal.node, {
             title: values.title,
             who: values.who || null,
             doneWhen: values.doneWhen,
             check: values.check,
-          }),
+            description: values.description,
+          });
+          treeRef.current = latest;
+        },
       );
+      if (!saved) return;
     }
     setModal(undefined);
   };
@@ -1982,12 +1989,14 @@ export function App(props: AppProps) {
             mode="edit"
             initial={{
               title: modalNode.title,
+              description: description(modalNode.body),
               doneWhen: modal.doneWhen ?? modalNode.doneWhen ?? '',
               check: modal.check ?? modalNode.check ?? '',
               who: modalNode.who ?? '',
               status: modalNode.status,
             }}
             width={w}
+            height={bodyHeight}
             onSubmit={submitForm}
             onCancel={close}
           />

@@ -5,6 +5,7 @@
 import type { Catalog, SessionInfo } from '@antondanv/brainyard';
 import { Box, Text, useInput } from 'ink';
 import { useRef, useState } from 'react';
+import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 
 import { START_HINT, START_LABEL } from '../agents/context.js';
@@ -28,6 +29,7 @@ import {
 import { catalogHint, effortOptions, effortsFor, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import {
   Choice,
+  editRows,
   Field,
   Frame,
   type KeyHint,
@@ -38,6 +40,7 @@ import {
   TextField,
   useLatest,
 } from './components/controls.js';
+import { MultilineField } from './components/multiline.js';
 import { shortcutKey } from './keys.js';
 import { Clickable } from './mouse.js';
 import { liveLabel, paneState } from './rows.js';
@@ -47,6 +50,7 @@ import { C, STATUS_COLOR } from './theme.js';
 
 export interface NodeValues {
   title: string;
+  description?: string;
   doneWhen: string;
   check: string;
   who: Who | '';
@@ -59,26 +63,64 @@ export function NodeForm(props: {
   place?: string;
   initial: NodeValues;
   width: number;
+  height?: number;
   onSubmit: (values: NodeValues) => void;
   onCancel: () => void;
 }) {
-  const [values, setValues] = useState<NodeValues>(props.initial);
-  const fields = props.mode === 'add' ? 5 : 4;
-  const [focus, setFocus] = useState(0);
+  const [values, setValues, latest] = useLatest<NodeValues>(props.initial);
+  const fields = 5;
+  const [focus, setFocus, focused] = useLatest(0);
+  const editingDescription = props.mode === 'edit' && focus === 4;
   const set = <K extends keyof NodeValues>(key: K, value: NodeValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
-  useInput((_input, key) => {
+  useInput((input, key) => {
     if (key.escape) return props.onCancel();
-    if (key.return) {
-      if (!values.title.trim()) return setFocus(0);
-      return props.onSubmit(values);
+    if ((key.ctrl && shortcutKey(input) === 's') || (key.return && !(props.mode === 'edit' && focused.current === 4))) {
+      if (!latest.current.title.trim()) return setFocus(0);
+      return props.onSubmit(latest.current);
     }
     if (key.tab && key.shift) return setFocus((f) => (f - 1 + fields) % fields);
-    if (key.tab || key.downArrow) return setFocus((f) => (f + 1) % fields);
+    if (key.tab) return setFocus((f) => (f + 1) % fields);
+    if (props.mode === 'edit' && focused.current === 4) return;
+    if (key.downArrow) return setFocus((f) => (f + 1) % fields);
     if (key.upArrow) return setFocus((f) => (f - 1 + fields) % fields);
   });
   const width = props.width - 4;
   const inputWidth = Math.max(10, width - 20);
+  const footer: KeyHint[] =
+    props.mode === 'add'
+      ? [
+          { key: '⏎', label: t('сохранить') },
+          { key: 'tab/↓', label: t('дальше'), press: '\t' },
+          { key: '←→', label: t('выбор') },
+          { key: 'esc', label: t('отмена') },
+          { label: t('описание — E в редакторе') },
+        ]
+      : [
+          { key: '⌃S', label: t('сохранить'), press: '\u0013' },
+          { key: 'esc', label: t('отмена') },
+          { key: 'tab', label: t('дальше') },
+          { key: '⏎', label: editingDescription ? t('новая строка') : t('сохранить') },
+          { key: editingDescription ? '↑↓' : '←→', label: editingDescription ? t('курсор') : t('выбор') },
+        ];
+  let footerRows = 1;
+  let used = 0;
+  for (const [index, hint] of footer.entries()) {
+    const size = stringWidth(
+      `${index ? ' · ' : ''}${hint.key ?? ''}${hint.key && hint.label ? ' ' : ''}${hint.label ?? ''}`,
+    );
+    if (used && used + size > width) {
+      footerRows += 1;
+      used = 0;
+    }
+    used += size;
+  }
+  const limits = props.mode === 'add' ? [5, 5, 3] : [0, 1, 2].map((index) => (focus === index ? 3 : 1));
+  const extraRows = [values.title, values.doneWhen, values.check].reduce(
+    (sum, value, index) => sum + Math.min(limits[index]!, editRows(value, value.length, inputWidth).length) - 1,
+    0,
+  );
+  const descriptionLines = Math.max(1, Math.min(6, (props.height ?? 30) - 10 - footerRows - extraRows));
   return (
     <Frame
       title={
@@ -89,13 +131,7 @@ export function NodeForm(props: {
           : t('Изменить узел')
       }
       width={props.width}
-      footer={[
-        { key: '⏎', label: t('сохранить') },
-        { key: 'tab/↓', label: t('дальше'), press: '\t' },
-        { key: '←→', label: t('выбор') },
-        { key: 'esc', label: t('отмена') },
-        { label: t('описание — E в редакторе') },
-      ]}
+      footer={footer}
     >
       <Field label={t('Название')} active={focus === 0}>
         <TextField
@@ -104,7 +140,7 @@ export function NodeForm(props: {
           active={focus === 0}
           width={inputWidth}
           placeholder={t('что сделать')}
-          lines={5}
+          lines={limits[0]}
         />
       </Field>
       <Field label={t('Готово, когда')} active={focus === 1}>
@@ -114,7 +150,7 @@ export function NodeForm(props: {
           active={focus === 1}
           width={inputWidth}
           placeholder={t('что можно увидеть или запустить')}
-          lines={5}
+          lines={limits[1]}
         />
       </Field>
       <Field label={t('Проверка')} active={focus === 2}>
@@ -124,7 +160,7 @@ export function NodeForm(props: {
           active={focus === 2}
           width={inputWidth}
           placeholder={t('команда, например npm test')}
-          lines={3}
+          lines={limits[2]}
         />
       </Field>
       <Field label={t('Делает')} active={focus === 3}>
@@ -134,10 +170,23 @@ export function NodeForm(props: {
             ...WHO.filter((who) => who !== 'any').map((who) => ({ value: who, label: WHO_LABEL[who] })),
           ]}
           value={values.who}
+          width={props.mode === 'edit' ? inputWidth : undefined}
           active={focus === 3}
           onChange={(v) => set('who', v)}
         />
       </Field>
+      {props.mode === 'edit' ? (
+        <Field label={t('Описание')} active={focus === 4}>
+          <MultilineField
+            value={values.description ?? ''}
+            onChange={(v) => set('description', v)}
+            active={focus === 4}
+            width={inputWidth}
+            lines={descriptionLines}
+            placeholder={t('подробности узла')}
+          />
+        </Field>
+      ) : null}
       {props.mode === 'add' ? (
         <Field label={t('Статус')} active={focus === 4}>
           <Choice<Status>
