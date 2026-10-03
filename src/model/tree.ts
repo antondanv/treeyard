@@ -2,6 +2,7 @@
  * Questions about the tree that do not change it: what is under a node, how
  * far along it is, what can be worked on right now and what is waiting.
  */
+import { plural, t } from '../i18n/i18n.js';
 import { needsMet } from './links.js';
 import { ROOT, STATUSES, type Status, type Tree, type TreeNode } from './types.js';
 
@@ -279,4 +280,44 @@ export function sessionOwners(tree: Tree): Map<string, string> {
   const owners = new Map<string, string>();
   for (const node of tree.nodes.values()) for (const ref of node.sessions) owners.set(ref.id, node.id);
   return owners;
+}
+
+/** How far back «мимо дерева» is counted: milestone 1 asks for two weeks of sessions from nodes. */
+export const OFF_TREE_DAYS = 14;
+
+interface SessionLike {
+  id: string;
+  title?: string;
+  startedAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * A session of this folder that no node holds: opened past the tree.
+ * Pane placeholders (`pane:…`, id not known yet) and the planting session are treeyard's own.
+ */
+export function offTree(session: SessionLike, owners: ReadonlyMap<string, string>): boolean {
+  if (owners.has(session.id) || session.id.startsWith('pane:')) return false;
+  return !/ · (посадка дерева|planting the tree)$/.test(session.title ?? '');
+}
+
+/** Sessions opened in the last `days`, and how many of them past the tree. */
+export function offTreeTally(
+  sessions: readonly SessionLike[],
+  owners: ReadonlyMap<string, string>,
+  now = Date.now(),
+  days = OFF_TREE_DAYS,
+): { total: number; off: number } {
+  const since = now - days * 86_400_000;
+  const recent = sessions.filter((s) => (Date.parse(s.startedAt ?? s.updatedAt ?? '') || 0) >= since);
+  return { total: recent.length, off: recent.filter((s) => offTree(s, owners)).length };
+}
+
+/** «за 14 дней: 12 сессий, мимо дерева — 3» — the milestone-1 check in one line. */
+export function offTreeLine(tally: { total: number; off: number }): string {
+  return t('за {days} дней: {total}, мимо дерева — {off}', {
+    days: OFF_TREE_DAYS,
+    total: `${tally.total} ${plural(tally.total, ['сессия', 'сессии', 'сессий'], ['session', 'sessions'])}`,
+    off: tally.off,
+  });
 }

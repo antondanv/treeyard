@@ -283,7 +283,7 @@ export function SessionDetails(props: {
           {props.owner.title}
         </Text>
       ) : (
-        <Text color={C.faint} wrap="truncate-end">
+        <Text color={C.warn} wrap="truncate-end">
           {t('не привязана — l, чтобы привязать к узлу')}
         </Text>
       )}

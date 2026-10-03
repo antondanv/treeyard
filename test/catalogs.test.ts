@@ -213,10 +213,10 @@ describe('the sessions view groups sessions by CLI', () => {
     const frame = await snapshot(tree.project.dir, { columns: 110, rows: 30, keys: ['5'] });
     const at = (text: string) => frame.indexOf(text);
     expect(at('Claude Code')).toBeGreaterThan(-1);
-    expect(at('Claude work')).toBeGreaterThan(at('Claude Code'));
-    expect(at('Codex  1')).toBeGreaterThan(at('Claude work'));
-    expect(at('Codex work')).toBeGreaterThan(at('Codex  1'));
-    expect(at('Antigravity  0')).toBeGreaterThan(at('Codex work'));
+    expect(at('Claude work · ')).toBeGreaterThan(at('Claude Code'));
+    expect(at('Codex  1')).toBeGreaterThan(at('Claude work · '));
+    expect(at('Codex work · ')).toBeGreaterThan(at('Codex  1'));
+    expect(at('Antigravity  0')).toBeGreaterThan(at('Codex work · '));
     expect(frame).toContain('нет сессий в этой папке');
     const jumped = await snapshot(tree.project.dir, { columns: 110, rows: 30, keys: ['5', '\u001b[C'] });
     expect(jumped).toMatch(/❯.*Codex work/);

@@ -79,6 +79,9 @@ import {
   childrenOf,
   descendants,
   ideaNodes,
+  offTree,
+  offTreeLine,
+  offTreeTally,
   parents,
   pathTo,
   progress,
@@ -1740,79 +1743,90 @@ export function App(props: AppProps) {
       if (sessionList.length === 0) return <Text color={C.faint}>{t(' в этой папке ещё не было сессий')}</Text>;
       const lines = sessionLines(sessionList);
       const at = lines.findIndex((line) => line.kind === 'row' && line.index === sessionIndex);
-      return windowed(lines, Math.max(0, at), listHeight).map(({ item: line }) => {
-        if (line.kind === 'gap') return <Text key={`gap:${line.brain}`}> </Text>;
-        if (line.kind === 'header') {
-          const group = sessionList.filter((session) => session.brain === line.brain);
-          const inPanes = group.map((session) => paneFor(session, panes)).filter((pane): pane is Pane => Boolean(pane));
-          const memory = inPanes.reduce((sum, pane) => sum + (pane.memory ?? 0), 0);
-          const busy = group.filter((session) => session.live?.status === 'busy').length;
-          const waiting = group.filter((session) => session.live?.status === 'waiting').length;
-          const mine = currentSession?.brain === line.brain;
-          const first = sessionList.findIndex((session) => session.brain === line.brain);
-          return (
-            <Clickable
-              key={`head:${line.brain}`}
-              width={leftWidth}
-              active={clicks && first >= 0}
-              onClick={(click) => clickRow(first, click)}
-            >
-              <Text wrap="truncate-end">
-                <Text color={mine ? C.brand : C.dim}>{mine ? '▌' : '▏'}</Text>
-                <Text bold color={mine ? C.brand : undefined}>
-                  {BRAIN_LABEL[line.brain]}
+      const tally = offTreeTally(sessionList, owners);
+      const summary = (
+        <Text key="off-tree" wrap="truncate-end" color={tally.off ? C.warn : C.faint}>
+          {` ${offTreeLine(tally)}`}
+        </Text>
+      );
+      return [summary].concat(
+        windowed(lines, Math.max(0, at), Math.max(1, listHeight - 1)).map(({ item: line }) => {
+          if (line.kind === 'gap') return <Text key={`gap:${line.brain}`}> </Text>;
+          if (line.kind === 'header') {
+            const group = sessionList.filter((session) => session.brain === line.brain);
+            const inPanes = group
+              .map((session) => paneFor(session, panes))
+              .filter((pane): pane is Pane => Boolean(pane));
+            const memory = inPanes.reduce((sum, pane) => sum + (pane.memory ?? 0), 0);
+            const busy = group.filter((session) => session.live?.status === 'busy').length;
+            const waiting = group.filter((session) => session.live?.status === 'waiting').length;
+            const mine = currentSession?.brain === line.brain;
+            const first = sessionList.findIndex((session) => session.brain === line.brain);
+            return (
+              <Clickable
+                key={`head:${line.brain}`}
+                width={leftWidth}
+                active={clicks && first >= 0}
+                onClick={(click) => clickRow(first, click)}
+              >
+                <Text wrap="truncate-end">
+                  <Text color={mine ? C.brand : C.dim}>{mine ? '▌' : '▏'}</Text>
+                  <Text bold color={mine ? C.brand : undefined}>
+                    {BRAIN_LABEL[line.brain]}
+                  </Text>
+                  <Text color={C.faint}>{`  ${group.length}`}</Text>
+                  {inPanes.length ? (
+                    <Text color={C.ok}>
+                      {t('  ▣ {n} в панели', {
+                        n: inPanes.length,
+                      })}
+                      {memory ? ` · ${formatMemory(memory)}` : ''}
+                    </Text>
+                  ) : null}
+                  {busy ? (
+                    <Text color={C.agent}>
+                      {t('  {n} работает', {
+                        n: busy,
+                      })}
+                    </Text>
+                  ) : null}
+                  {waiting ? (
+                    <Text color={C.you}>
+                      {t('  ? {n} ждёт тебя', {
+                        n: waiting,
+                      })}
+                    </Text>
+                  ) : null}
                 </Text>
-                <Text color={C.faint}>{`  ${group.length}`}</Text>
-                {inPanes.length ? (
-                  <Text color={C.ok}>
-                    {t('  ▣ {n} в панели', {
-                      n: inPanes.length,
-                    })}
-                    {memory ? ` · ${formatMemory(memory)}` : ''}
-                  </Text>
-                ) : null}
-                {busy ? (
-                  <Text color={C.agent}>
-                    {t('  {n} работает', {
-                      n: busy,
-                    })}
-                  </Text>
-                ) : null}
-                {waiting ? (
-                  <Text color={C.you}>
-                    {t('  ? {n} ждёт тебя', {
-                      n: waiting,
-                    })}
-                  </Text>
-                ) : null}
+              </Clickable>
+            );
+          }
+          if (line.kind === 'empty')
+            return (
+              <Text key={`empty:${line.brain}`} color={C.faint}>
+                {t('   нет сессий в этой папке')}
               </Text>
+            );
+          const item = sessionList[line.index]!;
+          const index = line.index;
+          return (
+            <Clickable key={keyOf(item)} active={clicks} onClick={(click) => clickRow(index, click)}>
+              <SessionRow
+                session={item}
+                selected={line.index === sessionIndex}
+                width={leftWidth}
+                frame={frame}
+                grouped
+                project={tree.project.title}
+                pane={paneFor(item, panes)}
+                sleeping={sessionSleeping(item)}
+                offTree={offTree(item, owners)}
+                {...(owners.get(item.id) ? { owner: tree.nodes.get(owners.get(item.id)!)?.title ?? '' } : {})}
+              />
             </Clickable>
           );
-        }
-        if (line.kind === 'empty')
-          return (
-            <Text key={`empty:${line.brain}`} color={C.faint}>
-              {t('   нет сессий в этой папке')}
-            </Text>
-          );
-        const item = sessionList[line.index]!;
-        const index = line.index;
-        return (
-          <Clickable key={keyOf(item)} active={clicks} onClick={(click) => clickRow(index, click)}>
-            <SessionRow
-              session={item}
-              selected={line.index === sessionIndex}
-              width={leftWidth}
-              frame={frame}
-              grouped
-              project={tree.project.title}
-              pane={paneFor(item, panes)}
-              sleeping={sessionSleeping(item)}
-              {...(owners.get(item.id) ? { owner: tree.nodes.get(owners.get(item.id)!)?.title ?? '' } : {})}
-            />
-          </Clickable>
-        );
-      });
+        }),
+      );
     }
     if (view === 'journal') return journal(events, cursor, leftWidth, listHeight, clicks, clickRow);
     if (view === 'tree') {

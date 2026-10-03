@@ -24,7 +24,14 @@ import { addNode, logToNode, moveNode, STATUS_LABEL, setStatus, updateNode } fro
 import { writeOverview } from '../model/overview.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
 import { ago } from '../model/time.js';
-import { isStatusOrder, STATUS_ORDER_NAMES, type StatusOrderName } from '../model/tree.js';
+import {
+  isStatusOrder,
+  offTree,
+  offTreeLine,
+  offTreeTally,
+  STATUS_ORDER_NAMES,
+  type StatusOrderName,
+} from '../model/tree.js';
 import {
   type BrainId,
   ROOT,
@@ -810,7 +817,7 @@ async function sessionsCommand(args: string[]): Promise<number> {
   if (values.json) {
     process.stdout.write(
       `${JSON.stringify(
-        list.map((s) => ({ ...s, node: owners.get(s.id) })),
+        list.map((s) => ({ ...s, node: owners.get(s.id), offTree: offTree(s, owners) })),
         null,
         2,
       )}\n`,
@@ -820,11 +827,17 @@ async function sessionsCommand(args: string[]): Promise<number> {
   for (const session of list) {
     const owner = owners.get(session.id);
     const live = session.live ? out.c('#c6a0ff', ` ● ${session.live.status}`) : '';
+    const where = owner
+      ? out.dim(`  → ${tree.nodes.get(owner)?.title}`)
+      : offTree(session, owners)
+        ? out.c('#ffcf70', `  ${t('без узла')}`)
+        : '';
     process.stdout.write(
-      `${session.brain.padEnd(11)} ${out.dim(session.id.slice(0, 8))}  ${(ago(session.updatedAt ?? session.startedAt) || '').padEnd(10)} ${session.title ?? out.dim(t('без названия'))}${live}${owner ? out.dim(`  → ${tree.nodes.get(owner)?.title}`) : ''}\n`,
+      `${session.brain.padEnd(11)} ${out.dim(session.id.slice(0, 8))}  ${(ago(session.updatedAt ?? session.startedAt) || '').padEnd(10)} ${session.title ?? out.dim(t('без названия'))}${live}${where}\n`,
     );
   }
   if (list.length === 0) process.stdout.write(`${out.dim(t('сессий в этой папке ещё не было'))}\n`);
+  else process.stdout.write(`\n${offTreeLine(offTreeTally(list, owners))}\n`);
   return 0;
 }
 

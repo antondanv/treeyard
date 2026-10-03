@@ -281,6 +281,8 @@ export function SessionRow(props: {
   width: number;
   frame: number;
   owner?: string;
+  /** No node holds it: opened past the tree. */
+  offTree?: boolean;
   pane?: Pane;
   sleeping?: boolean;
   /** Under its CLI's heading: no brain column. */
@@ -329,6 +331,12 @@ export function SessionRow(props: {
           {owner ? <Text color={C.faint}> · {owner}</Text> : null}
         </Text>
       </Box>
+      {/* Outside the title so a long one never truncates the mark away. */}
+      {props.offTree ? (
+        <Box flexShrink={0}>
+          <Text color={C.warn}>{t(' · без узла')}</Text>
+        </Box>
+      ) : null}
       <Box width={12} flexShrink={0} justifyContent="flex-end">
         <Text color={props.pane ? C.dim : C.faint} wrap="truncate-end">
           {right}

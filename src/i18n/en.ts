@@ -765,4 +765,7 @@ export const EN: Record<string, string> = {
   'НУЖЕН ДЛЯ': 'NEEDED FOR',
   'ждёт: ': 'waits for: ',
   'нужен для: ': 'needed for: ',
+  'без узла': 'no node',
+  ' · без узла': ' · no node',
+  'за {days} дней: {total}, мимо дерева — {off}': 'last {days} days: {total}, past the tree — {off}',
 };
