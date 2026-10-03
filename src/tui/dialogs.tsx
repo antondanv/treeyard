@@ -948,47 +948,90 @@ const help = (): [string, [string, string][]][] => [
   ],
 ];
 
+type HelpLine = { kind: 'title'; text: string } | { kind: 'row'; keys: string; what: string } | { kind: 'gap' };
+
+const helpLines = (sections: ReturnType<typeof help>): HelpLine[] =>
+  sections.flatMap(([title, rows], index): HelpLine[] => [
+    ...(index > 0 ? [{ kind: 'gap' } as const] : []),
+    { kind: 'title', text: title },
+    ...rows.map(([keys, what]) => ({ kind: 'row', keys, what }) as const),
+  ]);
+
+/**
+ * All keys, in one or two columns. Taller than the body on a small screen
+ * (130×36 already), so the columns scroll together instead of running over
+ * the footer.
+ */
 export function HelpDialog(props: { width: number; height: number; onClose: () => void }) {
-  useInput((input, key) => {
-    input = shortcutKey(input);
-    if (key.escape || key.return || input === '?' || input === 'q') props.onClose();
-  });
   const twoColumns = props.width >= 96;
   const columnWidth = twoColumns ? Math.floor((props.width - 6) / 2) : props.width - 4;
-  const section = ([title, rows]: [string, [string, string][]]) => (
-    <Box key={title} flexDirection="column" width={columnWidth} marginBottom={1}>
-      <Text color={C.brand} bold>
-        {title}
-      </Text>
-      {rows.map(([keys, what]) => (
-        <Box key={keys}>
-          <Box width={11} flexShrink={0}>
-            <Text color={C.accent}>{keys}</Text>
-          </Box>
-          <Text wrap="truncate-end">{what}</Text>
+  const sections = help();
+  const pick = (...at: number[]) => helpLines(at.map((index) => sections[index]!));
+  // Split by height, not by order: the longest column decides how much scrolls.
+  const columns = twoColumns ? [pick(0, 1, 4), pick(3, 2)] : [helpLines(sections)];
+  const total = Math.max(...columns.map((column) => column.length));
+  const footer = (scrolls: boolean, shown: number): KeyHint[] => [
+    { key: 'esc', label: t('закрыть') },
+    ...(scrolls
+      ? [{ key: '↑↓', label: t('листать') }, { key: 'PgUp PgDn', label: t('страница') }, { label: `${shown}/${total}` }]
+      : []),
+    { label: t('дерево — это md-файлы в .tree/, правь их чем угодно') },
+  ];
+  // Frame: border 2, title + gap 2, gap above the footer 1 — then the footer, which may wrap.
+  const footerLines = (hints: KeyHint[]) =>
+    Math.ceil(
+      stringWidth(hints.map((hint) => [hint.key, hint.label].filter(Boolean).join(' ')).join(' · ')) /
+        (props.width - 4),
+    );
+  const fits = Math.max(5, props.height - 5 - footerLines(footer(false, 0)));
+  const scrolls = total > fits;
+  const rows = scrolls ? Math.max(5, props.height - 5 - footerLines(footer(true, total))) : total;
+  const max = Math.max(0, total - rows);
+  const [top, setTop] = useState(0);
+  const at = Math.min(top, max);
+  useInput((input, key) => {
+    input = shortcutKey(input);
+    if (key.escape || key.return || input === '?' || input === 'q') return props.onClose();
+    if (key.downArrow || input === 'j') setTop(Math.min(max, at + 1));
+    if (key.upArrow || input === 'k') setTop(Math.max(0, at - 1));
+    if (key.pageDown || input === ' ') setTop(Math.min(max, at + rows));
+    if (key.pageUp) setTop(Math.max(0, at - rows));
+    if (key.home) setTop(0);
+    if (key.end) setTop(max);
+  });
+  const line = (item: HelpLine, index: number) => {
+    const id = `${at + index}`;
+    if (item.kind === 'gap') return <Text key={id}> </Text>;
+    if (item.kind === 'title')
+      return (
+        <Text key={id} color={C.brand} bold>
+          {item.text}
+        </Text>
+      );
+    return (
+      <Box key={id}>
+        <Box width={11} flexShrink={0}>
+          <Text color={C.accent}>{item.keys}</Text>
         </Box>
-      ))}
-    </Box>
-  );
+        <Text wrap="truncate-end">{item.what}</Text>
+      </Box>
+    );
+  };
   return (
-    <Frame
-      title={t('Клавиши')}
-      width={props.width}
-      footer={[
-        { key: 'esc', label: t('закрыть') },
-        { label: t('дерево — это md-файлы в .tree/, правь их чем угодно') },
-      ]}
-    >
-      {twoColumns ? (
-        <Box>
-          <Box flexDirection="column" marginRight={2}>
-            {help().slice(0, 3).map(section)}
+    <Frame title={t('Клавиши')} width={props.width} footer={footer(scrolls, Math.min(total, at + rows))}>
+      <Box>
+        {columns.map((column, index) => (
+          <Box
+            // biome-ignore lint/suspicious/noArrayIndexKey: columns are positions.
+            key={index}
+            flexDirection="column"
+            width={columnWidth}
+            marginRight={index < columns.length - 1 ? 2 : 0}
+          >
+            {column.slice(at, at + rows).map(line)}
           </Box>
-          <Box flexDirection="column">{help().slice(3).map(section)}</Box>
-        </Box>
-      ) : (
-        <Box flexDirection="column">{help().map(section)}</Box>
-      )}
+        ))}
+      </Box>
     </Frame>
   );
 }

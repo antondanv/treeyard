@@ -27,6 +27,8 @@ const keys = keyArgs.map((key) =>
     .replace(/<up>/g, '\u001b[A')
     .replace(/<right>/g, '\u001b[C')
     .replace(/<left>/g, '\u001b[D')
+    .replace(/<pgdn>/g, '\u001b[6~')
+    .replace(/<pgup>/g, '\u001b[5~')
     .replace(/<tab>/g, '\t'),
 );
 
