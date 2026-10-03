@@ -736,7 +736,12 @@ export const EN: Record<string, string> = {
   'в {dir} нет дерева — treeyard config notes <папка с деревом>':
     'no tree in {dir} — treeyard config notes <folder with a tree>',
   'здесь нет дерева (.tree/) — --node не к чему отнести': 'no tree here (.tree/) — --node has nothing to point to',
-  'в {dir} нет дерева (.tree/tree.md)': 'no tree in {dir} (.tree/tree.md)',
+  'Куда падают замечания': 'Where notes go',
+  'папка с деревом для treeyard note · «.» — этот · пусто — убрать':
+    'a folder with a tree for treeyard note · «.» — this one · empty — unset',
+  'нет дерева (.tree/tree.md): {dir}': 'no tree (.tree/tree.md): {dir}',
+  'замечания — в дерево {dir}': 'notes go to the tree in {dir}',
+  'куда падают замечания — не задано': 'where notes go — not set',
   Замечания: 'Notes',
   'каждое замечание разобрано: в работу, в «Идеи» или в отказ':
     'every note is sorted out: into work, into «Ideas» or dropped',

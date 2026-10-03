@@ -57,6 +57,7 @@ import { labels, plural, t } from '../i18n/i18n.js';
 import { activity, type Event } from '../model/activity.js';
 import { description } from '../model/journal.js';
 import { linkLabel, linksOf } from '../model/links.js';
+import { homeShort, notesFolder } from '../model/notes.js';
 import {
   addNode,
   attachSession,
@@ -2520,6 +2521,13 @@ export function App(props: AppProps) {
         hint: t('при превышении засыпает самая давно простаивающая'),
       },
       {
+        key: 'notes',
+        label: t('Куда падают замечания'),
+        value: s.notes ? homeShort(s.notes) : '',
+        placeholder: t('не задано'),
+        hint: t('папка с деревом для treeyard note · «.» — этот · пусто — убрать'),
+      },
+      {
         key: 'brain',
         section: t('ЭТОТ ПРОЕКТ  .tree/tree.md'),
         label: t('Мозг по умолчанию'),
@@ -2597,7 +2605,15 @@ export function App(props: AppProps) {
     else if (key === 'open' && (value === 'pane' || value === 'terminal')) updateSettings({ open: value });
     else if (key === 'sleepAfter') updateSettings({ sleepAfter: Number(value) });
     else if (key === 'maxPanes') updateSettings({ maxPanes: Number(value) });
-    else if (key === 'view') {
+    else if (key === 'notes') {
+      try {
+        const dir = notesFolder(value, props.dir);
+        updateSettings({ notes: dir });
+        say(dir ? t('замечания — в дерево {dir}', { dir: homeShort(dir) }) : t('куда падают замечания — не задано'));
+      } catch (error) {
+        say((error as Error).message, C.bad);
+      }
+    } else if (key === 'view') {
       if (value === 'list') setTreeMode('list');
       else {
         setTreeMode('graph');

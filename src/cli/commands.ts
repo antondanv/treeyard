@@ -19,7 +19,7 @@ import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/l
 import { launchInPane } from '../agents/panes.js';
 import { pick, t } from '../i18n/i18n.js';
 import { addLinkedNode, setNeeds } from '../model/links.js';
-import { addNote, noteOrigin, originText } from '../model/notes.js';
+import { addNote, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import { addNode, logToNode, moveNode, STATUS_LABEL, setStatus, updateNode } from '../model/ops.js';
 import { writeOverview } from '../model/overview.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
@@ -939,11 +939,10 @@ function configCommand(args: string[]): number {
         throw new UsageError(t('{key}: выбери {choices}', { key: requestedKey, choices: choices.join('/') }));
       updateSettings({ [key]: n });
     } else if (key === 'notes') {
-      if (/^(off|none|-)$/i.test(value)) updateSettings({ notes: '' });
-      else {
-        const dir = folderArg(value);
-        if (findProject(dir) !== dir) throw new UsageError(t('в {dir} нет дерева (.tree/tree.md)', { dir }));
-        updateSettings({ notes: dir });
+      try {
+        updateSettings({ notes: notesFolder(value) });
+      } catch (error) {
+        throw new UsageError((error as Error).message);
       }
     } else updateSettings({ [key]: flag(value) });
     process.stdout.write(`${requestedKey} = ${shown(key as (typeof GLOBAL_KEYS)[number])}\n`);

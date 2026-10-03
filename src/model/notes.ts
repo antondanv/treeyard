@@ -4,12 +4,33 @@
  * the work. A note says where it came from — the project and the node whose
  * session wrote it — so the review knows what was being done at the time.
  */
-import { basename } from 'node:path';
+import { homedir } from 'node:os';
+import { basename, resolve } from 'node:path';
 
 import { t } from '../i18n/i18n.js';
 import { addNode } from './ops.js';
+import { findProject } from './store.js';
 import { sessionOwners } from './tree.js';
 import { ROOT, type Tree, type TreeNode } from './types.js';
+
+/**
+ * The `notes` setting from what the person typed: a folder with a tree, `~`
+ * and relative paths resolved against `base`; `''` — not set. Throws when the
+ * folder holds no tree of its own, so a typo never swallows the notes.
+ */
+export function notesFolder(value: string, base: string = process.cwd()): string {
+  const text = value.trim();
+  if (!text || /^(off|none|-)$/i.test(text)) return '';
+  const dir = resolve(base, text.replace(/^~(?=$|\/)/, homedir()));
+  if (findProject(dir) !== dir) throw new Error(t('нет дерева (.tree/tree.md): {dir}', { dir: homeShort(dir) }));
+  return dir;
+}
+
+/** `~/Projects/Treeyard` rather than the whole home path. */
+export function homeShort(dir: string): string {
+  const home = homedir();
+  return dir === home || dir.startsWith(`${home}/`) ? `~${dir.slice(home.length)}` : dir;
+}
 
 /** Every session started from a node gets the node's id here. */
 export const NODE_VAR = 'TREEYARD_NODE';

@@ -11,8 +11,8 @@ import { emptyTree, tempDir } from './helpers.js';
 const DOWN = '\u001b[B';
 const RIGHT = '\u001b[C';
 const downs = (n: number) => Array.from({ length: n }, () => DOWN);
-/** Rows of the settings screen before «Модель сессий»: language … status order … live, brain, start. */
-const MODEL_ROW = 12;
+/** Rows of the settings screen before «Модель сессий»: language … status order … live, panes, notes, brain, start. */
+const MODEL_ROW = 13;
 
 beforeEach(() => {
   process.env.TREEYARD_HOME = tempDir('treeyard-home-');
@@ -87,7 +87,7 @@ describe('models come from the CLI, not from typing', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(10), RIGHT, DOWN, DOWN],
+      keys: [',', ...downs(11), RIGHT, DOWN, DOWN],
     });
     const project = loadTree(tree.project.dir).project;
     expect(project.brain).toBe('codex');

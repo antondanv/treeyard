@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
@@ -9,12 +9,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { setLang } from '../src/i18n/i18n.js';
 import { description, journalEntries } from '../src/model/journal.js';
-import { addNote, NODE_VAR, noteOrigin, notesBranch, originText } from '../src/model/notes.js';
+import { addNote, homeShort, NODE_VAR, noteOrigin, notesBranch, notesFolder, originText } from '../src/model/notes.js';
 import { addNode, attachSession } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { childrenOf } from '../src/model/tree.js';
 import { ROOT } from '../src/model/types.js';
-import { DEFAULTS, loadSettings, saveSettings } from '../src/settings.js';
+import { DEFAULTS, loadSettings, resetSettings, saveSettings } from '../src/settings.js';
+import { snapshot } from '../src/tui/snapshot.js';
 import { emptyTree, tempDir } from './helpers.js';
 
 const run = promisify(execFile);
@@ -75,6 +76,63 @@ describe('notes', () => {
     expect(loadSettings(env).notes).toBe('');
     saveSettings({ ...DEFAULTS, notes: '/projects/Treeyard' }, env);
     expect(loadSettings(env).notes).toBe('/projects/Treeyard');
+  });
+});
+
+describe('where notes go, from the settings screen', () => {
+  const DOWN = '\u001b[B';
+  /** «Куда падают замечания»: the last of the settings for all projects. */
+  const toNotes = [',', ...Array.from({ length: 10 }, () => DOWN)];
+  const home = process.env.TREEYARD_HOME;
+
+  afterEach(() => {
+    process.env.TREEYARD_HOME = home;
+    resetSettings({ ...DEFAULTS });
+  });
+
+  function fresh() {
+    process.env.TREEYARD_HOME = tempDir('treeyard-home-');
+    resetSettings({ ...DEFAULTS });
+    return emptyTree();
+  }
+
+  it('reads a folder: ~, relative to this project, off; a folder without a tree is refused', () => {
+    const tree = emptyTree();
+    const dir = tree.project.dir;
+    expect(notesFolder('.', dir)).toBe(dir);
+    expect(notesFolder(`  ${dir}  `)).toBe(dir);
+    expect(notesFolder('', dir)).toBe('');
+    expect(notesFolder('off', dir)).toBe('');
+    expect(() => notesFolder('nested', dir)).toThrow(/нет дерева/);
+    expect(notesFolder(homeShort(dir), '/')).toBe(dir);
+  });
+
+  it('shows the folder, takes «.» for this project and clears it with an empty field', async () => {
+    const tree = fresh();
+    const dir = tree.project.dir;
+    const unset = await snapshot(dir, { columns: 110, rows: 34, keys: toNotes });
+    expect(unset).toContain('Куда падают замечания');
+    expect(unset).toContain('не задано');
+    expect(unset).toContain('«.» — этот');
+
+    await snapshot(dir, { columns: 110, rows: 34, keys: [...toNotes, '.', '\r'] });
+    expect(loadSettings().notes).toBe(dir);
+
+    // Each snapshot starts from the settings in memory: hand it the saved one.
+    const saved = { settings: loadSettings() };
+    const shown = await snapshot(dir, { ...saved, columns: 160, rows: 34, keys: toNotes });
+    expect(shown).toContain(basename(dir));
+
+    const backspaces = Array.from({ length: homeShort(dir).length }, () => '\u007f');
+    await snapshot(dir, { ...saved, columns: 160, rows: 34, keys: [...toNotes, ...backspaces, '\r'] });
+    expect(loadSettings().notes).toBe('');
+  });
+
+  it('a folder without a tree is not saved, and the screen says why', async () => {
+    const tree = fresh();
+    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [...toNotes, '/nowhere', '\r'] });
+    expect(frame).toContain('нет дерева');
+    expect(loadSettings().notes).toBe('');
   });
 });
 
