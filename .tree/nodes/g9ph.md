@@ -2,7 +2,7 @@
 id: g9ph
 title: "Правка в другом проекте: агент сам заводит там связанный узел"
 parent: 8gtc
-order: 220
+order: 210
 status: done
 who: agent
 done_when: 'агент из узла Treeyard командой `treeyard add "…" --project ../Brainyard --for <id>` заводит узел в дереве Brainyard; узел Treeyard показывает «ждёт: Brainyard › … · статус», узел Brainyard — «нужен для: Treeyard › …»; проверено на временных копиях деревьев'

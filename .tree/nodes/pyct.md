@@ -2,7 +2,7 @@
 id: pyct
 title: "Выяснить: какие узлы разных деревьев пересекаются и как это показать"
 parent: 8gtc
-order: 210
+order: 200
 status: done
 who: agent
 done_when: в журнале узла — 3–5 реальных пар узлов из Treeyard / Brainyard / Factoyard и выбранный формат связи
