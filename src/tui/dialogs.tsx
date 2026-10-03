@@ -7,7 +7,7 @@ import { Box, Text, useInput } from 'ink';
 import { useRef, useState } from 'react';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
-
+import type { AssistChoice, AssistJob } from '../agents/assist.js';
 import { START_HINT, START_LABEL } from '../agents/context.js';
 import { BRAIN_LABEL, BRAIN_SHORT, type LaunchOptions } from '../agents/launch.js';
 import { formatMemory, isPending, type Pane, paneFor, panesAvailable } from '../agents/panes.js';
@@ -542,13 +542,55 @@ interface LaunchDraft {
   focus: number;
 }
 
-interface LaunchField {
+interface LaunchField<D = LaunchDraft> {
   label: string;
   options: { value: string; label: string }[];
   value: string;
   /** Shown instead of the options when the field does not apply. */
   note?: string;
-  set: (draft: LaunchDraft, value: string) => LaunchDraft;
+  set: (draft: D, value: string) => D;
+}
+
+/** A field of a launch: its options in a row, or a note where it does not apply. */
+function OptionField<D>(props: { field: LaunchField<D>; active: boolean; width: number }) {
+  const { field } = props;
+  return (
+    <Field label={field.label} active={props.active}>
+      {field.note ? (
+        <Text color={C.faint}>{field.note}</Text>
+      ) : (
+        <Options
+          labels={field.options.map((option) => option.label)}
+          index={Math.max(
+            0,
+            field.options.findIndex((option) => option.value === field.value),
+          )}
+          active={props.active}
+          width={Math.max(10, props.width - 24)}
+        />
+      )}
+    </Field>
+  );
+}
+
+/** ←→ on a field: the next or the previous option. */
+function stepField<D>(draft: D, field: LaunchField<D> | undefined, step: number): D | undefined {
+  if (!step || !field || field.note || field.options.length === 0) return undefined;
+  const at = Math.max(
+    0,
+    field.options.findIndex((option) => option.value === field.value),
+  );
+  return field.set(draft, field.options[(at + step + field.options.length) % field.options.length]!.value);
+}
+
+function FieldHint(props: { text: string }) {
+  return (
+    <Box marginLeft={18}>
+      <Text color={C.faint} wrap="truncate-end">
+        {props.text}
+      </Text>
+    </Box>
+  );
 }
 
 function launchFields(draft: LaunchDraft, catalog: Catalog | undefined, panes: boolean): LaunchField[] {
@@ -662,44 +704,13 @@ export function LaunchForm(props: {
     }
     const move = key.tab && key.shift ? -1 : key.tab || key.downArrow ? 1 : key.upArrow ? -1 : 0;
     if (move) return setDraft((before) => ({ ...before, focus: (before.focus + move + all.length) % all.length }));
-    const step = key.leftArrow ? -1 : key.rightArrow || input === ' ' ? 1 : 0;
-    const field = all[d.focus];
-    if (!step || !field || field.note || field.options.length === 0) return;
-    const at = Math.max(
-      0,
-      field.options.findIndex((option) => option.value === field.value),
-    );
-    const next = field.options[(at + step + field.options.length) % field.options.length]!;
-    setDraft(field.set(d, next.value));
+    const next = stepField(d, all[d.focus], key.leftArrow ? -1 : key.rightArrow || input === ' ' ? 1 : 0);
+    if (next) setDraft(next);
   });
-  const row = (index: number) => {
-    const field = fields[index]!;
-    const active = draft.focus === index;
-    return (
-      <Field label={field.label} active={active}>
-        {field.note ? (
-          <Text color={C.faint}>{field.note}</Text>
-        ) : (
-          <Options
-            labels={field.options.map((option) => option.label)}
-            index={Math.max(
-              0,
-              field.options.findIndex((option) => option.value === field.value),
-            )}
-            active={active}
-            width={Math.max(10, props.width - 24)}
-          />
-        )}
-      </Field>
-    );
-  };
-  const hint = (text: string) => (
-    <Box marginLeft={18}>
-      <Text color={C.faint} wrap="truncate-end">
-        {text}
-      </Text>
-    </Box>
+  const row = (index: number) => (
+    <OptionField field={fields[index]!} active={draft.focus === index} width={props.width} />
   );
+  const hint = (text: string) => <FieldHint text={text} />;
   const startMode = fields[2]!.value as StartMode;
   return (
     <Frame
@@ -1373,6 +1384,152 @@ export function ConfirmLaunch(props: {
           </Text>
         </Box>
       ) : null}
+    </Frame>
+  );
+}
+
+interface AssistDraft {
+  brain: BrainId;
+  model: string;
+  /** Kept as chosen; a CLI or model without it gets its default (see `assistPick`). */
+  effort: string;
+  focus: number;
+}
+
+/** What the job is started with: an effort the model does not understand is left to the CLI. */
+function assistPick(draft: AssistDraft, catalog: Catalog | undefined): AssistChoice {
+  const choice: AssistChoice = { brain: draft.brain };
+  if (draft.model) choice.model = draft.model;
+  const effort = fitEffort(catalog, draft.model, draft.effort);
+  if (effort) choice.effort = effort;
+  return choice;
+}
+
+function assistFields(
+  draft: AssistDraft,
+  catalog: Catalog | undefined,
+  defaults: AssistChoice,
+): LaunchField<AssistDraft>[] {
+  const choice = assistPick(draft, catalog);
+  return [
+    {
+      label: t('Мозг'),
+      options: (['claude', 'codex', 'antigravity'] as BrainId[]).map((id) => ({ value: id, label: BRAIN_LABEL[id] })),
+      value: draft.brain,
+      // Models belong to one CLI; coming back to the project's CLI brings its model back.
+      set: (d, value) => ({
+        ...d,
+        brain: value as BrainId,
+        model: value === defaults.brain ? (defaults.model ?? '') : '',
+      }),
+    },
+    {
+      label: t('Модель'),
+      options: modelOptions(catalog, draft.model),
+      value: draft.model,
+      set: (d, value) => ({ ...d, model: value }),
+    },
+    {
+      label: t('Усилие'),
+      options: effortOptions(catalog, draft.model, choice.effort),
+      value: choice.effort ?? '',
+      ...(effortsFor(catalog, draft.model)?.length === 0 ? { note: t('у этой модели не настраивается') } : {}),
+      set: (d, value) => ({ ...d, effort: value }),
+    },
+  ];
+}
+
+/**
+ * The confirmation of an agent job without a session: who does it, with which
+ * model and effort. The choice is for this job only — the project's settings
+ * stay as they are.
+ */
+export function ConfirmAssist(props: {
+  job: AssistJob;
+  node: TreeNode;
+  defaults: AssistChoice;
+  width: number;
+  onConfirm: (choice: AssistChoice) => void;
+  onNever: (choice: AssistChoice) => void;
+  onCancel: () => void;
+}) {
+  // As in ConfirmLaunch: the Enter that opened the question does not answer it.
+  const opened = useRef(Date.now());
+  const answered = useRef(false);
+  const [draft, setDraft, latest] = useLatest<AssistDraft>(() => ({
+    brain: props.defaults.brain,
+    model: props.defaults.model ?? '',
+    effort: props.defaults.effort ?? '',
+    focus: 0,
+  }));
+  const catalog = useCatalog(draft.brain);
+  const catalogRef = useRef(catalog);
+  catalogRef.current = catalog;
+  const fields = assistFields(draft, catalog, props.defaults);
+  useInput((input, key) => {
+    if (answered.current) return;
+    const d = latest.current;
+    const shortcut = shortcutKey(input);
+    const answer = (act: (choice: AssistChoice) => void) => {
+      answered.current = true;
+      act(assistPick(d, catalogRef.current));
+    };
+    if (key.escape || shortcut === 'n') {
+      answered.current = true;
+      return props.onCancel();
+    }
+    if (key.return || shortcut === 'y' || input === 'д') {
+      if (Date.now() - opened.current < CONFIRM_GUARD_MS) return;
+      return answer(props.onConfirm);
+    }
+    if (input === '!') return answer(props.onNever);
+    const all = assistFields(d, catalogRef.current, props.defaults);
+    const move = key.tab && key.shift ? -1 : key.tab || key.downArrow ? 1 : key.upArrow ? -1 : 0;
+    if (move) return setDraft((before) => ({ ...before, focus: (before.focus + move + all.length) % all.length }));
+    const next = stepField(d, all[d.focus], key.leftArrow ? -1 : key.rightArrow || input === ' ' ? 1 : 0);
+    if (next) setDraft(next);
+  });
+  const row = (index: number) => (
+    <OptionField field={fields[index]!} active={draft.focus === index} width={props.width} />
+  );
+  return (
+    <Frame
+      title={props.job === 'split' ? t('Разбить узел на шаги?') : t('Сформулировать «готово, когда»?')}
+      width={props.width}
+      color={C.agent}
+      footer={[
+        { key: '⏎', label: t('запустить') },
+        { key: '↑↓', label: t('поле') },
+        { key: '←→', label: t('выбор') },
+        { key: 'esc', label: t('отмена') },
+        { key: '!', label: t('больше не спрашивать') },
+      ]}
+    >
+      <Field label={t('Узел')}>
+        <Text color={STATUS_COLOR[props.node.status]} wrap="truncate-end">
+          {GLYPH[props.node.status]} {props.node.title}
+        </Text>
+      </Field>
+      {row(0)}
+      <FieldHint
+        text={
+          draft.focus === 0
+            ? t('без сессии, в фоне · только для этой задачи, настройки проекта не меняются')
+            : catalogHint(draft.brain, catalog, draft.model)
+        }
+      />
+      {row(1)}
+      {row(2)}
+      <Field label={t('Права')}>
+        <Text wrap="truncate-end">{t('только чтение: смотрит код и документы, ничего не меняет')}</Text>
+      </Field>
+      <Box marginTop={1}>
+        <Text color={C.warn} wrap="wrap">
+          {props.job === 'split'
+            ? t('Займёт минуту-две и потратит лимит подписки. Предложит 3–7 шагов — добавишь те, что отметишь.')
+            : t('Займёт меньше минуты и потратит немного лимита. Критерий запишется, только если примешь.')}
+        </Text>
+      </Box>
     </Frame>
   );
 }

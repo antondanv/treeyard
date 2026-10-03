@@ -23,10 +23,19 @@ export interface Criterion {
   check?: string;
 }
 
-export interface AssistOptions {
+export type AssistJob = 'split' | 'criterion';
+
+/** Who does one job: the project's choice by default, another one for this job only. */
+export interface AssistChoice {
   brain: BrainId;
   model?: string;
   effort?: string;
+}
+
+/** Steps need a look around the project; a criterion is one sentence. */
+export const ASSIST_EFFORT: Record<AssistJob, string> = { split: 'medium', criterion: 'low' };
+
+export interface AssistOptions extends AssistChoice {
   onEvent?: (event: AgentEvent) => void;
   signal?: AbortSignal;
 }

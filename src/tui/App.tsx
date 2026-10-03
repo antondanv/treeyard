@@ -17,7 +17,14 @@ import type { SessionInfo } from '@antondanv/brainyard';
 import { Box, type Key, Text, useAnimation, useApp, useInput, useWindowSize } from 'ink';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { proposeCriterion, proposeSteps, type Step } from '../agents/assist.js';
+import {
+  ASSIST_EFFORT,
+  type AssistChoice,
+  type AssistJob,
+  proposeCriterion,
+  proposeSteps,
+  type Step,
+} from '../agents/assist.js';
 import { type CheckResult, runCheck } from '../agents/check.js';
 import { contextText, START_HINT, START_LABEL, sessionPlan } from '../agents/context.js';
 import {
@@ -91,11 +98,12 @@ import {
   type TreeNode,
 } from '../model/types.js';
 import { MAX_PANES, type Settings, SLEEP_AFTER, settings, updateSettings } from '../settings.js';
-import { catalogHint, effortOptions, effortsFor, fitEffort, modelOptions, useCatalog } from './catalogs.js';
+import { catalogHint, effortOptions, effortsFor, fitChoice, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './components/controls.js';
 import { NodeDetails, SessionDetails } from './details.js';
 import {
   CheckDialog,
+  ConfirmAssist,
   ConfirmDelete,
   ConfirmLaunch,
   type ConfirmRow,
@@ -168,8 +176,7 @@ type Intent =
   | { kind: 'new'; node: string; options: LaunchOptions }
   | { kind: 'resume'; node: string; ref: SessionRef }
   | { kind: 'loose'; session: SessionInfo }
-  | { kind: 'split'; node: string }
-  | { kind: 'criterion'; node: string };
+  | { kind: AssistJob; node: string; choice: AssistChoice };
 
 /** A one-line input in the footer: quick add and rename without a form. */
 interface Prompt {
@@ -731,7 +738,12 @@ export function App(props: AppProps) {
     setSelected(id);
   };
 
-  const assistModel = (): { model?: string } => (tree.project.assistModel ? { model: tree.project.assistModel } : {});
+  /** The project's brain and its model for agent jobs; the confirmation may pick another one for this job. */
+  const assistChoice = (job: AssistJob): AssistChoice => ({
+    brain: tree.project.brain ?? 'claude',
+    ...(tree.project.assistModel ? { model: tree.project.assistModel } : {}),
+    effort: ASSIST_EFFORT[job],
+  });
 
   const defaults = (): LaunchOptions => ({
     brain: tree.project.brain ?? 'claude',
@@ -777,8 +789,8 @@ export function App(props: AppProps) {
       return handOver({ type: 'resume-loose', session: intent.session });
     }
     if (!node) return;
-    if (intent.kind === 'split') return splitNode(node);
-    askCriterion(node);
+    if (intent.kind === 'split') return splitNode(node, intent.choice);
+    askCriterion(node, intent.choice);
   };
 
   const startSession = (nodeId: string, options: LaunchOptions) => {
@@ -937,7 +949,7 @@ export function App(props: AppProps) {
       setJob((current) => (current ? { ...current, detail: event.summary } : current));
   };
 
-  const splitNode = (node: TreeNode) => {
+  const splitNode = (node: TreeNode, choice: AssistChoice) => {
     if (job)
       return say(
         t('подожди: {label}', {
@@ -945,20 +957,20 @@ export function App(props: AppProps) {
         }),
         C.warn,
       );
-    const brain = defaults().brain;
     setJob({
       label: t('{p1} разбивает «{title}» на шаги', {
-        p1: BRAIN_SHORT[brain],
+        p1: BRAIN_SHORT[choice.brain],
         title: node.title,
       }),
     });
-    void proposeSteps(treeRef.current, node.id, { brain, effort: 'medium', onEvent: feed, ...assistModel() })
+    void fitChoice(choice)
+      .then((fitted) => proposeSteps(treeRef.current, node.id, { ...fitted, onEvent: feed }))
       .then((steps) => offer({ kind: 'steps', node: node.id, steps }))
       .catch((error: Error) => say(error.message, C.bad))
       .finally(() => setJob(undefined));
   };
 
-  const askCriterion = (node: TreeNode) => {
+  const askCriterion = (node: TreeNode, choice: AssistChoice) => {
     if (job)
       return say(
         t('подожди: {label}', {
@@ -966,14 +978,14 @@ export function App(props: AppProps) {
         }),
         C.warn,
       );
-    const brain = defaults().brain;
     setJob({
       label: t('{p1} формулирует «готово, когда» для «{title}»', {
-        p1: BRAIN_SHORT[brain],
+        p1: BRAIN_SHORT[choice.brain],
         title: node.title,
       }),
     });
-    void proposeCriterion(treeRef.current, node.id, { brain, effort: 'low', onEvent: feed, ...assistModel() })
+    void fitChoice(choice)
+      .then((fitted) => proposeCriterion(treeRef.current, node.id, { ...fitted, onEvent: feed }))
       .then((criterion) =>
         offer({
           kind: 'criterion',
@@ -1027,8 +1039,8 @@ export function App(props: AppProps) {
     if (!node) return;
     if (choice.kind === 'configure') return setModal({ kind: 'launch', node: nodeId });
     if (choice.kind === 'new') return request({ kind: 'new', node: nodeId, options: withProject(choice.options) });
-    if (choice.kind === 'split') return request({ kind: 'split', node: nodeId });
-    if (choice.kind === 'criterion') return request({ kind: 'criterion', node: nodeId });
+    if (choice.kind === 'split' || choice.kind === 'criterion')
+      return request({ kind: choice.kind, node: nodeId, choice: assistChoice(choice.kind) });
     if (choice.kind === 'check') return check(node);
     if (choice.kind === 'context') return setModal({ kind: 'context', node: nodeId });
     if (choice.kind === 'raise' || choice.kind === 'lower') return prioritize(node, choice.kind === 'raise' ? -1 : 1);
@@ -1241,13 +1253,13 @@ export function App(props: AppProps) {
       label: t('Разбить на шаги (агент)'),
       keys: 'S',
       needs: 'node',
-      run: () => current && request({ kind: 'split', node: current.id }),
+      run: () => current && request({ kind: 'split', node: current.id, choice: assistChoice('split') }),
     },
     criterion: {
       label: t('Сформулировать «готово, когда» (агент)'),
       keys: '⏎ k',
       needs: 'node',
-      run: () => current && request({ kind: 'criterion', node: current.id }),
+      run: () => current && request({ kind: 'criterion', node: current.id, choice: assistChoice('criterion') }),
     },
     check: { label: t('Запустить проверку узла'), keys: 't', needs: 'node', run: () => current && check(current) },
     add: {
@@ -1891,9 +1903,32 @@ export function App(props: AppProps) {
     const close = () => setModal(undefined);
     switch (modal.kind) {
       case 'confirm': {
-        const view = confirmView(modal.intent);
-        if (!view) return null;
         const intent = modal.intent;
+        if (intent.kind === 'split' || intent.kind === 'criterion') {
+          const node = tree.nodes.get(intent.node);
+          if (!node) return null;
+          const run = (choice: AssistChoice) => {
+            setModal(undefined);
+            perform({ ...intent, choice });
+          };
+          return (
+            <ConfirmAssist
+              job={intent.kind}
+              node={node}
+              defaults={intent.choice}
+              width={Math.min(width - 2, 96)}
+              onCancel={close}
+              onConfirm={run}
+              onNever={(choice) => {
+                updateSettings({ confirm: false });
+                say(t('больше не спрашиваю перед запуском · вернуть — «,» → «Подтверждать запуск»'));
+                run(choice);
+              }}
+            />
+          );
+        }
+        const view = confirmView(intent);
+        if (!view) return null;
         return (
           <ConfirmLaunch
             title={view.title}
@@ -2364,21 +2399,8 @@ export function App(props: AppProps) {
         note: t('Сессия не привязана к узлу — после неё нажми l, чтобы привязать.'),
       };
     }
-    if (!node) return undefined;
-    const brain = defaults().brain;
-    return {
-      title: intent.kind === 'split' ? t('Разбить узел на шаги?') : t('Сформулировать «готово, когда»?'),
-      rows: [
-        nodeRow(node),
-        { label: t('Кто'), value: `${BRAIN_LABEL[brain]} · ${t('без сессии, в фоне')}`, color: C.agent },
-        { label: t('Модель'), value: tree.project.assistModel ?? t('по умолчанию CLI') },
-        { label: t('Права'), value: t('только чтение: смотрит код и документы, ничего не меняет') },
-      ],
-      note:
-        intent.kind === 'split'
-          ? t('Займёт минуту-две и потратит лимит подписки. Предложит 3–7 шагов — добавишь те, что отметишь.')
-          : t('Займёт меньше минуты и потратит немного лимита. Критерий запишется, только если примешь.'),
-    };
+    // Agent jobs are confirmed by ConfirmAssist: there the agent is chosen too.
+    return undefined;
   };
 
   const settingRows = (): SettingRow[] => {

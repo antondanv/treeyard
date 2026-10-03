@@ -317,7 +317,8 @@ export const EN: Record<string, string> = {
     'The session belongs to no node — press l afterwards to attach it.',
   'Разбить узел на шаги?': 'Break the node into steps?',
   'Сформулировать «готово, когда»?': 'Write a "done when"?',
-  'без сессии, в фоне': 'no session, in the background',
+  'без сессии, в фоне · только для этой задачи, настройки проекта не меняются':
+    "no session, in the background · for this job only, the project's settings stay as they are",
   Права: 'Access',
   'только чтение: смотрит код и документы, ничего не меняет': 'read-only: looks at code and documents, changes nothing',
   'Займёт минуту-две и потратит лимит подписки. Предложит 3–7 шагов — добавишь те, что отметишь.':

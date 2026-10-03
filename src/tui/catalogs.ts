@@ -89,6 +89,15 @@ export function fitEffort(catalog: Catalog | undefined, model: string | undefine
   return (efforts as string[]).includes(effort) ? effort : '';
 }
 
+/** A choice made without the list at hand (no confirmation): an effort the model does not take is left to the CLI. */
+export async function fitChoice<T extends { brain: BrainId; model?: string; effort?: string }>(choice: T): Promise<T> {
+  if (!choice.effort) return choice;
+  const catalog = await ask(choice.brain).catch(() => undefined);
+  const { effort, ...rest } = choice;
+  const fitted = fitEffort(catalog, choice.model, effort);
+  return (fitted ? { ...rest, effort: fitted } : rest) as T;
+}
+
 /** Where the list came from, said in a line under the row. */
 export function catalogHint(brain: BrainId, catalog: Catalog | undefined, model?: string): string {
   if (!catalog)
