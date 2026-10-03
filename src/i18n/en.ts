@@ -967,4 +967,7 @@ export const EN: Record<string, string> = {
   'что здесь видно': 'what to look at',
   'Удалить {file}? Файл уйдёт насовсем.': 'Remove {file}? The file goes for good.',
   'без подписи — n': 'no caption — n',
+  '{file} открыта в полном размере': '{file} opened full size',
+  'открыть в полном размере': 'open full size',
+  'в полном размере': 'full size',
 };

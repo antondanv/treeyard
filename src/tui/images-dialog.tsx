@@ -3,6 +3,7 @@
  * whole screen, a caption. A screenshot comes from the clipboard (`v`) or as
  * a file dropped into the terminal — the terminal pastes its path.
  */
+import { spawn, spawnSync } from 'node:child_process';
 import { Box, Text, useInput, usePaste } from 'ink';
 import { useState } from 'react';
 import { t } from '../i18n/i18n.js';
@@ -44,6 +45,30 @@ function added(image: NodeImage): string {
   return t('картинка добавлена: {file}', { file: image.file }) + (image.note ? ` — ${image.note}` : '');
 }
 
+/**
+ * Apple Terminal has no way to draw pixels: a screenshot there is a mosaic.
+ * Under tmux the outer terminal is known from tmux's global environment.
+ */
+export function appleTerminal(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.TERM_PROGRAM === 'Apple_Terminal') return true;
+  if (env.TERM_PROGRAM !== 'tmux' || !env.TMUX) return false;
+  const outer = spawnSync('tmux', ['show-environment', '-g', 'TERM_PROGRAM'], { encoding: 'utf8' });
+  return outer.status === 0 && outer.stdout.trim() === 'TERM_PROGRAM=Apple_Terminal';
+}
+
+/** Opens a picture full size in the system viewer (Preview on a Mac); the TUI stays where it is. */
+export function openPicture(path: string): string | undefined {
+  const command = process.platform === 'darwin' ? 'open' : 'xdg-open';
+  try {
+    const child = spawn(command, [path], { detached: true, stdio: 'ignore' });
+    child.on('error', () => undefined);
+    child.unref();
+    return undefined;
+  } catch (error) {
+    return (error as Error).message;
+  }
+}
+
 type Mode = 'list' | 'full' | 'note' | 'delete';
 
 export function ImagesDialog(props: {
@@ -57,6 +82,8 @@ export function ImagesDialog(props: {
   onChange: (journal: string | undefined, message: string) => void;
   onError: (message: string) => void;
   onClose: () => void;
+  /** ⏎ opens the system viewer instead of the full-screen mosaic; found out from the terminal when not given. */
+  external?: boolean;
 }) {
   const { dir, node } = props;
   const [images, setImages] = useState(() => {
@@ -68,6 +95,8 @@ export function ImagesDialog(props: {
   });
   const [cursor, setCursor] = useState(Math.max(0, images.length - 1));
   const [mode, setMode] = useState<Mode>('list');
+  // Where a mosaic is all the terminal can do, ⏎ shows the real picture instead.
+  const [external] = useState(() => props.external ?? appleTerminal());
   const [note, setNote] = useState('');
   const current = images[Math.min(cursor, images.length - 1)];
   const refresh = (select?: string) => {
@@ -131,6 +160,13 @@ export function ImagesDialog(props: {
     const step = (by: number) => setCursor((at) => Math.max(0, Math.min(images.length - 1, at + by)));
     if (key.upArrow || key.leftArrow || input === 'k' || input === 'h') return step(-1);
     if (key.downArrow || key.rightArrow || input === 'j' || input === 'l') return step(1);
+    const show = () => {
+      const error = openPicture(imagePath(dir, node.id, current.file));
+      if (error) props.onError(error);
+      else props.onChange(undefined, t('{file} открыта в полном размере', { file: current.file }));
+    };
+    if (input === 'o') return show();
+    if (key.return && mode === 'list' && external) return show();
     if (key.return && mode === 'list') return setMode('full');
     if (key.return) return setMode('list');
     if (input === 'n') {
@@ -158,7 +194,10 @@ export function ImagesDialog(props: {
             { key: 'v', label: t('из буфера') },
             ...(current
               ? [
-                  { key: '⏎', label: mode === 'full' ? t('к списку') : t('на весь экран'), press: '\r' },
+                  external
+                    ? { key: '⏎', label: t('открыть в полном размере'), press: '\r' }
+                    : { key: '⏎', label: mode === 'full' ? t('к списку') : t('на весь экран'), press: '\r' },
+                  ...(external ? [] : [{ key: 'o', label: t('в полном размере') }]),
                   { key: '←→', label: t('листать') },
                   { key: 'n', label: t('подпись') },
                   { key: 'D', label: t('удалить') },

@@ -27,7 +27,7 @@ import { addNode, deleteNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { DEFAULTS, resetSettings } from '../src/settings.js';
 import { fitCells, halfBlocks } from '../src/tui/image-view.js';
-import { attachFromClipboard, ImagesDialog } from '../src/tui/images-dialog.js';
+import { appleTerminal, attachFromClipboard, ImagesDialog } from '../src/tui/images-dialog.js';
 import { snapshot } from '../src/tui/snapshot.js';
 import { emptyTree, tempDir } from './helpers.js';
 
@@ -198,6 +198,7 @@ describe('pictures in the TUI and for agents', () => {
         onChange={(journal) => changes.push(journal)}
         onError={() => undefined}
         onClose={() => undefined}
+        external={false}
       />,
     );
     await pause();
@@ -222,6 +223,37 @@ describe('pictures in the TUI and for agents', () => {
     await pause();
     expect(listImages(dir, node.id)).toEqual([]);
     expect(view.lastFrame()).toContain('Картинок пока нет');
+  });
+});
+
+describe('pictures in Apple Terminal', () => {
+  it('knows Apple Terminal, which can draw no pixels', () => {
+    expect(appleTerminal({ TERM_PROGRAM: 'Apple_Terminal' })).toBe(true);
+    expect(appleTerminal({ TERM_PROGRAM: 'iTerm.app' })).toBe(false);
+    expect(appleTerminal({ TERM_PROGRAM: 'tmux' })).toBe(false);
+  });
+
+  it('offers the full-size picture on ⏎ instead of the mosaic', async () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Экран входа' });
+    addImage(tree.project.dir, node.id, RED_OVER_BLUE);
+    const props = {
+      dir: tree.project.dir,
+      node,
+      width: 100,
+      height: 30,
+      onChange: () => undefined,
+      onError: () => undefined,
+      onClose: () => undefined,
+    };
+    const apple = render(<ImagesDialog {...props} external />);
+    await pause();
+    expect(apple.lastFrame()).toContain('открыть в полном размере');
+    apple.unmount();
+    const other = render(<ImagesDialog {...props} external={false} />);
+    await pause();
+    expect(other.lastFrame()).toContain('на весь экран');
+    expect(other.lastFrame()).toContain('o в полном размере');
   });
 });
 
