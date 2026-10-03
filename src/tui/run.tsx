@@ -9,15 +9,17 @@ import { attachPane } from '@antondanv/brainyard';
 import { render } from 'ink';
 
 import { BRAIN_LABEL, launch, resume, resumeLoose } from '../agents/launch.js';
+import type { Pane } from '../agents/panes.js';
 import { t } from '../i18n/i18n.js';
 import { loadTree, nodePath } from '../model/store.js';
 import { type Action, App, type Toast } from './App.js';
 import { captureMouse, TerminalInput, withoutAutowrap } from './input.js';
 import { inlineMark } from './logo.js';
+import { PlantingApp } from './planting.js';
 import { C } from './theme.js';
 import { loadUi, saveUi } from './ui-state.js';
 
-export async function runTui(dir: string): Promise<void> {
+export async function runTui(dir: string, plantingPane?: Pane): Promise<void> {
   let toast: Toast | undefined;
   for (;;) {
     const ui = loadUi(dir);
@@ -26,15 +28,16 @@ export async function runTui(dir: string): Promise<void> {
     const releaseMouse = captureMouse(process.stdout);
     const screen = withoutAutowrap(process.stdout);
     try {
+      const props = {
+        dir,
+        ui,
+        toast,
+        onAction: (action: Action) => {
+          next = action;
+        },
+      };
       const instance = render(
-        <App
-          dir={dir}
-          ui={ui}
-          {...(toast ? { toast } : {})}
-          onAction={(action) => {
-            next = action;
-          }}
-        />,
+        plantingPane ? <PlantingApp {...props} plantingPane={plantingPane} /> : <App {...props} />,
         {
           stdin: input as unknown as NodeJS.ReadStream,
           stdout: screen.stdout,
@@ -58,12 +61,11 @@ export async function runTui(dir: string): Promise<void> {
     const action: Action = next;
     if (action.type === 'quit') return;
     toast = await perform(dir, action);
-    if (action.type !== 'editor') saveUi(dir, loadUi(dir));
+    if (action.type !== 'editor' && !plantingPane) saveUi(dir, loadUi(dir));
   }
 }
 
 async function perform(dir: string, action: Exclude<Action, { type: 'quit' }>): Promise<Toast | undefined> {
-  const tree = loadTree(dir);
   try {
     if (action.type === 'attach-pane') {
       await attachPane(action.pane, { hint: t('⌃Q — обратно к дереву') });
@@ -74,6 +76,7 @@ async function perform(dir: string, action: Exclude<Action, { type: 'quit' }>): 
       spawnSync(editor, [nodePath(dir, action.node)], { stdio: 'inherit', shell: true });
       return { text: t('узел сохранён в редакторе') };
     }
+    const tree = loadTree(dir);
     if (action.type === 'launch') {
       const node = tree.nodes.get(action.node);
       banner(`${BRAIN_LABEL[action.options.brain]} · ${node?.title ?? ''}`);

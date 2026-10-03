@@ -16,7 +16,7 @@ import { Box, render, Text, useApp, useInput, useWindowSize } from 'ink';
 import { type ReactNode, useRef, useState } from 'react';
 
 import { BRAIN_LABEL } from '../agents/launch.js';
-import { type FolderFacts, folderFacts } from '../agents/planting.js';
+import { type FolderFacts, folderFacts, plantingInPane } from '../agents/planting.js';
 import { plural, t } from '../i18n/i18n.js';
 import type { BrainId } from '../model/types.js';
 import { addPointer, pointerTargets } from '../templates/pointer.js';
@@ -364,7 +364,12 @@ export function Wizard(props: { dir: string; templateId?: string; onDone: (resul
           })}
         </Text>
         <Box marginTop={1} flexDirection="column">
-          {row(t('Где'), t('в этом терминале — выйдешь из сессии, и откроется дерево'))}
+          {row(
+            t('Где'),
+            plantingInPane()
+              ? t('в панели рядом — дерево появится само · ⌃Q — к дереву')
+              : t('в этом терминале — выйдешь из сессии, и откроется дерево'),
+          )}
           {row(t('Сначала'), how)}
           {row(
             t('Потом'),

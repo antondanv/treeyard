@@ -5,8 +5,8 @@
  * goal you can see in real life and plants the tree with one
  * `treeyard import --from-json -`, plus a few short project documents.
  *
- * The session is the CLI's own, interactive, in this terminal: the interview
- * is a conversation, not a background job.
+ * The interactive CLI runs beside the tree when tmux is available, or in
+ * this terminal until the person leaves it.
  *
  * The same skill can be installed into Claude Code, Codex and Antigravity
  * (`treeyard skills install`), so a plain `claude` in any folder knows how
@@ -18,10 +18,13 @@ import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { type OpenResult, open } from '@antondanv/brainyard';
+import { type OpenResult, open, panesAvailable, startPane } from '@antondanv/brainyard';
 
 import { pick } from '../i18n/i18n.js';
+import { nodeEnv } from '../model/notes.js';
 import type { BrainId } from '../model/types.js';
+import { settings } from '../settings.js';
+import type { Pane, PaneSize } from './panes.js';
 
 export const SKILL = 'treeyard-init';
 
@@ -118,18 +121,42 @@ export function plantingPrompt(facts: FolderFacts): string {
   });
 }
 
-/** Opens the CLI in this terminal for the interview; resolves when the person leaves it. */
-export async function plantWithAgent(dir: string, brain: BrainId): Promise<OpenResult> {
+export function plantingInPane(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY && settings().open === 'pane' && panesAvailable());
+}
+
+export type PlantingResult = { mode: 'pane'; pane: Pane } | { mode: 'terminal'; result: OpenResult };
+
+/** Starts the interview without creating `.tree/` before the person agrees. */
+export async function plantWithAgent(dir: string, brain: BrainId, size?: PaneSize): Promise<PlantingResult> {
   const facts = folderFacts(dir);
-  return open({
+  const pane = plantingInPane();
+  const name = pick({ ru: `${facts.name} · посадка дерева`, en: `${facts.name} · planting the tree` });
+  const options = {
     brain,
     cwd: dir,
-    system: skillBody(),
+    system: `${skillBody()}\n\n## Session entry\n\nThis session was opened from treeyard ${
+      pane
+        ? 'in a pane beside the tree. The tree appears automatically as you plant it. At wrap-up, tell the person to press Ctrl+Q to return to the tree.'
+        : 'in the terminal. At wrap-up, tell the person to exit this session — the tree will open automatically.'
+    } Do not ask them to launch treeyard again.`,
     prompt: plantingPrompt(facts),
-    ...(brain === 'claude'
-      ? { name: pick({ ru: `${facts.name} · посадка дерева`, en: `${facts.name} · planting the tree` }) }
-      : {}),
-  });
+    ...(brain === 'claude' ? { name } : {}),
+    env: nodeEnv(''),
+  };
+  if (!pane) return { mode: 'terminal', result: await open(options) };
+  const started = await startPane({ ...options, label: name, ...size });
+  return {
+    mode: 'pane',
+    pane: {
+      ...started,
+      cwd: dir,
+      label: name,
+      attached: false,
+      width: size?.width ?? 100,
+      height: size?.height ?? 30,
+    },
+  };
 }
 
 export interface SkillHome {

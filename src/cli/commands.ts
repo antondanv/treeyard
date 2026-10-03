@@ -314,12 +314,12 @@ async function wizard(dir: string, template?: string): Promise<number> {
 
 /** An agent interviews the person and plants the tree; then the tree opens. */
 async function plantCommand(dir: string, brain: BrainId, confirmed: boolean): Promise<number> {
-  const { folderFacts, plantWithAgent } = await import('../agents/planting.js');
+  const { folderFacts, plantingInPane, plantWithAgent } = await import('../agents/planting.js');
   const facts = folderFacts(dir);
   if (!confirmed && settings().confirm && process.stdin.isTTY) {
     process.stderr.write(
       `\n${inlineMark(err.c)}\n` +
-        `  ${err.dim(t('Кто'))}        ${BRAIN_LABEL[brain]} · ${t('в этом терминале')}\n` +
+        `  ${err.dim(t('Кто'))}        ${BRAIN_LABEL[brain]} · ${plantingInPane() ? t('в панели') : t('в этом терминале')}\n` +
         `  ${err.dim(t('Что'))}        ${
           facts.tree
             ? t('посмотрит дерево и проект, предложит, как дорастить')
@@ -334,7 +334,13 @@ async function plantCommand(dir: string, brain: BrainId, confirmed: boolean): Pr
       return 0;
     }
   }
-  const result = await plantWithAgent(dir, brain);
+  const planted = await plantWithAgent(dir, brain);
+  if (planted.mode === 'pane') {
+    const { runTui } = await import('../tui/run.js');
+    await runTui(dir, planted.pane);
+    return 0;
+  }
+  const { result } = planted;
   if (result.error) {
     process.stderr.write(`${err.c('#ff8f8f', '✗')} ${result.error.message}\n`);
     return 1;

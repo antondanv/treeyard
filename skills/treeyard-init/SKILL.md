@@ -215,8 +215,15 @@ where the tree is and how to report back to it.
 
 Briefly: the goal; how many nodes and branches; where to start (`active` nodes);
 what waits for the person (`who: human`) and for the outside world; which docs
-were written. Explain how to go on: `treeyard` → a node → `⏎` → a new session,
-which gets the path from the root and the node's criterion. Offer a commit
+were written. Explain how to go on based on the session entry:
+- **Opened from treeyard in a pane:** the tree is already growing beside this
+  conversation. Say "Ctrl+Q — back to the tree; choose a node and press Enter."
+- **Opened from treeyard in the terminal:** say "Exit this session — the tree
+  will open automatically; choose a node and press Enter."
+- **Opened directly in a CLI:** say "Run treeyard, choose a node and press Enter."
+
+Each node opens a new session with the path from the root and its criterion.
+Never ask someone whose session was opened from treeyard to launch it again. Offer a commit
 (`chore: plant the treeyard tree and project docs`) — only if the person agrees.
 
 Don't start on the nodes in this session: each node gets its own session with a

@@ -60,6 +60,8 @@ export function TerminalPane(props: {
   width: number;
   height: number;
   focused: boolean;
+  /** Before the tree exists, only typing and full-screen attachment are available. */
+  planting?: boolean;
   onFocus: () => void;
   onBlur: () => void;
   onGone: () => void;
@@ -227,12 +229,17 @@ export function TerminalPane(props: {
           { key: '⌃Q', label: t('к дереву') },
           { key: t('колесо, PgUp'), label: t('история') },
         ]
-      : [
-          { key: 'f', label: t('печатать') },
-          { key: 'F', label: t('весь экран') },
-          { key: 'x', label: t('усыпить') },
-          { key: 'p', label: t('скрыть') },
-        ];
+      : props.planting
+        ? [
+            { key: 'f', label: t('печатать') },
+            { key: 'F', label: t('весь экран') },
+          ]
+        : [
+            { key: 'f', label: t('печатать') },
+            { key: 'F', label: t('весь экран') },
+            { key: 'x', label: t('усыпить') },
+            { key: 'p', label: t('скрыть') },
+          ];
   // At the right edge, which stays put while the pane grows and shrinks: clicks in a row land on it again.
   const resize: KeyHint | undefined =
     focused || scrollOffset ? undefined : { key: '⇧← ⇧→', label: t('ширина'), press: ['\u001b[1;2D', '\u001b[1;2C'] };

@@ -1,5 +1,13 @@
 /** English for every `t()` key, in the order the keys appear in the code. `scripts/i18n-keys.mjs` lists them. */
 export const EN: Record<string, string> = {
+  'в панели рядом — дерево появится само · ⌃Q — к дереву':
+    'in a pane beside it — the tree appears automatically · ⌃Q to the tree',
+  'Сажаем дерево с агентом': 'Planting the tree with an agent',
+  'Дерево появится здесь после твоего «да» и будет расти по мере посадки.':
+    'The tree appears here after your "yes" and grows as it is planted.',
+  'Разговор справа · ⌃Q — к дереву · f — снова агенту':
+    'Conversation on the right · ⌃Q to the tree · f back to the agent',
+  'Сессия посадки закрыта': 'The planting session has closed',
   'Готовые · {n}': 'Done · {n}',
   'Узел уже на краю среди соседей этого статуса': 'The node is already at the edge among siblings of this status',
   '{label} · u — отменить': '{label} · u — undo',

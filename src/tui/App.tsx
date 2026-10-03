@@ -205,6 +205,9 @@ export interface AppProps {
   offline?: boolean;
   /** Remember the view and selection in `.tree/.local/`. Default true. */
   persist?: boolean;
+  /** The planting conversation has no task node yet. */
+  plantingPane?: Pane;
+  plantingFocused?: boolean;
 }
 
 export function App(props: AppProps) {
@@ -234,11 +237,11 @@ export function App(props: AppProps) {
   const [pending, setPending] = useState<Modal | undefined>();
   const [prompt, setPrompt] = useState<Prompt | undefined>();
   const [live, setLive] = useState<Map<string, SessionInfo>>(new Map());
-  const [panes, setPanes] = useState<Pane[]>([]);
+  const [panes, setPanes] = useState<Pane[]>(props.plantingPane ? [props.plantingPane] : []);
   const [showPane, setShowPane] = useState(true);
   /** How much of the width the session on the right takes; `<` `>` change it. */
   const [split, setSplit] = useState(props.ui.split ?? 0.58);
-  const [paneFocused, setPaneFocused] = useState(false);
+  const [paneFocused, setPaneFocused] = useState(props.plantingFocused ?? false);
   /** A pane chosen in the menu, when the node has several. */
   const [pinnedPane, setPinnedPane] = useState<string | undefined>();
   const watchedPane = useRef<string | undefined>(undefined);
@@ -274,6 +277,7 @@ export function App(props: AppProps) {
   // First run: open what is in work, select the first thing to do.
   useEffect(() => {
     if (initialized.current) return;
+    if (props.plantingPane && tree.nodes.size === 0) return;
     initialized.current = true;
     if (props.ui.expanded.length === 0 && !props.ui.selected) {
       const top = childrenOf(tree, ROOT);
@@ -294,7 +298,7 @@ export function App(props: AppProps) {
         );
       }
     }
-  }, [props.ui.expanded.length, props.ui.selected, tree]);
+  }, [props.ui.expanded.length, props.ui.selected, props.plantingPane, tree]);
 
   useEffect(() => {
     if (props.persist !== false) saveUi(props.dir, ui());
@@ -511,16 +515,18 @@ export function App(props: AppProps) {
   });
   const currentSession = view === 'sessions' ? sessionList[Math.min(sessionIndex, sessionList.length - 1)] : undefined;
   const pinned = pinnedPane ? panes.find((p) => p.pane === pinnedPane) : undefined;
+  const planting = panes.find((p) => p.pane === props.plantingPane?.pane);
   const selectedPane = currentSession
     ? paneFor(currentSession, panes)
     : ((pinned && current?.sessions.some((ref) => paneFor(ref, [pinned])) ? pinned : undefined) ??
-      nodePane(current, panes)?.pane);
+      nodePane(current, panes)?.pane ??
+      planting);
   const terminalVisible = Boolean(showPane && selectedPane && !modal && !prompt && !searching);
   watchedPane.current = terminalVisible ? selectedPane?.pane : undefined;
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new selection restores its pane and returns focus to the tree.
   useEffect(() => {
     setShowPane(true);
-    setPaneFocused(false);
+    if (!props.plantingPane) setPaneFocused(false);
     setPinnedPane(undefined);
   }, [selected, view, sessionKey]);
   useEffect(() => {
@@ -2768,7 +2774,11 @@ export function App(props: AppProps) {
                 <TerminalPane
                   key={selectedPane.pane}
                   pane={selectedPane}
-                  title={current?.title ?? selectedPane.label ?? currentSession?.title ?? ''}
+                  title={
+                    selectedPane === planting
+                      ? (selectedPane.label ?? '')
+                      : (current?.title ?? selectedPane.label ?? currentSession?.title ?? '')
+                  }
                   state={paneState(selectedPane, live.get(selectedPane.sessionId ?? ''), frame)}
                   width={side ? rightWidth : width}
                   height={bodyHeight}
