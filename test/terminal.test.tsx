@@ -229,7 +229,7 @@ describe('terminal panes in the tree', () => {
     const app = mount(60, 20);
     await until(() => app.stdout.frame.includes('hello from the CLI'));
     expect(app.stdout.frame.split('\n').length).toBeLessThanOrEqual(20);
-    expect(backend.resizePane.mock.lastCall?.slice(1)).toEqual([58, 9]);
+    expect(backend.resizePane.mock.lastCall?.slice(1)).toEqual([57, 9]);
   });
 
   it('⇧← ⇧→ move the border of the pane and keep the selection on the node', async () => {
@@ -239,16 +239,16 @@ describe('terminal panes in the tree', () => {
     const width = () => backend.resizePane.mock.lastCall?.[1];
     expect(width()).toBe(67);
     app.stdin.write('\u001b[1;2D');
-    await until(() => width() === 77);
+    await until(() => width() === 76);
     app.stdin.write('\u001b[1;2C');
     app.stdin.write('\u001b[1;2C');
-    await until(() => width() === 58);
+    await until(() => width() === 57);
     expect(app.stdout.frame).toContain('Milestone › ◐ Pane work');
     // The keys it had keep working; on the Russian layout too.
     app.stdin.write('Б');
     await until(() => width() === 67);
     app.stdin.write('>');
-    await until(() => width() === 58);
+    await until(() => width() === 57);
     // A node without a session says so instead of walking away.
     app.stdin.write('\u001b[B');
     await until(() => app.stdout.frame.includes('◯ Quiet sibling') || !app.stdout.frame.includes('hello from the CLI'));
@@ -266,7 +266,7 @@ describe('terminal panes in the tree', () => {
     const x = [...lines[y]!].indexOf('⇧');
     const click = () => app.stdin.write(`\u001b[<0;${x + 1};${y + 1}M\u001b[<0;${x + 1};${y + 1}m`);
     click();
-    await until(() => backend.resizePane.mock.lastCall?.[1] === 77);
+    await until(() => backend.resizePane.mock.lastCall?.[1] === 76);
     // Past the double-click window: two separate presses.
     await pause(450);
     click();
@@ -350,8 +350,8 @@ describe('terminal panes in the tree', () => {
     await until(() => app.stdout.frame.includes('hello from the CLI'));
     app.stdin.write('\u001b[<64;80;10M');
     await until(() => backend.sendToPane.mock.calls.length === 1);
-    // Panel starts at column 52, row 6; its content begins one column and two rows in.
-    expect(backend.sendToPane.mock.lastCall?.[1]).toBe('\u001b[<64;28;3M');
+    // Panel starts at column 51, row 6; its content begins one column and two rows in.
+    expect(backend.sendToPane.mock.lastCall?.[1]).toBe('\u001b[<64;29;3M');
     app.stdin.write('f');
     await until(() => app.stdout.frame.includes('печатаешь в Claude Code'));
     app.stdin.write('\u001b[5~');

@@ -163,3 +163,31 @@ export function captureMouse(stdout: NodeJS.WriteStream): () => void {
   stdout.write(`${ESC}[?1000h${ESC}[?1006h`);
   return () => stdout.write(`${ESC}[?1006l${ESC}[?1000l`);
 }
+
+const ALTERNATE_SCREEN = `${ESC}[?1049h`;
+
+/**
+ * A row the terminal draws wider than Ink measured it (a ZWJ emoji in Apple
+ * Terminal, U+115F in tmux — a node's text or a session's screen can hold
+ * anything) must not wrap: Ink repaints only changed rows by relative moves, so
+ * one wrapped row leaves the frame shifted for good. Without autowrap the extra
+ * cells stay at the edge. Apple Terminal turns autowrap back on when it enters
+ * the alternate screen, and Ink draws its first frame right after that switch:
+ * so autowrap goes off in the same stream, straight after Ink's switch.
+ */
+export function withoutAutowrap(stdout: NodeJS.WriteStream): { stdout: NodeJS.WriteStream; restore: () => void } {
+  if (!stdout.isTTY) return { stdout, restore: () => {} };
+  const write = (chunk: string | Uint8Array, ...rest: unknown[]) => {
+    const written = (stdout.write as (...args: unknown[]) => boolean)(chunk, ...rest);
+    if (typeof chunk === 'string' && chunk.includes(ALTERNATE_SCREEN)) stdout.write(`${ESC}[?7l`);
+    return written;
+  };
+  const wrapped = new Proxy(stdout, {
+    get: (target, key) => {
+      if (key === 'write') return write;
+      const value = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  return { stdout: wrapped, restore: () => stdout.write(`${ESC}[?7h`) };
+}

@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { captureMouse, TerminalInput, TerminalInputDecoder } from '../src/tui/input.js';
+import { captureMouse, TerminalInput, TerminalInputDecoder, withoutAutowrap } from '../src/tui/input.js';
 
 describe('terminal input ownership', () => {
   it('separates fragmented wheel reports from keys and ignores releases', () => {
@@ -66,6 +66,26 @@ describe('terminal input ownership', () => {
     expect(write).toHaveBeenLastCalledWith('\u001b[?1006l\u001b[?1000l');
     write.mockClear();
     captureMouse({ isTTY: false, write } as unknown as NodeJS.WriteStream)();
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('turns autowrap off right after the switch to the alternate screen and back on when the tree leaves', () => {
+    const write = vi.fn((_chunk: string) => true);
+    const tty = { isTTY: true, columns: 120, write } as unknown as NodeJS.WriteStream;
+    const screen = withoutAutowrap(tty);
+    // Apple Terminal turns autowrap back on with the switch: nothing is written before it.
+    expect(write).not.toHaveBeenCalled();
+    expect(screen.stdout.columns).toBe(120);
+    screen.stdout.write('\u001b[?1049h');
+    screen.stdout.write('frame');
+    expect(write.mock.calls.map((call) => call[0])).toEqual(['\u001b[?1049h', '\u001b[?7l', 'frame']);
+    screen.restore();
+    expect(write).toHaveBeenLastCalledWith('\u001b[?7h');
+    write.mockClear();
+    const pipe = { isTTY: false, write } as unknown as NodeJS.WriteStream;
+    const plain = withoutAutowrap(pipe);
+    expect(plain.stdout).toBe(pipe);
+    plain.restore();
     expect(write).not.toHaveBeenCalled();
   });
 });

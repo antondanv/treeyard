@@ -542,14 +542,17 @@ export function App(props: AppProps) {
 
   // ── Layout ────────────────────────────────────────────────────────────────
 
-  const width = Math.max(40, columns);
+  // The last column stays empty. Autowrap is off while the tree is up (run.tsx): a row the
+  // terminal draws wider than Ink measured piles into that column, and Ink's erase-to-end
+  // of the row clears it, instead of a wrap shifting the whole frame.
+  const width = Math.max(40, columns - 1);
   const height = Math.max(14, rows);
   const compact = height < 26;
   const mark = logoSize(compact);
   const headerHeight = mark.rows + 1;
   // The journal is text: it gets the whole width, the strip below says which node.
   const side =
-    width >= 100 && (terminalVisible || Boolean(modal) || (view === 'tree' ? inspector : view !== 'journal'));
+    columns >= 100 && (terminalVisible || Boolean(modal) || (view === 'tree' ? inspector : view !== 'journal'));
   const wide = modal && ['add', 'edit', 'waiting', 'launch', 'delete', 'steps', 'criterion'].includes(modal.kind);
   const rightWidth = side
     ? terminalVisible
@@ -2689,7 +2692,7 @@ export function App(props: AppProps) {
         return (
           <Clickable
             key={v}
-            marginRight={width < 90 ? 1 : 3}
+            marginRight={columns < 90 ? 1 : 3}
             flexShrink={0}
             active={clicks}
             onClick={() => {

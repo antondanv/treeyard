@@ -12,7 +12,7 @@ import { BRAIN_LABEL, launch, resume, resumeLoose } from '../agents/launch.js';
 import { t } from '../i18n/i18n.js';
 import { loadTree, nodePath } from '../model/store.js';
 import { type Action, App, type Toast } from './App.js';
-import { captureMouse, TerminalInput } from './input.js';
+import { captureMouse, TerminalInput, withoutAutowrap } from './input.js';
 import { inlineMark } from './logo.js';
 import { C } from './theme.js';
 import { loadUi, saveUi } from './ui-state.js';
@@ -24,6 +24,7 @@ export async function runTui(dir: string): Promise<void> {
     let next = { type: 'quit' } as Action;
     const input = new TerminalInput(process.stdin);
     const releaseMouse = captureMouse(process.stdout);
+    const screen = withoutAutowrap(process.stdout);
     try {
       const instance = render(
         <App
@@ -36,6 +37,7 @@ export async function runTui(dir: string): Promise<void> {
         />,
         {
           stdin: input as unknown as NodeJS.ReadStream,
+          stdout: screen.stdout,
           alternateScreen: true,
           exitOnCtrlC: false,
           patchConsole: false,
@@ -45,6 +47,8 @@ export async function runTui(dir: string): Promise<void> {
       );
       await instance.waitUntilExit();
     } finally {
+      // Unmounted Ink has left the alternate screen: the CLI or the shell gets wrapping back.
+      screen.restore();
       releaseMouse();
       input.destroy();
     }
