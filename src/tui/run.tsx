@@ -10,6 +10,7 @@ import { render } from 'ink';
 
 import { BRAIN_LABEL, launch, resume, resumeLoose } from '../agents/launch.js';
 import type { Pane } from '../agents/panes.js';
+import { followStatuses, settlePushes } from '../github.js';
 import { t } from '../i18n/i18n.js';
 import { loadTree, nodePath } from '../model/store.js';
 import { type Action, App, type Toast } from './App.js';
@@ -20,6 +21,17 @@ import { C } from './theme.js';
 import { loadUi, saveUi } from './ui-state.js';
 
 export async function runTui(dir: string, plantingPane?: Pane): Promise<void> {
+  // A status changed here moves its card on the GitHub board; quitting waits for the moves.
+  const unfollow = followStatuses();
+  try {
+    await loop(dir, plantingPane);
+  } finally {
+    unfollow();
+    await settlePushes();
+  }
+}
+
+async function loop(dir: string, plantingPane?: Pane): Promise<void> {
   let toast: Toast | undefined;
   for (;;) {
     const ui = loadUi(dir);

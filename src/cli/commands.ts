@@ -17,6 +17,7 @@ import { contextText, START_HINT, START_LABEL, sessionPlan } from '../agents/con
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { launchInPane } from '../agents/panes.js';
+import { type Board, boardOf, cardOf, followStatuses, linkBoard, settlePushes, syncBoard } from '../github.js';
 import { pick, t } from '../i18n/i18n.js';
 import { addLinkedNode, setNeeds } from '../model/links.js';
 import { addNote, noteOrigin, notesFolder, originText } from '../model/notes.js';
@@ -40,6 +41,7 @@ import {
   type StartMode,
   type Status,
   type Tree,
+  type TreeNode,
   WHO,
   type Who,
 } from '../model/types.js';
@@ -83,6 +85,8 @@ ${out.bold('Команды')}
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            сессия по узлу прямо из shell
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они
+  treeyard github [link <owner>/<N> [--parent id] | sync]
+                                           доска GitHub Project: карточки — узлы, колонки — статусы, в обе стороны
   treeyard config [ключ [значение]]        настройки: lang ru|en, confirm, theme…
 
 ${out.bold('Статусы')}  ${statuses}
@@ -111,6 +115,8 @@ ${out.bold('Commands')}
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            a session for a node straight from the shell
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are
+  treeyard github [link <owner>/<N> [--parent id] | sync]
+                                           a GitHub Project board: cards are nodes, columns are statuses, both ways
   treeyard config [key [value]]            settings: lang ru|en, confirm, theme…
 
 ${out.bold('Statuses')}  ${statuses}
@@ -121,6 +127,8 @@ ${out.bold('Example')}   treeyard set k3f9 status=waiting waiting="no server" un
 async function main(argv: string[]): Promise<number> {
   // Language and theme before the first word is printed.
   settings();
+  // A status changed by any command moves its card on the GitHub board.
+  followStatuses();
   const [command, ...rest] = argv;
   switch (command) {
     case undefined:
@@ -142,7 +150,7 @@ async function main(argv: string[]): Promise<number> {
     case 'add':
       return addCommand(rest);
     case 'set':
-      return setCommand(rest);
+      return setCommand(rest).then(reportPushes);
     case 'log':
       return logCommand(rest);
     case 'note':
@@ -153,6 +161,8 @@ async function main(argv: string[]): Promise<number> {
       return openCommand(rest);
     case 'sessions':
       return sessionsCommand(rest);
+    case 'github':
+      return githubCommand(rest);
     case 'config':
     case 'settings':
       return configCommand(rest);
@@ -601,7 +611,7 @@ function otherProject(here: Tree, folder: string): Tree {
   return loadTree(dir);
 }
 
-function setCommand(args: string[]): number {
+async function setCommand(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, {
     as: { type: 'string' },
     note: { type: 'string' },
@@ -687,6 +697,79 @@ function setCommand(args: string[]): number {
   const node = tree.nodes.get(id)!;
   process.stdout.write(`${node.id} · ${STATUS_LABEL[node.status]} · ${node.title}\n`);
   return 0;
+}
+
+/** Says where the cards moved by this command went, or why they did not. */
+async function reportPushes(code: number): Promise<number> {
+  for (const push of await settlePushes()) {
+    if (push.error)
+      process.stderr.write(
+        t('{p1} github: карточку не сдвинуть в «{column}» — {error}\n', {
+          p1: err.c('#ffcf70', '!'),
+          column: push.column,
+          error: push.error,
+        }),
+      );
+    else process.stdout.write(t('github: карточка в «{column}»\n', { column: push.column }));
+  }
+  return code;
+}
+
+async function githubCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, { parent: { type: 'string' } });
+  const tree = project();
+  const [action, ref] = positionals;
+  if (action === 'link') {
+    if (!ref) throw new UsageError(t('treeyard github link <owner>/<номер> [--parent id]'));
+    const parent = values.parent ? nodeArg(tree, values.parent) : undefined;
+    let board: Board;
+    try {
+      board = await linkBoard(tree, ref, parent);
+    } catch (error) {
+      throw new UsageError((error as Error).message);
+    }
+    process.stdout.write(t('дерево привязано к доске {board}\n', { board: `${board.owner}/${board.number}` }));
+    printBoard(board, tree);
+    return 0;
+  }
+  if (action === 'sync') {
+    const result = await syncBoard(tree);
+    const line = (mark: string, node: TreeNode, text: string) =>
+      process.stdout.write(`${mark} ${out.dim(node.id)} ${node.title}${text ? out.dim(` · ${text}`) : ''}\n`);
+    for (const node of result.added) line(out.c('#7ee2a8', '+'), node, STATUS_LABEL[node.status]);
+    for (const node of result.pulled) line('←', node, STATUS_LABEL[node.status]);
+    for (const node of result.pushed) line('→', node, cardOf(node)?.column ?? '');
+    for (const { node, error } of result.failed) line(err.c('#ff7b72', '✗'), node, error);
+    process.stdout.write(
+      t('новых {added} · с доски {pulled} · на доску {pushed} · готовых карточек без узла {skipped}\n', {
+        added: result.added.length,
+        pulled: result.pulled.length,
+        pushed: result.pushed.length,
+        skipped: result.skipped,
+      }),
+    );
+    return result.failed.length ? 1 : 0;
+  }
+  if (action) throw new UsageError(t('treeyard github [link <owner>/<номер> | sync]'));
+  const board = boardOf(tree);
+  if (!board) {
+    process.stdout.write(`${out.dim(t('дерево не привязано к доске — treeyard github link <owner>/<номер>'))}\n`);
+    return 0;
+  }
+  process.stdout.write(t('доска {board}\n', { board: `${board.owner}/${board.number}` }));
+  printBoard(board, tree);
+  return 0;
+}
+
+function printBoard(board: Board, tree: Tree): void {
+  for (const status of STATUSES)
+    process.stdout.write(
+      `  ${STATUS_LABEL[status].padEnd(12)} → ${board.columns[status] ?? out.dim(t('не двигать'))}\n`,
+    );
+  const parent = board.parent ? tree.nodes.get(board.parent)?.title : undefined;
+  process.stdout.write(
+    `${out.dim(t('новые карточки — в «{parent}» · колонки правятся в .tree/tree.md, github.columns', { parent: parent ?? t('корень') }))}\n`,
+  );
 }
 
 function logCommand(args: string[]): number {

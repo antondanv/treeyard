@@ -773,4 +773,26 @@ export const EN: Record<string, string> = {
   'без узла': 'no node',
   ' · без узла': ' · no node',
   'за {days} дней: {total}, мимо дерева — {off}': 'last {days} days: {total}, past the tree — {off}',
+  '{p1} github: карточку не сдвинуть в «{column}» — {error}\n':
+    "{p1} github: couldn't move the card to «{column}» — {error}\n",
+  'github: карточка в «{column}»\n': 'github: the card is in «{column}»\n',
+  'treeyard github link <owner>/<номер> [--parent id]': 'treeyard github link <owner>/<number> [--parent id]',
+  'дерево привязано к доске {board}\n': 'the tree is linked to board {board}\n',
+  'новых {added} · с доски {pulled} · на доску {pushed} · готовых карточек без узла {skipped}\n':
+    'new {added} · from the board {pulled} · to the board {pushed} · done cards without a node {skipped}\n',
+  'treeyard github [link <owner>/<номер> | sync]': 'treeyard github [link <owner>/<number> | sync]',
+  'дерево не привязано к доске — treeyard github link <owner>/<номер>':
+    'the tree is not linked to a board — treeyard github link <owner>/<number>',
+  'доска {board}\n': 'board {board}\n',
+  'не двигать': "don't move",
+  'новые карточки — в «{parent}» · колонки правятся в .tree/tree.md, github.columns':
+    'new cards go to «{parent}» · edit the columns in .tree/tree.md, github.columns',
+  корень: 'the root',
+  'доска: owner/номер или ссылка на GitHub Project — «{ref}»': 'board: owner/number or a GitHub Project link — «{ref}»',
+  'на доске нет поля Status с колонками': 'the board has no Status field with columns',
+  'на доске нет колонки «{column}»': 'the board has no column «{column}»',
+  '{p1} · github · карточку не сдвинуть в «{column}»: {message}':
+    "{p1} · github · couldn't move the card to «{column}»: {message}",
+  'Карточка: {url}': 'Card: {url}',
+  'карточка в «{column}»': 'the card is in «{column}»',
 };

@@ -144,6 +144,16 @@ export interface StatusChange {
   note?: string;
 }
 
+/** Called after a node's status changed and was written: the GitHub board follows it this way. */
+export type StatusListener = (tree: Tree, node: TreeNode, before: Status) => void;
+
+const statusListeners = new Set<StatusListener>();
+
+export function onStatusChange(listener: StatusListener): () => void {
+  statusListeners.add(listener);
+  return () => statusListeners.delete(listener);
+}
+
 export function setStatus(tree: Tree, id: string, status: Status, change: StatusChange = {}): TreeNode {
   const node = need(tree, id);
   const before = node.status;
@@ -166,6 +176,7 @@ export function setStatus(tree: Tree, id: string, status: Status, change: Status
   }
   save(tree, node);
   if (status === 'done' && before !== 'done' && node.needs) closeNeeds(tree, node, change.source ?? t('ты'));
+  if (before !== status) for (const listener of statusListeners) listener(tree, node, before);
   return node;
 }
 
