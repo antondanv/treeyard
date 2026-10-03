@@ -14,6 +14,9 @@ export default defineConfig({
       TREEYARD_LANG: '',
       BRAINYARD_CODEX_BIN: 'treeyard-test-no-codex',
       BRAINYARD_AGY_BIN: 'treeyard-test-no-agy',
+      // Assertions match plain text; the color level of the terminal running the
+      // tests must not add escape codes to the frames or to CLI output.
+      FORCE_COLOR: '0',
     },
   },
 });
