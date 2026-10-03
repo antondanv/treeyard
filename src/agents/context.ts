@@ -8,6 +8,7 @@ import { realpathSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { labels, pick, t } from '../i18n/i18n.js';
 import { description, journalEntries } from '../model/journal.js';
+import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { childrenOf, pathTo } from '../model/tree.js';
@@ -140,6 +141,13 @@ const TEXT = {
     waitWhat: 'упёрся во внешнее',
     note: 'что мешает',
     noteWhat: 'неудобство самого treeyard (не задача проекта) — в «Замечания»; проект и узел запишутся сами',
+    other: 'что нужно в другом проекте',
+    otherWhat:
+      'нужна правка в другом проекте — заведи там узел, связанный с этим (ляжет в «Совместные узлы»), а не правь там молча; связь руками — `set <id> needs=../X#id`',
+    closeOther:
+      'сделал там нужное — закрой тот узел сам; он закроется и сам, когда человек поставит «готово» этому узлу',
+    needs: 'Ждёт',
+    neededBy: 'Нужен для',
     done: 'Статус done ставит человек.',
   },
   en: {
@@ -178,6 +186,13 @@ const TEXT = {
     note: 'what gets in the way',
     noteWhat:
       'something in treeyard itself gets in the way (not a project task) — into «Notes»; the project and the node are recorded',
+    other: 'what is needed in the other project',
+    otherWhat:
+      'a change is needed in another project — add a node there, linked to this one (it goes to «Shared nodes»), instead of changing it silently; a link by hand — `set <id> needs=../X#id`',
+    closeOther:
+      'done what was needed there — close that node yourself; it also closes on its own when a person sets this node done',
+    needs: 'Waits for',
+    neededBy: 'Needed for',
     done: 'Status done is set by a person.',
   },
 };
@@ -204,6 +219,11 @@ export function contextText(tree: Tree, id: string): string {
   if (node.status === 'waiting' && node.waiting) {
     lines.push(`${L.waiting}: ${node.waiting}${node.until ? ` · ${L.until}: ${node.until}` : ''}`);
   }
+  const links = linksOf(tree, node);
+  const linkLine = (link: Link) =>
+    link.node ? `${linkLabel(link)} (\`${link.ref}\`, ${STATUS_LABEL[link.node.status]})` : linkLabel(link);
+  for (const link of links.needs) lines.push(`${L.needs}: ${linkLine(link)}`);
+  for (const link of links.neededBy) lines.push(`${L.neededBy}: ${linkLine(link)}`);
   const about = clip(description(node.body), 2500);
   if (about) lines.push('', about);
   const journal = journalEntries(node.body).slice(-6);
@@ -243,6 +263,8 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea\` — ${L.addWhat}`);
   lines.push(`- \`${self} set ${node.id} status=review\` — ${L.review}`);
   lines.push(`- \`${self} set ${node.id} status=waiting ${L.wait}\` — ${L.waitWhat}`);
+  lines.push(`- \`${self} add "${L.other}" --project ../X --for ${node.id}\` — ${L.otherWhat}`);
+  lines.push(`- \`${self} set <id> status=done --project ../X\` — ${L.closeOther}`);
   // Read, not applied: the context must not switch the language or the theme of whoever asks.
   if (loadSettings().notes) lines.push(`- \`${self} note "${L.note}"\` — ${L.noteWhat}`);
   lines.push(`- ${L.done}`);
