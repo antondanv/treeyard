@@ -3104,6 +3104,7 @@ export function App(props: AppProps) {
                     setPaneFocused(false);
                   }}
                   onError={(message) => say(message, C.bad)}
+                  onNotice={(message) => say(message)}
                 />
               ) : side ? (
                 view === 'sessions' ? (
@@ -3156,9 +3157,9 @@ export function App(props: AppProps) {
           />
         ) : null}
 
-        {/* Footer: a prompt, a job, news or keys. */}
+        {/* Footer: a prompt, a job, news or keys. News of the pane (copied, an error) shows while typing too. */}
         <Box width={width} paddingX={1}>
-          {paneFocused ? (
+          {paneFocused && !toast ? (
             <Text color={C.agent} wrap="truncate-end">
               {t('✎ печатаешь в {brain} · ⌃Q или клик по дереву — обратно', {
                 brain: selectedPane?.brain ? BRAIN_LABEL[selectedPane.brain] : 'CLI',

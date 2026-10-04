@@ -7,10 +7,12 @@ import stringWidth from 'string-width';
 import { BRAIN_LABEL } from '../agents/launch.js';
 import { formatMemory, type Pane } from '../agents/panes.js';
 import { t } from '../i18n/i18n.js';
+import { copyText, terminalCopy } from '../model/clipboard.js';
 import { type KeyHint, KeyHints } from './components/controls.js';
 import type { MouseEvent, TerminalInputEvent } from './input.js';
 import { useClick } from './mouse.js';
 import type { PaneState } from './rows.js';
+import { type Cell, highlight, rowSpan, type Selection, selectedText } from './selection.js';
 import { C } from './theme.js';
 
 /** Ctrl+Q belongs to the tree; all other bytes belong to the CLI. */
@@ -66,9 +68,16 @@ export function TerminalPane(props: {
   onBlur: () => void;
   onGone: () => void;
   onError: (message: string) => void;
+  /** Something done that the person should hear about: text copied. */
+  onNotice?: (message: string) => void;
 }) {
   const { pane, width, height, focused } = props;
   const [screen, setScreen] = useState<PaneScreen>();
+  // The tree owns the mouse, so the terminal cannot select here: a drag selects, its release copies.
+  const [selection, setSelection] = useState<Selection>();
+  const drag = useRef<{ from: Cell; to: Cell; moved: boolean }>(undefined);
+  const size = useRef({ columns: width - 2, rows: height - 4 });
+  size.current = { columns: width - 2, rows: height - 4 };
   const screenRef = useRef<PaneScreen>(undefined);
   const viewport = useRef(0);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -79,6 +88,8 @@ export function TerminalPane(props: {
   const sending = useRef<Promise<void>>(Promise.resolve());
 
   const scrollTo = (offset: number) => {
+    // Another part of the history comes into view: what was selected is not there any more.
+    setSelection(undefined);
     viewport.current = Math.max(0, Math.min(screenRef.current?.historySize ?? 0, offset));
     setScrollOffset(viewport.current);
   };
@@ -87,8 +98,16 @@ export function TerminalPane(props: {
       .then(() => sendToPane(pane.pane, data))
       .catch((error: Error) => callbacks.current.onError(error.message));
   };
-  const controls = useRef({ scrollTo, send });
-  controls.current = { scrollTo, send };
+  const copy = (selected: Selection) => {
+    const lines = (screenRef.current?.lines ?? []).slice(0, size.current.rows).map(screenLine);
+    const text = selectedText(lines, selected);
+    if (!text.trim()) return;
+    // No clipboard tool (a Linux box without one): the terminal may copy it itself.
+    if (!copyText(text)) process.stdout.write(terminalCopy(text));
+    callbacks.current.onNotice?.(t('скопировано: {count} симв.', { count: [...text].length }));
+  };
+  const controls = useRef({ scrollTo, send, copy });
+  controls.current = { scrollTo, send, copy };
 
   useEffect(() => {
     let stopped = false;
@@ -141,15 +160,45 @@ export function TerminalPane(props: {
   });
   useEffect(() => {
     const mouse = (event: MouseEvent) => {
-      if (event.release || !box.current) return;
+      if (!box.current) return;
       const bounds = measureElement(box.current);
-      // A click outside goes back to the tree.
-      if (!(event.button & 64) && (event.button & 3) === 0) {
+      const left = !(event.button & 64) && (event.button & 3) === 0;
+      // The screen's cell under the pointer; a drag past the edge stays at the edge.
+      const cell = (): Cell => ({
+        x: Math.max(0, Math.min(size.current.columns - 1, event.x - bounds.x - 1)),
+        y: Math.max(0, Math.min(size.current.rows - 1, event.y - bounds.y - 2)),
+      });
+      const held = drag.current;
+      if (held && left && (event.release || event.button & 32)) {
+        const to = cell();
+        if (to.x !== held.to.x || to.y !== held.to.y) {
+          held.to = to;
+          held.moved = true;
+          setSelection({ from: held.from, to });
+        }
+        if (event.release) {
+          drag.current = undefined;
+          if (held.moved) controls.current.copy({ from: held.from, to: held.to });
+        }
+        return;
+      }
+      // Motion with no drag of ours, and releases, mean nothing here.
+      if (event.release || event.button & 32) return;
+      if (left) {
         const inside =
           event.x >= bounds.x &&
           event.x < bounds.x + bounds.width &&
           event.y >= bounds.y &&
           event.y < bounds.y + bounds.height;
+        const onScreen =
+          event.x >= bounds.x + 1 &&
+          event.x < bounds.x + bounds.width - 1 &&
+          event.y >= bounds.y + 2 &&
+          event.y < bounds.y + bounds.height - 2;
+        // A press on the screen may start a selection; the last one goes either way.
+        setSelection(undefined);
+        drag.current = onScreen ? { from: cell(), to: cell(), moved: false } : undefined;
+        // A click outside goes back to the tree.
         if (!inside && callbacks.current.focused) callbacks.current.onBlur();
         return;
       }
@@ -200,6 +249,7 @@ export function TerminalPane(props: {
         return;
       }
       const next = paste ? { data, leave: false } : paneInput(data);
+      setSelection(undefined);
       if (next.data) {
         controls.current.scrollTo(0);
         // Preserve order across rapid typing and multi-byte pastes.
@@ -273,14 +323,19 @@ export function TerminalPane(props: {
       </Box>
       <Box height={Math.max(1, height - 4)} flexDirection="column" overflow="hidden">
         {screen ? (
-          screen.lines.slice(0, height - 4).map((line, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: terminal rows are screen positions.
-            <Text key={index} wrap="truncate-end">
-              {focused && !scrollOffset && screen.cursor.visible && screen.cursor.y === index
-                ? cursorLine(screenLine(line), screen.cursor.x)
-                : screenLine(line) || ' '}
-            </Text>
-          ))
+          screen.lines.slice(0, height - 4).map((line, index) => {
+            const span = selection ? rowSpan(selection, index) : undefined;
+            return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: terminal rows are screen positions.
+              <Text key={index} wrap="truncate-end">
+                {span
+                  ? highlight(screenLine(line), span, width - 2)
+                  : focused && !scrollOffset && screen.cursor.visible && screen.cursor.y === index
+                    ? cursorLine(screenLine(line), screen.cursor.x)
+                    : screenLine(line) || ' '}
+              </Text>
+            );
+          })
         ) : (
           <Text color={C.faint}>{t('читаю экран…')}</Text>
         )}

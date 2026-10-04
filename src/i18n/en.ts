@@ -654,6 +654,9 @@ export const EN: Record<string, string> = {
   ширина: 'width',
   '  ✎ ввод': '  ✎ typing',
   'история ↑{rows}': 'history ↑{rows}',
+  'скопировано: {count} симв.': 'copied: {count} characters',
+  'протянуть мышью': 'drag with the mouse',
+  'выделить и скопировать в буфер обмена': 'select and copy to the clipboard',
   'в этой сессии не было ни одного сообщения — CLI её не сохранил; убрал из узла · o — новая':
     'nothing was ever said in this session, so the CLI did not save it; removed from the node · o starts a new one',
   'в сессии не было ни одного сообщения — закрыл её{freed}, продолжать нечего':

@@ -13,6 +13,12 @@ const backend = vi.hoisted(() => ({
   sessions: vi.fn(),
   stopSession: vi.fn(),
 }));
+// Never the clipboard of the machine the tests run on.
+const clipboard = vi.hoisted(() => ({ copyText: vi.fn(() => true) }));
+vi.mock('../src/model/clipboard.js', async (original) => ({
+  ...(await original<typeof import('../src/model/clipboard.js')>()),
+  copyText: clipboard.copyText,
+}));
 vi.mock('@antondanv/brainyard', async (original) => ({
   ...(await original<typeof import('@antondanv/brainyard')>()),
   ...backend,
@@ -464,6 +470,26 @@ describe('terminal panes in the tree', () => {
     app.stdin.write('\u001b[5~');
     await until(() => backend.sendToPane.mock.calls.length === 2);
     expect(backend.sendToPane.mock.lastCall?.[1]).toBe('\u001b[5~');
+  });
+
+  it('a drag over the screen selects and copies its text; a click copies nothing', async () => {
+    const app = mount();
+    await until(() => app.stdout.frame.includes('hello from the CLI'));
+    // The screen's first cell is column 52, row 8: `hello from` is cells 0–9 of its first row.
+    app.stdin.write('\u001b[<0;52;8M');
+    app.stdin.write('\u001b[<32;58;8M\u001b[<32;61;8M');
+    app.stdin.write('\u001b[<0;61;8m');
+    await until(() => clipboard.copyText.mock.calls.length === 1);
+    expect(clipboard.copyText).toHaveBeenLastCalledWith('hello from');
+    await until(() => app.stdout.frame.includes('скопировано: 10 симв.'));
+    // Over three rows: the blank one stays a line break.
+    app.stdin.write('\u001b[<0;58;8M\u001b[<32;55;10M\u001b[<0;55;10m');
+    await until(() => clipboard.copyText.mock.calls.length === 2);
+    expect(clipboard.copyText).toHaveBeenLastCalledWith('from the CLI\n\ncolo');
+    app.stdin.write('\u001b[<0;60;9M\u001b[<0;60;9m');
+    await pause(100);
+    expect(clipboard.copyText).toHaveBeenCalledTimes(2);
+    expect(backend.sendToPane).not.toHaveBeenCalled();
   });
 
   it('keeps Ctrl+Q out of the CLI, including a coalesced input chunk', () => {

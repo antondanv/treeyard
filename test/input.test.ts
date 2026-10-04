@@ -61,9 +61,9 @@ describe('terminal input ownership', () => {
   it('captures the wheel for the entire screen and restores mouse modes on exit', () => {
     const write = vi.fn();
     const release = captureMouse({ isTTY: true, write } as unknown as NodeJS.WriteStream);
-    expect(write).toHaveBeenCalledWith('\u001b[?1000h\u001b[?1006h');
+    expect(write).toHaveBeenCalledWith('\u001b[?1000h\u001b[?1002h\u001b[?1006h');
     release();
-    expect(write).toHaveBeenLastCalledWith('\u001b[?1006l\u001b[?1000l');
+    expect(write).toHaveBeenLastCalledWith('\u001b[?1006l\u001b[?1002l\u001b[?1000l');
     write.mockClear();
     captureMouse({ isTTY: false, write } as unknown as NodeJS.WriteStream)();
     expect(write).not.toHaveBeenCalled();

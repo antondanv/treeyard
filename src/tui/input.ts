@@ -157,11 +157,14 @@ export class TerminalInput extends Readable {
   };
 }
 
-/** The alternate screen belongs to Ink; mouse ownership prevents host scrollback on wheel input. */
+/**
+ * The alternate screen belongs to Ink; mouse ownership prevents host scrollback on wheel input.
+ * Motion while a button is held (1002) is what selecting on a session's screen takes.
+ */
 export function captureMouse(stdout: NodeJS.WriteStream): () => void {
   if (!stdout.isTTY) return () => {};
-  stdout.write(`${ESC}[?1000h${ESC}[?1006h`);
-  return () => stdout.write(`${ESC}[?1006l${ESC}[?1000l`);
+  stdout.write(`${ESC}[?1000h${ESC}[?1002h${ESC}[?1006h`);
+  return () => stdout.write(`${ESC}[?1006l${ESC}[?1002l${ESC}[?1000l`);
 }
 
 const ALTERNATE_SCREEN = `${ESC}[?1049h`;

@@ -1,4 +1,6 @@
 /**
+ * The system clipboard: text goes onto it, and a picture comes from it.
+ *
  * A picture from the clipboard. Terminals paste text only, so a screenshot
  * taken with ⌘⇧⌃4 never reaches the TUI as input: it is read from the system
  * clipboard instead — `osascript` on macOS, `wl-paste` or `xclip` elsewhere.
@@ -55,4 +57,30 @@ function linuxClipboard(): ClipboardImage | undefined {
 /** Removes a scratch file the clipboard was written to. */
 export function forgetClipboard(image: ClipboardImage): void {
   if (image.kind === 'file' && image.scratch) rmSync(image.path, { force: true });
+}
+
+/**
+ * Puts text on the system clipboard: `pbcopy` on macOS, `wl-copy`, `xclip` or
+ * `xsel` elsewhere. False when none of them took it.
+ */
+export function copyText(text: string): boolean {
+  const tools: [string, string[]][] =
+    process.platform === 'darwin'
+      ? [['pbcopy', []]]
+      : [
+          ['wl-copy', []],
+          ['xclip', ['-selection', 'clipboard']],
+          ['xsel', ['--clipboard', '--input']],
+        ];
+  for (const [command, args] of tools) {
+    // pbcopy reads bytes in the locale's encoding: without a UTF-8 one, Cyrillic turns to garbage.
+    const result = spawnSync(command, args, { input: text, env: { ...process.env, LC_ALL: 'en_US.UTF-8' } });
+    if (result.status === 0) return true;
+  }
+  return false;
+}
+
+/** The same text for the terminal to copy (OSC 52), where no clipboard tool is there. */
+export function terminalCopy(text: string): string {
+  return `\u001b]52;c;${Buffer.from(text, 'utf8').toString('base64')}\u0007`;
 }
