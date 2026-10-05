@@ -715,9 +715,14 @@ export function App(props: AppProps) {
   }
 
   const paneNodes = useMemo(() => {
-    const ids = new Set<string>();
-    if (panes.length) for (const node of tree.nodes.values()) if (nodePane(node, panes)) ids.add(node.id);
-    return ids;
+    const brains = new Map<string, BrainId>();
+    if (panes.length) {
+      for (const node of tree.nodes.values()) {
+        const match = nodePane(node, panes);
+        if (match) brains.set(node.id, match.ref.brain);
+      }
+    }
+    return brains;
   }, [panes, tree]);
 
   const badgesFor = (node: TreeNode) => {

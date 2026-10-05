@@ -22,7 +22,7 @@ import { linksOf } from '../model/links.js';
 import { STATUS_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { childrenOf, progress, type Row } from '../model/tree.js';
-import { ROOT, type Tree } from '../model/types.js';
+import { type BrainId, ROOT, type Tree } from '../model/types.js';
 import { agentBadge, type Badge, fitBadge } from './badges.js';
 import { marquee, overflows } from './marquee.js';
 import { type Click, useClick } from './mouse.js';
@@ -100,9 +100,9 @@ export function layoutGraph(rows: Row[], options: LayoutOptions): GraphLayout {
   const measureLabel = (id: string, depth: number, row?: Row) => {
     // Reserve the agent's compact label even while its live status is being read.
     const extra = row?.node.sessions.length
-      ? 3 + Math.max(...row.node.sessions.map((ref) => stringWidth(BRAIN_SHORT[ref.brain])))
+      ? 4 + Math.max(...row.node.sessions.map((ref) => stringWidth(BRAIN_SHORT[ref.brain])))
       : row?.node.needs?.length
-        ? 4
+        ? 5
         : 0;
     const width = card ? options.width : Math.min(options.width, stringWidth(labelText(lineLabel(tree, row))) + extra);
     labelWidth.set(id, width);
@@ -317,8 +317,8 @@ export interface GraphProps {
   height: number;
   offset: Viewport;
   live?: Map<string, SessionInfo>;
-  /** Nodes whose session runs in a pane now. */
-  panes?: ReadonlySet<string>;
+  /** The brain running in each node's current pane. */
+  panes?: ReadonlyMap<string, BrainId>;
   frame?: number;
   /** Milliseconds since the selected node got selected: the clock of its running title. */
   tick?: number;
@@ -335,9 +335,8 @@ function lineNote(
   const node = item.row?.node;
   if (!node) return undefined;
   const sessions = node.sessions.map((ref) => badges.live?.get(ref.id)).filter((s): s is SessionInfo => Boolean(s));
-  const agent = agentBadge(sessions, undefined, badges.frame ?? 0);
+  const agent = agentBadge(sessions, badges.panes?.get(node.id), badges.frame ?? 0);
   if (agent) return agent;
-  if (badges.panes?.has(node.id)) return { text: '▣', compact: '▣', mark: '▣', color: C.ok };
   if (node.needs) {
     const needs = linksOf(tree, node).needs;
     const open = needs.filter((link) => link.node?.status !== 'done');
@@ -362,7 +361,8 @@ function lineContent(tree: Tree, item: GraphCard, badges: Pick<GraphProps, 'live
   const budget = Math.max(1, Math.min(10, item.width - 2 - tail - Math.min(8, stringWidth(label.title))));
   const extra = note ? fitBadge(note, budget) : '';
   return {
-    room: Math.max(1, item.width - 2 - tail - (extra ? stringWidth(extra) + 1 : 0)),
+    // One gap stays outside the selected pill's trailing padding.
+    room: Math.max(1, item.width - 2 - tail - (extra ? stringWidth(extra) + 2 : 0)),
     extra,
     color: note?.color,
   };
@@ -554,14 +554,13 @@ export function graphCells(props: GraphProps): Cell[][] {
       meta = t('space — раскрыть или свернуть');
     } else {
       const sessions = node.sessions.map((ref) => props.live?.get(ref.id)).filter((s): s is SessionInfo => Boolean(s));
-      const agent = agentBadge(sessions, undefined, props.frame ?? 0);
+      const agent = agentBadge(sessions, props.panes?.get(node.id), props.frame ?? 0);
       if (agent) {
         meta = fitBadge(agent, inner);
         metaColor = agent.color ?? color;
       } else {
         meta = STATUS_LABEL[node.status];
         if (node.who === 'human' && node.status !== 'done' && node.status !== 'dropped') meta += t(' · ты');
-        if (props.panes?.has(node.id)) meta += ' · ▣';
         if (item.row?.hasChildren) {
           const p = progress(tree, node.id);
           meta += ` · ${p.done}/${p.total}${item.row.expanded ? '' : ' ›'}`;

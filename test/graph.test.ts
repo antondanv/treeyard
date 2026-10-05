@@ -139,6 +139,52 @@ describe('drawing', () => {
             expect(picture).toContain('◎');
             expect(picture).toContain(status === 'waiting' ? '? claude' : '⠋ claude');
             expect(picture).not.toMatch(/работа…|ждёт т…/);
+            if (style === 'line' && selected) {
+              const row = cells.find((line) => line.some((cell) => cell.char === (status === 'waiting' ? '?' : '⠋')))!;
+              const at = row.findIndex((cell) => cell.char === (status === 'waiting' ? '?' : '⠋'));
+              expect(row[at - 1]!.char).toBe(' ');
+              expect(row[at - 1]!.pill).not.toBe(true);
+            }
+          }
+        }
+      }
+    },
+  );
+
+  it.each(['line', 'card'] as const)(
+    '%s: an idle pane keeps its actual brain name before and after polling',
+    (style) => {
+      const tree = emptyTree();
+      const node = addNode(tree, { title: 'Оплата заказа после доставки с продолжением', status: 'review' });
+      node.sessions.push({ brain: 'claude', id: 'old' }, { brain: 'codex', id: 'current' });
+      const layout = layoutGraph(flatten(tree, { expanded: new Set(), showClosed: true }), { style, width: 20, tree });
+      const live = new Map<string, SessionInfo>([
+        [
+          'current',
+          { brain: 'codex', id: 'current', interactive: true, live: { kind: 'interactive', status: 'idle' } },
+        ],
+      ]);
+      for (const sessions of [undefined, live]) {
+        for (const selected of [undefined, node.id]) {
+          const cells = graphCells({
+            tree,
+            layout,
+            selected,
+            width: 70,
+            height: 10,
+            offset: { x: 0, y: 0 },
+            live: sessions,
+            panes: new Map([[node.id, 'codex' as const]]),
+          });
+          const picture = text(cells);
+          expect(picture).toContain('◎');
+          expect(picture).toContain('▣ codex');
+          expect(picture).not.toContain('▣ claude');
+          if (style === 'line' && selected) {
+            const row = cells.find((line) => line.some((cell) => cell.char === '▣'))!;
+            const at = row.findIndex((cell) => cell.char === '▣');
+            expect(row[at - 1]!.char).toBe(' ');
+            expect(row[at - 1]!.pill).not.toBe(true);
           }
         }
       }

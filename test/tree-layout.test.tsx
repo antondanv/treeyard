@@ -11,13 +11,13 @@ const backend = vi.hoisted(() => ({
   capturePane: vi.fn(),
   resizePane: vi.fn(),
   liveSessions: vi.fn(),
+  sessions: vi.fn(),
 }));
 vi.mock('@antondanv/brainyard', async (original) => ({
   ...(await original<typeof import('@antondanv/brainyard')>()),
   ...backend,
   panesAvailable: () => true,
   paneMemory: async () => new Map(),
-  sessions: async () => [{ brain: 'claude', id: 'conversation', interactive: true }],
 }));
 
 import { addNode, attachSession } from '../src/model/ops.js';
@@ -92,16 +92,20 @@ afterEach(() => {
   resetSettings({ ...DEFAULTS });
 });
 
-const cases = (['line', 'card', 'list'] as const).flatMap((style) => [
-  { style, columns: 100, rows: 30, depth: 3, lang: 'ru' as const },
-  { style, columns: 130, rows: 36, depth: 3, lang: 'ru' as const },
-  { style, columns: 100, rows: 30, depth: 9, lang: 'ru' as const },
-  { style, columns: 100, rows: 30, depth: 3, lang: 'en' as const },
-]);
+const cases = [
+  ...(['line', 'card', 'list'] as const).flatMap((style) => [
+    { style, columns: 100, rows: 30, depth: 3, lang: 'ru' as const, brain: 'claude' as const },
+    { style, columns: 130, rows: 36, depth: 3, lang: 'ru' as const, brain: 'claude' as const },
+    { style, columns: 100, rows: 30, depth: 9, lang: 'ru' as const, brain: 'claude' as const },
+    { style, columns: 100, rows: 30, depth: 3, lang: 'en' as const, brain: 'claude' as const },
+  ]),
+  { style: 'line' as const, columns: 130, rows: 36, depth: 3, lang: 'ru' as const, brain: 'codex' as const },
+  { style: 'card' as const, columns: 100, rows: 30, depth: 3, lang: 'ru' as const, brain: 'codex' as const },
+];
 
 describe('tree beside an open agent session', () => {
   it.each(cases)(
-    '$style at $columns×$rows, level $depth ($lang): keeps the node and agent states while resizing',
+    '$brain $style at $columns×$rows, level $depth ($lang): keeps the node and agent states while resizing',
     async (size) => {
       resetSettings({ ...DEFAULTS, lang: size.lang, animation: false, marquee: false, sleepAfter: 0, maxPanes: 0 });
       const tree = emptyTree();
@@ -116,11 +120,17 @@ describe('tree beside an open agent session', () => {
       }
       const title = 'Оплата заказа после доставки и длинное продолжение для проверки';
       const node = addNode(tree, { title, parent, status: 'review' });
-      attachSession(tree, node.id, { brain: 'claude', id: 'conversation', mode: 'pane', pane: 'claude-layout' });
+      attachSession(tree, node.id, {
+        brain: size.brain,
+        id: 'conversation',
+        mode: 'pane',
+        pane: `${size.brain}-layout`,
+      });
+      backend.sessions.mockResolvedValue([{ brain: size.brain, id: 'conversation', interactive: true }]);
       backend.listPanes.mockResolvedValue([
         {
-          pane: 'claude-layout',
-          brain: 'claude',
+          pane: `${size.brain}-layout`,
+          brain: size.brain,
           sessionId: 'conversation',
           cwd: tree.project.dir,
           attached: false,
@@ -129,7 +139,7 @@ describe('tree beside an open agent session', () => {
         },
       ]);
       const session = {
-        brain: 'claude',
+        brain: size.brain,
         id: 'conversation',
         interactive: true,
         live: { kind: 'interactive', status: 'busy' },
@@ -181,7 +191,7 @@ describe('tree beside an open agent session', () => {
         expect(frame.split('\n').length).toBeLessThanOrEqual(size.rows);
         for (const line of frame.split('\n')) expect(stringWidth(line)).toBeLessThan(size.columns);
         expect(treeBody()).toContain('◎ Оплата');
-        expect(treeBody()).toContain('claude');
+        expect(treeBody()).toContain(size.brain);
         expect(treeBody()).not.toContain('◆ Тест');
         expect(treeBody()).not.toMatch(/работа…|ждёт т…/);
         if (size.style === 'card') {
@@ -196,7 +206,10 @@ describe('tree beside an open agent session', () => {
         if (evidence) {
           mkdirSync(evidence, { recursive: true });
           writeFileSync(
-            join(evidence, `${size.style}-${size.columns}x${size.rows}-level${size.depth}-${size.lang}-${phase}.ans`),
+            join(
+              evidence,
+              `${size.brain}-${size.style}-${size.columns}x${size.rows}-level${size.depth}-${size.lang}-${phase}.ans`,
+            ),
             stdout.frame,
           );
         }
@@ -210,11 +223,16 @@ describe('tree beside an open agent session', () => {
       await pause(80);
       check('wide-pane');
       backend.liveSessions.mockResolvedValue([{ ...session, live: { kind: 'interactive', status: 'waiting' } }]);
-      await until(() => treeBody().includes('? claude'));
+      await until(() => treeBody().includes(`? ${size.brain}`));
       check('waiting');
       stdin.write('>');
       await pause(80);
       check('narrower-pane');
+      if (size.brain === 'codex') {
+        backend.liveSessions.mockResolvedValue([{ ...session, live: { kind: 'interactive', status: 'idle' } }]);
+        await until(() => treeBody().includes('▣ codex'));
+        check('idle');
+      }
       if (size.style !== 'list' && size.depth === 3) {
         for (let step = 0; step < 24 && !treeBody().includes('◆ Тест'); step++) {
           stdin.write('\u001b[1;3D');
@@ -226,7 +244,10 @@ describe('tree beside an open agent session', () => {
         const evidence = process.env.TREEYARD_LAYOUT_EVIDENCE_DIR;
         if (evidence) {
           writeFileSync(
-            join(evidence, `${size.style}-${size.columns}x${size.rows}-level${size.depth}-${size.lang}-root.ans`),
+            join(
+              evidence,
+              `${size.brain}-${size.style}-${size.columns}x${size.rows}-level${size.depth}-${size.lang}-root.ans`,
+            ),
             stdout.frame,
           );
         }
