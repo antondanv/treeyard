@@ -73,6 +73,13 @@ export function sessionPlan(tree: Tree, id: string, start: StartMode, brain: Bra
   const title = `«${node.title}» (${node.id})`;
   const check = node.check ? `\`${node.check}\`` : '';
   const self = selfCommand();
+  if (mode === 'chat') {
+    // Some CLIs deliver the context as a first message instead of a system instruction.
+    plan.system += pick({
+      ru: '\n\nЭто разговор о проекте. Дождись моего вопроса; до него не начинай ревью и не выполняй команды. Можно коротко сказать, что готов обсуждать проект.',
+      en: '\n\nThis is a project conversation. Wait for my question; until then do not start a review or run commands. You may briefly say you are ready to discuss the project.',
+    });
+  }
   if (mode === 'plan') {
     plan.prompt = pick({
       ru:
@@ -340,6 +347,13 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId): SessionPlan 
     start: mode,
     ...fullAccess(brain),
   };
+  if (mode === 'chat') {
+    // Some CLIs deliver the context as a first message instead of a system instruction.
+    plan.system += pick({
+      ru: '\n\nЭто разговор о проекте. Дождись моего вопроса; до него не начинай ревью и не выполняй команды. Можно коротко сказать, что готов обсуждать проект.',
+      en: '\n\nThis is a project conversation. Wait for my question; until then do not start a review or run commands. You may briefly say you are ready to discuss the project.',
+    });
+  }
   if (mode === 'plan') {
     plan.prompt = pick({
       ru:

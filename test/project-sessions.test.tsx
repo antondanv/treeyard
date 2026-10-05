@@ -74,7 +74,9 @@ describe('sessions of the whole project', () => {
       const review = sessionPlan(tree, ROOT, 'plan', 'claude');
       expect(review.permissionMode).toBe('plan');
       expect(review.prompt).toContain(lang === 'ru' ? 'Ничего не меняй' : 'Change nothing');
-      expect(sessionPlan(tree, ROOT, 'chat', 'codex').prompt).toBeUndefined();
+      const chat = sessionPlan(tree, ROOT, 'chat', 'codex');
+      expect(chat.prompt).toBeUndefined();
+      expect(chat.system).toContain(lang === 'ru' ? 'Дождись моего вопроса' : 'Wait for my question');
       expect(sessionPlan(tree, ROOT, 'goal', 'codex').start).toBe('plan');
     }
   });
