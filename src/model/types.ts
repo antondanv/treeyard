@@ -96,6 +96,8 @@ export interface Project {
   created?: string;
   /** Markdown: how the tree is run, rules for agents, decisions. */
   body: string;
+  /** Sessions about the whole project, opened from the root: a review of the tree, a talk about where it stands. */
+  sessions: SessionRef[];
   extra: Record<string, unknown>;
 }
 

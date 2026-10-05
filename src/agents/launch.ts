@@ -9,6 +9,7 @@ import { t } from '../i18n/i18n.js';
 import { nodeEnv } from '../model/notes.js';
 import { attachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
+import { holderOf } from '../model/tree.js';
 import type { BrainId, SessionRef, StartMode, Tree } from '../model/types.js';
 import { fullAccess, sessionPlan } from './context.js';
 
@@ -44,9 +45,9 @@ export interface Launched {
   ref?: SessionRef;
 }
 
-/** Opens a new session for a node. In the terminal it returns when the person exits the CLI. */
+/** Opens a new session for a node, or for the whole project (`root`). In the terminal it returns when the person exits the CLI. */
 export async function launch(tree: Tree, id: string, options: LaunchOptions): Promise<Launched> {
-  const node = tree.nodes.get(id);
+  const node = holderOf(tree, id);
   if (!node)
     throw new Error(
       t('нет узла {id}', {
@@ -103,7 +104,7 @@ export async function resume(tree: Tree, id: string, ref: SessionRef): Promise<O
     ...fullAccess(ref.brain),
     env: nodeEnv(id),
   });
-  if (tree.nodes.has(id)) attachSession(tree, id, { ...ref, opened: nowIso() });
+  if (holderOf(tree, id)) attachSession(tree, id, { ...ref, opened: nowIso() });
   return result;
 }
 

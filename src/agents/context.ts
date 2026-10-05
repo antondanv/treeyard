@@ -7,13 +7,14 @@
 import { realpathSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { labels, pick, t } from '../i18n/i18n.js';
+import { activity } from '../model/activity.js';
 import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
-import { childrenOf, pathTo } from '../model/tree.js';
-import type { BrainId, StartMode, Tree, TreeNode } from '../model/types.js';
+import { actionable, childrenOf, pathTo, progress, summarize, waitingNodes } from '../model/tree.js';
+import { type BrainId, ROOT, type StartMode, type Tree, type TreeNode } from '../model/types.js';
 import { loadSettings } from '../settings.js';
 
 export interface SessionPlan {
@@ -59,6 +60,7 @@ export function sessionName(tree: Tree, node: TreeNode): string {
 }
 
 export function sessionPlan(tree: Tree, id: string, start: StartMode, brain: BrainId): SessionPlan {
+  if (id === ROOT) return projectPlan(tree, start, brain);
   const node = tree.nodes.get(id);
   if (!node) throw new Error(t('нет узла {id}', { id }));
   const mode: StartMode = start === 'goal' && (brain !== 'claude' || !node.doneWhen) ? 'do' : start;
@@ -224,6 +226,7 @@ const TEXT = {
 };
 
 export function contextText(tree: Tree, id: string): string {
+  if (id === ROOT) return projectContext(tree);
   const node = tree.nodes.get(id);
   if (!node) throw new Error(t('нет узла {id}', { id }));
   const L = pick(TEXT);
@@ -304,6 +307,217 @@ export function contextText(tree: Tree, id: string): string {
   // Read, not applied: the context must not switch the language or the theme of whoever asks.
   if (loadSettings().notes) lines.push(`- \`${self} note "${L.note}"\` — ${L.noteWhat}`);
   lines.push(`- ${L.done}`);
+  return lines.join('\n');
+}
+
+// ── The whole project: a session from the root ──────────────────────────────
+
+/** A session from the root starts one of two ways: a review of the tree, or a talk about the project. */
+export function rootStart(start: StartMode): StartMode {
+  return start === 'chat' ? 'chat' : 'plan';
+}
+
+export const ROOT_START_LABEL: Record<StartMode, string> = labels(() => ({
+  plan: t('ревью дерева'),
+  do: t('ревью дерева'),
+  goal: t('ревью дерева'),
+  chat: t('разговор о проекте'),
+}));
+
+export const ROOT_START_HINT: Record<StartMode, string> = labels(() => ({
+  plan: t('агент проходит всё дерево и предлагает правки командами treeyard, ничего не меняя'),
+  do: t('агент проходит всё дерево и предлагает правки командами treeyard, ничего не меняя'),
+  goal: t('агент проходит всё дерево и предлагает правки командами treeyard, ничего не меняя'),
+  chat: t('статус, на чём остановились, завести или закрыть узлы — первое сообщение твоё'),
+}));
+
+function projectPlan(tree: Tree, start: StartMode, brain: BrainId): SessionPlan {
+  const mode = rootStart(start);
+  const name = `${tree.project.title} · ${ROOT_START_LABEL[mode]}`;
+  const plan: SessionPlan = {
+    name: name.length > 64 ? `${name.slice(0, 63)}…` : name,
+    system: projectContext(tree),
+    start: mode,
+    ...fullAccess(brain),
+  };
+  if (mode === 'plan') {
+    plan.prompt = pick({
+      ru:
+        `Проведи ревью всего дерева проекта «${tree.project.title}». Пройди узлы (\`${selfCommand()} show <id>\`, файлы .tree/nodes/), ` +
+        'загляни в код и git log, сколько нужно, и найди, что в дереве криво: узлы без «готово, когда» или с критерием, ' +
+        'который нельзя увидеть или запустить; переростки, которые пора разбить; «в работе» и «на проверке» без движения больше недели, ' +
+        '«на проверке» без доказательств в журнале; «ждёт», у которых условие возврата, похоже, наступило; работу, которая по коду и ' +
+        'коммитам сделана, а узел не закрыт, и наоборот; дубли, идеи, которые пора поднять или закрыть, узлы не на своём месте; ' +
+        'чего не хватает до ближайшей вехи и цели проекта. Начни с короткой сводки: где проект сейчас и на чём остановились. ' +
+        'Потом находки по важности — у каждой команда treeyard, которая её исправит. Ничего не меняй, пока я не соглашусь; ' +
+        'после согласия выполни команды и покажи, что вышло.',
+      en:
+        `Review the whole tree of project «${tree.project.title}». Go through the nodes (\`${selfCommand()} show <id>\`, the files in .tree/nodes/), ` +
+        'look into the code and git log as much as you need, and find what is crooked in the tree: nodes without "done when" or with ' +
+        'a criterion nobody can see or run; nodes grown too big to be one session; "in progress" and "in review" without movement for ' +
+        'over a week, "in review" without evidence in the journal; "waiting" whose condition to come back seems to have come; work ' +
+        'done by the code and commits while its node is open, and the other way round; duplicates, ideas to take up or drop, nodes in ' +
+        'the wrong place; what is missing for the nearest milestone and the goal. Start with a short summary: where the project ' +
+        'stands and where it stopped. Then the findings by importance — each with the treeyard command that fixes it. Change ' +
+        'nothing until I agree; after that run the commands and show what came of them.',
+    });
+    if (brain === 'claude') plan.permissionMode = 'plan';
+  }
+  return plan;
+}
+
+const ROOT_TEXT = {
+  ru: {
+    heading: '# Ты работаешь со всем деревом проекта',
+    role: '## Твоя роль',
+    roleText: [
+      'Ты не делаешь один узел — ты смотришь на проект целиком вместе с человеком, как менеджер проекта:',
+      '- отвечаешь, где проект сейчас и на чём остановились — по дереву, журналам узлов и git;',
+      '- находишь кривое в дереве и предлагаешь, как поправить;',
+      '- по просьбе человека заводишь, переносишь, переименовываешь и закрываешь узлы — командами treeyard, а не правкой файлов руками;',
+      '- код проекта не меняешь: работа над узлом — это сессия из этого узла.',
+    ],
+    doneRule: (self: string) =>
+      `Статус done ставит человек. Если он в этом разговоре прямо просит закрыть узлы — \`${self} set <id> status=done --as ты\`: решение его, ты исполняешь. Без такой просьбы — только review.`,
+    tree: '## Дерево сейчас',
+    tally: (s: ReturnType<typeof summarize>) =>
+      `Готово ${s.done} из ${s.total} · в работе ${s.active} · на проверке ${s.review} · ждут ${s.waiting} · идей ${s.ideas}`,
+    now: '## Можно делать сейчас',
+    review: '## На проверке',
+    waiting: '## Ждёт',
+    until: 'вернуться, когда',
+    noReason: 'причина не записана',
+    recent: '## Последнее в журналах',
+    problems: '## Что не так с файлами дерева',
+    rules: '## Как ведётся проект',
+    commands: '## Команды дерева',
+    command: 'Команда',
+    show: 'всё дерево; узел целиком — `show <id>`',
+    add: 'новый узел (родитель — по смыслу; `--status idea` для идеи)',
+    set: 'поменять узел: status, title, parent, done_when, who, check, waiting, until',
+    keyValue: 'ключ=значение',
+    log: 'запись в журнал узла',
+    sessions: 'сессии папки и чьи они',
+    doneWhen: 'готово, когда',
+    more: 'ещё',
+  },
+  en: {
+    heading: '# You are working with the whole project tree',
+    role: '## Your role',
+    roleText: [
+      'You do not do one node — you look at the project as a whole together with the person, like a project manager:',
+      '- you answer where the project stands and where it stopped — from the tree, the node journals and git;',
+      '- you find what is crooked in the tree and propose how to fix it;',
+      '- when the person asks, you add, move, rename and close nodes — with treeyard commands, not by editing the files by hand;',
+      '- you do not change the project code: work on a node is a session from that node.',
+    ],
+    doneRule: (self: string) =>
+      `Status done is set by a person. If they ask you right in this conversation to close nodes — \`${self} set <id> status=done --as you\`: the decision is theirs, you carry it out. Without such a request — review only.`,
+    tree: '## The tree now',
+    tally: (s: ReturnType<typeof summarize>) =>
+      `Done ${s.done} of ${s.total} · in progress ${s.active} · in review ${s.review} · waiting ${s.waiting} · ideas ${s.ideas}`,
+    now: '## Can be done now',
+    review: '## In review',
+    waiting: '## Waiting',
+    until: 'come back when',
+    noReason: 'no reason written',
+    recent: '## Latest in the journals',
+    problems: '## What is wrong with the tree files',
+    rules: '## How the project is run',
+    commands: '## Tree commands',
+    command: 'The command is',
+    show: 'the whole tree; a node in full — `show <id>`',
+    add: 'a new node (pick the parent by meaning; `--status idea` for an idea)',
+    set: 'change a node: status, title, parent, done_when, who, check, waiting, until',
+    keyValue: 'key=value',
+    log: 'a line in the node journal',
+    sessions: 'the sessions of the folder and whose they are',
+    doneWhen: 'done when',
+    more: 'more',
+  },
+};
+
+/** What a session from the root gets: the whole tree, what moves and what stands, the rules, the commands. */
+export function projectContext(tree: Tree): string {
+  const L = pick(ROOT_TEXT);
+  const T = pick(TEXT);
+  const { project } = tree;
+  const self = selfCommand();
+  const lines: string[] = [L.heading, '', T.intro(project.title)];
+  if (project.goal) lines.push(`${T.goal}: ${project.goal}`);
+  lines.push('', L.role, '', ...L.roleText, '', L.doneRule(self), '');
+
+  lines.push(L.tree, '', L.tally(summarize(tree)), '');
+  // Open work in full, with its criterion; closed work one line each — the details are a `show` away.
+  const outline: string[] = [];
+  const walk = (parent: string, depth: number) => {
+    for (const node of childrenOf(tree, parent)) {
+      let line = `${'  '.repeat(depth)}- ${GLYPH[node.status]} ${node.title} (\`${node.id}\`)`;
+      const kids = childrenOf(tree, node.id);
+      if (kids.length) {
+        const p = progress(tree, node.id);
+        line += ` — ${p.done}/${p.total}`;
+      }
+      if (node.who === 'human') line += ` · ${WHO_LABEL.human}`;
+      const open = node.status !== 'done' && node.status !== 'dropped';
+      if (open && node.status === 'waiting' && node.waiting) line += ` · ${T.waiting}: ${clip(node.waiting, 160)}`;
+      if (open && node.doneWhen) line += ` · ${L.doneWhen}: ${clip(node.doneWhen, 200)}`;
+      outline.push(line);
+      walk(node.id, depth + 1);
+    }
+  };
+  walk(ROOT, 0);
+  lines.push(clip(outline.join('\n'), 24_000), '');
+
+  const brief = (node: TreeNode) => {
+    const path = pathTo(tree, node.id)
+      .slice(0, -1)
+      .map((step) => step.title)
+      .join(' › ');
+    return `- ${node.title} (\`${node.id}\`)${path ? ` — ${clip(path, 120)}` : ''}`;
+  };
+  const listed = (title: string, nodes: TreeNode[], line: (node: TreeNode) => string = brief) => {
+    if (!nodes.length) return;
+    lines.push(title, '', ...nodes.slice(0, 20).map(line));
+    if (nodes.length > 20) lines.push(`- … ${L.more} ${nodes.length - 20}`);
+    lines.push('');
+  };
+  listed(
+    L.now,
+    actionable(tree).filter((node) => node.status !== 'review'),
+  );
+  listed(
+    L.review,
+    [...tree.nodes.values()].filter((node) => node.status === 'review'),
+  );
+  listed(L.waiting, waitingNodes(tree), (node) => {
+    const why = node.waiting ? clip(node.waiting, 200) : L.noReason;
+    return `- ${node.title} (\`${node.id}\`): ${why}${node.until ? ` · ${L.until}: ${clip(node.until, 160)}` : ''}`;
+  });
+
+  const events = activity(tree, 25);
+  if (events.length) {
+    lines.push(L.recent, '');
+    for (const event of events)
+      lines.push(
+        `- ${event.when} · ${event.who} · «${clip(event.node.title, 80)}» (\`${event.node.id}\`): ${clip(event.text, 240)}`,
+      );
+    lines.push('');
+  }
+  if (tree.problems.length) lines.push(L.problems, '', ...tree.problems.map((line) => `- ${line}`), '');
+
+  const rules = project.body.trim();
+  if (rules) lines.push(L.rules, '', clip(rules, 6000), '');
+
+  lines.push(L.commands, '');
+  lines.push(`${L.command} \`${self}\`.`);
+  lines.push(`- \`${self} show\` — ${L.show}`);
+  lines.push(`- \`${self} add "${T.add}" --parent <id> --done-when "…"\` — ${L.add}`);
+  lines.push(`- \`${self} set <id> ${L.keyValue}…\` — ${L.set}`);
+  lines.push(`- \`${self} log <id> "…"\` — ${L.log}`);
+  lines.push(`- \`${self} sessions\` — ${L.sessions}`);
+  if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);
+  lines.push(`- ${L.doneRule(self)}`);
   return lines.join('\n');
 }
 

@@ -19,7 +19,7 @@ import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { ago } from '../model/time.js';
 import { childrenOf, heldBy, pathTo, progress, summarize } from '../model/tree.js';
-import type { SessionRef, Tree, TreeNode } from '../model/types.js';
+import { ROOT, type SessionRef, type Tree, type TreeNode } from '../model/types.js';
 import { pictureLines } from './image-view.js';
 import { liveLabel } from './rows.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
@@ -441,7 +441,9 @@ export function SessionDetails(props: {
       </Text>
       {props.owner ? (
         <Text wrap="truncate-end">
-          <Text color={STATUS_COLOR[props.owner.status]}>{GLYPH[props.owner.status]} </Text>
+          <Text color={props.owner.id === ROOT ? C.brand : STATUS_COLOR[props.owner.status]}>
+            {props.owner.id === ROOT ? '◆' : GLYPH[props.owner.status]}{' '}
+          </Text>
           {props.owner.title}
         </Text>
       ) : (

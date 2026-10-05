@@ -1093,4 +1093,19 @@ export const EN: Record<string, string> = {
   '{n} .md проекта — из Git, без игнорируемых файлов и узлов дерева':
     '{n} .md files of the project — from Git, without ignored files and tree nodes',
   'корень дерева: цель, правила, решения': 'root of the tree: goal, rules, decisions',
+  'ревью дерева': 'tree review',
+  'разговор о проекте': 'project conversation',
+  'агент проходит всё дерево и предлагает правки командами treeyard, ничего не меняя':
+    'the agent reviews the whole tree and proposes treeyard commands without changing anything',
+  'статус, на чём остановились, завести или закрыть узлы — первое сообщение твоё':
+    'status, where things stopped, add or close nodes — you write the first message',
+  '⏎ проект · c ревью · P документы': '⏎ project · c review · P documents',
+  'Сессии проекта': 'Project sessions',
+  'Сессия по проекту': 'Project session',
+  '▶ {brain} · ревью дерева': '▶ {brain} · tree review',
+  '▶ {brain} · разговор о проекте': '▶ {brain} · project conversation',
+  '⚙ Другой агент, место, модель…': '⚙ Another agent, place, model…',
+  'Claude Code, Codex или Antigravity · в панели, в терминале или в фоне':
+    'Claude Code, Codex or Antigravity · in a pane, in the terminal or in the background',
+  'всё дерево, журналы, правила и команды': 'the whole tree, journals, rules and commands',
 };

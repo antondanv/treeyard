@@ -14,6 +14,7 @@ import { followStatuses, settlePushes } from '../github.js';
 import { t } from '../i18n/i18n.js';
 import { purgeImages } from '../model/images.js';
 import { loadTree, nodePath } from '../model/store.js';
+import { holderOf } from '../model/tree.js';
 import { type Action, App, type Toast } from './App.js';
 import { captureMouse, TerminalInput, withoutAutowrap } from './input.js';
 import { inlineMark } from './logo.js';
@@ -99,7 +100,7 @@ async function perform(dir: string, action: Exclude<Action, { type: 'quit' }>): 
     }
     const tree = loadTree(dir);
     if (action.type === 'launch') {
-      const node = tree.nodes.get(action.node);
+      const node = holderOf(tree, action.node);
       banner(`${BRAIN_LABEL[action.options.brain]} · ${node?.title ?? ''}`);
       const { result, ref } = await launch(tree, action.node, action.options);
       if (result.error) return { text: result.error.message, color: C.bad };
@@ -113,7 +114,7 @@ async function perform(dir: string, action: Exclude<Action, { type: 'quit' }>): 
       };
     }
     if (action.type === 'resume') {
-      const node = tree.nodes.get(action.node);
+      const node = holderOf(tree, action.node);
       banner(`${BRAIN_LABEL[action.ref.brain]} · ${action.ref.name ?? node?.title ?? ''}`);
       const result = await resume(tree, action.node, action.ref);
       if (result.error) return { text: result.error.message, color: C.bad };

@@ -27,7 +27,15 @@ import {
   type Step,
 } from '../agents/assist.js';
 import { type CheckResult, runCheck } from '../agents/check.js';
-import { contextText, START_HINT, START_LABEL, sessionPlan } from '../agents/context.js';
+import {
+  contextText,
+  ROOT_START_HINT,
+  ROOT_START_LABEL,
+  rootStart,
+  START_HINT,
+  START_LABEL,
+  sessionPlan,
+} from '../agents/context.js';
 import {
   BRAIN_LABEL,
   BRAIN_SHORT,
@@ -99,6 +107,7 @@ import {
   actionable,
   childrenOf,
   descendants,
+  holderOf,
   ideaNodes,
   offTree,
   offTreeLine,
@@ -107,8 +116,10 @@ import {
   pathTo,
   progress,
   type Row,
+  rootNode,
   STATUS_ORDER_NAMES,
   type StatusOrderName,
+  sessionHolders,
   statusOrder,
   summarize,
   waitingNodes,
@@ -495,7 +506,7 @@ export function App(props: AppProps) {
     live: watching ? live.get(session.id)?.live : session.live,
   }));
   // Include panes and sleeping references even before the CLI lists them.
-  for (const node of tree.nodes.values())
+  for (const node of sessionHolders(tree))
     for (const ref of node.sessions) {
       if (
         (ref.mode === 'pane' || ref.mode === 'background') &&
@@ -537,9 +548,9 @@ export function App(props: AppProps) {
     !paneFor(session, panes) &&
     Boolean(
       session.background ||
-        tree.nodes
-          .get(owners.get(session.id) ?? '')
-          ?.sessions.some((ref) => ref.id === session.id && (ref.mode === 'pane' || ref.mode === 'background')),
+        holderOf(tree, owners.get(session.id))?.sessions.some(
+          (ref) => ref.id === session.id && (ref.mode === 'pane' || ref.mode === 'background'),
+        ),
     );
   const sessionIndex = Math.max(
     0,
@@ -574,6 +585,7 @@ export function App(props: AppProps) {
   }
   const currentItem = view === 'sessions' ? undefined : nodesInView[cursor];
   const current = currentItem ? tree.nodes.get(currentItem.id) : undefined;
+  const currentHolder = rootSelected ? rootNode(tree) : current;
   const currentGroup = view === 'tree' && isDoneGroup(currentItem?.id) ? currentItem : undefined;
   const currentOffer = view === 'tree' && isGithubOffer(currentItem?.id);
 
@@ -613,8 +625,8 @@ export function App(props: AppProps) {
   const planting = panes.find((p) => p.pane === props.plantingPane?.pane);
   const selectedPane = currentSession
     ? paneFor(currentSession, panes)
-    : ((pinned && current?.sessions.some((ref) => paneFor(ref, [pinned])) ? pinned : undefined) ??
-      nodePane(current, panes)?.pane ??
+    : ((pinned && currentHolder?.sessions.some((ref) => paneFor(ref, [pinned])) ? pinned : undefined) ??
+      nodePane(currentHolder, panes)?.pane ??
       planting);
   const terminalVisible = Boolean(showPane && selectedPane && !modal && !prompt && !searching);
   watchedPane.current = terminalVisible ? selectedPane?.pane : undefined;
@@ -697,6 +709,7 @@ export function App(props: AppProps) {
     modal &&
     [
       'context',
+      'project',
       'help',
       'link',
       'problems',
@@ -853,6 +866,12 @@ export function App(props: AppProps) {
     exit();
   };
   const reveal = (id: string) => {
+    if (id === ROOT) {
+      setFilter('');
+      setView('tree');
+      setSelected(ROOT);
+      return;
+    }
     const node = tree.nodes.get(id);
     if (!node) return;
     setExpanded(
@@ -880,7 +899,7 @@ export function App(props: AppProps) {
 
   const defaults = (): LaunchOptions => ({
     brain: tree.project.brain ?? 'claude',
-    start: tree.project.start ?? 'plan',
+    start: rootSelected ? rootStart(tree.project.start ?? 'plan') : (tree.project.start ?? 'plan'),
     pane: hasPanes && settings().open === 'pane',
   });
 
@@ -900,7 +919,7 @@ export function App(props: AppProps) {
     perform(intent);
   };
   const perform = (intent: Intent) => {
-    const node = 'node' in intent ? tree.nodes.get(intent.node) : undefined;
+    const node = 'node' in intent ? holderOf(tree, intent.node) : undefined;
     if (intent.kind === 'new') return startSession(intent.node, intent.options);
     if (intent.kind === 'resume') {
       const pane = paneFor(intent.ref, panes);
@@ -916,7 +935,7 @@ export function App(props: AppProps) {
         return;
       }
       const owner = owners.get(intent.session.id);
-      const ref = owner ? tree.nodes.get(owner)?.sessions.find((s) => s.id === intent.session.id) : undefined;
+      const ref = owner ? holderOf(tree, owner)?.sessions.find((s) => s.id === intent.session.id) : undefined;
       if (owner && ref?.mode === 'pane') return wakeSession(owner, ref);
       if (owner && ref) return handOver({ type: 'resume', node: owner, ref });
       return handOver({ type: 'resume-loose', session: intent.session });
@@ -950,7 +969,7 @@ export function App(props: AppProps) {
         }),
         C.warn,
       );
-    const node = tree.nodes.get(nodeId);
+    const node = holderOf(tree, nodeId);
     setJob({
       label: t('запускаю {p1} в фоне', {
         p1: BRAIN_LABEL[options.brain],
@@ -993,8 +1012,8 @@ export function App(props: AppProps) {
       setShowPane(true);
       return setPaneFocused(true);
     }
-    const ref = view === 'sessions' ? undefined : sleepingRef(current, panes);
-    if (ref && current) return request({ kind: 'resume', node: current.id, ref });
+    const ref = view === 'sessions' ? undefined : sleepingRef(currentHolder, panes);
+    if (ref && currentHolder) return request({ kind: 'resume', node: currentHolder.id, ref });
     say(t('у узла нет сессии в панели · o — запустить, ⏎ — все сессии узла'), C.warn);
   };
 
@@ -1168,7 +1187,7 @@ export function App(props: AppProps) {
 
   const onMenu = (nodeId: string, choice: SessionChoice) => {
     setModal(undefined);
-    const node = tree.nodes.get(nodeId);
+    const node = holderOf(tree, nodeId);
     if (!node) return;
     if (choice.kind === 'configure') return setModal({ kind: 'launch', node: nodeId });
     if (choice.kind === 'new') return request({ kind: 'new', node: nodeId, options: withProject(choice.options) });
@@ -1928,7 +1947,7 @@ export function App(props: AppProps) {
       expandTo(row.node.id, !row.expanded);
       return true;
     }
-    if (input === 'f' && graphLayout && !selectedPane && !sleepingRef(current, panes)) {
+    if (input === 'f' && graphLayout && !selectedPane && !sleepingRef(currentHolder, panes)) {
       viewportFollowRef.current.manual = false;
       viewportRef.current = { x: 0, y: 0 };
       bump();
@@ -1993,6 +2012,9 @@ export function App(props: AppProps) {
         if (key.return) return enter();
       }
 
+      if (rootSelected && input === 'c')
+        return request({ kind: 'new', node: ROOT, options: withProject({ ...defaults(), start: 'plan' }) });
+      if (rootSelected && input === 'o') return setModal({ kind: 'launch', node: ROOT });
       if (arrows(input, key)) return;
       if (key.return) return enter();
       if (key.delete) return actions.remove!.run();
@@ -2089,7 +2111,11 @@ export function App(props: AppProps) {
                 pane={paneFor(item, panes)}
                 sleeping={sessionSleeping(item)}
                 offTree={offTree(item, owners)}
-                {...(owners.get(item.id) ? { owner: tree.nodes.get(owners.get(item.id)!)?.title ?? '' } : {})}
+                {...(owners.get(item.id)
+                  ? {
+                      owner: `${owners.get(item.id) === ROOT ? '◆ ' : ''}${holderOf(tree, owners.get(item.id))?.title ?? ''}`,
+                    }
+                  : {})}
               />
             </Clickable>
           );
@@ -2198,7 +2224,7 @@ export function App(props: AppProps) {
     });
   };
 
-  const modalNode = modal && 'node' in modal ? tree.nodes.get(modal.node) : undefined;
+  const modalNode = modal && 'node' in modal ? holderOf(tree, modal.node) : undefined;
   const dialog = (): ReactNode => {
     if (!modal) return null;
     const w = fullModal
@@ -2331,6 +2357,12 @@ export function App(props: AppProps) {
         return (
           <ProjectMenu
             project={tree.project}
+            node={rootNode(tree)}
+            defaults={defaults()}
+            live={live}
+            panes={panes}
+            frame={frame}
+            onChoose={(choice) => onMenu(ROOT, choice)}
             {...(docs ? { docs: docs.length } : {})}
             width={w}
             height={bodyHeight}
@@ -2511,12 +2543,13 @@ export function App(props: AppProps) {
         if (!modalNode) return null;
         return (
           <LaunchForm
+            root={modalNode.id === ROOT}
             node={modalNode}
             width={w}
             defaults={
               modal.options ?? {
                 brain: defaults().brain,
-                start: defaults().start,
+                start: modalNode.id === ROOT ? rootStart(defaults().start) : defaults().start,
                 pane: defaults().pane,
                 ...(tree.project.model ? { model: tree.project.model } : {}),
                 ...(tree.project.effort ? { effort: tree.project.effort } : {}),
@@ -2724,11 +2757,11 @@ export function App(props: AppProps) {
   const confirmView = (
     intent: Intent,
   ): { title: string; rows: ConfirmRow[]; prompt?: string; note?: string } | undefined => {
-    const node = 'node' in intent ? tree.nodes.get(intent.node) : undefined;
+    const node = 'node' in intent ? holderOf(tree, intent.node) : undefined;
     const nodeRow = (n: TreeNode): ConfirmRow => ({
       label: t('Узел'),
-      value: `${GLYPH[n.status]} ${n.title}`,
-      color: STATUS_COLOR[n.status],
+      value: `${n.id === ROOT ? '◆' : GLYPH[n.status]} ${n.title}`,
+      color: n.id === ROOT ? C.brand : STATUS_COLOR[n.status],
     });
     if (intent.kind === 'new') {
       if (!node) return undefined;
@@ -2741,7 +2774,10 @@ export function App(props: AppProps) {
           value: `${BRAIN_LABEL[options.brain]} · ${options.background ? t('в фоне, сам по себе') : options.pane ? t('в панели') : t('в этом терминале')}`,
           color: C.agent,
         },
-        { label: t('Как начать'), value: `${START_LABEL[plan.start]} — ${START_HINT[plan.start]}` },
+        {
+          label: t('Как начать'),
+          value: `${(node.id === ROOT ? ROOT_START_LABEL : START_LABEL)[plan.start]} — ${(node.id === ROOT ? ROOT_START_HINT : START_HINT)[plan.start]}`,
+        },
         {
           label: t('Модель'),
           value: `${options.model ?? t('по умолчанию CLI')} · ${t('усилие')} ${options.effort ?? t('по умолчанию')}`,
@@ -3279,7 +3315,7 @@ export function App(props: AppProps) {
                   title={
                     selectedPane === planting
                       ? (selectedPane.label ?? '')
-                      : (current?.title ?? selectedPane.label ?? currentSession?.title ?? '')
+                      : (currentHolder?.title ?? selectedPane.label ?? currentSession?.title ?? '')
                   }
                   state={paneState(selectedPane, live.get(selectedPane.sessionId ?? ''), frame)}
                   width={side ? rightWidth : width}
@@ -3301,7 +3337,7 @@ export function App(props: AppProps) {
                     sleeping={Boolean(currentSession && sessionSleeping(currentSession))}
                     owner={
                       currentSession && owners.get(currentSession.id)
-                        ? tree.nodes.get(owners.get(currentSession.id)!)
+                        ? holderOf(tree, owners.get(currentSession.id))
                         : undefined
                     }
                     width={rightWidth}
@@ -3375,7 +3411,7 @@ export function App(props: AppProps) {
               offer={currentOffer}
               root={rootSelected}
               filter={filter}
-              pane={!terminalVisible && current && sleepingRef(current, panes) ? 'sleeping' : undefined}
+              pane={!terminalVisible && currentHolder && sleepingRef(currentHolder, panes) ? 'sleeping' : undefined}
               active={listKeys}
             />
           )}
@@ -3401,7 +3437,7 @@ function SelectionStrip(props: {
   if (props.root) {
     const { done, total } = progress(tree, ROOT);
     const meta = t('корень дерева · {done}/{total}', { done, total });
-    const keys = t('⏎ проект · P документы');
+    const keys = t('⏎ проект · c ревью · P документы');
     return (
       <Box flexDirection="column" width={props.width} paddingX={1}>
         <Box width={props.width - 2}>
@@ -3619,6 +3655,7 @@ function Hints(props: {
         : props.root
           ? [
               ['⏎', t('проект')],
+              ['c', t('ревью дерева')],
               ['P', t('документы')],
               ['→', t('к веткам')],
               ['a', t('новая ветка')],

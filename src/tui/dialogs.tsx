@@ -3,12 +3,12 @@
  * resume a session, confirm a delete, help, and a reader for long text.
  */
 import type { Catalog, SessionInfo } from '@antondanv/brainyard';
-import { Box, Text, useInput } from 'ink';
+import { Box, type Key, Text, useInput } from 'ink';
 import { useRef, useState } from 'react';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 import type { AssistChoice, AssistJob } from '../agents/assist.js';
-import { START_HINT, START_LABEL } from '../agents/context.js';
+import { ROOT_START_HINT, ROOT_START_LABEL, START_HINT, START_LABEL } from '../agents/context.js';
 import { BRAIN_LABEL, BRAIN_SHORT, type LaunchOptions } from '../agents/launch.js';
 import { formatMemory, isPending, type Pane, paneFor, panesAvailable } from '../agents/panes.js';
 import { plural, t } from '../i18n/i18n.js';
@@ -320,31 +320,22 @@ export type SessionChoice =
   | { kind: 'diffs' }
   | { kind: 'context' };
 
-export function NodeMenu(props: {
-  node: TreeNode;
-  width: number;
-  height: number;
-  defaults: LaunchOptions;
-  live: Map<string, SessionInfo>;
-  panes: readonly Pane[];
-  frame: number;
-  canRaise?: boolean;
-  canLower?: boolean;
-  onChoose: (choice: SessionChoice) => void;
-  onCancel: () => void;
-}) {
-  const { node, defaults } = props;
-  const start = defaults.start;
+/** The sessions a node (or the root) holds, the newest first: resume, show, full screen, sleep. */
+function sessionItems(
+  node: TreeNode,
+  context: { live: Map<string, SessionInfo>; panes: readonly Pane[]; frame: number },
+  section: string,
+): MenuItem[] {
   const sorted = [...node.sessions].sort((a, b) =>
     (b.opened ?? b.started ?? '').localeCompare(a.opened ?? a.started ?? ''),
   );
   const items: MenuItem[] = [];
   let firstPane = true;
   sorted.forEach((ref, index) => {
-    const live = props.live.get(ref.id);
-    const pane = paneFor(ref, props.panes);
+    const live = context.live.get(ref.id);
+    const pane = paneFor(ref, context.panes);
     const sleeping = !pane && ref.mode === 'pane';
-    const state = pane ? paneState(pane, live, props.frame) : undefined;
+    const state = pane ? paneState(pane, live, context.frame) : undefined;
     const name = shortSessionName(ref.name, node.title);
     const status = state
       ? `▣ ${t('в панели')} · ${state.text}${pane?.memory ? ` · ${formatMemory(pane.memory)}` : ''}`
@@ -355,7 +346,7 @@ export function NodeMenu(props: {
           : '';
     items.push({
       key: `resume:${ref.id}`,
-      section: index === 0 ? t('Сессии узла') : undefined,
+      section: index === 0 ? section : undefined,
       hint: pane
         ? t('⏎ — справа от дерева, печатать в неё · del — убрать из узла')
         : sleeping
@@ -393,6 +384,52 @@ export function NodeMenu(props: {
       firstPane = false;
     }
   });
+  return items;
+}
+
+/** What picking one of `sessionItems` means; undefined for the other items. */
+function sessionPick(key: string, node: TreeNode, panes: readonly Pane[]): SessionChoice | undefined {
+  if (key.startsWith('resume:')) {
+    const ref = node.sessions.find((session) => session.id === key.slice('resume:'.length));
+    // A live pane is shown, not resumed: nothing new starts.
+    return ref ? { kind: paneFor(ref, panes) ? 'show' : 'resume', ref } : undefined;
+  }
+  for (const kind of ['sleep', 'fullscreen'] as const) {
+    if (!key.startsWith(`${kind}:`)) continue;
+    const ref = node.sessions.find((session) => session.id === key.slice(kind.length + 1));
+    return ref ? { kind, ref } : undefined;
+  }
+  return undefined;
+}
+
+/** del on a session: forget it in the tree (the CLI keeps it). */
+function forgetKey(node: TreeNode, onChoose: (choice: SessionChoice) => void) {
+  return (_input: string, key: Key, current: string | undefined) => {
+    if ((key.delete || key.backspace) && current?.startsWith('resume:')) {
+      const ref = node.sessions.find((session) => session.id === current.slice('resume:'.length));
+      if (ref) onChoose({ kind: 'forget', ref });
+      return true;
+    }
+    return false;
+  };
+}
+
+export function NodeMenu(props: {
+  node: TreeNode;
+  width: number;
+  height: number;
+  defaults: LaunchOptions;
+  live: Map<string, SessionInfo>;
+  panes: readonly Pane[];
+  frame: number;
+  canRaise?: boolean;
+  canLower?: boolean;
+  onChoose: (choice: SessionChoice) => void;
+  onCancel: () => void;
+}) {
+  const { node, defaults } = props;
+  const start = defaults.start;
+  const items: MenuItem[] = sessionItems(node, props, t('Сессии узла'));
   items.push(
     {
       key: 'new:claude',
@@ -478,16 +515,9 @@ export function NodeMenu(props: {
     ) {
       return props.onChoose({ kind: key });
     }
-    if (key.startsWith('resume:')) {
-      const ref = node.sessions.find((session) => session.id === key.slice('resume:'.length));
-      // A live pane is shown, not resumed: nothing new starts.
-      if (ref) props.onChoose({ kind: paneFor(ref, props.panes) ? 'show' : 'resume', ref });
-      return;
-    }
-    for (const kind of ['sleep', 'fullscreen'] as const) {
-      if (!key.startsWith(`${kind}:`)) continue;
-      const ref = node.sessions.find((session) => session.id === key.slice(kind.length + 1));
-      if (ref) props.onChoose({ kind, ref });
+    if (key.startsWith('resume:') || key.startsWith('sleep:') || key.startsWith('fullscreen:')) {
+      const choice = sessionPick(key, node, props.panes);
+      if (choice) props.onChoose(choice);
       return;
     }
     const [, brain, bg] = key.split(':') as [string, BrainId, string | undefined];
@@ -511,14 +541,7 @@ export function NodeMenu(props: {
         onCancel={props.onCancel}
         // Section headings and the selected hint also need room inside the frame.
         maxRows={Math.max(3, props.height - 9 - items.filter((item) => item.section).length * 2)}
-        onKey={(_input, key, current) => {
-          if ((key.delete || key.backspace) && current?.startsWith('resume:')) {
-            const ref = node.sessions.find((session) => session.id === current.slice('resume:'.length));
-            if (ref) props.onChoose({ kind: 'forget', ref });
-            return true;
-          }
-          return false;
-        }}
+        onKey={forgetKey(node, props.onChoose)}
       />
     </Frame>
   );
@@ -529,12 +552,21 @@ export function NodeMenu(props: {
 /** ⏎ on the root: what belongs to the whole project rather than to one node. */
 export function ProjectMenu(props: {
   project: Project;
+  /** The root as a holder of sessions (`rootNode`). */
+  node: TreeNode;
   docs?: number;
   width: number;
   height: number;
+  defaults: LaunchOptions;
+  live: Map<string, SessionInfo>;
+  panes: readonly Pane[];
+  frame: number;
   onPick: (key: 'docs' | 'rules' | 'settings' | 'add') => void;
+  /** Sessions of the project: resume, start, configure, what the agent gets. */
+  onChoose: (choice: SessionChoice) => void;
   onCancel: () => void;
 }) {
+  const brain = BRAIN_LABEL[props.defaults.brain];
   const items: MenuItem[] = [
     {
       key: 'docs',
@@ -548,6 +580,32 @@ export function ProjectMenu(props: {
       label: t('Цель, правила и решения — .tree/tree.md'),
       hotkey: 'e',
       hint: t('корень дерева: его получает каждый агент · u отменит правку'),
+    },
+    ...sessionItems(props.node, props, t('Сессии проекта')),
+    {
+      key: 'new:plan',
+      hotkey: 'c',
+      section: t('Сессия по проекту'),
+      label: t('▶ {brain} · ревью дерева', { brain }),
+      hint: ROOT_START_HINT.plan,
+    },
+    {
+      key: 'new:chat',
+      hotkey: 'r',
+      label: t('▶ {brain} · разговор о проекте', { brain }),
+      hint: ROOT_START_HINT.chat,
+    },
+    {
+      key: 'configure',
+      hotkey: 'o',
+      label: t('⚙ Другой агент, место, модель…'),
+      hint: t('Claude Code, Codex или Antigravity · в панели, в терминале или в фоне'),
+    },
+    {
+      key: 'context',
+      hotkey: 'p',
+      label: t('☰ Что получит агент'),
+      hint: t('всё дерево, журналы, правила и команды'),
     },
     { key: 'settings', label: t('Настройки проекта'), hotkey: ',', hint: t('мозг, модель, как начинать сессии') },
     { key: 'add', label: t('Новая ветка'), hotkey: 'a', hint: t('узел верхнего уровня'), section: t('Дерево') },
@@ -569,9 +627,27 @@ export function ProjectMenu(props: {
       <Menu
         items={items}
         active
-        onPick={(key) => props.onPick(key as 'docs' | 'rules' | 'settings' | 'add')}
+        onPick={(key) => {
+          const session = sessionPick(key, props.node, props.panes);
+          if (session) return props.onChoose(session);
+          if (key === 'configure' || key === 'context') return props.onChoose({ kind: key });
+          if (key === 'new:plan' || key === 'new:chat')
+            return props.onChoose({
+              kind: 'new',
+              options: {
+                brain: props.defaults.brain,
+                start: key === 'new:chat' ? 'chat' : 'plan',
+                pane: props.defaults.pane,
+              },
+            });
+          props.onPick(key as 'docs' | 'rules' | 'settings' | 'add');
+        }}
         onCancel={props.onCancel}
-        maxRows={Math.max(3, props.height - 12)}
+        maxRows={Math.max(
+          3,
+          props.height - 9 - (props.project.goal ? 3 : 0) - items.filter((item) => item.section).length * 2,
+        )}
+        onKey={forgetKey(props.node, props.onChoose)}
       />
     </Frame>
   );
@@ -650,9 +726,11 @@ function FieldHint(props: { text: string }) {
   );
 }
 
-function launchFields(draft: LaunchDraft, catalog: Catalog | undefined, panes: boolean): LaunchField[] {
+function launchFields(draft: LaunchDraft, catalog: Catalog | undefined, panes: boolean, root = false): LaunchField[] {
   const claude = draft.brain === 'claude';
-  const starts = START_MODES.filter((mode) => mode !== 'goal' || claude);
+  // A session from the root starts as a review of the tree or as a talk about the project.
+  const starts: StartMode[] = root ? ['plan', 'chat'] : START_MODES.filter((mode) => mode !== 'goal' || claude);
+  const labels = root ? ROOT_START_LABEL : START_LABEL;
   const noEffort = effortsFor(catalog, draft.model)?.length === 0;
   return [
     {
@@ -680,13 +758,13 @@ function launchFields(draft: LaunchDraft, catalog: Catalog | undefined, panes: b
       set: (d, value) => ({
         ...d,
         where: value as Where,
-        start: value === 'background' && d.start === 'chat' ? 'do' : d.start,
+        start: value === 'background' && d.start === 'chat' ? (root ? 'plan' : 'do') : d.start,
       }),
     },
     {
       label: t('Как начать'),
-      options: starts.map((mode) => ({ value: mode, label: START_LABEL[mode] })),
-      value: starts.includes(draft.start) ? draft.start : 'do',
+      options: starts.map((mode) => ({ value: mode, label: labels[mode] })),
+      value: starts.includes(draft.start) ? draft.start : root ? 'plan' : 'do',
       set: (d, value) => ({ ...d, start: value as StartMode }),
     },
     {
@@ -717,6 +795,8 @@ function launchFields(draft: LaunchDraft, catalog: Catalog | undefined, panes: b
 
 export function LaunchForm(props: {
   node: TreeNode;
+  /** A session about the whole project, from the root. */
+  root?: boolean;
   width: number;
   defaults: LaunchOptions;
   onSubmit: (options: LaunchOptions) => void;
@@ -736,11 +816,11 @@ export function LaunchForm(props: {
   const catalogRef = useRef(catalog);
   catalogRef.current = catalog;
   const done = useRef(false);
-  const fields = launchFields(draft, catalog, panes);
+  const fields = launchFields(draft, catalog, panes, props.root);
   useInput((input, key) => {
     if (done.current) return;
     const d = latest.current;
-    const all = launchFields(d, catalogRef.current, panes);
+    const all = launchFields(d, catalogRef.current, panes, props.root);
     if (key.escape) {
       done.current = true;
       return props.onCancel();
@@ -772,7 +852,7 @@ export function LaunchForm(props: {
   return (
     <Frame
       title={t('Запуск · {title}', {
-        title: props.node.title,
+        title: props.root ? `◆ ${props.node.title}` : props.node.title,
       })}
       width={props.width}
       color={C.agent}
@@ -796,8 +876,10 @@ export function LaunchForm(props: {
         : null}
       {row(2)}
       {hint(
-        START_HINT[startMode] +
-          (startMode === 'goal' && !props.node.doneWhen ? t(' — у узла нет критерия, будет «делать»') : ''),
+        props.root
+          ? ROOT_START_HINT[startMode]
+          : START_HINT[startMode] +
+              (startMode === 'goal' && !props.node.doneWhen ? t(' — у узла нет критерия, будет «делать»') : ''),
       )}
       {row(3)}
       {row(4)}

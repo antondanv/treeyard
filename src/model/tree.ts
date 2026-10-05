@@ -275,10 +275,39 @@ export function parents(tree: Tree): string[] {
   return [...out];
 }
 
-/** Which node holds a session, by session id. */
+/**
+ * The root as a holder of sessions: shaped like a node, so session lists,
+ * panes and menus treat it like one. Its `sessions` are the project's own
+ * array — what is written there lands in tree.md.
+ */
+export function rootNode(tree: Tree): TreeNode {
+  return {
+    id: ROOT,
+    title: tree.project.title,
+    parent: '',
+    order: 0,
+    status: 'active',
+    sessions: tree.project.sessions,
+    body: '',
+    extra: {},
+  };
+}
+
+/** A node, or the root when `id` is `root`: whoever may hold sessions. */
+export function holderOf(tree: Tree, id: string | undefined): TreeNode | undefined {
+  if (id === ROOT) return rootNode(tree);
+  return id ? tree.nodes.get(id) : undefined;
+}
+
+/** Every holder of sessions: the nodes and the root. */
+export function sessionHolders(tree: Tree): TreeNode[] {
+  return [...tree.nodes.values(), rootNode(tree)];
+}
+
+/** Which node holds a session, by session id; `root` for the project's own sessions. */
 export function sessionOwners(tree: Tree): Map<string, string> {
   const owners = new Map<string, string>();
-  for (const node of tree.nodes.values()) for (const ref of node.sessions) owners.set(ref.id, node.id);
+  for (const node of sessionHolders(tree)) for (const ref of node.sessions) owners.set(ref.id, node.id);
   return owners;
 }
 

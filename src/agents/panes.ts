@@ -27,6 +27,7 @@ import { t } from '../i18n/i18n.js';
 import { nodeEnv } from '../model/notes.js';
 import { attachSession, detachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
+import { holderOf, sessionHolders } from '../model/tree.js';
 import type { BrainId, SessionRef, Tree, TreeNode } from '../model/types.js';
 import { fullAccess, sessionPlan } from './context.js';
 import type { LaunchOptions } from './launch.js';
@@ -62,14 +63,14 @@ export interface PaneSize {
   height: number;
 }
 
-/** Starts a node's session in a new pane. */
+/** Starts a session of a node, or of the whole project (`root`), in a new pane. */
 export async function launchInPane(
   tree: Tree,
   id: string,
   options: LaunchOptions,
   size: PaneSize,
 ): Promise<{ pane: string; ref: SessionRef; warnings: string[] }> {
-  const node = tree.nodes.get(id);
+  const node = holderOf(tree, id);
   if (!node)
     throw new Error(
       t('нет узла {id}', {
@@ -131,10 +132,10 @@ export async function wakeInPane(tree: Tree, nodeId: string, ref: SessionRef, si
   const running = paneFor(ref, await listPanes());
   if (running) return running.pane;
   if (isPending(ref) || !(await hasConversation(tree.project.dir, ref.brain, ref.id))) {
-    if (tree.nodes.has(nodeId)) detachSession(tree, nodeId, ref.id);
+    if (holderOf(tree, nodeId)) detachSession(tree, nodeId, ref.id);
     throw new Error(t('в этой сессии не было ни одного сообщения — CLI её не сохранил; убрал из узла · o — новая'));
   }
-  const node = tree.nodes.get(nodeId);
+  const node = holderOf(tree, nodeId);
   const started = await startPane({
     brain: ref.brain,
     cwd: tree.project.dir,
@@ -147,7 +148,7 @@ export async function wakeInPane(tree: Tree, nodeId: string, ref: SessionRef, si
   });
   // The resumed session may not know its id was ours: tell the pane.
   if (!started.sessionId) await setPaneSession(started.pane, ref.id);
-  if (tree.nodes.has(nodeId)) updateRef(tree, nodeId, ref, { mode: 'pane', pane: started.pane, opened: nowIso() });
+  if (node) updateRef(tree, nodeId, ref, { mode: 'pane', pane: started.pane, opened: nowIso() });
   return started.pane;
 }
 
@@ -158,7 +159,7 @@ export async function wakeInPane(tree: Tree, nodeId: string, ref: SessionRef, si
  */
 export async function sleepPane(tree: Tree, pane: Pane): Promise<'slept' | 'closed' | 'failed'> {
   let owner: { nodeId: string; ref: SessionRef } | undefined;
-  for (const node of tree.nodes.values()) {
+  for (const node of sessionHolders(tree)) {
     const ref = node.sessions.find((s) => paneFor(s, [pane]));
     if (ref) owner = { nodeId: node.id, ref };
   }
@@ -178,7 +179,7 @@ export async function sleepPane(tree: Tree, pane: Pane): Promise<'slept' | 'clos
 }
 
 function updateRef(tree: Tree, nodeId: string, ref: SessionRef, patch: Partial<SessionRef>): void {
-  const node = tree.nodes.get(nodeId);
+  const node = holderOf(tree, nodeId);
   if (!node) return;
   const found = node.sessions.find((s) => s.brain === ref.brain && s.id === ref.id);
   if (!found) return;
@@ -236,11 +237,11 @@ export function sleepingRef(node: TreeNode | undefined, panes: readonly Pane[]):
  */
 export async function settlePending(tree: Tree, panes: readonly Pane[]): Promise<boolean> {
   let changed = false;
-  const pending = [...tree.nodes.values()]
+  const pending = sessionHolders(tree)
     .flatMap((node) => node.sessions.filter(isPending).map((ref) => ({ node, ref })))
     .sort((a, b) => (a.ref.started ?? '').localeCompare(b.ref.started ?? ''));
   const used = new Set(
-    [...tree.nodes.values()].flatMap((node) =>
+    sessionHolders(tree).flatMap((node) =>
       node.sessions.filter((ref) => !isPending(ref)).map((ref) => `${ref.brain}:${ref.id}`),
     ),
   );

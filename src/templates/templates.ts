@@ -172,6 +172,7 @@ export function createTree(dir: string, template: Template, options: CreateOptio
     start: 'plan',
     created: today(),
     body: projectBody(template, vars),
+    sessions: [],
     extra: {},
   };
   const goal = vars.goal;

@@ -136,6 +136,7 @@ function readProject(dir: string, problems: string[]): Project {
     dir,
     title: str(take('title')) || basename(dir),
     body,
+    sessions: sessionsFrom(take('sessions')),
     extra,
   };
   const goal = str(take('goal'));
@@ -252,21 +253,25 @@ export function nodeToText(node: TreeNode): string {
     needs: node.needs,
     for: node.neededBy,
     commits: node.commits?.length ? node.commits : undefined,
-    sessions: node.sessions.map((ref) => ({
-      brain: ref.brain,
-      id: ref.id,
-      ...(ref.name ? { name: ref.name } : {}),
-      ...(ref.started ? { started: ref.started } : {}),
-      ...(ref.opened ? { opened: ref.opened } : {}),
-      ...(ref.mode ? { mode: ref.mode } : {}),
-      ...(ref.pane ? { pane: ref.pane } : {}),
-    })),
+    sessions: sessionsData(node.sessions),
     created: node.created,
     updated: node.updated,
     closed: node.closed,
     ...node.extra,
   };
   return stringifyDocument(data, node.body);
+}
+
+function sessionsData(refs: readonly SessionRef[]): Record<string, unknown>[] {
+  return refs.map((ref) => ({
+    brain: ref.brain,
+    id: ref.id,
+    ...(ref.name ? { name: ref.name } : {}),
+    ...(ref.started ? { started: ref.started } : {}),
+    ...(ref.opened ? { opened: ref.opened } : {}),
+    ...(ref.mode ? { mode: ref.mode } : {}),
+    ...(ref.pane ? { pane: ref.pane } : {}),
+  }));
 }
 
 export function projectToText(project: Project): string {
@@ -280,6 +285,7 @@ export function projectToText(project: Project): string {
     start: project.start,
     assist_model: project.assistModel,
     created: project.created,
+    sessions: sessionsData(project.sessions ?? []),
     ...project.extra,
   };
   return stringifyDocument(data, project.body);

@@ -8,9 +8,9 @@ import { labels, t } from '../i18n/i18n.js';
 import { appendJournal, replaceDescription } from './journal.js';
 import { closeNeeds, forgetLinked } from './links.js';
 import { writeOverview } from './overview.js';
-import { removeNode, writeNode } from './store.js';
+import { removeNode, writeNode, writeProject } from './store.js';
 import { nowIso, stamp, today } from './time.js';
-import { childrenOf, descendants } from './tree.js';
+import { childrenOf, descendants, rootNode } from './tree.js';
 import { ROOT, type SessionRef, type Status, type Tree, type TreeNode, type Who } from './types.js';
 
 // No 0/o, 1/l/i: ids get read aloud and typed into prompts.
@@ -205,9 +205,13 @@ export function detachCommit(tree: Tree, id: string, sha: string, source = t('т
   return logToNode(tree, id, t('убрана привязка коммита {sha}', { sha }), source);
 }
 
-/** Records a session on a node; opening it again only refreshes `opened`. */
+/**
+ * Records a session on a node — or on the root (`root`): a session about the
+ * whole project, kept in tree.md, with no journal of its own. Opening it
+ * again only refreshes `opened`.
+ */
 export function attachSession(tree: Tree, id: string, ref: SessionRef, journal?: string): TreeNode {
-  const node = need(tree, id);
+  const node = id === ROOT ? rootNode(tree) : need(tree, id);
   const existing = node.sessions.find((session) => session.brain === ref.brain && session.id === ref.id);
   if (existing) {
     existing.opened = ref.opened ?? nowIso();
@@ -215,12 +219,21 @@ export function attachSession(tree: Tree, id: string, ref: SessionRef, journal?:
   } else {
     node.sessions.push({ ...ref, opened: ref.opened ?? nowIso() });
   }
+  if (id === ROOT) {
+    writeProject(tree.project);
+    return node;
+  }
   if (journal) node.body = appendJournal(node.body, `${stamp()} · ${ref.brain} · ${journal}`);
   save(tree, node);
   return node;
 }
 
 export function detachSession(tree: Tree, id: string, sessionId: string): TreeNode {
+  if (id === ROOT) {
+    tree.project.sessions = tree.project.sessions.filter((session) => session.id !== sessionId);
+    writeProject(tree.project);
+    return rootNode(tree);
+  }
   const node = need(tree, id);
   node.sessions = node.sessions.filter((session) => session.id !== sessionId);
   save(tree, node);

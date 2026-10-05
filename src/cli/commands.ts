@@ -13,7 +13,14 @@ import { createInterface } from 'node:readline';
 
 import { parseArgs } from 'node:util';
 
-import { contextText, START_HINT, START_LABEL, sessionPlan } from '../agents/context.js';
+import {
+  contextText,
+  ROOT_START_HINT,
+  ROOT_START_LABEL,
+  START_HINT,
+  START_LABEL,
+  sessionPlan,
+} from '../agents/context.js';
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { launchInPane } from '../agents/panes.js';
@@ -51,6 +58,7 @@ import { writeOverview } from '../model/overview.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
 import { ago } from '../model/time.js';
 import {
+  holderOf,
   isStatusOrder,
   offTree,
   offTreeLine,
@@ -1143,13 +1151,13 @@ async function openCommand(args: string[]): Promise<number> {
     ...(values.worktree ? { worktree: true } : {}),
   };
   if (settings().confirm && !values.yes && process.stdin.isTTY) {
-    const node = tree.nodes.get(id)!;
+    const node = holderOf(tree, id)!;
     const plan = sessionPlan(tree, id, options.start, brain);
     process.stderr.write(
       `\n${inlineMark(err.c)}\n` +
         `  ${err.dim(t('Узел'))}        ${node.title}\n` +
         `  ${err.dim(t('Кто'))}         ${BRAIN_LABEL[brain]} · ${options.background ? t('в фоне, сам по себе') : options.pane ? t('в панели') : t('в этом терминале')}\n` +
-        `  ${err.dim(t('Как начать'))}  ${START_LABEL[plan.start]} — ${START_HINT[plan.start]}\n\n`,
+        `  ${err.dim(t('Как начать'))}  ${(id === ROOT ? ROOT_START_LABEL : START_LABEL)[plan.start]} — ${(id === ROOT ? ROOT_START_HINT : START_HINT)[plan.start]}\n\n`,
     );
     if (!(await askYes(t('Запустить сессию?')))) {
       process.stderr.write(`${err.dim(t('не запускаю'))}\n`);
@@ -1201,7 +1209,7 @@ async function sessionsCommand(args: string[]): Promise<number> {
     const owner = owners.get(session.id);
     const live = session.live ? out.c('#c6a0ff', ` ● ${session.live.status}`) : '';
     const where = owner
-      ? out.dim(`  → ${tree.nodes.get(owner)?.title}`)
+      ? out.dim(`  → ${owner === ROOT ? `◆ ${tree.project.title}` : tree.nodes.get(owner)?.title}`)
       : offTree(session, owners)
         ? out.c('#ffcf70', `  ${t('без узла')}`)
         : '';
