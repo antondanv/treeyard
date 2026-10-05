@@ -17,6 +17,7 @@ import { contextText, START_HINT, START_LABEL, sessionPlan } from '../agents/con
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { launchInPane } from '../agents/panes.js';
+import { parsePatch } from '../diff.js';
 import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, gitRepository } from '../git.js';
 import {
   type Board,
@@ -993,18 +994,24 @@ async function diffCommand(args: string[]): Promise<number> {
       if (section.error) process.stdout.write(`${section.error}\n`);
       else if (!section.files.length) process.stdout.write(`${t('изменений нет')}\n`);
       for (const file of section.files) {
-        process.stdout.write(`  ${file.status} ${fileLabel(file)}  ${fileStats(file)}\n`);
+        const stats =
+          file.added !== null && file.removed !== null && !file.binary
+            ? `${out.c('#5fd38d', `+${file.added}`)} ${out.c('#ff7b72', `−${file.removed}`)}`
+            : fileStats(file);
+        process.stdout.write(`  ${file.status} ${fileLabel(file)}  ${stats}\n`);
         if (file.patch) {
-          const patch = diffText(file.patch)
-            .split('\n')
+          const patch = parsePatch(file.patch)
             .map((line) =>
-              line.startsWith('+')
-                ? out.c('#5fd38d', line)
-                : line.startsWith('-')
-                  ? out.c('#ff7b72', line)
-                  : line.startsWith('@@')
-                    ? out.c('#62d0e0', line)
-                    : line,
+              line.kind === 'add' || line.kind === 'remove'
+                ? out.c(
+                    line.kind === 'add' ? '#5fd38d' : '#ff7b72',
+                    line.raw[0]! + line.parts.map((part) => (part.changed ? out.bold(part.text) : part.text)).join(''),
+                  )
+                : line.kind === 'hunk'
+                  ? out.c('#62d0e0', line.raw)
+                  : line.kind === 'header' || line.kind === 'meta' || line.kind === 'no-newline'
+                    ? out.dim(line.raw)
+                    : line.raw,
             )
             .join('\n');
           process.stdout.write(`${patch}\n`);

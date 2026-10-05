@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFil
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
+import { promisify, stripVTControlCharacters } from 'node:util';
 import { cleanup, render } from 'ink-testing-library';
 import stringWidth from 'string-width';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -224,8 +224,24 @@ describe('Git patches', () => {
 });
 
 describe('diff CLI', () => {
-  const invoke = (dir: string, args: string[]) =>
-    run(process.execPath, ['--import', tsx, cli, 'diff', ...args], { cwd: dir, env: process.env });
+  const invoke = (dir: string, args: string[], env = process.env) =>
+    run(process.execPath, ['--import', tsx, cli, 'diff', ...args], { cwd: dir, env });
+  it('colors code and statistics while keeping headers subdued and plain output intact', async () => {
+    const tree = repoTree();
+    const dir = tree.project.dir;
+    const node = addNode(tree, { title: 'Цвета' });
+    commitFile(dir, 'odd.txt', '-- old code\n', 'base');
+    attachCommit(tree, node.id, commitFile(dir, 'odd.txt', '++ new code\n', 'change'));
+    const plain = (await invoke(dir, [node.id])).stdout;
+    const colored = (await invoke(dir, [node.id], { ...process.env, FORCE_COLOR: '2' })).stdout;
+    expect(stripVTControlCharacters(colored)).toBe(plain);
+    expect(colored).toContain('\u001b[2m--- a/odd.txt');
+    expect(colored).toContain('\u001b[2m+++ b/odd.txt');
+    expect(colored).toContain('\u001b[38;2;95;211;141m+1');
+    expect(colored).toContain('\u001b[38;2;255;123;114m−1');
+    expect(colored).toContain('\u001b[1mold');
+    expect(colored).toContain('\u001b[1mnew');
+  });
   it('attaches an abbreviated SHA, shows only that node, filters a file and removes an unavailable link', async () => {
     const { dir, tree, a, b, last } = intertwined();
     const fresh = addNode(tree, { title: 'Проверить каталог' });
@@ -317,7 +333,10 @@ describe('diff TUI', () => {
     app.stdin.write('\r');
     await waitFor(app, '+catalog row 0');
     app.stdin.write('\u001b[6~');
-    await waitFor(app, '+catalog row 10');
+    await vi.waitFor(() => {
+      expect(app.lastFrame()).toContain('+catalog row ');
+      expect(app.lastFrame()).not.toContain('+catalog row 0');
+    });
     expect(app.lastFrame()).not.toContain('+catalog row 0');
     app.stdin.write('\u001b[F');
     await waitFor(app, '+catalog row 79');

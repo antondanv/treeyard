@@ -16,6 +16,7 @@ import {
 import { t } from '../i18n/i18n.js';
 import type { TreeNode } from '../model/types.js';
 import { Frame, type KeyHint, useLatest } from './components/controls.js';
+import { DiffStats, layoutPatch, PatchLineView } from './diff-patch.js';
 import { shortcutKey } from './keys.js';
 import { Clickable } from './mouse.js';
 import { C } from './theme.js';
@@ -39,29 +40,6 @@ interface Item {
 }
 
 const commitLabel = (commit: GitCommit) => `${commit.sha.slice(0, 8)} · ${diffText(commit.subject)}`;
-
-/** Wrapped code keeps its original line's colour, including each continuation. */
-function patchLines(patch: string, width: number): { text: string; color: string | undefined }[] {
-  if (!patch) return [];
-  return diffText(patch)
-    .trimEnd()
-    .split('\n')
-    .flatMap((text) => {
-      const color =
-        text.startsWith('+++') || text.startsWith('---') || text.startsWith('diff ') || text.startsWith('index ')
-          ? C.dim
-          : text.startsWith('+')
-            ? C.ok
-            : text.startsWith('-')
-              ? C.bad
-              : text.startsWith('@@')
-                ? C.review
-                : undefined;
-      return wrapAnsi(text, width, { hard: true, trim: false })
-        .split('\n')
-        .map((text) => ({ text, color }));
-    });
-}
 
 function footerRows(hints: KeyHint[], width: number): number {
   let rows = 1;
@@ -168,18 +146,17 @@ export function DiffsDialog(props: {
         next = (await repo.files(source)).map((file) => ({
           key: file.path,
           label: `${file.status} ${fileLabel(file)}`,
-          detail: fileStats(file),
           file,
           source,
         }));
       } else {
         const working = await repo.working();
-        const labels = { staged: t('индекс'), unstaged: t('рабочая папка'), untracked: t('новый') };
+        const labels = { staged: t('индекс'), unstaged: t('рабочая папка'), untracked: '' };
         next = (['staged', 'unstaged', 'untracked'] as const).flatMap((kind) =>
           working[kind].map((file) => ({
             key: `${kind}:${file.path}`,
             label: `${file.status} ${fileLabel(file)}`,
-            detail: kind === 'untracked' ? fileStats(file) : `${labels[kind]} · ${fileStats(file)}`,
+            detail: labels[kind],
             file,
             source: { kind },
           })),
@@ -233,7 +210,8 @@ export function DiffsDialog(props: {
   };
 
   const inner = Math.max(10, props.width - 4);
-  const lines = useMemo(() => patchLines(patch, inner), [patch, inner]);
+  const layout = useMemo(() => layoutPatch(patch, inner), [patch, inner]);
+  const lines = layout.rows;
   const selected = items[Math.min(cursor, Math.max(0, items.length - 1))];
   const footer: KeyHint[] =
     page.kind === 'patch'
@@ -265,7 +243,10 @@ export function DiffsDialog(props: {
         ? t('Текущие правки общие для всех узлов')
         : '');
   const notices = note ? wrapAnsi(diffText(note), inner, { hard: true }).split('\n').slice(0, 2) : [];
-  const room = Math.max(1, props.height - 6 - footerRows(footer, inner) - notices.length);
+  const room = Math.max(
+    1,
+    props.height - 6 - footerRows(footer, inner) - notices.length - (page.kind === 'patch' ? 1 : 0),
+  );
   const maxTop = Math.max(0, lines.length - room);
   const at = Math.min(cursor, Math.max(0, items.length - 1));
   const first = Math.max(0, Math.min(at - Math.floor(room / 2), items.length - room));
@@ -319,15 +300,29 @@ export function DiffsDialog(props: {
       : page.kind === 'pick'
         ? t('Выбери коммит для узла')
         : page.kind === 'patch'
-          ? `${fileLabel(page.file)} · ${fileStats(page.file)}`
+          ? fileLabel(page.file)
           : page.commit
             ? commitLabel(page.commit)
             : t('Текущие изменения проекта');
   return (
     <Frame title={t('Дифы · {title}', { title: props.node.title })} width={props.width} footer={footer}>
-      <Text color={C.dim} wrap="truncate-end">
+      <Text color={page.kind === 'patch' ? undefined : C.dim} bold={page.kind === 'patch'} wrap="truncate-end">
         {heading}
+        {page.kind === 'patch' ? (
+          <Text>
+            {' '}
+            · <DiffStats file={page.file} />
+          </Text>
+        ) : null}
       </Text>
+      {page.kind === 'patch' ? (
+        <Text color={C.dim} wrap="truncate-end">
+          {t('до').padStart(layout.oldWidth)} {t('после').padStart(layout.newWidth)} │{' '}
+          <Text color={C.ok}>+ {t('добавлено')}</Text>
+          {'  '}
+          <Text color={C.bad}>− {t('удалено')}</Text>
+        </Text>
+      ) : null}
       {notices.map((line, index) => (
         <Text key={String(index)} color={error ? C.warn : C.faint}>
           {line}
@@ -337,39 +332,67 @@ export function DiffsDialog(props: {
         {loading ? (
           <Text color={C.faint}>{t('читаю Git…')}</Text>
         ) : page.kind === 'patch' ? (
-          lines.slice(Math.min(top, maxTop), Math.min(top, maxTop) + room).map((line, index) => (
-            <Text key={String(Math.min(top, maxTop) + index)} color={line.color} wrap="truncate-end">
-              {line.text || ' '}
-            </Text>
-          ))
+          lines.length ? (
+            lines
+              .slice(Math.min(top, maxTop), Math.min(top, maxTop) + room)
+              .map((row, index) => (
+                <PatchLineView
+                  key={String(Math.min(top, maxTop) + index)}
+                  row={row}
+                  width={inner}
+                  oldWidth={layout.oldWidth}
+                  newWidth={layout.newWidth}
+                />
+              ))
+          ) : error ? null : (
+            <Text color={C.dim}>{t('Содержимое не изменилось')}</Text>
+          )
         ) : items.length ? (
-          items.slice(first, first + room).map((item, offset) => (
-            <Clickable
-              key={item.key}
-              width={inner}
-              onClick={(click) => {
-                setCursor(first + offset);
-                if (click.double) pick(first + offset);
-              }}
-            >
-              <Box width={inner - (item.detail ? Math.min(30, stringWidth(item.detail)) + 3 : 0)} flexShrink={0}>
-                <Text
-                  color={item.error ? C.warn : at === first + offset ? C.brand : undefined}
-                  bold={at === first + offset}
-                  wrap="truncate-end"
-                >
-                  {at === first + offset ? '› ' : '  '}
-                  {item.label}
-                </Text>
-              </Box>
-              {item.detail ? (
-                <Text color={C.faint} wrap="truncate-end">
-                  {' '}
-                  · {item.detail}
-                </Text>
-              ) : null}
-            </Clickable>
-          ))
+          items.slice(first, first + room).map((item, offset) => {
+            const detail = [item.detail, item.file ? fileStats(item.file) : ''].filter(Boolean).join(' · ');
+            return (
+              <Clickable
+                key={item.key}
+                width={inner}
+                onClick={(click) => {
+                  setCursor(first + offset);
+                  if (click.double) pick(first + offset);
+                }}
+              >
+                <Box width={inner - (detail ? Math.min(30, stringWidth(detail)) + 3 : 0)} flexShrink={0}>
+                  <Text
+                    color={item.error ? C.warn : at === first + offset ? C.brand : undefined}
+                    bold={at === first + offset}
+                    wrap="truncate-end"
+                  >
+                    {at === first + offset ? '› ' : '  '}
+                    {item.file ? (
+                      <Text
+                        color={
+                          item.file.status[0] === 'D'
+                            ? C.bad
+                            : ['A', '?'].includes(item.file.status[0]!)
+                              ? C.ok
+                              : C.accent
+                        }
+                      >
+                        {item.file.status}
+                      </Text>
+                    ) : null}
+                    {item.file ? ` ${fileLabel(item.file)}` : item.label}
+                  </Text>
+                </Box>
+                {detail ? (
+                  <Text color={C.faint} wrap="truncate-end">
+                    {' '}
+                    · {item.detail}
+                    {item.detail && item.file && fileStats(item.file) ? ' · ' : ''}
+                    {item.file ? <DiffStats file={item.file} /> : null}
+                  </Text>
+                ) : null}
+              </Clickable>
+            );
+          })
         ) : error ? null : (
           <Text color={C.faint}>{page.kind === 'pick' ? t('В Git пока нет коммитов') : t('изменений нет')}</Text>
         )}

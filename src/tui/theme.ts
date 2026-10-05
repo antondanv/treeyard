@@ -1,7 +1,7 @@
 /**
  * Colours and marks. Hex colours degrade to the nearest the terminal has
  * (Apple Terminal: 256), so every colour here is picked to land on a good
- * one. The only background is the selection pill.
+ * one. Backgrounds mark the selection and changed code in diffs.
  *
  * Two palettes: dark terminals and light ones. `C` is changed in place when
  * the theme changes, and every component reads it while rendering, so the
@@ -31,6 +31,12 @@ const DARK = {
   /** The selected node: dark text on the brand colour. */
   pill: '#7ee2a8',
   pillText: '#0b1a12',
+  diffAddedBg: '#102a10',
+  diffRemovedBg: '#2a1010',
+  diffAddedWordBg: '#008700',
+  diffRemovedWordBg: '#870000',
+  diffHunkBg: '#262626',
+  diffWordText: '#ffffff',
 };
 
 const LIGHT: typeof DARK = {
@@ -50,6 +56,12 @@ const LIGHT: typeof DARK = {
   review: '#0b7f8c',
   pill: '#13804f',
   pillText: '#ffffff',
+  diffAddedBg: '#e6ffe6',
+  diffRemovedBg: '#ffe6e6',
+  diffAddedWordBg: '#afffaf',
+  diffRemovedWordBg: '#ffafaf',
+  diffHunkBg: '#eeeeee',
+  diffWordText: '#111827',
 };
 
 export type Palette = typeof DARK;
