@@ -16,12 +16,14 @@ export const BRAIN_LABEL: Record<BrainId, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   antigravity: 'Antigravity',
+  opencode: 'OpenCode',
 };
 
 export const BRAIN_SHORT: Record<BrainId, string> = {
   claude: 'claude',
   codex: 'codex',
   antigravity: 'agy',
+  opencode: 'opencode',
 };
 
 export interface LaunchOptions {
