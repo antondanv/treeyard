@@ -164,6 +164,40 @@ function sample() {
 }
 
 describe('mouse in the tree', () => {
+  it('folds a deep branch by its visible marker beside a wide session pane', async () => {
+    const tree = emptyTree();
+    const expanded: string[] = [];
+    let parent = 'root';
+    for (let depth = 0; depth < 8; depth++) {
+      parent = addNode(tree, { title: `Уровень ${depth}`, parent }).id;
+      expanded.push(parent);
+    }
+    const branch = addNode(tree, { title: 'Оплата', parent, status: 'active' });
+    addNode(tree, { title: 'Лист', parent: branch.id });
+    attachSession(tree, branch.id, { brain: 'claude', id: 'conversation', mode: 'pane', pane: 'claude-deep' });
+    backend.listPanes.mockResolvedValue([
+      {
+        pane: 'claude-deep',
+        brain: 'claude',
+        sessionId: 'conversation',
+        cwd: tree.project.dir,
+        attached: false,
+        width: 60,
+        height: 12,
+      },
+    ]);
+    const app = mount(tree, { treeMode: 'list', selected: branch.id, expanded, split: 0.8 }, { offline: false });
+    await until(() => app.screen().includes('hello from the CLI'));
+    expect(app.screen()).not.toContain('Лист');
+    await app.click('▸');
+    expect(app.screen()).toContain('Лист');
+    await pause(350);
+    await app.click('▾', { nth: 8 });
+    expect(app.screen()).not.toContain('Лист');
+    await app.type(' ');
+    expect(app.screen()).toContain('Лист');
+  });
+
   it('selects a row, opens a branch by its marker and opens the actions by a double click', async () => {
     const { tree, release } = sample();
     const app = mount(tree, { treeMode: 'list', selected: release.id });

@@ -1,3 +1,4 @@
+import type { SessionInfo } from '@antondanv/brainyard';
 import stringWidth from 'string-width';
 import { describe, expect, it } from 'vitest';
 
@@ -86,9 +87,64 @@ describe('moving around the graph', () => {
     expect(card.y - far.y).toBeGreaterThanOrEqual(0);
     expect(card.y + card.height - far.y).toBeLessThanOrEqual(8);
   });
+
+  it('frames the working branch beside a session, keeping the root reachable', () => {
+    const { tree, expanded } = sample();
+    for (const style of ['line', 'card'] as const) {
+      const layout = layoutGraph(flatten(tree, { expanded, showClosed: true }), { style, width: 28, tree });
+      const branch = [...tree.nodes.values()][0]!;
+      const child = [...tree.nodes.values()].find((node) => node.parent === branch.id)!;
+      const size = { x: 100, y: 12 };
+      const focused = follow(layout, child.id, size, { x: 0, y: 0 }, true);
+      expect(focused.x).toBe(layout.byId.get(branch.id)!.x - 1);
+      expect(layout.byId.get(ROOT)!.x + layout.byId.get(ROOT)!.width).toBeLessThan(focused.x);
+      const returned = follow(layout, branch.id, size, focused, true);
+      expect(returned.x).toBe(0);
+      expect(layout.byId.has(ROOT)).toBe(true);
+    }
+    const empty = emptyTree();
+    const layout = layoutGraph([], { style: 'line', width: 28, tree: empty });
+    expect(follow(layout, undefined, { x: 80, y: 12 }, { x: 0, y: 0 })).toEqual({ x: 0, y: 0 });
+  });
 });
 
 describe('drawing', () => {
+  it.each(['line', 'card'] as const)(
+    '%s: selected and unselected nodes keep their live state, even in narrow cards',
+    (style) => {
+      const tree = emptyTree();
+      const node = addNode(tree, { title: 'Оплата заказа после доставки с продолжением', status: 'review' });
+      node.sessions.push({ brain: 'claude', id: 'conversation' });
+      const layout = layoutGraph(flatten(tree, { expanded: new Set(), showClosed: true }), { style, width: 20, tree });
+      for (const status of ['busy', 'waiting'] as const) {
+        const live = new Map<string, SessionInfo>([
+          [
+            'conversation',
+            { brain: 'claude', id: 'conversation', interactive: true, live: { kind: 'interactive', status } },
+          ],
+        ]);
+        for (const selected of [undefined, node.id]) {
+          for (const tick of [0, 12_000]) {
+            const cells = graphCells({
+              tree,
+              layout,
+              selected,
+              width: 70,
+              height: 10,
+              offset: { x: 0, y: 0 },
+              live,
+              tick,
+            });
+            const picture = text(cells);
+            expect(picture).toContain('◎');
+            expect(picture).toContain(status === 'waiting' ? '? claude' : '⠋ claude');
+            expect(picture).not.toMatch(/работа…|ждёт т…/);
+          }
+        }
+      }
+    },
+  );
+
   it('fits Unicode exactly into the terminal cells, wide characters and emoji included', () => {
     const tree = emptyTree();
     const expanded = new Set<string>();

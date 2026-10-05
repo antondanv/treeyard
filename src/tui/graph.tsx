@@ -23,9 +23,11 @@ import { STATUS_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { childrenOf, progress, type Row } from '../model/tree.js';
 import { ROOT, type Tree } from '../model/types.js';
+import { agentBadge, type Badge, fitBadge } from './badges.js';
 import { marquee, overflows } from './marquee.js';
 import { type Click, useClick } from './mouse.js';
-import { C, SPINNER, STATUS_COLOR } from './theme.js';
+import { clip } from './text.js';
+import { C, STATUS_COLOR } from './theme.js';
 import { isDoneGroup } from './tree-view.js';
 
 export type GraphStyle = 'line' | 'card';
@@ -96,7 +98,13 @@ export function layoutGraph(rows: Row[], options: LayoutOptions): GraphLayout {
   const columns: number[] = [];
   const labelWidth = new Map<string, number>();
   const measureLabel = (id: string, depth: number, row?: Row) => {
-    const width = card ? options.width : Math.min(options.width, stringWidth(labelText(lineLabel(tree, row))));
+    // Reserve the agent's compact label even while its live status is being read.
+    const extra = row?.node.sessions.length
+      ? 3 + Math.max(...row.node.sessions.map((ref) => stringWidth(BRAIN_SHORT[ref.brain])))
+      : row?.node.needs?.length
+        ? 4
+        : 0;
+    const width = card ? options.width : Math.min(options.width, stringWidth(labelText(lineLabel(tree, row))) + extra);
     labelWidth.set(id, width);
     columns[depth] = Math.max(columns[depth] ?? 0, width);
     for (const kid of children.get(id) ?? []) measureLabel(kid.node.id, depth + 1, kid);
@@ -174,6 +182,7 @@ export function follow(
   selected: string | undefined,
   size: Viewport,
   previous: Viewport,
+  focusBranch = false,
 ): Viewport {
   const card = (selected && layout.byId.get(selected)) || layout.byId.get(ROOT)!;
   const marginY = Math.min(4, Math.floor(size.y / 4));
@@ -196,9 +205,11 @@ export function follow(
   // Keep the parent's column in view when there is room for it.
   const parent = card.row ? layout.byId.get(card.row.node.parent) : undefined;
   const left = parent && right - parent.x <= size.x ? parent.x - 1 : card.x - 1;
-  if (left < x) x = left;
+  // Beside a session, frame the working branch; the root remains reachable by panning left.
+  const focused = focusBranch && card.depth > 1;
+  if (focused || left < x) x = left;
   return {
-    x: clamp(x, 0, Math.max(0, layout.width - size.x)),
+    x: clamp(x, 0, Math.max(0, layout.width - size.x, focused ? left : 0)),
     y: clamp(y, 0, Math.max(0, layout.height - size.y)),
   };
 }
@@ -276,17 +287,21 @@ export function selectedOverflow(
   layout: GraphLayout,
   tree: Tree,
   id: string | undefined,
+  badges: Pick<GraphProps, 'live' | 'panes' | 'frame'> = {},
 ): { text: string; width: number } | undefined {
   const item = id ? layout.byId.get(id) : undefined;
   if (!item?.row) return undefined;
   if (layout.style === 'line') {
     const label = lineLabel(tree, item.row);
-    const width = Math.max(4, item.width - 2 - stringWidth(label.tail));
+    const { room: width } = lineContent(tree, item, badges);
     return overflows(label.title, width) ? { text: label.title, width } : undefined;
   }
   const inner = item.width - 4;
   const title = `${GLYPH[item.row.node.status]} ${item.row.node.title}`;
-  if (item.height < 5) return overflows(title, inner) ? { text: title, width: inner } : undefined;
+  if (item.height < 5) {
+    const width = inner - 2;
+    return overflows(item.row.node.title, width) ? { text: item.row.node.title, width } : undefined;
+  }
   const lines = wrapAnsi(title, inner, { hard: true, trim: true }).split('\n');
   if (lines.length <= 2) return undefined;
   // The second line runs through everything the first one did not show.
@@ -310,6 +325,47 @@ export interface GraphProps {
   /** A click on a node, or on the `›4` of a closed branch. */
   onClick?: (hit: { node: string; fold: boolean } | undefined, click: Click) => void;
   active?: boolean;
+}
+
+function lineNote(
+  tree: Tree,
+  item: GraphCard,
+  badges: Pick<GraphProps, 'live' | 'panes' | 'frame'>,
+): Badge | undefined {
+  const node = item.row?.node;
+  if (!node) return undefined;
+  const sessions = node.sessions.map((ref) => badges.live?.get(ref.id)).filter((s): s is SessionInfo => Boolean(s));
+  const agent = agentBadge(sessions, undefined, badges.frame ?? 0);
+  if (agent) return agent;
+  if (badges.panes?.has(node.id)) return { text: '▣', compact: '▣', mark: '▣', color: C.ok };
+  if (node.needs) {
+    const needs = linksOf(tree, node).needs;
+    const open = needs.filter((link) => link.node?.status !== 'done');
+    const shown = open[0] ?? needs[0];
+    if (shown) {
+      const mark = shown.node ? GLYPH[shown.node.status] : '?';
+      return {
+        text: `→ ${shown.project} ${mark}`,
+        compact: `→ ${mark}`,
+        mark: '→',
+        color: open.length === 0 ? C.ok : shown.node ? C.warn : C.faint,
+      };
+    }
+  }
+  return undefined;
+}
+
+function lineContent(tree: Tree, item: GraphCard, badges: Pick<GraphProps, 'live' | 'panes' | 'frame'>) {
+  const label = lineLabel(tree, item.row);
+  const tail = stringWidth(label.tail);
+  const note = lineNote(tree, item, badges);
+  const budget = Math.max(1, Math.min(10, item.width - 2 - tail - Math.min(8, stringWidth(label.title))));
+  const extra = note ? fitBadge(note, budget) : '';
+  return {
+    room: Math.max(1, item.width - 2 - tail - (extra ? stringWidth(extra) + 1 : 0)),
+    extra,
+    color: note?.color,
+  };
 }
 
 /** Draw only viewport cells, so a deep or large tree does not allocate a giant canvas. */
@@ -403,7 +459,7 @@ export function graphCells(props: GraphProps): Cell[][] {
     const label = lineLabel(tree, item.row);
     // The tail stays; a long title gives way with an ellipsis.
     const tailWidth = stringWidth(label.tail);
-    const room = Math.max(4, item.width - 2 - tailWidth);
+    const { room, extra, color: extraColor } = lineContent(tree, item, props);
     // The selected title runs when it does not fit; the others give way with an ellipsis.
     const title = isSelected ? marquee(label.title, room, props.tick ?? 0) : clip(label.title, room);
     const glyphColor = node ? (held ? C.faint : (STATUS_COLOR[node.status] ?? C.dim)) : C.brand;
@@ -414,22 +470,16 @@ export function graphCells(props: GraphProps): Cell[][] {
         bold: true,
         pill: true,
       });
-      markLine(item, title, tailWidth);
-      return;
-    }
-    const titleColor = !node ? C.brand : held ? C.faint : closed ? C.dim : onPath ? C.brand : undefined;
-    text(item.x, item.y, label.glyph, 2, { color: glyphColor });
-    text(item.x + 2, item.y, title, item.width - 2, {
-      ...(titleColor ? { color: titleColor } : {}),
-      bold: onPath || !node,
-    });
-    if (label.tail) text(item.x + 2 + stringWidth(title), item.y, label.tail, tailWidth, { color: C.faint });
-    // Live agents and waiting reasons right after the label.
-    const extra = liveNote(item);
-    if (extra)
-      text(item.x + item.width + 1, item.y, extra.text, Math.max(0, item.column - item.width + 2), {
-        color: extra.color,
+    } else {
+      const titleColor = !node ? C.brand : held ? C.faint : closed ? C.dim : onPath ? C.brand : undefined;
+      text(item.x, item.y, label.glyph, 2, { color: glyphColor });
+      text(item.x + 2, item.y, title, room, {
+        ...(titleColor ? { color: titleColor } : {}),
+        bold: onPath || !node,
       });
+      if (label.tail) text(item.x + 2 + stringWidth(title), item.y, label.tail, tailWidth, { color: C.faint });
+    }
+    if (extra) text(item.x + item.width - stringWidth(extra), item.y, extra, stringWidth(extra), { color: extraColor });
     markLine(item, title, tailWidth);
   }
 
@@ -438,28 +488,6 @@ export function graphCells(props: GraphProps): Cell[][] {
     mark(item.x - 1, item.y, item.width + 2, { node: item.id });
     if (isDoneGroup(item.id)) mark(item.x, item.y, 1, { fold: true });
     if (tailWidth) mark(item.x + 2 + stringWidth(title), item.y, tailWidth, { fold: true });
-  }
-
-  function liveNote(item: GraphCard): { text: string; color: string } | undefined {
-    const node = item.row?.node;
-    if (!node) return undefined;
-    const sessions = node.sessions.map((ref) => props.live?.get(ref.id)).filter(Boolean);
-    if (sessions.some((session) => session?.live?.status === 'waiting')) return { text: '?', color: C.you };
-    if (sessions.some((session) => session?.live?.status === 'busy'))
-      return { text: SPINNER[(props.frame ?? 0) % SPINNER.length]!, color: C.agent };
-    if (props.panes?.has(node.id)) return { text: '▣', color: C.ok };
-    if (node.needs) {
-      // What it waits for in another project: the first one not done yet, green when all are.
-      const needs = linksOf(props.tree, node).needs;
-      const open = needs.filter((link) => link.node?.status !== 'done');
-      const shown = open[0] ?? needs[0];
-      if (shown)
-        return {
-          text: `→ ${shown.project} ${shown.node ? GLYPH[shown.node.status] : '?'}`,
-          color: open.length === 0 ? C.ok : shown.node ? C.warn : C.faint,
-        };
-    }
-    return undefined;
   }
 
   function drawCard(item: GraphCard) {
@@ -499,7 +527,9 @@ export function graphCells(props: GraphProps): Cell[][] {
     const running = isSelected ? selectedOverflow(layout, tree, item.id) : undefined;
     const lines =
       item.height < 5
-        ? [running ? marquee(title, inner, props.tick ?? 0) : clip(title, inner)]
+        ? [
+            `${lineLabel(tree, item.row).glyph} ${running ? marquee(running.text, inner - 2, props.tick ?? 0) : clip(node?.title ?? tree.project.title, inner - 2)}`,
+          ]
         : wrapAnsi(title, inner, { hard: true, trim: true }).split('\n');
     text(item.x + 2, item.y + 1, lines[0]!, inner, {
       color: isSelected ? C.brand : dim ? C.dim : node ? undefined : C.brand,
@@ -513,6 +543,7 @@ export function graphCells(props: GraphProps): Cell[][] {
         color: isSelected ? undefined : dim ? C.faint : C.dim,
       });
     let meta: string;
+    let metaColor = color;
     if (!node) {
       const p = progress(tree, ROOT);
       meta = t('цель проекта · {done}/{total}', {
@@ -522,19 +553,12 @@ export function graphCells(props: GraphProps): Cell[][] {
     } else if (isDoneGroup(node.id)) {
       meta = t('space — раскрыть или свернуть');
     } else {
-      const sessions = node.sessions.map((ref) => props.live?.get(ref.id)).filter(Boolean);
-      const waiting = sessions.find((session) => session?.live?.status === 'waiting');
-      const busy = sessions.find((session) => session?.live?.status === 'busy');
-      if (waiting)
-        meta = t('? {p1} ждёт тебя', {
-          p1: BRAIN_SHORT[waiting.brain],
-        });
-      else if (busy)
-        meta = t('{p1} {p2} работает', {
-          p1: SPINNER[(props.frame ?? 0) % SPINNER.length],
-          p2: BRAIN_SHORT[busy.brain],
-        });
-      else {
+      const sessions = node.sessions.map((ref) => props.live?.get(ref.id)).filter((s): s is SessionInfo => Boolean(s));
+      const agent = agentBadge(sessions, undefined, props.frame ?? 0);
+      if (agent) {
+        meta = fitBadge(agent, inner);
+        metaColor = agent.color ?? color;
+      } else {
         meta = STATUS_LABEL[node.status];
         if (node.who === 'human' && node.status !== 'done' && node.status !== 'dropped') meta += t(' · ты');
         if (props.panes?.has(node.id)) meta += ' · ▣';
@@ -545,7 +569,7 @@ export function graphCells(props: GraphProps): Cell[][] {
       }
     }
     const shown = clip(meta, inner);
-    text(item.x + 2, item.y + item.height - 2, shown, inner, { color });
+    text(item.x + 2, item.y + item.height - 2, shown, inner, { color: metaColor });
     if (!node) return;
     mark(item.x, item.y, item.width, { node: item.id }, item.height);
     if (shown.endsWith(' ›')) mark(item.x + 2 + stringWidth(shown) - 2, item.y + item.height - 2, 2, { fold: true });
@@ -611,16 +635,6 @@ function runs(cells: Cell[]): Run[] {
     else result.push({ x, value: cell.char, color: cell.color, bold: cell.bold, pill });
   });
   return result;
-}
-
-function clip(value: string, width: number): string {
-  if (stringWidth(value) <= width) return value;
-  let result = '';
-  for (const { segment } of graphemes.segment(value)) {
-    if (stringWidth(result + segment) > width - 1) break;
-    result += segment;
-  }
-  return `${result}…`;
 }
 
 function clamp(value: number, min: number, max: number): number {

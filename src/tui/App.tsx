@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process';
 import type { SessionInfo } from '@antondanv/brainyard';
 import { Box, type Key, Text, useAnimation, useApp, useInput, usePaste, useWindowSize } from 'ink';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import stringWidth from 'string-width';
 
 import {
   ASSIST_EFFORT,
@@ -156,6 +157,7 @@ import { MARQUEE_TICK, marquee } from './marquee.js';
 import { type Click, Clickable, MouseProvider, usePress } from './mouse.js';
 import { ListRow, paneState, rowOverflow, SessionRow, TreeRow, treePrefix } from './rows.js';
 import { TerminalPane } from './terminal.js';
+import { breadcrumb } from './text.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
 import {
   doneGroupId,
@@ -261,6 +263,7 @@ export function App(props: AppProps) {
   const initialized = useRef(false);
   const stampRef = useRef(treeStamp(props.dir));
   const viewportRef = useRef<Viewport>({ x: 0, y: 0 });
+  const viewportFollowRef = useRef({ key: '', manual: false });
   const [, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
   const tree = treeRef.current;
@@ -672,13 +675,43 @@ export function App(props: AppProps) {
   const listHeight = bodyHeight;
   const paneSize = { width: Math.max(20, (rightWidth || width) - 2), height: Math.max(5, bodyHeight - 4) };
   const graphWidth =
-    graphStyle === 'card' ? cardWidth : Math.min(46, Math.max(20, Math.floor((leftWidth - 18) / 2) - 5));
+    graphStyle === 'card'
+      ? Math.min(cardWidth, leftWidth - 2)
+      : Math.min(
+          46,
+          Math.max(
+            20,
+            terminalVisible
+              ? leftWidth < 50
+                ? leftWidth - 4
+                : Math.floor((leftWidth - 10) / 2)
+              : Math.floor((leftWidth - 18) / 2) - 5,
+          ),
+        );
   const graphLayout =
     view === 'tree' && treeMode === 'graph'
       ? layoutGraph(treeRows, { style: graphStyle, width: graphWidth, tree })
       : undefined;
   if (graphLayout) {
-    viewportRef.current = follow(graphLayout, currentItem?.id, { x: leftWidth, y: bodyHeight }, viewportRef.current);
+    const key = `${currentItem?.id}:${graphStyle}:${graphWidth}:${leftWidth}:${bodyHeight}:${graphLayout.width}:${graphLayout.height}:${terminalVisible}`;
+    const camera = viewportFollowRef.current;
+    if (camera.key !== key) camera.manual = false;
+    camera.key = key;
+    if (!camera.manual) {
+      viewportRef.current = follow(
+        graphLayout,
+        currentItem?.id,
+        { x: leftWidth, y: bodyHeight },
+        viewportRef.current,
+        terminalVisible,
+      );
+    } else {
+      // Polling and animation must not pull a manually panned view back to the selection.
+      viewportRef.current = {
+        x: Math.min(viewportRef.current.x, Math.max(0, graphLayout.width - Math.min(leftWidth, graphWidth + 4))),
+        y: Math.min(viewportRef.current.y, Math.max(0, graphLayout.height - bodyHeight)),
+      };
+    }
   }
 
   const paneNodes = useMemo(() => {
@@ -702,11 +735,12 @@ export function App(props: AppProps) {
   // The selected title runs when it does not fit — the clock ticks only then.
   const running = (() => {
     if (!current || modal || prompt || !settings().marquee) return undefined;
-    if (view === 'tree' && graphLayout) return selectedOverflow(graphLayout, tree, current.id);
+    if (view === 'tree' && graphLayout)
+      return selectedOverflow(graphLayout, tree, current.id, { live, panes: paneNodes, frame });
     if (view === 'tree') {
       const row = treeRows[cursor];
       return row
-        ? rowOverflow(current, leftWidth, treePrefix(row), badgesFor(current), row.held || !row.match)
+        ? rowOverflow(current, leftWidth, treePrefix(row, leftWidth), badgesFor(current), row.held || !row.match)
         : undefined;
     }
     if (view === 'now' || view === 'waiting' || view === 'ideas')
@@ -1658,7 +1692,7 @@ export function App(props: AppProps) {
   };
   const clickTreeRow = (row: Row, index: number, click: Click) => {
     // The ▸ ▾ of a branch, with a column of slack on each side.
-    const marker = treePrefix(row) - 1;
+    const marker = treePrefix(row, leftWidth) - 1;
     if (row.hasChildren && click.x >= marker - 1 && click.x <= marker + 1) {
       if (!click.double) expandTo(row.node.id, !row.expanded);
       return;
@@ -1757,6 +1791,7 @@ export function App(props: AppProps) {
       return true;
     }
     if (graphLayout && key.meta && (key.upArrow || key.downArrow || key.leftArrow || key.rightArrow)) {
+      viewportFollowRef.current.manual = true;
       viewportRef.current = {
         x: Math.max(0, viewportRef.current.x + (key.leftArrow ? -10 : key.rightArrow ? 10 : 0)),
         y: Math.max(0, viewportRef.current.y + (key.upArrow ? -5 : key.downArrow ? 5 : 0)),
@@ -1818,6 +1853,7 @@ export function App(props: AppProps) {
       return true;
     }
     if (input === 'f' && graphLayout && !selectedPane && !sleepingRef(current, panes)) {
+      viewportFollowRef.current.manual = false;
       viewportRef.current = { x: 0, y: 0 };
       bump();
       return true;
@@ -3209,7 +3245,7 @@ function SelectionStrip(props: {
     return (
       <Box flexDirection="column" width={props.width} paddingX={1}>
         <Text color={C.brand} wrap="truncate-end">
-          {`${tree.project.title} › GitHub`}
+          {`${breadcrumb([tree.project.title], props.width - 2 - stringWidth('GitHub'))}GitHub`}
         </Text>
         {props.full ? (
           <Text color={C.faint} wrap="truncate-end">
@@ -3220,11 +3256,12 @@ function SelectionStrip(props: {
     );
   }
   if (props.group) {
-    const path = [tree.project.title, ...pathTo(tree, props.group.parent).map((step) => step.title), props.group.title];
+    const path = [tree.project.title, ...pathTo(tree, props.group.parent).map((step) => step.title)];
     return (
       <Box flexDirection="column" width={props.width} paddingX={1}>
         <Text color={C.ok} wrap="truncate-end">
-          {path.join(' › ')}
+          {breadcrumb(path, props.width - 2 - stringWidth(props.group.title))}
+          {props.group.title}
         </Text>
         {props.full ? (
           <Text color={C.faint} wrap="truncate-end">
@@ -3245,6 +3282,11 @@ function SelectionStrip(props: {
   const meta = [STATUS_LABEL[node.status], node.who ? WHO_LABEL[node.who] : undefined, node.id]
     .filter(Boolean)
     .join(' · ');
+  const nameWidth = props.width - 2 - stringWidth(meta) - 2;
+  const context = breadcrumb(
+    [tree.project.title, ...path.slice(0, -1).map((step) => step.title)],
+    nameWidth - 2 - stringWidth(node.title),
+  );
   const sessions = node.sessions.map((ref) => props.live.get(ref.id)).filter((s): s is SessionInfo => Boolean(s?.live));
   const busy = sessions.find((s) => s.live?.status === 'busy');
   const waiting = sessions.find((s) => s.live?.status === 'waiting');
@@ -3326,14 +3368,9 @@ function SelectionStrip(props: {
   return (
     <Box flexDirection="column" width={props.width} paddingX={1}>
       <Box width={props.width - 2}>
-        <Box flexGrow={1} flexShrink={1}>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
           <Text wrap="truncate-end">
-            <Text color={C.faint}>{tree.project.title} › </Text>
-            {path.slice(0, -1).map((step) => (
-              <Text key={step.id} color={C.faint}>
-                {step.title} ›{' '}
-              </Text>
-            ))}
+            <Text color={C.faint}>{context}</Text>
             <Text color={STATUS_COLOR[node.status]}>{GLYPH[node.status]} </Text>
             <Text bold>{node.title}</Text>
           </Text>
@@ -3344,7 +3381,7 @@ function SelectionStrip(props: {
       </Box>
       {props.full ? (
         <Box width={props.width - 2}>
-          <Box flexGrow={1} flexShrink={1}>
+          <Box flexGrow={1} flexShrink={1} minWidth={0}>
             {second}
           </Box>
           <Box flexShrink={0} marginLeft={2}>

@@ -16,7 +16,9 @@ import { ago, duration } from '../model/time.js';
 import type { Progress, Row } from '../model/tree.js';
 import type { BrainId, TreeNode } from '../model/types.js';
 
+import { agentBadge, type Badge, fitBadge } from './badges.js';
 import { marquee, overflows } from './marquee.js';
+import { clip } from './text.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
 
 export interface Badges {
@@ -30,11 +32,33 @@ export interface Badges {
   needs?: Link[];
 }
 
-const RIGHT = 24;
+const MIN_TITLE = 10;
+
+const badgeRoom = (width: number) => Math.min(24, Math.max(10, Math.floor(width / 3)));
+
+function rowBadge(node: TreeNode, width: number, badges: Badges, dim?: boolean) {
+  const badge = badgeFor(node, badges, dim);
+  if (!badge) return undefined;
+  const text = fitBadge(badge, badgeRoom(width));
+  return { ...badge, shown: text, width: stringWidth(text) };
+}
 
 /** Columns before the title of a tree row: guides and the branch marker. */
-export function treePrefix(row: Row): number {
-  return row.depth > 0 ? 2 + (row.depth - 1) * 4 + 2 + 2 : 2;
+export function treePrefix(row: Row, width?: number): number {
+  if (row.depth === 0) return 2;
+  const full = 6 + (row.depth - 1) * 4;
+  if (width === undefined) return full;
+  // One limit for all rows: live-state changes must not shift the tree guides.
+  const room = width - 1 - 4 - MIN_TITLE - badgeRoom(width) - 1;
+  return Math.min(full, 6 + Math.max(0, Math.floor((room - 6) / 4)) * 4);
+}
+
+function rowParts(node: TreeNode, width: number, prefix: number, badges: Badges, dim?: boolean) {
+  const badge = rowBadge(node, width, badges, dim);
+  const closed = node.status === 'done' || node.status === 'dropped';
+  const available = width - 1 - prefix - 4 - (badge ? badge.width + 1 : 0);
+  const who = node.who === 'human' && !closed && available - stringWidth(t(' · ты')) >= MIN_TITLE;
+  return { badge, who, room: Math.max(1, available - (who ? stringWidth(t(' · ты')) : 0)) };
 }
 
 /**
@@ -48,21 +72,19 @@ export function rowOverflow(
   badges: Badges,
   dim?: boolean,
 ): { text: string; width: number } | undefined {
-  const closed = node.status === 'done' || node.status === 'dropped';
-  const who = node.who === 'human' && !closed ? stringWidth(t(' · ты')) : 0;
-  const badge = badgeFor(node, badges, dim) ? RIGHT : 0;
-  // A space of gutter, the pill's two spaces, the status mark and its space.
-  const room = Math.max(4, width - 1 - prefix - 2 - 2 - who - badge);
+  const { room } = rowParts(node, width, prefix, badges, dim);
   return overflows(node.title, room) ? { text: node.title, width: room } : undefined;
 }
 
 export function TreeRow(props: { row: Row; selected: boolean; width: number; badges: Badges; tick?: number }) {
   const { row, selected } = props;
   const { node } = row;
+  const prefix = treePrefix(row, props.width);
   let lead = '';
   if (row.depth > 0) {
-    lead = '  ';
-    for (let level = 1; level < row.depth; level++) lead += row.guides[level] ? '│   ' : '    ';
+    const visible = 1 + (prefix - 6) / 4;
+    lead = visible < row.depth ? '… ' : '  ';
+    for (let level = row.depth - visible + 1; level < row.depth; level++) lead += row.guides[level] ? '│   ' : '    ';
     lead += row.last ? '└─' : '├─';
   }
   const marker = row.hasChildren ? (row.expanded ? '▾' : '▸') : row.depth > 0 ? '─' : ' ';
@@ -73,7 +95,7 @@ export function TreeRow(props: { row: Row; selected: boolean; width: number; bad
       node={node}
       badges={props.badges}
       dim={row.held || !row.match}
-      prefix={treePrefix(row)}
+      prefix={prefix}
       tick={props.tick ?? 0}
     >
       <Text color={C.rule}>{lead}</Text>
@@ -127,70 +149,53 @@ function Line(props: {
   children?: ReactNode;
 }) {
   const { node, selected } = props;
-  const running = selected ? rowOverflow(node, props.width, props.prefix, props.badges, props.dim) : undefined;
+  const { badge, who, room } = rowParts(node, props.width, props.prefix, props.badges, props.dim);
+  const title = selected ? marquee(node.title, room, props.tick) : clip(node.title, room);
   const closed = node.status === 'done' || node.status === 'dropped';
   const color = STATUS_COLOR[node.status];
   const titleColor = props.dim ? C.faint : closed ? C.dim : selected ? C.brand : undefined;
-  const badge = badgeFor(node, props.badges, props.dim);
   return (
     <Box width={props.width}>
       <Text> </Text>
-      <Box flexGrow={1} flexShrink={1} overflow="hidden">
+      <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
         <Text wrap="truncate-end">
           {props.children}
           {selected ? (
             // The same pill as in the graph: the selection reads at a glance.
             <Text color={C.pillText} backgroundColor={C.pill} bold>
-              {` ${GLYPH[node.status]} ${running ? marquee(running.text, running.width, props.tick) : node.title} `}
+              {` ${GLYPH[node.status]} ${title} `}
             </Text>
           ) : (
             <>
               <Text color={props.dim ? C.faint : color}>{GLYPH[node.status]} </Text>
               <Text color={titleColor} strikethrough={node.status === 'dropped'}>
-                {node.title}
+                {title}
               </Text>
             </>
           )}
-          {node.who === 'human' && !closed ? <Text color={props.dim ? C.faint : C.you}>{t(' · ты')}</Text> : null}
+          {who ? <Text color={props.dim ? C.faint : C.you}>{t(' · ты')}</Text> : null}
         </Text>
       </Box>
       {badge ? (
-        <Box width={RIGHT} flexShrink={0} justifyContent="flex-end">
-          {badge}
+        <Box width={badge.width} marginLeft={1} flexShrink={0} justifyContent="flex-end">
+          <Text color={badge.color} wrap="truncate-end">
+            {badge.shown === badge.text && badge.content ? badge.content : badge.shown}
+          </Text>
         </Box>
       ) : null}
     </Box>
   );
 }
 
-/** What goes on the right of a row, or null — then the title gets the whole line. */
-function badgeFor(node: TreeNode, badges: Badges, dim: boolean | undefined): ReactNode {
+/** The badge on the right; without it the title gets the whole line. */
+function badgeFor(
+  node: TreeNode,
+  badges: Badges,
+  dim: boolean | undefined,
+): (Badge & { content?: ReactNode }) | undefined {
   const props = { dim };
-  const waiting = badges.live.find((session) => session.live?.status === 'waiting');
-  const busy = badges.live.find((session) => session.live?.status === 'busy');
-  if (waiting) {
-    return (
-      <Text color={C.you} wrap="truncate-end">
-        ? {BRAIN_SHORT[waiting.brain]}
-        {t(' ждёт тебя')}
-      </Text>
-    );
-  }
-  if (busy) {
-    return (
-      <Text color={C.agent} wrap="truncate-end">
-        {SPINNER[badges.frame % SPINNER.length]} {BRAIN_SHORT[busy.brain]}
-        {t(' работает')}
-      </Text>
-    );
-  }
-  if (badges.pane) {
-    return (
-      <Text color={C.ok} wrap="truncate-end">
-        ▣ {BRAIN_SHORT[badges.pane]}
-      </Text>
-    );
-  }
+  const agent = agentBadge(badges.live, badges.pane, badges.frame);
+  if (agent) return agent;
   if (badges.needs?.length) {
     // The first one not done yet speaks for all; when all are done, the work can go on.
     const open = badges.needs.filter((link) => link.node?.status !== 'done');
@@ -203,46 +208,51 @@ function badgeFor(node: TreeNode, badges: Badges, dim: boolean | undefined): Rea
         : shown.node
           ? (STATUS_COLOR[shown.node.status] ?? C.warn)
           : C.faint;
-    return (
-      <Text color={color} wrap="truncate-end">
-        → {shown.project} {mark}
-        {open.length > 1 ? ` +${open.length - 1}` : ''}
-      </Text>
-    );
+    return {
+      text: `→ ${shown.project} ${mark}${open.length > 1 ? ` +${open.length - 1}` : ''}`,
+      compact: `→ ${mark}`,
+      mark: '→',
+      color,
+    };
   }
   if (node.status === 'waiting') {
-    return (
-      <Text color={props.dim ? C.faint : C.warn} wrap="truncate-end">
-        {t('ждёт')}
-        {node.waiting ? `: ${node.waiting}` : ''}
-      </Text>
-    );
+    return {
+      text: `${t('ждёт')}${node.waiting ? `: ${node.waiting}` : ''}`,
+      compact: t('ждёт'),
+      mark: GLYPH.waiting,
+      color: props.dim ? C.faint : C.warn,
+    };
   }
   if (badges.progress && badges.progress.total > 0) {
     const { done, total } = badges.progress;
     const cells = 6;
     const filled = Math.round((done / total) * cells);
     const complete = done === total;
-    return (
-      <Text wrap="truncate-end">
-        <Text color={C.faint}>
-          {done}/{total}{' '}
+    return {
+      text: `${done}/${total} ${'━'.repeat(cells)}`,
+      compact: `${done}/${total}`,
+      mark: `${done}/${total}`,
+      content: (
+        <Text wrap="truncate-end">
+          <Text color={C.faint}>
+            {done}/{total}{' '}
+          </Text>
+          <Text color={props.dim ? C.faint : complete ? C.ok : C.brandDim}>{'━'.repeat(filled)}</Text>
+          <Text color={C.rule}>{'━'.repeat(cells - filled)}</Text>
         </Text>
-        <Text color={props.dim ? C.faint : complete ? C.ok : C.brandDim}>{'━'.repeat(filled)}</Text>
-        <Text color={C.rule}>{'━'.repeat(cells - filled)}</Text>
-      </Text>
-    );
+      ),
+    };
   }
   const open = badges.live.find((session) => session.live);
   if (open) {
-    return (
-      <Text color={C.faint} wrap="truncate-end">
-        ● {BRAIN_SHORT[open.brain]}
-        {t(' открыт')}
-      </Text>
-    );
+    return {
+      text: `● ${BRAIN_SHORT[open.brain]}${t(' открыт')}`,
+      compact: `● ${BRAIN_SHORT[open.brain]}`,
+      mark: '●',
+      color: C.faint,
+    };
   }
-  return null;
+  return undefined;
 }
 
 /** How a pane is doing, in one word and a colour: works, waits for you, free, quiet. */
