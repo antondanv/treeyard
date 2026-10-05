@@ -17,6 +17,7 @@ import { contextText, START_HINT, START_LABEL, sessionPlan } from '../agents/con
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { launchInPane } from '../agents/panes.js';
+import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, gitRepository } from '../git.js';
 import {
   type Board,
   boardOf,
@@ -35,7 +36,16 @@ import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
 import { addLinkedNode, setNeeds } from '../model/links.js';
 import { addNote, noteOrigin, notesFolder, originText } from '../model/notes.js';
-import { addNode, logToNode, moveNode, STATUS_LABEL, setStatus, updateNode } from '../model/ops.js';
+import {
+  addNode,
+  attachCommit,
+  detachCommit,
+  logToNode,
+  moveNode,
+  STATUS_LABEL,
+  setStatus,
+  updateNode,
+} from '../model/ops.js';
 import { writeOverview } from '../model/overview.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
 import { ago } from '../model/time.js';
@@ -97,6 +107,9 @@ ${out.bold('Команды')}
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
   treeyard image <id> [файл…|--paste] [--note "…"]   картинки узла: список, приложить файл или из буфера
   treeyard image <id> 001.png --note "…" | --rm 001.png   подпись к картинке · удалить её
+  treeyard diff <id> [--commit <sha>] [--file <путь>] [--stat|--json]   дифы коммитов узла
+  treeyard diff <id> --add <sha> | --rm <sha>   привязать коммит · убрать привязку
+  treeyard diff <id> --working              текущие изменения проекта (общие для узлов)
   treeyard context <id> [--start plan|do|goal|chat]   что получит агент
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            сессия по узлу прямо из shell
@@ -130,6 +143,9 @@ ${out.bold('Commands')}
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
   treeyard image <id> [file…|--paste] [--note "…"]   a node's pictures: the list, attach a file or the clipboard
   treeyard image <id> 001.png --note "…" | --rm 001.png   caption a picture · remove it
+  treeyard diff <id> [--commit <sha>] [--file <path>] [--stat|--json]   patches of the node's commits
+  treeyard diff <id> --add <sha> | --rm <sha>   attach a commit · remove the link
+  treeyard diff <id> --working              current project changes (shared by nodes)
   treeyard context <id> [--start plan|do|goal|chat]   what an agent gets
   treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
                                            a session for a node straight from the shell
@@ -178,6 +194,8 @@ async function main(argv: string[]): Promise<number> {
     case 'image':
     case 'images':
       return imageCommand(rest);
+    case 'diff':
+      return diffCommand(rest);
     case 'context':
       return contextCommand(rest);
     case 'open':
@@ -858,6 +876,143 @@ function logCommand(args: string[]): number {
     }),
   );
   return 0;
+}
+
+/** A node's explicit commit links and the project's separate working changes. */
+async function diffCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, {
+    add: { type: 'string', multiple: true },
+    rm: { type: 'string' },
+    commit: { type: 'string' },
+    file: { type: 'string' },
+    working: { type: 'boolean' },
+    stat: { type: 'boolean' },
+    json: { type: 'boolean' },
+    project: { type: 'string' },
+    as: { type: 'string' },
+  });
+  const dir = values.project ? findProject(resolve(values.project)) : findProject();
+  if (!dir) throw new UsageError(t('здесь нет дерева (.tree/) — treeyard init, чтобы посадить'));
+  let tree = loadTree(dir);
+  const id = nodeArg(tree, positionals[0]);
+  if (!tree.nodes.has(id)) throw new UsageError(t('выбери узел, чтобы посмотреть его дифы'));
+  if (positionals.length > 1 || (values.add && values.rm) || (values.working && values.commit))
+    throw new UsageError(t('treeyard diff <id>: выбери просмотр, --add или --rm'));
+  if ((values.add || values.rm) && (values.working || values.commit || values.file || values.stat))
+    throw new UsageError(t('treeyard diff <id>: выбери просмотр, --add или --rm'));
+  const source = sourceOf(values.as);
+  if (values.rm) {
+    if (!/^[a-f0-9]{4,64}$/i.test(values.rm))
+      throw new UsageError(t('укажи SHA коммита (от 4 шестнадцатеричных символов)'));
+    const matches = (tree.nodes.get(id)!.commits ?? []).filter((sha) => sha.startsWith(values.rm!.toLowerCase()));
+    if (matches.length !== 1)
+      throw new UsageError(t('у узла нет единственного коммита с SHA {sha}', { sha: values.rm }));
+    detachCommit(tree, id, matches[0]!, source);
+    process.stdout.write(
+      values.json
+        ? `${JSON.stringify({ id, commits: tree.nodes.get(id)!.commits ?? [] })}\n`
+        : `${id} · ${t('убрана привязка коммита {sha}', { sha: matches[0] })}\n`,
+    );
+    return 0;
+  }
+  const repo = await gitRepository(dir);
+  if (values.add) {
+    const commits = await Promise.all(values.add.map((sha) => repo.commit(sha)));
+    // Git reads are asynchronous; keep any journal entries written in the meantime.
+    tree = loadTree(dir);
+    for (const commit of commits) attachCommit(tree, id, commit.sha, source);
+    process.stdout.write(
+      values.json
+        ? `${JSON.stringify({ id, commits: tree.nodes.get(id)!.commits ?? [] })}\n`
+        : `${id} · ${t('привязано коммитов: {n}', { n: commits.length })}\n`,
+    );
+    return 0;
+  }
+  const node = tree.nodes.get(id)!;
+  let refs = node.commits ?? [];
+  if (values.commit) {
+    const commit = await repo.commit(values.commit);
+    if (!refs.includes(commit.sha))
+      throw new UsageError(t('коммит {sha} не привязан к узлу {id}', { sha: commit.sha, id }));
+    refs = [commit.sha];
+  }
+  type Section = {
+    title: string;
+    sha?: string;
+    kind?: string;
+    files: (GitFile & { patch?: string })[];
+    error?: string;
+  };
+  const sections: Section[] = [];
+  const sources: { title: string; source: DiffSource; files: GitFile[] }[] = [];
+  if (values.working) {
+    const working = await repo.working();
+    const labels = { staged: t('В индексе'), unstaged: t('В рабочей папке'), untracked: t('Новые файлы') };
+    for (const kind of ['staged', 'unstaged', 'untracked'] as const)
+      sources.push({ title: labels[kind], source: { kind }, files: working[kind] });
+  } else {
+    for (const ref of refs) {
+      try {
+        const commit = await repo.commit(ref);
+        const source: DiffSource = { kind: 'commit', commit };
+        sources.push({
+          title: `${commit.sha.slice(0, 8)} · ${diffText(commit.subject)}`,
+          source,
+          files: await repo.files(source),
+        });
+      } catch (error) {
+        sections.push({ title: ref, sha: ref, files: [], error: (error as Error).message });
+      }
+    }
+  }
+  let matched = false;
+  for (const { title, source, files } of sources) {
+    const chosen = values.file
+      ? files.filter((file) => file.path === values.file || file.oldPath === values.file)
+      : files;
+    if (chosen.length) matched = true;
+    if (values.file && !chosen.length) continue;
+    const patches: (GitFile & { patch?: string })[] = [];
+    for (const file of chosen)
+      patches.push({ ...file, ...(!values.stat ? { patch: await repo.patch(source, file) } : {}) });
+    sections.push({
+      title,
+      ...(source.kind === 'commit' ? { sha: source.commit.sha } : { kind: source.kind }),
+      files: patches,
+    });
+  }
+  if (values.file && !matched) throw new UsageError(t('среди этих изменений нет файла {file}', { file: values.file }));
+  const title = values.working ? t('Текущие изменения проекта') : t('Дифы · {title}', { title: node.title });
+  if (values.json) process.stdout.write(`${JSON.stringify({ id, root: repo.dir, title, sections }, null, 2)}\n`);
+  else {
+    process.stdout.write(`${out.bold(title)}\n`);
+    if (!sections.length)
+      process.stdout.write(`${t('к узлу пока не привязаны коммиты · treeyard diff <id> --add <sha>')}\n`);
+    for (const section of sections) {
+      process.stdout.write(`\n${out.bold(section.title)}\n`);
+      if (section.error) process.stdout.write(`${section.error}\n`);
+      else if (!section.files.length) process.stdout.write(`${t('изменений нет')}\n`);
+      for (const file of section.files) {
+        process.stdout.write(`  ${file.status} ${fileLabel(file)}  ${fileStats(file)}\n`);
+        if (file.patch) {
+          const patch = diffText(file.patch)
+            .split('\n')
+            .map((line) =>
+              line.startsWith('+')
+                ? out.c('#5fd38d', line)
+                : line.startsWith('-')
+                  ? out.c('#ff7b72', line)
+                  : line.startsWith('@@')
+                    ? out.c('#62d0e0', line)
+                    : line,
+            )
+            .join('\n');
+          process.stdout.write(`${patch}\n`);
+        }
+      }
+    }
+  }
+  return sections.some((section) => section.error) ? 1 : 0;
 }
 
 /** Pictures of a node: list, attach (files or the clipboard), caption, remove. */

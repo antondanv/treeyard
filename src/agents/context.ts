@@ -168,6 +168,8 @@ const TEXT = {
     images: 'Картинки узла — открой файлы, чтобы посмотреть:',
     image: 'файл.png',
     imageWhat: 'приложить к узлу картинку или скрин (например, доказательство для проверки); без файла — список',
+    diffWhat:
+      'после коммита привяжи его SHA к узлу, чтобы человек мог посмотреть диф; без --add — просмотр. Привязывай только коммиты с работой по этому узлу',
   },
   en: {
     heading: '# You are working on a node of the project tree',
@@ -216,6 +218,8 @@ const TEXT = {
     images: 'Pictures of the node — open the files to look at them:',
     image: 'file.png',
     imageWhat: 'attach a picture or a screenshot to the node (evidence for review, say); without a file — the list',
+    diffWhat:
+      'after committing, attach its SHA to the node so the person can inspect the patch; without --add — view. Attach only commits with work on this node',
   },
 };
 
@@ -296,6 +300,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} add "${L.other}" --project ../X --for ${node.id}\` — ${L.otherWhat}`);
   lines.push(`- \`${self} set <id> status=done --project ../X\` — ${L.closeOther}`);
   lines.push(`- \`${self} image ${node.id} ${L.image} --note "…"\` — ${L.imageWhat}`);
+  lines.push(`- \`${self} diff ${node.id} --add <sha>\` — ${L.diffWhat}`);
   // Read, not applied: the context must not switch the language or the theme of whoever asks.
   if (loadSettings().notes) lines.push(`- \`${self} note "${L.note}"\` — ${L.noteWhat}`);
   lines.push(`- ${L.done}`);

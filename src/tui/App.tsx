@@ -77,8 +77,10 @@ import { linkLabel, linksOf } from '../model/links.js';
 import { homeShort, notesFolder } from '../model/notes.js';
 import {
   addNode,
+  attachCommit,
   attachSession,
   deleteNode,
+  detachCommit,
   detachSession,
   indent,
   logToNode,
@@ -147,6 +149,7 @@ import {
   TextViewer,
   WaitingForm,
 } from './dialogs.js';
+import { DiffsDialog } from './diffs-dialog.js';
 import { type AgentTask, GithubConnect } from './github-connect.js';
 import { follow, Graph, type GraphStyle, layoutGraph, neighbour, selectedOverflow, type Viewport } from './graph.js';
 import { History } from './history.js';
@@ -205,6 +208,7 @@ type Modal =
   | { kind: 'help' }
   | { kind: 'github' }
   | { kind: 'images'; node: string }
+  | { kind: 'diffs'; node: string }
   | { kind: 'problems' };
 
 /** Something that starts a session or spends an agent's time: asked about first, unless turned off. */
@@ -671,6 +675,7 @@ export function App(props: AppProps) {
       'confirm',
       'github',
       'images',
+      'diffs',
     ].includes(modal.kind);
   const listHeight = bodyHeight;
   const paneSize = { width: Math.max(20, (rightWidth || width) - 2), height: Math.max(5, bodyHeight - 4) };
@@ -1128,6 +1133,7 @@ export function App(props: AppProps) {
       return request({ kind: choice.kind, node: nodeId, choice: assistChoice(choice.kind) });
     if (choice.kind === 'check') return check(node);
     if (choice.kind === 'context') return setModal({ kind: 'context', node: nodeId });
+    if (choice.kind === 'diffs') return setModal({ kind: 'diffs', node: nodeId });
     if (choice.kind === 'raise' || choice.kind === 'lower') return prioritize(node, choice.kind === 'raise' ? -1 : 1);
     if (choice.kind === 'sleep') return putToSleep(choice.ref);
     if (choice.kind === 'show' || choice.kind === 'fullscreen') {
@@ -1513,6 +1519,12 @@ export function App(props: AppProps) {
       needs: 'node',
       run: () => current && setModal({ kind: 'images', node: current.id }),
     },
+    diffs: {
+      label: t('Дифы узла: коммиты и текущие изменения проекта'),
+      keys: 'V',
+      needs: 'node',
+      run: () => current && setModal({ kind: 'diffs', node: current.id }),
+    },
     copy: {
       label: t('Скопировать id узла'),
       keys: 'y',
@@ -1636,6 +1648,7 @@ export function App(props: AppProps) {
     z: 'style',
     i: 'inspector',
     I: 'images',
+    V: 'diffs',
     '.': 'closed',
     '+': 'expandAll',
     '=': 'expandAll',
@@ -2113,7 +2126,9 @@ export function App(props: AppProps) {
   const dialog = (): ReactNode => {
     if (!modal) return null;
     const w = fullModal
-      ? Math.min(width - 2, modal.kind === 'help' ? 112 : 100)
+      ? modal.kind === 'diffs'
+        ? width - 2
+        : Math.min(width - 2, modal.kind === 'help' ? 112 : 100)
       : Math.max(36, rightWidth || width - 2);
     const close = () => setModal(undefined);
     switch (modal.kind) {
@@ -2194,6 +2209,30 @@ export function App(props: AppProps) {
         );
       case 'help':
         return <HelpDialog width={w} height={bodyHeight} onClose={close} />;
+      case 'diffs': {
+        if (!modalNode) return null;
+        return (
+          <DiffsDialog
+            dir={props.dir}
+            node={modalNode}
+            width={w}
+            height={bodyHeight}
+            onAttach={(sha) => {
+              reload();
+              return change(t('привязан коммит {sha}', { sha }), () =>
+                attachCommit(treeRef.current, modalNode.id, sha),
+              );
+            }}
+            onDetach={(sha) => {
+              reload();
+              return change(t('убрана привязка коммита {sha}', { sha }), () =>
+                detachCommit(treeRef.current, modalNode.id, sha),
+              );
+            }}
+            onClose={close}
+          />
+        );
+      }
       case 'images': {
         if (!modalNode) return null;
         return (
@@ -3455,6 +3494,7 @@ function Hints(props: {
               : [
                   ...pane,
                   ['⏎', t('действия')],
+                  ['V', t('дифы')],
                   ['K J', t('приоритет')],
                   [',', t('настройки')],
                   ['c', 'claude'],

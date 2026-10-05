@@ -187,6 +187,24 @@ export function logToNode(tree: Tree, id: string, text: string, source = t('ты
   return node;
 }
 
+/** A commit is attached explicitly: a shared work folder cannot tell whose changes it contains. */
+export function attachCommit(tree: Tree, id: string, sha: string, source = t('ты')): TreeNode {
+  const node = need(tree, id);
+  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(sha)) throw new Error(t('нужен полный SHA коммита'));
+  const value = sha.toLowerCase();
+  if (node.commits?.includes(value)) return node;
+  node.commits = [...(node.commits ?? []), value];
+  return logToNode(tree, id, t('привязан коммит {sha}', { sha: value }), source);
+}
+
+export function detachCommit(tree: Tree, id: string, sha: string, source = t('ты')): TreeNode {
+  const node = need(tree, id);
+  if (!node.commits?.includes(sha)) return node;
+  node.commits = node.commits.filter((ref) => ref !== sha);
+  if (!node.commits.length) delete node.commits;
+  return logToNode(tree, id, t('убрана привязка коммита {sha}', { sha }), source);
+}
+
 /** Records a session on a node; opening it again only refreshes `opened`. */
 export function attachSession(tree: Tree, id: string, ref: SessionRef, journal?: string): TreeNode {
   const node = need(tree, id);

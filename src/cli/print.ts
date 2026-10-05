@@ -165,6 +165,10 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint): string {
       : p.dim(linkLabel(link));
   for (const link of links.needs) lines.push(`${p.dim(t('ждёт:'))} ${linkLine(link)}`);
   for (const link of links.neededBy) lines.push(`${p.dim(t('нужен для:'))} ${linkLine(link)}`);
+  if (node.commits?.length) {
+    lines.push('', p.dim(t('коммиты:')));
+    for (const sha of node.commits) lines.push(`  ${sha}`);
+  }
   const kids = childrenOf(tree, node.id);
   if (kids.length > 0) {
     lines.push('', p.dim(t('внутри:')));
@@ -202,6 +206,7 @@ export function treeJson(tree: Tree): unknown {
     ...(node.needs ? { needs: node.needs } : {}),
     ...(node.neededBy ? { for: node.neededBy } : {}),
     ...(node.sessions.length ? { sessions: node.sessions } : {}),
+    ...(node.commits?.length ? { commits: node.commits } : {}),
     children: childrenOf(tree, node.id).map(nodeJson),
   });
   return {

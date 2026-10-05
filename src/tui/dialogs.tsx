@@ -316,6 +316,7 @@ export type SessionChoice =
   | { kind: 'check' }
   | { kind: 'raise' }
   | { kind: 'lower' }
+  | { kind: 'diffs' }
   | { kind: 'context' };
 
 export function NodeMenu(props: {
@@ -445,6 +446,7 @@ export function NodeMenu(props: {
       disabled: !node.check,
       hint: t('команда из поля «проверка», в папке проекта'),
     },
+    { key: 'diffs', hotkey: 'V', label: t('Дифы узла'), hint: t('коммиты, файлы и текущие изменения проекта') },
     { key: 'context', hotkey: 'p', label: t('☰ Что получит агент'), hint: t('контекст, с которым стартует сессия') },
     {
       key: 'raise',
@@ -469,6 +471,7 @@ export function NodeMenu(props: {
       key === 'criterion' ||
       key === 'check' ||
       key === 'context' ||
+      key === 'diffs' ||
       key === 'raise' ||
       key === 'lower'
     ) {
@@ -932,6 +935,7 @@ const help = (): [string, [string, string][]][] => [
       ['tab ⇧tab', t('вложить · поднять на уровень')],
       ['K J · ⇧↑↓', t('приоритет среди соседей одного статуса')],
       ['I', t('картинки: v — из буфера, перетащить файл, подписи')],
+      ['V', t('дифы узла: коммиты, файлы, текущие правки')],
       ['u', t('отменить последнее изменение')],
       ['D', t('удалить')],
     ],

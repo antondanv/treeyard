@@ -155,6 +155,7 @@ export function NodeDetails(props: {
       </Text>,
     );
   }
+  if (node.commits?.length) wrap(t('коммитов: {n} · V — дифы', { n: node.commits.length }), C.dim);
 
   const images = listImages(tree.project.dir, node.id);
   if (images.length > 0) {

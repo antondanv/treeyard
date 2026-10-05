@@ -201,6 +201,8 @@ export function nodeFromText(text: string, fallbackId: string, problems: string[
   if (needs.length) node.needs = needs;
   const neededBy = strList(take('for'));
   if (neededBy.length) node.neededBy = neededBy;
+  const commits = strList(take('commits'));
+  if (commits.length) node.commits = [...new Set(commits)];
   const created = dateStr(take('created'));
   if (created) node.created = created;
   const updated = dateStr(take('updated'));
@@ -249,6 +251,7 @@ export function nodeToText(node: TreeNode): string {
     until: node.status === 'waiting' ? node.until : undefined,
     needs: node.needs,
     for: node.neededBy,
+    commits: node.commits?.length ? node.commits : undefined,
     sessions: node.sessions.map((ref) => ({
       brain: ref.brain,
       id: ref.id,

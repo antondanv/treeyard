@@ -62,6 +62,8 @@ export interface TreeNode {
   /** The other side of `needs`: nodes elsewhere that wait for this one (`for` in the file). */
   neededBy?: string[];
   sessions: SessionRef[];
+  /** Explicit Git commit IDs whose patches belong to this node. */
+  commits?: string[];
   /** YYYY-MM-DD. */
   created?: string;
   /** ISO time. */
