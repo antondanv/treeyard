@@ -9,12 +9,12 @@
 
 TypeScript (ESM, strict), Node.js 22+, Ink 7 + React 19, `yaml`. Тесты — Vitest
 (+ ink-testing-library), lint и формат — Biome. Сессии и tmux — через
-`@antondanv/brainyard` из соседней папки `../Brainyard` (`file:` зависимость).
+`@antondanv/brainyard` из npm (`^0.2`); его исходники — в `../Brainyard`.
 
 ## Команды
 
 ```sh
-npm install                        # нужен ../Brainyard (собранный: npm run build там)
+npm install                        # при NODE_ENV=production: npm install --include=dev
 npm run dev -- <args>              # treeyard из исходников (tsx)
 npm run typecheck && npm test && npm run lint && npm run build   # перед «на проверке»
 npm run format                     # biome check --write
