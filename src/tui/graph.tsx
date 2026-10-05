@@ -38,7 +38,7 @@ export interface GraphCard {
   y: number;
   width: number;
   height: number;
-  /** Width of the column the card stands in: lines leave from its right edge. */
+  /** Where lines to the children leave from: the card's column in `card` style, its own label in `line` style. */
   column: number;
   depth: number;
   row?: Row;
@@ -56,6 +56,8 @@ export interface LayoutOptions {
   style: GraphStyle;
   /** Card width in `card` style; the widest label in `line` style. */
   width: number;
+  /** In `line` style, the widest label of a node with nothing open to its right: a leaf takes the room left there. */
+  leafWidth?: number;
   tree: Tree;
 }
 
@@ -93,8 +95,8 @@ export function layoutGraph(rows: Row[], options: LayoutOptions): GraphLayout {
     children.set(row.node.parent, list);
   }
 
-  // Column widths: cards are all alike; lines take what the longest title in
-  // the column needs, up to the limit.
+  // Cards are all alike and stand in columns. A line takes what its title
+  // needs, up to the limit — a leaf up to the wider one: nothing grows to its right.
   const columns: number[] = [];
   const labelWidth = new Map<string, number>();
   const measureLabel = (id: string, depth: number, row?: Row) => {
@@ -104,7 +106,9 @@ export function layoutGraph(rows: Row[], options: LayoutOptions): GraphLayout {
       : row?.node.needs?.length
         ? 5
         : 0;
-    const width = card ? options.width : Math.min(options.width, stringWidth(labelText(lineLabel(tree, row))) + extra);
+    const leaf = row && !children.get(id)?.length;
+    const limit = leaf ? Math.max(options.width, options.leafWidth ?? 0) : options.width;
+    const width = card ? options.width : Math.min(limit, stringWidth(labelText(lineLabel(tree, row))) + extra);
     labelWidth.set(id, width);
     columns[depth] = Math.max(columns[depth] ?? 0, width);
     for (const kid of children.get(id) ?? []) measureLabel(kid.node.id, depth + 1, kid);
@@ -136,29 +140,34 @@ export function layoutGraph(rows: Row[], options: LayoutOptions): GraphLayout {
   const height = measure(ROOT) + 2;
   const cards: GraphCard[] = [];
   const middle = card ? 2 : 0;
-  const place = (id: string, depth: number, top: number, row?: Row): number => {
+  // Lines: children start right after their parent's own title, not after the longest
+  // title of the whole column — a short «Готовые · 27» does not push its children away.
+  const place = (id: string, depth: number, top: number, x: number, row?: Row): number => {
     const kids = children.get(id) ?? [];
+    const width = labelWidth.get(id) ?? options.width;
+    const column = card ? (columns[depth] ?? options.width) : width;
+    const kidsX = card ? columnX[depth + 1]! : x + width + gapX;
     let next = top;
     const centers = kids.map((kid, index) => {
       if (index > 0) next += gapBetween(kids[index - 1]!, kid);
-      const center = place(kid.node.id, depth + 1, next, kid);
+      const center = place(kid.node.id, depth + 1, next, kidsX, kid);
       next += heights.get(kid.node.id)!;
       return center;
     });
     const center = centers.length ? Math.floor((centers[0]! + centers.at(-1)!) / 2) : top + middle;
     cards.push({
       id,
-      x: columnX[depth]!,
+      x,
       y: center - middle,
-      width: labelWidth.get(id) ?? options.width,
+      width,
       height: cardHeight,
-      column: columns[depth] ?? options.width,
+      column,
       depth,
       ...(row ? { row } : {}),
     });
     return center;
   };
-  place(ROOT, 0, 1);
+  place(ROOT, 0, 1, columnX[0]!);
   const width = Math.max(...cards.map((item) => item.x + item.column)) + 2;
   return { style, cards, byId: new Map(cards.map((item) => [item.id, item])), width, height };
 }
@@ -200,7 +209,12 @@ export function follow(
             .map((child) => child.x + child.column + 2),
         )
       : 0;
-  const right = Math.max(card.x + card.column + 4, childRight);
+  // Siblings stand in one column: the longest of them is in view too, not cut by the edge.
+  const parentId = card.row?.node.parent;
+  const siblings = parentId
+    ? Math.max(...layout.cards.filter((item) => item.row?.node.parent === parentId).map((item) => item.x + item.column))
+    : 0;
+  const right = Math.max(card.x + card.column + 4, siblings + 2, childRight);
   if (right > x + size.x) x = right - size.x;
   // Keep the parent's column in view when there is room for it.
   const parent = card.row ? layout.byId.get(card.row.node.parent) : undefined;

@@ -726,9 +726,11 @@ export function App(props: AppProps) {
               : Math.floor((leftWidth - 18) / 2) - 5,
           ),
         );
+  // A leaf has nothing to its right: its title takes what is left after one parent's column.
+  const leafWidth = Math.max(graphWidth, leftWidth - graphWidth - 12);
   const graphLayout =
     view === 'tree' && treeMode === 'graph'
-      ? layoutGraph(treeRows, { style: graphStyle, width: graphWidth, tree })
+      ? layoutGraph(treeRows, { style: graphStyle, width: graphWidth, leafWidth, tree })
       : undefined;
   /** What the graph shows as selected and keeps in view: a node, or the root. */
   const graphSelected = rootSelected ? ROOT : currentItem?.id;
@@ -1785,6 +1787,7 @@ export function App(props: AppProps) {
     const layout = layoutGraph(treeViewRows(tree, { expanded: opened, showClosed, filter }), {
       style: graphStyle,
       width: graphWidth,
+      leafWidth,
       tree,
     });
     const next = neighbour(layout, row.node.id, 'right');
@@ -1897,6 +1900,7 @@ export function App(props: AppProps) {
           const layout = layoutGraph(treeViewRows(tree, { expanded: opened, showClosed, filter }), {
             style: graphStyle,
             width: graphWidth,
+            leafWidth,
             tree,
           });
           const next = neighbour(layout, row.node.id, 'right');

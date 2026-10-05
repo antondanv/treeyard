@@ -71,7 +71,8 @@ describe('running title', () => {
     const start = graphLine(await snapshot(tree.project.dir, { columns: 100, rows: 20 }));
     expect(start).toContain('Длинное название');
     expect(start).not.toContain('колонку целиком');
-    const later = graphLine(await snapshot(tree.project.dir, { columns: 100, rows: 20, settle: 12_500 }));
+    // A leaf takes the room left at 100 columns (52): 16 columns run over, the far end rests at 6.7–8.3 s.
+    const later = graphLine(await snapshot(tree.project.dir, { columns: 100, rows: 20, settle: 7_500 }));
     expect(later).toContain('колонку целиком');
     expect(later).not.toContain('Длинное название');
   }, 30_000);

@@ -61,6 +61,32 @@ describe('graph layout', () => {
   });
 });
 
+describe('room in the line graph', () => {
+  it("children start right after their parent's own title, and a leaf takes the wider room", () => {
+    const tree = emptyTree();
+    const long = addNode(tree, { title: 'Очень длинное название ветки, которое занимает всю колонку' });
+    const short = addNode(tree, { title: 'Готовые' });
+    const leaf = addNode(tree, {
+      title: 'Лист с длинным названием, которому есть куда расти вправо',
+      parent: short.id,
+    });
+    addNode(tree, { title: 'Задача', parent: long.id });
+    const expanded = new Set([long.id, short.id]);
+    const layout = layoutGraph(flatten(tree, { expanded, showClosed: true }), {
+      style: 'line',
+      width: 30,
+      leafWidth: 60,
+      tree,
+    });
+    const card = (id: string) => layout.byId.get(id)!;
+    expect(card(long.id).width).toBe(30);
+    // No empty run of line after a short title: its children are six columns away from it.
+    expect(card(leaf.id).x).toBe(card(short.id).x + card(short.id).width + 6);
+    expect(card(leaf.id).x).toBeLessThan(card(long.id).x + card(long.id).width + 6);
+    expect(card(leaf.id).width).toBe(stringWidth(`○ ${leaf.title}`));
+  });
+});
+
 describe('moving around the graph', () => {
   it('up and down stay in the column and cross between parents; left is the parent; right the nearest child', () => {
     const { tree, expanded } = sample();
