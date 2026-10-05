@@ -63,6 +63,7 @@ describe.skipIf(!hasTmux)('the tree in a real terminal', () => {
       BRAINYARD_CLAUDE_BIN: process.env.BRAINYARD_CLAUDE_BIN!,
       BRAINYARD_CODEX_BIN: 'treeyard-test-no-codex',
       BRAINYARD_AGY_BIN: 'treeyard-test-no-agy',
+      BRAINYARD_OPENCODE_BIN: 'treeyard-test-no-opencode',
       CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR!,
       TERM: 'xterm-256color',
     };

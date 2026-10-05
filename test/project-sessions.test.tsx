@@ -99,7 +99,7 @@ describe('sessions of the whole project', () => {
     expect(loadTree(tree.project.dir).project.sessions).toEqual([]);
   });
 
-  it.each(['claude', 'codex', 'antigravity'] as const)(
+  it.each(['claude', 'codex', 'antigravity', 'opencode'] as const)(
     'launches and resumes %s from the root through Brainyard',
     async (brain) => {
       const tree = emptyTree();

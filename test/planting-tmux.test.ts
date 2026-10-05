@@ -49,6 +49,7 @@ async function start(name: string, columns: number, fallback = false) {
     BRAINYARD_CLAUDE_BIN: JSON.stringify([process.execPath, fixture]),
     BRAINYARD_CODEX_BIN: 'treeyard-test-no-codex',
     BRAINYARD_AGY_BIN: 'treeyard-test-no-agy',
+    BRAINYARD_OPENCODE_BIN: 'treeyard-test-no-opencode',
     ...(fallback ? { BRAINYARD_TMUX_BIN: 'treeyard-test-no-tmux' } : {}),
     CLAUDE_CONFIG_DIR: tempDir('treeyard-plant-claude-'),
     TREEYARD_TEST_TSX: tsx,

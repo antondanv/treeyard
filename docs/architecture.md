@@ -2,7 +2,7 @@
 
 ```
 .tree/tree.md, .tree/nodes/*.md  ←→  model  ←→  cli (команды)  ─┐
-        (md + YAML, в git)                  ←→  tui (Ink)        ├→ agents → Brainyard → claude / codex / agy
+        (md + YAML, в git)                  ←→  tui (Ink)        ├→ agents → Brainyard → claude / codex / agy / opencode
                                                                  ┘                     └→ tmux -L brainyard (панели)
 ```
 

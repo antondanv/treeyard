@@ -115,7 +115,7 @@ describe('the confirmation of an agent job picks who does it', () => {
     app.stdin.write('!');
     await pause();
     expect(onNever).toHaveBeenCalledOnce();
-    expect(onNever.mock.calls[0]![0]).toMatchObject({ brain: 'antigravity' });
+    expect(onNever.mock.calls[0]![0]).toMatchObject({ brain: 'opencode' });
   });
 });
 
@@ -133,13 +133,23 @@ describe('the job runs on the chosen agent; the project keeps its own', () => {
 
   it('the criterion: Antigravity, and the next job starts from the project defaults again', async () => {
     const { tree, settings } = sample();
-    const menu = [`\r`, DOWN.repeat(6), '\r'];
-    await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [...menu, LEFT, ...idle, '\r'] });
+    const menu = [`\r`, DOWN.repeat(7), '\r'];
+    await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [...menu, LEFT, LEFT, ...idle, '\r'] });
     expect(backend.run.mock.calls[0]![0]).toMatchObject({ brain: 'antigravity' });
     expect(backend.run.mock.calls[0]![0]).not.toHaveProperty('model');
     const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [...menu, ...idle, '\r'] });
     expect(frame).toContain('Видно в TUI');
     expect(backend.run.mock.calls[1]![0]).toMatchObject({ brain: 'claude', model: 'sonnet', effort: 'low' });
+    expect(readFileSync(join(tree.project.dir, '.tree', 'tree.md'), 'utf8')).toBe(settings);
+  });
+
+  it('OpenCode breaks the node down too; with no list of its models, no effort is sent', async () => {
+    const { tree, settings } = sample();
+    await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['S', LEFT, ...idle, '\r'] });
+    expect(backend.run).toHaveBeenCalledOnce();
+    expect(backend.run.mock.calls[0]![0]).toMatchObject({ brain: 'opencode', access: 'readonly' });
+    expect(backend.run.mock.calls[0]![0]).not.toHaveProperty('model');
+    expect(backend.run.mock.calls[0]![0]).not.toHaveProperty('effort');
     expect(readFileSync(join(tree.project.dir, '.tree', 'tree.md'), 'utf8')).toBe(settings);
   });
 

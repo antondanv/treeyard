@@ -160,7 +160,7 @@ export const EN: Record<string, string> = {
   'нет узла «{id}»': 'no node «{id}»',
   'статус бывает: {p1}': 'status can be: {p1}',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
-  'мозг бывает: claude, codex, antigravity': 'brain can be: claude, codex, antigravity',
+  'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',
   'старт бывает: {p1}': 'start can be: {p1}',
   ты: 'you',
   агент: 'agent',
@@ -333,8 +333,8 @@ export const EN: Record<string, string> = {
   '«{title}» вложен': '«{title}» nested',
   '«{title}» выше': '«{title}» up',
   '«{title}» ниже': '«{title}» down',
-  ' ищу сессии Claude Code, Codex и Antigravity этой папки…':
-    ' looking for Claude Code, Codex and Antigravity sessions of this folder…',
+  ' ищу сессии Claude Code, Codex, Antigravity и OpenCode этой папки…':
+    ' looking for Claude Code, Codex, Antigravity and OpenCode sessions of this folder…',
   ' в этой папке ещё не было сессий': ' no sessions in this folder yet',
   'ничего не найдено по «{filter}»': 'nothing found for «{filter}»',
   'Дерево пустое.': 'The tree is empty.',
@@ -419,8 +419,8 @@ export const EN: Record<string, string> = {
   'У каждого родителя сверху вниз. Готовые собраны в группу «Готовые · N» там, где стоит «готово».':
     'Under every parent, top to bottom. Done nodes gather in the «Done · N» group where «done» stands.',
   'Живые статусы сессий': 'Live session status',
-  'каждые 3 с: кто из Claude Code, Codex и Antigravity работает, а кто ждёт тебя':
-    'every 3 s: which Claude Code, Codex and Antigravity sessions are working and which wait for you',
+  'каждые 3 с: кто из Claude Code, Codex, Antigravity и OpenCode работает, а кто ждёт тебя':
+    'every 3 s: which Claude Code, Codex, Antigravity and OpenCode sessions are working and which wait for you',
   'ЭТОТ ПРОЕКТ  .tree/tree.md': 'THIS PROJECT  .tree/tree.md',
   'Мозг по умолчанию': 'Default brain',
   'Как начинать сессию': 'How sessions start',
@@ -430,6 +430,9 @@ export const EN: Record<string, string> = {
   'у этой модели усилие не настраивается': 'this model has no effort setting',
   '* — по умолчанию у модели; больше усилия — дольше и дороже':
     '* — the model’s default; more effort is slower and costs more',
+  'в самой сессии': 'inside the session',
+  'OpenCode меняет усилие — вариант модели — прямо в сессии: ctrl+t':
+    'OpenCode changes the effort — the model’s variant — right in the session: ctrl+t',
   'для «разбить на шаги» и критерия — можно дешевле и быстрее':
     'for “split into steps” and the criterion — a cheaper, faster one will do',
   ' настройки': ' settings',
@@ -440,8 +443,10 @@ export const EN: Record<string, string> = {
   ' · усилие не настраивается': ' · no effort setting',
   'псевдонимы Claude Code — всегда последняя версия модели':
     'Claude Code aliases — always the latest version of the model',
+  '{brain} не дал список моделей': '{brain} gave no list of models',
   'встроенный список: CLI не ответил': 'built-in list: the CLI did not answer',
   '{n} {models} из {brain}': '{n} {models} from {brain}',
+  'в самой сессии OpenCode — ctrl+t': 'inside the OpenCode session — ctrl+t',
   'у этой модели не настраивается': 'not configurable for this model',
   Усилие: 'Effort',
   'Модель для задач агента': 'Model for agent jobs',
@@ -736,7 +741,7 @@ export const EN: Record<string, string> = {
   '  ? {n} ждёт тебя': '  ? {n} waiting for you',
   '   нет сессий в этой папке': '   no sessions in this folder',
   'к другому CLI': 'another CLI',
-  'в «Сессиях»: Claude · Codex · Antigravity': 'in Sessions: Claude · Codex · Antigravity',
+  'в «Сессиях»: Claude · Codex · Antigravity · OpenCode': 'in Sessions: Claude · Codex · Antigravity · OpenCode',
   Что: 'What',
   'посмотрит дерево и проект, предложит, как дорастить': 'looks at the tree and the project, proposes how to grow it',
   'попросит выложить всё о проекте, потом поведёт по вопросам':
@@ -1105,7 +1110,7 @@ export const EN: Record<string, string> = {
   '▶ {brain} · ревью дерева': '▶ {brain} · tree review',
   '▶ {brain} · разговор о проекте': '▶ {brain} · project conversation',
   '⚙ Другой агент, место, модель…': '⚙ Another agent, place, model…',
-  'Claude Code, Codex или Antigravity · в панели, в терминале или в фоне':
-    'Claude Code, Codex or Antigravity · in a pane, in the terminal or in the background',
+  'Claude Code, Codex, Antigravity или OpenCode · в панели, в терминале или в фоне':
+    'Claude Code, Codex, Antigravity or OpenCode · in a pane, in the terminal or in the background',
   'всё дерево, журналы, правила и команды': 'the whole tree, journals, rules and commands',
 };

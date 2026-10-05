@@ -22,8 +22,11 @@ export type Who = 'agent' | 'human' | 'any';
 
 export const WHO: readonly Who[] = ['agent', 'human', 'any'];
 
-// OpenCode comes from Brainyard 0.2 in sessions and live lists; Treeyard does not start it yet.
+/** The CLI a session runs in, through Brainyard. */
 export type BrainId = 'claude' | 'codex' | 'antigravity' | 'opencode';
+
+/** Every CLI, in the order the tree offers and groups them. */
+export const BRAIN_IDS: readonly BrainId[] = ['claude', 'codex', 'antigravity', 'opencode'];
 
 /** A CLI session opened for a node. The id is what that CLI resumes. */
 export interface SessionRef {

@@ -9,7 +9,7 @@ import type { ReactNode } from 'react';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 
-import { BRAIN_SHORT } from '../agents/launch.js';
+import { BRAIN_SHORT, resumeCommand } from '../agents/launch.js';
 import { type DocFile, linesLabel, TREE_DOC } from '../docs.js';
 import { t } from '../i18n/i18n.js';
 import { daysLeft, imagePath, listImages } from '../model/images.js';
@@ -413,12 +413,7 @@ export function SessionDetails(props: {
       </Pane>
     );
   }
-  const resume =
-    session.brain === 'claude'
-      ? `claude --resume ${session.id}`
-      : session.brain === 'codex'
-        ? `codex resume ${session.id}`
-        : `agy --conversation ${session.id}`;
+  const resume = resumeCommand(session.brain, session.id);
   return (
     <Pane width={props.width} height={props.height}>
       <Text bold wrap="truncate-end">

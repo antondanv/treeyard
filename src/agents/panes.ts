@@ -51,7 +51,7 @@ export interface Pane extends PaneInfo {
   memory?: number;
 }
 
-/** Codex and Antigravity name a session only after it starts; until then the ref holds the pane. */
+/** Codex, Antigravity and OpenCode name a session only after it starts; until then the ref holds the pane. */
 const PENDING = 'pane:';
 
 export function isPending(ref: SessionRef): boolean {
@@ -164,7 +164,7 @@ export async function sleepPane(tree: Tree, pane: Pane): Promise<'slept' | 'clos
     if (ref) owner = { nodeId: node.id, ref };
   }
   let id = pane.sessionId ?? (owner && !isPending(owner.ref) ? owner.ref.id : undefined);
-  // Codex and Antigravity may have written it down a moment ago.
+  // Codex, Antigravity or OpenCode may have written it down a moment ago.
   if (!id) id = (await findPaneSession(pane))?.id;
   const saved = Boolean(id && pane.brain && (await hasConversation(tree.project.dir, pane.brain, id)));
   if (!(await closePane(pane.pane))) return 'failed';
@@ -231,9 +231,9 @@ export function sleepingRef(node: TreeNode | undefined, panes: readonly Pane[]):
 }
 
 /**
- * Codex and Antigravity sessions get their ids once their CLI wrote them
- * down: the pending refs in the tree and the panes learn them. Returns
- * whether the tree changed.
+ * Codex, Antigravity and OpenCode sessions get their ids once their CLI
+ * wrote them down: the pending refs in the tree and the panes learn them.
+ * Returns whether the tree changed.
  */
 export async function settlePending(tree: Tree, panes: readonly Pane[]): Promise<boolean> {
   let changed = false;

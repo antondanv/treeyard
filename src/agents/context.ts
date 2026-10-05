@@ -24,7 +24,7 @@ export interface SessionPlan {
   system: string;
   /** The first message; none for `chat`. */
   prompt?: string;
-  /** Permission mode to start in: Claude Code `plan`, Antigravity full access. */
+  /** Permission mode to start in: Claude Code `plan`, OpenCode's plan agent, Antigravity full access. */
   permissionMode?: string;
   /** The start mode actually used (`goal` falls back to `do` outside Claude Code). */
   start: StartMode;
@@ -45,13 +45,21 @@ export const START_HINT: Record<StartMode, string> = labels(() => ({
 }));
 
 /**
- * Codex and Claude Code take their access from their own settings; agy has
- * only plan and accept-edits there, and asks before every command — an agent
- * from a node has to run treeyard and the project's tests. The flag lives for
- * one run, so a resumed session needs it again.
+ * Claude Code, Codex and OpenCode take their access from their own settings;
+ * agy has only plan and accept-edits there, and asks before every command — an
+ * agent from a node has to run treeyard and the project's tests. The flag
+ * lives for one run, so a resumed session needs it again.
  */
 export function fullAccess(brain: BrainId): { permissionMode?: string } {
   return brain === 'antigravity' ? { permissionMode: 'bypassPermissions' } : {};
+}
+
+/**
+ * A plan starts where the CLI itself keeps edits out until the person agrees:
+ * Claude Code's plan mode, OpenCode's plan agent. The others get it in words.
+ */
+function planMode(brain: BrainId): boolean {
+  return brain === 'claude' || brain === 'opencode';
 }
 
 export function sessionName(tree: Tree, node: TreeNode): string {
@@ -95,7 +103,7 @@ export function sessionPlan(tree: Tree, id: string, start: StartMode, brain: Bra
           : 'to do it. The node has no "done when" yet — propose one as the first item.') +
         ' Change nothing until I agree with the plan.',
     });
-    if (brain === 'claude') plan.permissionMode = 'plan';
+    if (planMode(brain)) plan.permissionMode = 'plan';
   } else if (mode === 'do') {
     plan.prompt = pick({
       ru:
@@ -375,7 +383,7 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId): SessionPlan 
         'stands and where it stopped. Then the findings by importance — each with the treeyard command that fixes it. Change ' +
         'nothing until I agree; after that run the commands and show what came of them.',
     });
-    if (brain === 'claude') plan.permissionMode = 'plan';
+    if (planMode(brain)) plan.permissionMode = 'plan';
   }
   return plan;
 }

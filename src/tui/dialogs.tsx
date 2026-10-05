@@ -9,13 +9,14 @@ import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 import type { AssistChoice, AssistJob } from '../agents/assist.js';
 import { ROOT_START_HINT, ROOT_START_LABEL, START_HINT, START_LABEL } from '../agents/context.js';
-import { BRAIN_LABEL, BRAIN_SHORT, type LaunchOptions } from '../agents/launch.js';
+import { BRAIN_LABEL, BRAIN_SHORT, type LaunchOptions, sessionEffort } from '../agents/launch.js';
 import { formatMemory, isPending, type Pane, paneFor, panesAvailable } from '../agents/panes.js';
 import { plural, t } from '../i18n/i18n.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { ago } from '../model/time.js';
 import {
+  BRAIN_IDS,
   type BrainId,
   type Project,
   type SessionRef,
@@ -331,6 +332,8 @@ function sessionItems(
   );
   const items: MenuItem[] = [];
   let firstPane = true;
+  // One column for the CLI's name, with room after the longest one.
+  const column = Math.max(7, ...sorted.map((ref) => BRAIN_SHORT[ref.brain].length + 1));
   sorted.forEach((ref, index) => {
     const live = context.live.get(ref.id);
     const pane = paneFor(ref, context.panes);
@@ -358,7 +361,7 @@ function sessionItems(
           <Text color={state?.color ?? (live?.live ? C.agent : C.faint)}>
             {state?.mark ?? (sleeping ? '☾' : live?.live ? '●' : '○')}{' '}
           </Text>
-          <Text color={C.dim}>{BRAIN_SHORT[ref.brain].padEnd(7)}</Text>
+          <Text color={C.dim}>{BRAIN_SHORT[ref.brain].padEnd(column)}</Text>
           {name ? <Text>{name} · </Text> : null}
           <Text color={C.faint}>{ago(ref.opened ?? ref.started)}</Text>
           {status ? <Text color={state?.color ?? C.faint}> · {status}</Text> : null}
@@ -450,6 +453,7 @@ export function NodeMenu(props: {
     },
     { key: 'new:codex', hotkey: 'x', label: `▶ Codex · ${START_LABEL[start === 'goal' ? 'do' : start]}` },
     { key: 'new:antigravity', hotkey: 'g', label: `▶ Antigravity · ${START_LABEL[start === 'goal' ? 'do' : start]}` },
+    { key: 'new:opencode', hotkey: 'O', label: `▶ OpenCode · ${START_LABEL[start === 'goal' ? 'do' : start]}` },
     {
       key: 'configure',
       hotkey: 'o',
@@ -539,12 +543,27 @@ export function NodeMenu(props: {
         active
         onPick={pick}
         onCancel={props.onCancel}
-        // Section headings and the selected hint also need room inside the frame.
-        maxRows={Math.max(3, props.height - 9 - items.filter((item) => item.section).length * 2)}
+        // Around the items: the frame and its title, both scroll marks, the selected
+        // hint and a footer that takes two lines in a narrow terminal.
+        maxRows={menuRows(items, props.height - 10)}
         onKey={forgetKey(node, props.onChoose)}
       />
     </Frame>
   );
+}
+
+/**
+ * How many items a menu shows in `budget` rows: a heading takes two rows, and
+ * only the headings within the shown items count, wherever the list scrolls.
+ */
+function menuRows(items: readonly MenuItem[], budget: number): number {
+  for (let rows = items.length; rows > 3; rows--) {
+    let headings = 0;
+    for (let from = 0; from + rows <= items.length; from++)
+      headings = Math.max(headings, items.slice(from, from + rows).filter((item) => item.section).length);
+    if (rows + headings * 2 <= budget) return rows;
+  }
+  return 3;
 }
 
 // ── The root's menu ─────────────────────────────────────────────────────────
@@ -599,7 +618,7 @@ export function ProjectMenu(props: {
       key: 'configure',
       hotkey: 'o',
       label: t('⚙ Другой агент, место, модель…'),
-      hint: t('Claude Code, Codex или Antigravity · в панели, в терминале или в фоне'),
+      hint: t('Claude Code, Codex, Antigravity или OpenCode · в панели, в терминале или в фоне'),
     },
     {
       key: 'context',
@@ -732,10 +751,15 @@ function launchFields(draft: LaunchDraft, catalog: Catalog | undefined, panes: b
   const starts: StartMode[] = root ? ['plan', 'chat'] : START_MODES.filter((mode) => mode !== 'goal' || claude);
   const labels = root ? ROOT_START_LABEL : START_LABEL;
   const noEffort = effortsFor(catalog, draft.model)?.length === 0;
+  const effortNote = !sessionEffort(draft.brain)
+    ? t('в самой сессии OpenCode — ctrl+t')
+    : noEffort
+      ? t('у этой модели не настраивается')
+      : undefined;
   return [
     {
       label: t('Мозг'),
-      options: (['claude', 'codex', 'antigravity'] as BrainId[]).map((id) => ({ value: id, label: BRAIN_LABEL[id] })),
+      options: BRAIN_IDS.map((id) => ({ value: id, label: BRAIN_LABEL[id] })),
       value: draft.brain,
       set: (d, value) => {
         const brain = value as BrainId;
@@ -777,7 +801,7 @@ function launchFields(draft: LaunchDraft, catalog: Catalog | undefined, panes: b
       label: t('Усилие'),
       options: effortOptions(catalog, draft.model, draft.effort),
       value: draft.effort,
-      ...(noEffort ? { note: t('у этой модели не настраивается') } : {}),
+      ...(effortNote ? { note: effortNote } : {}),
       set: (d, value) => ({ ...d, effort: value }),
     },
     {
@@ -1033,7 +1057,7 @@ const help = (): [string, [string, string][]][] => [
       [': ⌃K', t('палитра: найти узел или действие')],
       ['/', t('фильтр по названию · esc сбросить')],
       ['1 … 6', t('вкладки')],
-      ['← →', t('в «Сессиях»: Claude · Codex · Antigravity')],
+      ['← →', t('в «Сессиях»: Claude · Codex · Antigravity · OpenCode')],
     ],
   ],
   [
@@ -1600,7 +1624,7 @@ function assistFields(
   return [
     {
       label: t('Мозг'),
-      options: (['claude', 'codex', 'antigravity'] as BrainId[]).map((id) => ({ value: id, label: BRAIN_LABEL[id] })),
+      options: BRAIN_IDS.map((id) => ({ value: id, label: BRAIN_LABEL[id] })),
       value: draft.brain,
       // Models belong to one CLI; coming back to the project's CLI brings its model back.
       set: (d, value) => ({

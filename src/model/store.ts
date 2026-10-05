@@ -14,6 +14,7 @@ import { t } from '../i18n/i18n.js';
 import { parseDocument, stringifyDocument } from './frontmatter.js';
 import { nowIso } from './time.js';
 import {
+  BRAIN_IDS,
   type BrainId,
   type Project,
   ROOT,
@@ -29,7 +30,6 @@ import {
 } from './types.js';
 
 export const TREE_DIR = '.tree';
-const BRAINS: readonly BrainId[] = ['claude', 'codex', 'antigravity'];
 
 /** The folder that holds `.tree/`, looking up from `start`. */
 export function findProject(start: string = process.cwd()): string | undefined {
@@ -144,7 +144,7 @@ function readProject(dir: string, problems: string[]): Project {
   const template = str(take('template'));
   if (template) project.template = template;
   const brain = str(take('brain'));
-  if (brain && (BRAINS as readonly string[]).includes(brain)) project.brain = brain as BrainId;
+  if (brain && (BRAIN_IDS as readonly string[]).includes(brain)) project.brain = brain as BrainId;
   const model = str(take('model'));
   if (model) project.model = model;
   const effort = str(take('effort'));
@@ -221,7 +221,7 @@ function sessionsFrom(value: unknown): SessionRef[] {
     const record = item as Record<string, unknown>;
     const brain = str(record.brain);
     const id = str(record.id);
-    if (!id || !(BRAINS as readonly string[]).includes(brain)) continue;
+    if (!id || !(BRAIN_IDS as readonly string[]).includes(brain)) continue;
     const ref: SessionRef = { brain: brain as BrainId, id };
     const name = str(record.name);
     if (name) ref.name = name;

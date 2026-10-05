@@ -1,8 +1,9 @@
 /**
  * Sessions from the tree, through Brainyard. A session opened here is the
- * CLI's own — `claude --resume`, `codex resume`, `agy --conversation` and
- * Claude Code's picker show it — and the node remembers it, so the next time
- * you come to the node, the conversation is one key away.
+ * CLI's own — `claude --resume`, `codex resume`, `agy --conversation`,
+ * `opencode --session` and Claude Code's picker show it — and the node
+ * remembers it, so the next time you come to the node, the conversation is
+ * one key away.
  */
 import { liveSessions, type OpenResult, open, type SessionInfo, sessions, stopSession } from '@antondanv/brainyard';
 import { t } from '../i18n/i18n.js';
@@ -26,6 +27,19 @@ export const BRAIN_SHORT: Record<BrainId, string> = {
   antigravity: 'agy',
   opencode: 'opencode',
 };
+
+/** How to open a session by hand, in the project's folder. */
+export function resumeCommand(brain: BrainId, id: string): string {
+  if (brain === 'claude') return `claude --resume ${id}`;
+  if (brain === 'codex') return `codex resume ${id}`;
+  if (brain === 'opencode') return `opencode --session ${id}`;
+  return `agy --conversation ${id}`;
+}
+
+/** OpenCode picks its reasoning variant inside a session (ctrl+t): its command line takes no effort. */
+export function sessionEffort(brain: BrainId): boolean {
+  return brain !== 'opencode';
+}
 
 export interface LaunchOptions {
   brain: BrainId;
@@ -120,7 +134,7 @@ export async function resumeLoose(tree: Tree, session: SessionInfo): Promise<Ope
   });
 }
 
-/** Live state of the sessions on this machine — Claude Code, Codex, Antigravity — by session id. */
+/** Live state of the sessions on this machine — Claude Code, Codex, Antigravity, OpenCode — by session id. */
 export async function liveById(): Promise<Map<string, SessionInfo>> {
   const list = await liveSessions({ panes: {} });
   return new Map(list.map((session) => [session.id, session]));

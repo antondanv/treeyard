@@ -120,7 +120,7 @@ ${out.bold('Команды')}
   treeyard diff <id> --add <sha> | --rm <sha>   привязать коммит · убрать привязку
   treeyard diff <id> --working              текущие изменения проекта (общие для узлов)
   treeyard context <id> [--start plan|do|goal|chat]   что получит агент
-  treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
+  treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
                                            сессия по узлу прямо из shell
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
@@ -156,7 +156,7 @@ ${out.bold('Commands')}
   treeyard diff <id> --add <sha> | --rm <sha>   attach a commit · remove the link
   treeyard diff <id> --working              current project changes (shared by nodes)
   treeyard context <id> [--start plan|do|goal|chat]   what an agent gets
-  treeyard open <id> [--brain claude|codex|antigravity] [--pane|--bg] [--start …] [--yes]
+  treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
                                            a session for a node straight from the shell
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
@@ -297,7 +297,8 @@ function brainArg(value: string | undefined, fallback: BrainId): BrainId {
   if (v === 'claude' || v === 'cc') return 'claude';
   if (v === 'codex') return 'codex';
   if (v === 'antigravity' || v === 'agy') return 'antigravity';
-  throw new UsageError(t('мозг бывает: claude, codex, antigravity'));
+  if (v === 'opencode') return 'opencode';
+  throw new UsageError(t('мозг бывает: claude, codex, antigravity, opencode'));
 }
 
 function startArg(value: string | undefined, fallback: StartMode): StartMode {

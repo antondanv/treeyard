@@ -1,8 +1,8 @@
 /**
  * Which models and efforts each CLI offers, for the settings and the launch
- * form. Brainyard asks the CLI itself (`codex debug models`, `agy models`;
- * Claude Code has aliases that always mean the latest model), so the list is
- * never typed by hand and never stale.
+ * form. Brainyard asks the CLI itself (`codex debug models`, `agy models`,
+ * `opencode models`; Claude Code has aliases that always mean the latest
+ * model), so the list is never typed by hand and never stale.
  *
  * Asking takes a moment, so the list arrives after the dialog opens; until
  * then the dialog shows what is chosen now.
@@ -113,6 +113,9 @@ export function catalogHint(brain: BrainId, catalog: Catalog | undefined, model?
       ? t(' · усилие не настраивается')
       : '';
   if (brain === 'claude') return t('псевдонимы Claude Code — всегда последняя версия модели') + efforts;
+  // OpenCode has no list to fall back on: its models are the providers connected to it.
+  if (catalog.source === 'builtin' && catalog.models.length === 0)
+    return t('{brain} не дал список моделей', { brain: BRAIN_LABEL[brain] });
   if (catalog.source === 'builtin') return t('встроенный список: CLI не ответил') + efforts;
   return (
     t('{n} {models} из {brain}', {

@@ -75,6 +75,7 @@ describe.skipIf(!panesAvailable())('background sessions in a real TUI', () => {
         BRAINYARD_TMUX_SOCKET: process.env.BRAINYARD_TMUX_SOCKET!,
         BRAINYARD_CODEX_BIN: 'treeyard-test-no-codex',
         BRAINYARD_AGY_BIN: 'treeyard-test-no-agy',
+        BRAINYARD_OPENCODE_BIN: 'treeyard-test-no-opencode',
         CLAUDE_CONFIG_DIR: claudeHome,
         TERM: 'xterm-256color',
         FORCE_COLOR: '2',

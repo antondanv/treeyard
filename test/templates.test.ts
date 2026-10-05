@@ -128,6 +128,19 @@ describe('what an agent gets', () => {
     expect(fullAccess('codex')).toEqual({});
   });
 
+  it('OpenCode keeps its own access; a plan starts in its plan agent, and there is no /goal', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'X', doneWhen: 'тесты зелёные' });
+    expect(fullAccess('opencode')).toEqual({});
+    expect(sessionPlan(tree, node.id, 'plan', 'opencode').permissionMode).toBe('plan');
+    expect(sessionPlan(tree, node.id, 'do', 'opencode').permissionMode).toBeUndefined();
+    expect(sessionPlan(tree, node.id, 'chat', 'opencode').permissionMode).toBeUndefined();
+    expect(sessionPlan(tree, ROOT, 'plan', 'opencode').permissionMode).toBe('plan');
+    const goal = sessionPlan(tree, node.id, 'goal', 'opencode');
+    expect(goal.start).toBe('do');
+    expect(goal.prompt).toMatch(/^Сделай узел/);
+  });
+
   it('starts with a plan by default, and /goal only in Claude Code with a criterion', () => {
     const tree = emptyTree();
     const node = addNode(tree, { title: 'X', doneWhen: 'тесты зелёные', check: 'npm test' });

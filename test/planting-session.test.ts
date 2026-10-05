@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe('the planting session entry', () => {
-  it.each(['claude', 'codex', 'antigravity'] as const)(
+  it.each(['claude', 'codex', 'antigravity', 'opencode'] as const)(
     'opens %s beside the tree without planting it early',
     async (brain) => {
       const dir = tempDir();

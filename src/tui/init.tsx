@@ -1,12 +1,12 @@
 /**
  * The first run: the whole terminal, like the tree it is about to plant.
  *
- * Two ways to start. With an agent: Claude Code, Codex or Antigravity studies
- * the folder (or asks for everything you have in mind when it is empty),
- * leads you through short questions and plants the tree and a few short
- * documents — the evening of writing the same files for every new project,
- * done in a conversation. Or by yourself: pick a template, answer a couple
- * of questions, and the tree is there at once.
+ * Two ways to start. With an agent: Claude Code, Codex, Antigravity or
+ * OpenCode studies the folder (or asks for everything you have in mind when
+ * it is empty), leads you through short questions and plants the tree and a
+ * few short documents — the evening of writing the same files for every new
+ * project, done in a conversation. Or by yourself: pick a template, answer a
+ * couple of questions, and the tree is there at once.
  */
 import { existsSync } from 'node:fs';
 import { basename, delimiter, join } from 'node:path';
@@ -18,7 +18,7 @@ import { type ReactNode, useRef, useState } from 'react';
 import { BRAIN_LABEL } from '../agents/launch.js';
 import { type FolderFacts, folderFacts, plantingInPane } from '../agents/planting.js';
 import { plural, t } from '../i18n/i18n.js';
-import type { BrainId } from '../model/types.js';
+import { BRAIN_IDS, type BrainId } from '../model/types.js';
 import { addPointer, pointerTargets } from '../templates/pointer.js';
 import { createTree, getTemplate, listTemplates, type Template } from '../templates/templates.js';
 import { Choice, Menu, type MenuItem, TextField } from './components/controls.js';
@@ -45,7 +45,7 @@ export async function runInit(dir: string, templateId?: string): Promise<InitRes
   return result;
 }
 
-const AGENTS: BrainId[] = ['claude', 'codex', 'antigravity'];
+const AGENTS = BRAIN_IDS;
 
 function installed(brain: BrainId): boolean {
   const bin = BRAINS[brain].binary;

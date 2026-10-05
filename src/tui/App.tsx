@@ -43,6 +43,7 @@ import {
   launch,
   liveById,
   projectSessions,
+  sessionEffort,
   sessionOwners,
   sleepBackground,
 } from '../agents/launch.js';
@@ -125,6 +126,7 @@ import {
   waitingNodes,
 } from '../model/tree.js';
 import {
+  BRAIN_IDS,
   type BrainId,
   ROOT,
   type SessionRef,
@@ -2029,7 +2031,7 @@ export function App(props: AppProps) {
   const body = (): ReactNode => {
     if (view === 'sessions') {
       if (!allSessions && !sessionList.length)
-        return <Text color={C.faint}>{t(' ищу сессии Claude Code, Codex и Antigravity этой папки…')}</Text>;
+        return <Text color={C.faint}>{t(' ищу сессии Claude Code, Codex, Antigravity и OpenCode этой папки…')}</Text>;
       if (sessionList.length === 0) return <Text color={C.faint}>{t(' в этой папке ещё не было сессий')}</Text>;
       const lines = sessionLines(sessionList);
       const at = lines.findIndex((line) => line.kind === 'row' && line.index === sessionIndex);
@@ -2909,7 +2911,7 @@ export function App(props: AppProps) {
         label: t('Живые статусы сессий'),
         options: yesNo,
         value: s.live ? 'on' : 'off',
-        hint: t('каждые 3 с: кто из Claude Code, Codex и Antigravity работает, а кто ждёт тебя'),
+        hint: t('каждые 3 с: кто из Claude Code, Codex, Antigravity и OpenCode работает, а кто ждёт тебя'),
       },
       {
         key: 'open',
@@ -2946,7 +2948,7 @@ export function App(props: AppProps) {
         key: 'brain',
         section: t('ЭТОТ ПРОЕКТ  .tree/tree.md'),
         label: t('Мозг по умолчанию'),
-        options: (['claude', 'codex', 'antigravity'] as BrainId[]).map((id) => ({ value: id, label: BRAIN_LABEL[id] })),
+        options: BRAIN_IDS.map((id) => ({ value: id, label: BRAIN_LABEL[id] })),
         value: p.brain ?? 'claude',
         hint: t('для c, ⏎ → новая сессия и задач агента · модель и усилие у каждого CLI свои'),
       },
@@ -2967,16 +2969,25 @@ export function App(props: AppProps) {
         value: p.model ?? '',
         hint: catalogHint(brain, catalog, p.model),
       },
-      {
-        key: 'effort',
-        label: t('Усилие'),
-        options: effortOptions(catalog, p.model, p.effort),
-        value: p.effort ?? '',
-        hint:
-          effortsFor(catalog, p.model)?.length === 0
-            ? t('у этой модели усилие не настраивается')
-            : t('* — по умолчанию у модели; больше усилия — дольше и дороже'),
-      },
+      sessionEffort(brain)
+        ? {
+            key: 'effort',
+            label: t('Усилие'),
+            options: effortOptions(catalog, p.model, p.effort),
+            value: p.effort ?? '',
+            hint:
+              effortsFor(catalog, p.model)?.length === 0
+                ? t('у этой модели усилие не настраивается')
+                : t('* — по умолчанию у модели; больше усилия — дольше и дороже'),
+          }
+        : {
+            // Nothing to choose here: the CLI takes no effort on its command line.
+            key: 'effort',
+            label: t('Усилие'),
+            options: [{ value: p.effort ?? '', label: t('в самой сессии') }],
+            value: p.effort ?? '',
+            hint: t('OpenCode меняет усилие — вариант модели — прямо в сессии: ctrl+t'),
+          },
       {
         key: 'assistModel',
         label: t('Модель для задач агента'),
@@ -3777,7 +3788,7 @@ function journal(
 }
 
 /** The slice of a long list that keeps the cursor in view, a little above the middle. */
-const BRAIN_ORDER: readonly BrainId[] = ['claude', 'codex', 'antigravity'];
+const BRAIN_ORDER = BRAIN_IDS;
 
 type SessionLine =
   | { kind: 'header'; brain: BrainId }
