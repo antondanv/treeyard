@@ -240,6 +240,23 @@ describe('mouse in the tree', () => {
     expect(app.screen()).toMatch(/Продукт › ◐ Корзина/);
   });
 
+  it('selects the root by a click on ◆ in the graph and the list, and opens its menu by a double click', async () => {
+    const { tree, release } = sample();
+    const graph = mount(tree, { treeMode: 'graph', selected: release.id });
+    await until(() => graph.screen().includes('◆ Тест'));
+    await graph.click('◆ Тест');
+    await until(() => graph.screen().includes('корень дерева'));
+    await pause(450);
+    await graph.click('◆ Тест', { double: true });
+    await until(() => graph.screen().includes('Документы проекта'));
+    for (const cleanup of cleanups.splice(0)) cleanup();
+
+    const list = mount(tree, { treeMode: 'list', selected: release.id });
+    await until(() => list.screen().includes('◆ Тест'));
+    await list.click('◆ Тест');
+    await until(() => list.screen().includes('корень дерева'));
+  });
+
   it('switches tabs and presses the keys of the hints, the header and a dialog footer', async () => {
     const { tree, release } = sample();
     // The help is tall: its footer needs the room.

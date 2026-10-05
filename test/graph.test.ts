@@ -72,8 +72,33 @@ describe('moving around the graph', () => {
     expect(neighbour(layout, byTitle('Задача 2.1'), 'left')).toBe(byTitle('Ветка 2'));
     // Branch 2 has three tasks and sits by the middle one.
     expect(neighbour(layout, byTitle('Ветка 2'), 'right')).toBe(byTitle('Задача 2.1'));
-    expect(neighbour(layout, byTitle('Ветка 0'), 'left')).toBeUndefined();
+    // The top level leads to the root; the root leads back into the branches and nowhere else.
+    expect(neighbour(layout, byTitle('Ветка 0'), 'left')).toBe(ROOT);
+    expect(neighbour(layout, ROOT, 'left')).toBeUndefined();
+    expect(neighbour(layout, ROOT, 'up')).toBeUndefined();
+    expect(neighbour(layout, ROOT, 'down')).toBeUndefined();
+    expect(tree.nodes.get(neighbour(layout, ROOT, 'right')!)?.parent).toBe(ROOT);
   });
+
+  for (const style of ['line', 'card'] as const) {
+    it(`${style}: the root is drawn as the selection and a click on it selects it`, () => {
+      const { tree, expanded } = sample();
+      const layout = layoutGraph(flatten(tree, { expanded, showClosed: true }), { style, width: 28, tree });
+      const root = layout.byId.get(ROOT)!;
+      const cells = graphCells({
+        tree,
+        layout,
+        selected: ROOT,
+        width: layout.width,
+        height: layout.height,
+        offset: { x: 0, y: 0 },
+      });
+      const at = cells[style === 'card' ? root.y + 1 : root.y]![root.x + 1]!;
+      expect(at.node).toBe(ROOT);
+      if (style === 'line') expect(at.pill).toBe(true);
+      else expect(cells[root.y]![root.x]!.char).toBe('┏');
+    });
+  }
 
   it('the viewport moves only when the selection leaves it', () => {
     const { tree, expanded } = sample();

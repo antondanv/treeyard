@@ -222,7 +222,8 @@ export function neighbour(
 ): string | undefined {
   const card = from ? layout.byId.get(from) : undefined;
   if (!card) return layout.cards.find((item) => item.id !== ROOT)?.id;
-  if (direction === 'left') return card.row && card.row.node.parent !== ROOT ? card.row.node.parent : undefined;
+  // The root is a stop of its own: ← from a top-level node reaches it.
+  if (direction === 'left') return card.row?.node.parent;
   if (direction === 'right') {
     const kids = layout.cards.filter((item) => item.row?.node.parent === card.id);
     return nearest(kids, port(card))?.id;
@@ -484,8 +485,8 @@ export function graphCells(props: GraphProps): Cell[][] {
   }
 
   function markLine(item: GraphCard, title: string, tailWidth: number) {
-    if (!item.row) return;
     mark(item.x - 1, item.y, item.width + 2, { node: item.id });
+    if (!item.row) return;
     if (isDoneGroup(item.id)) mark(item.x, item.y, 1, { fold: true });
     if (tailWidth) mark(item.x + 2 + stringWidth(title), item.y, tailWidth, { fold: true });
   }
@@ -569,8 +570,8 @@ export function graphCells(props: GraphProps): Cell[][] {
     }
     const shown = clip(meta, inner);
     text(item.x + 2, item.y + item.height - 2, shown, inner, { color: metaColor });
-    if (!node) return;
     mark(item.x, item.y, item.width, { node: item.id }, item.height);
+    if (!node) return;
     if (shown.endsWith(' ›')) mark(item.x + 2 + stringWidth(shown) - 2, item.y + item.height - 2, 2, { fold: true });
   }
 

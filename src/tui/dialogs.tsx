@@ -17,6 +17,7 @@ import { GLYPH } from '../model/overview.js';
 import { ago } from '../model/time.js';
 import {
   type BrainId,
+  type Project,
   type SessionRef,
   START_MODES,
   STATUSES,
@@ -523,6 +524,59 @@ export function NodeMenu(props: {
   );
 }
 
+// ── The root's menu ─────────────────────────────────────────────────────────
+
+/** ⏎ on the root: what belongs to the whole project rather than to one node. */
+export function ProjectMenu(props: {
+  project: Project;
+  docs?: number;
+  width: number;
+  height: number;
+  onPick: (key: 'docs' | 'rules' | 'settings' | 'add') => void;
+  onCancel: () => void;
+}) {
+  const items: MenuItem[] = [
+    {
+      key: 'docs',
+      label: props.docs === undefined ? t('Документы проекта') : t('Документы проекта · {n}', { n: props.docs }),
+      hotkey: 'P',
+      hint: t('README, AGENTS.md, docs/ — читать с разметкой и править здесь же'),
+      section: t('Проект'),
+    },
+    {
+      key: 'rules',
+      label: t('Цель, правила и решения — .tree/tree.md'),
+      hotkey: 'e',
+      hint: t('корень дерева: его получает каждый агент · u отменит правку'),
+    },
+    { key: 'settings', label: t('Настройки проекта'), hotkey: ',', hint: t('мозг, модель, как начинать сессии') },
+    { key: 'add', label: t('Новая ветка'), hotkey: 'a', hint: t('узел верхнего уровня'), section: t('Дерево') },
+  ];
+  return (
+    <Frame
+      title={`◆ ${props.project.title}`}
+      width={props.width}
+      footer={[{ key: '⏎', label: t('выбрать') }, { label: t('буква — сразу') }, { key: 'esc', label: t('закрыть') }]}
+      color={C.brand}
+    >
+      {props.project.goal ? (
+        <Box marginBottom={1}>
+          <Text color={C.dim} wrap="wrap">
+            {props.project.goal}
+          </Text>
+        </Box>
+      ) : null}
+      <Menu
+        items={items}
+        active
+        onPick={(key) => props.onPick(key as 'docs' | 'rules' | 'settings' | 'add')}
+        onCancel={props.onCancel}
+        maxRows={Math.max(3, props.height - 12)}
+      />
+    </Frame>
+  );
+}
+
 /** «Factoyard · Медиа-цех» shown inside «Медиа-цех» is just noise before the point. */
 function shortSessionName(name: string | undefined, title: string): string | undefined {
   if (!name) return undefined;
@@ -891,7 +945,7 @@ const help = (): [string, [string, string][]][] => [
     t('Ходить'),
     [
       ['↑ ↓', t('по колонке · j k — подряд')],
-      ['← →', t('к родителю · к детям')],
+      ['← →', t('к родителю, до корня ◆ · к детям')],
       ['space', t('свернуть или раскрыть ветку')],
       ['+  −', t('раскрыть всё · свернуть всё')],
       [': ⌃K', t('палитра: найти узел или действие')],
@@ -909,6 +963,7 @@ const help = (): [string, [string, string][]][] => [
       ['.', t('показать или скрыть готовое')],
       [t('⌥ стрелки'), t('сдвинуть граф · f — к выбранному')],
       [',', t('настройки: язык, подтверждения, тема')],
+      ['P', t('документы проекта: читать и править .md')],
     ],
   ],
   [

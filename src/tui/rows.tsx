@@ -13,8 +13,8 @@ import { t } from '../i18n/i18n.js';
 import type { Link } from '../model/links.js';
 import { GLYPH } from '../model/overview.js';
 import { ago, duration } from '../model/time.js';
-import type { Progress, Row } from '../model/tree.js';
-import type { BrainId, TreeNode } from '../model/types.js';
+import { type Progress, progress, type Row } from '../model/tree.js';
+import { type BrainId, ROOT, type Tree, type TreeNode } from '../model/types.js';
 
 import { agentBadge, type Badge, fitBadge } from './badges.js';
 import { marquee, overflows } from './marquee.js';
@@ -101,6 +101,30 @@ export function TreeRow(props: { row: Row; selected: boolean; width: number; bad
       <Text color={C.rule}>{lead}</Text>
       <Text color={row.hasChildren ? (selected ? C.brand : C.dim) : C.rule}>{marker} </Text>
     </Line>
+  );
+}
+
+/** The root over the tree list: the project and how far it is; ⏎ on it — documents and settings. */
+export function RootRow(props: { tree: Tree; selected: boolean; width: number }) {
+  const { done, total } = progress(props.tree, ROOT);
+  const tally = `  ${done}/${total}`;
+  const title = clip(props.tree.project.title, Math.max(4, props.width - 6 - stringWidth(tally)));
+  return (
+    <Box width={props.width}>
+      <Text wrap="truncate-end">
+        {' '}
+        {props.selected ? (
+          <Text color={C.pillText} backgroundColor={C.pill} bold>
+            {` ◆ ${title} `}
+          </Text>
+        ) : (
+          <Text color={C.brand} bold>
+            ◆ {title}
+          </Text>
+        )}
+        <Text color={C.faint}>{tally}</Text>
+      </Text>
+    </Box>
   );
 }
 

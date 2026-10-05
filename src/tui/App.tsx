@@ -54,6 +54,7 @@ import {
   sleepPane,
   wakeInPane,
 } from '../agents/panes.js';
+import { type DocFile, projectDocs, TREE_DOC, writeDoc } from '../docs.js';
 import {
   boardOf,
   ensureHub,
@@ -124,7 +125,7 @@ import {
 import { MAX_PANES, type Settings, SLEEP_AFTER, settings, updateSettings } from '../settings.js';
 import { catalogHint, effortOptions, effortsFor, fitChoice, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './components/controls.js';
-import { NodeDetails, SessionDetails } from './details.js';
+import { NodeDetails, ProjectDetails, SessionDetails } from './details.js';
 import {
   CheckDialog,
   ConfirmAssist,
@@ -140,6 +141,7 @@ import {
   type NodeValues,
   Palette,
   type PaletteItem,
+  ProjectMenu,
   type SessionChoice,
   type SettingRow,
   SettingsDialog,
@@ -150,6 +152,7 @@ import {
   WaitingForm,
 } from './dialogs.js';
 import { DiffsDialog } from './diffs-dialog.js';
+import { DocsDialog, type DocsOpen } from './docs-dialog.js';
 import { type AgentTask, GithubConnect } from './github-connect.js';
 import { follow, Graph, type GraphStyle, layoutGraph, neighbour, selectedOverflow, type Viewport } from './graph.js';
 import { History } from './history.js';
@@ -158,7 +161,7 @@ import { shortcutKey } from './keys.js';
 import { Logo, logoSize, WORDMARK } from './logo.js';
 import { MARQUEE_TICK, marquee } from './marquee.js';
 import { type Click, Clickable, MouseProvider, usePress } from './mouse.js';
-import { ListRow, paneState, rowOverflow, SessionRow, TreeRow, treePrefix } from './rows.js';
+import { ListRow, paneState, RootRow, rowOverflow, SessionRow, TreeRow, treePrefix } from './rows.js';
 import { TerminalPane } from './terminal.js';
 import { breadcrumb } from './text.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
@@ -209,6 +212,9 @@ type Modal =
   | { kind: 'github' }
   | { kind: 'images'; node: string }
   | { kind: 'diffs'; node: string }
+  /** ⏎ on the root: the project's documents and settings. */
+  | { kind: 'project' }
+  | { kind: 'docs'; open?: DocsOpen }
   | { kind: 'problems' };
 
 /** Something that starts a session or spends an agent's time: asked about first, unless turned off. */
@@ -303,6 +309,9 @@ export function App(props: AppProps) {
   const [toast, setToast] = useState<Toast | undefined>(props.toast);
   const [job, setJob] = useState<Job | undefined>();
   const [branch, setBranch] = useState<string | undefined>();
+  /** The project's documents for the root's card; read again after the documents window closes. */
+  const [docs, setDocs] = useState<DocFile[] | undefined>();
+  const [docsVersion, setDocsVersion] = useState(0);
   /** The models of the project's CLI, asked once the settings open. */
   const catalog = useCatalog(tree.project.brain ?? 'claude', modal?.kind === 'settings');
 
@@ -547,12 +556,16 @@ export function App(props: AppProps) {
   };
 
   const nodesInView = view === 'sessions' ? [] : listFor(view);
+  /** The root is selected in the tree: it has no row of its own, its cursor is before the first one. */
+  const rootSelected = view === 'tree' && selected === ROOT;
   let cursor = 0;
   if (view === 'tree') {
-    cursor = Math.max(
-      0,
-      treeRows.findIndex((row) => row.node.id === selected),
-    );
+    cursor = rootSelected
+      ? -1
+      : Math.max(
+          0,
+          treeRows.findIndex((row) => row.node.id === selected),
+        );
   } else if (view === 'journal') {
     cursor = Math.min(listIndex.journal ?? 0, Math.max(0, events.length - 1));
   } else if (view !== 'sessions') {
@@ -564,9 +577,26 @@ export function App(props: AppProps) {
   const currentGroup = view === 'tree' && isDoneGroup(currentItem?.id) ? currentItem : undefined;
   const currentOffer = view === 'tree' && isGithubOffer(currentItem?.id);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: docsVersion re-reads the list after the documents window.
+  useEffect(() => {
+    if (!rootSelected) return;
+    let active = true;
+    projectDocs(props.dir)
+      .then((list) => {
+        if (active) setDocs(list);
+      })
+      .catch(() => {
+        if (active) setDocs([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [rootSelected, props.dir, docsVersion]);
+
   // A node that just became done moves into its folded group; keep the selection nearby.
   useEffect(() => {
-    if (view !== 'tree' || filter || !selected || treeRows.some((row) => row.node.id === selected)) return;
+    if (view !== 'tree' || filter || !selected || selected === ROOT || treeRows.some((row) => row.node.id === selected))
+      return;
     const path = pathTo(tree, isDoneGroup(selected) ? doneGroupParent(selected) : selected).reverse();
     for (const node of path) {
       const group = node.status === 'done' ? doneGroupId(node.parent) : undefined;
@@ -604,6 +634,8 @@ export function App(props: AppProps) {
       if (at) setSessionKey(keyOf(at));
       return;
     }
+    // Above the first row of the tree is the root.
+    if (view === 'tree' && index < 0) return setSelected(ROOT);
     const list = nodesInView;
     if (list.length === 0) return;
     const clamped = Math.max(0, Math.min(index, list.length - 1));
@@ -676,6 +708,7 @@ export function App(props: AppProps) {
       'github',
       'images',
       'diffs',
+      'docs',
     ].includes(modal.kind);
   const listHeight = bodyHeight;
   const paneSize = { width: Math.max(20, (rightWidth || width) - 2), height: Math.max(5, bodyHeight - 4) };
@@ -697,15 +730,17 @@ export function App(props: AppProps) {
     view === 'tree' && treeMode === 'graph'
       ? layoutGraph(treeRows, { style: graphStyle, width: graphWidth, tree })
       : undefined;
+  /** What the graph shows as selected and keeps in view: a node, or the root. */
+  const graphSelected = rootSelected ? ROOT : currentItem?.id;
   if (graphLayout) {
-    const key = `${currentItem?.id}:${graphStyle}:${graphWidth}:${leftWidth}:${bodyHeight}:${graphLayout.width}:${graphLayout.height}:${terminalVisible}`;
+    const key = `${graphSelected}:${graphStyle}:${graphWidth}:${leftWidth}:${bodyHeight}:${graphLayout.width}:${graphLayout.height}:${terminalVisible}`;
     const camera = viewportFollowRef.current;
     if (camera.key !== key) camera.manual = false;
     camera.key = key;
     if (!camera.manual) {
       viewportRef.current = follow(
         graphLayout,
-        currentItem?.id,
+        graphSelected,
         { x: leftWidth, y: bodyHeight },
         viewportRef.current,
         terminalVisible,
@@ -785,6 +820,12 @@ export function App(props: AppProps) {
       say((error as Error).message, C.bad);
       return false;
     }
+  };
+  /** A document from the root's window. tree.md is the root itself: undoable with u, and the tree reloads. */
+  const saveDoc = (path: string, text: string, crlf: boolean) => {
+    if (path !== TREE_DOC) return writeDoc(props.dir, path, text, crlf);
+    historyRef.current.record(t('правка .tree/tree.md'), () => writeDoc(props.dir, path, text, crlf));
+    reload();
   };
   const undo = () => {
     const done = historyRef.current.undo();
@@ -1605,6 +1646,11 @@ export function App(props: AppProps) {
       },
     },
     github: { label: t('GitHub: подключить доску или issues, свериться с ними'), keys: 'G', run: github },
+    docs: {
+      label: t('Документы проекта: читать и править .md'),
+      keys: 'P',
+      run: () => setModal({ kind: 'docs' }),
+    },
     help: { label: t('Все клавиши'), keys: '?', run: () => setModal({ kind: 'help' }) },
     settings: { label: t('Настройки'), keys: ',', run: () => setModal({ kind: 'settings' }) },
     reload: {
@@ -1642,6 +1688,7 @@ export function App(props: AppProps) {
     '>': 'paneNarrower',
     D: 'remove',
     G: 'github',
+    P: 'docs',
     y: 'copy',
     u: 'undo',
     v: 'mode',
@@ -1662,6 +1709,7 @@ export function App(props: AppProps) {
 
   /** ⏎ in the list: a node's actions, a session, the node of a journal entry. */
   const enter = () => {
+    if (rootSelected) return setModal({ kind: 'project' });
     if (currentGroup) return expandTo(currentGroup.id, !expanded.has(currentGroup.id));
     if (currentOffer || (current && current.id === hubNode(tree)?.id && !boardOf(tree) && !linkedRepo(tree)))
       return github();
@@ -1822,7 +1870,7 @@ export function App(props: AppProps) {
       return true;
     }
     if (graphLayout && (key.upArrow || key.downArrow)) {
-      const next = neighbour(graphLayout, currentItem?.id, key.upArrow ? 'up' : 'down');
+      const next = neighbour(graphLayout, graphSelected, key.upArrow ? 'up' : 'down');
       if (next) setSelected(next);
       return true;
     }
@@ -1835,6 +1883,11 @@ export function App(props: AppProps) {
       return true;
     }
     if (key.rightArrow || input === 'l') {
+      if (rootSelected) {
+        const next = graphLayout ? neighbour(graphLayout, ROOT, 'right') : treeRows[0]?.node.id;
+        if (next) setSelected(next);
+        return true;
+      }
       if (!row) return true;
       if (row.hasChildren && !row.expanded) {
         const opened = new Set(expanded).add(row.node.id);
@@ -1863,7 +1916,8 @@ export function App(props: AppProps) {
         expandTo(row.node.id, false);
         return true;
       }
-      if (row.node.parent !== ROOT) setSelected(row.node.parent);
+      // From the top level ← reaches the root: the project's documents and settings.
+      setSelected(row.node.parent);
       return true;
     }
     if (input === ' ' && row?.hasChildren) {
@@ -2059,7 +2113,7 @@ export function App(props: AppProps) {
           <Graph
             tree={tree}
             layout={graphLayout}
-            selected={currentItem?.id}
+            selected={graphSelected}
             width={leftWidth}
             height={bodyHeight}
             offset={viewportRef.current}
@@ -2072,11 +2126,29 @@ export function App(props: AppProps) {
           />
         );
       }
-      return windowed(treeRows, cursor, listHeight).map(({ item, index }) => (
-        <Clickable key={item.node.id} active={clicks} onClick={(click) => clickTreeRow(item, index, click)}>
-          <TreeRow tick={tick} row={item} selected={index === cursor} width={leftWidth} badges={badgesFor(item.node)} />
-        </Clickable>
-      ));
+      // The root heads the list: ← from the top level or ↑ from the first row reaches it.
+      // Beside a session the list is the working branch only, as the graph frames it.
+      const rootRow = !terminalVisible || rootSelected;
+      return [
+        ...(rootRow
+          ? [
+              <Clickable key={ROOT} active={clicks} onClick={(click) => clickRow(-1, click)}>
+                <RootRow tree={tree} selected={rootSelected} width={leftWidth} />
+              </Clickable>,
+            ]
+          : []),
+        ...windowed(treeRows, cursor, Math.max(1, listHeight - (rootRow ? 1 : 0))).map(({ item, index }) => (
+          <Clickable key={item.node.id} active={clicks} onClick={(click) => clickTreeRow(item, index, click)}>
+            <TreeRow
+              tick={tick}
+              row={item}
+              selected={index === cursor}
+              width={leftWidth}
+              badges={badgesFor(item.node)}
+            />
+          </Clickable>
+        )),
+      ];
     }
     const nodes = nodesInView;
     if (nodes.length === 0) {
@@ -2128,7 +2200,7 @@ export function App(props: AppProps) {
     const w = fullModal
       ? modal.kind === 'diffs'
         ? width - 2
-        : Math.min(width - 2, modal.kind === 'help' ? 112 : 100)
+        : Math.min(width - 2, modal.kind === 'help' ? 112 : modal.kind === 'docs' ? 120 : 100)
       : Math.max(36, rightWidth || width - 2);
     const close = () => setModal(undefined);
     switch (modal.kind) {
@@ -2251,6 +2323,38 @@ export function App(props: AppProps) {
           />
         );
       }
+      case 'project':
+        return (
+          <ProjectMenu
+            project={tree.project}
+            {...(docs ? { docs: docs.length } : {})}
+            width={w}
+            height={bodyHeight}
+            onCancel={close}
+            onPick={(key) => {
+              if (key === 'docs') return setModal({ kind: 'docs' });
+              if (key === 'rules') return setModal({ kind: 'docs', open: { path: TREE_DOC, edit: true } });
+              if (key === 'settings') return setModal({ kind: 'settings' });
+              setModal(undefined);
+              if (key === 'add') quickAdd(undefined, false);
+            }}
+          />
+        );
+      case 'docs':
+        return (
+          <DocsDialog
+            dir={props.dir}
+            project={tree.project.title}
+            width={w}
+            height={bodyHeight}
+            {...(modal.open ? { open: modal.open } : {})}
+            onSave={saveDoc}
+            onClose={() => {
+              close();
+              setDocsVersion((value) => value + 1);
+            }}
+          />
+        );
       case 'github':
         return (
           <GithubConnect
@@ -3199,6 +3303,8 @@ export function App(props: AppProps) {
                     width={rightWidth}
                     height={bodyHeight}
                   />
+                ) : rootSelected ? (
+                  <ProjectDetails tree={tree} docs={docs} width={rightWidth} height={bodyHeight} />
                 ) : currentOffer ? (
                   <GithubOffer />
                 ) : currentGroup ? (
@@ -3230,6 +3336,7 @@ export function App(props: AppProps) {
             node={current}
             group={currentGroup}
             offer={currentOffer}
+            root={rootSelected}
             width={width}
             full={stripShown === 2}
             live={live}
@@ -3262,6 +3369,7 @@ export function App(props: AppProps) {
               has={Boolean(current)}
               group={Boolean(currentGroup)}
               offer={currentOffer}
+              root={rootSelected}
               filter={filter}
               pane={!terminalVisible && current && sleepingRef(current, panes) ? 'sleeping' : undefined}
               active={listKeys}
@@ -3279,12 +3387,46 @@ function SelectionStrip(props: {
   node: TreeNode | undefined;
   group?: TreeNode | undefined;
   offer?: boolean;
+  root?: boolean;
   width: number;
   full: boolean;
   live: Map<string, SessionInfo>;
   frame: number;
 }) {
   const { tree, node } = props;
+  if (props.root) {
+    const { done, total } = progress(tree, ROOT);
+    const meta = t('корень дерева · {done}/{total}', { done, total });
+    const keys = t('⏎ проект · P документы');
+    return (
+      <Box flexDirection="column" width={props.width} paddingX={1}>
+        <Box width={props.width - 2}>
+          <Box flexGrow={1} flexShrink={1} minWidth={0}>
+            <Text wrap="truncate-end">
+              <Text color={C.brand}>◆ </Text>
+              <Text bold>{tree.project.title}</Text>
+            </Text>
+          </Box>
+          <Box flexShrink={0} marginLeft={2}>
+            <Text color={C.faint}>{meta}</Text>
+          </Box>
+        </Box>
+        {props.full ? (
+          <Box width={props.width - 2}>
+            <Box flexGrow={1} flexShrink={1} minWidth={0}>
+              <Text wrap="truncate-end">
+                <Text color={C.faint}>{t('цель  ')}</Text>
+                <Text>{tree.project.goal ?? t('не записана — в .tree/tree.md, поле goal')}</Text>
+              </Text>
+            </Box>
+            <Box flexShrink={0} marginLeft={2}>
+              <Text color={C.faint}>{keys}</Text>
+            </Box>
+          </Box>
+        ) : null}
+      </Box>
+    );
+  }
   if (props.offer) {
     return (
       <Box flexDirection="column" width={props.width} paddingX={1}>
@@ -3442,6 +3584,7 @@ function Hints(props: {
   has: boolean;
   group: boolean;
   offer?: boolean;
+  root?: boolean;
   filter: string;
   pane?: 'sleeping' | undefined;
   active: boolean;
@@ -3469,48 +3612,59 @@ function Hints(props: {
             [',', t('настройки')],
             ['?', t('клавиши')],
           ]
-        : props.offer
+        : props.root
           ? [
-              ['⏎', t('подключить доску или issues GitHub')],
-              [',', t('настройки — скрыть узел')],
+              ['⏎', t('проект')],
+              ['P', t('документы')],
+              ['→', t('к веткам')],
+              ['a', t('новая ветка')],
+              [':', t('найти')],
+              [',', t('настройки')],
               ['?', t('клавиши')],
               ['q', t('выход')],
             ]
-          : props.group
+          : props.offer
             ? [
-                ['space', t('раскрыть или свернуть готовые')],
-                [':', t('найти')],
-                ['.', t('скрыть готовое')],
+                ['⏎', t('подключить доску или issues GitHub')],
+                [',', t('настройки — скрыть узел')],
                 ['?', t('клавиши')],
+                ['q', t('выход')],
               ]
-            : !props.has
+            : props.group
               ? [
-                  ['a', t('добавить')],
+                  ['space', t('раскрыть или свернуть готовые')],
                   [':', t('найти')],
-                  [',', t('настройки')],
+                  ['.', t('скрыть готовое')],
                   ['?', t('клавиши')],
-                  ['q', t('выход')],
                 ]
-              : [
-                  ...pane,
-                  ['⏎', t('действия')],
-                  ['V', t('дифы')],
-                  ['K J', t('приоритет')],
-                  [',', t('настройки')],
-                  ['c', 'claude'],
-                  ['a', t('добавить')],
-                  ['r', t('имя')],
-                  ['d', t('готово')],
-                  ['w', t('ждёт')],
-                  ['S', t('разбить')],
-                  ['u', t('отмена')],
-                  [':', t('найти')],
-                  ['?', t('всё')],
-                ];
+              : !props.has
+                ? [
+                    ['a', t('добавить')],
+                    [':', t('найти')],
+                    [',', t('настройки')],
+                    ['?', t('клавиши')],
+                    ['q', t('выход')],
+                  ]
+                : [
+                    ...pane,
+                    ['⏎', t('действия')],
+                    ['V', t('дифы')],
+                    ['K J', t('приоритет')],
+                    [',', t('настройки')],
+                    ['c', 'claude'],
+                    ['a', t('добавить')],
+                    ['r', t('имя')],
+                    ['d', t('готово')],
+                    ['w', t('ждёт')],
+                    ['S', t('разбить')],
+                    ['u', t('отмена')],
+                    [':', t('найти')],
+                    ['?', t('всё')],
+                  ];
   const hints: KeyHint[] = keys.map(([key, label]) => ({
     key,
     label,
-    ...(key === 'K J' ? { press: ['K', 'J'] } : {}),
+    ...(key === 'K J' ? { press: ['K', 'J'] } : key === '→' ? { press: '\u001b[C' } : {}),
   }));
   return (
     <Box>

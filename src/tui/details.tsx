@@ -10,6 +10,7 @@ import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 
 import { BRAIN_SHORT } from '../agents/launch.js';
+import { type DocFile, linesLabel, TREE_DOC } from '../docs.js';
 import { t } from '../i18n/i18n.js';
 import { daysLeft, imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
@@ -17,7 +18,7 @@ import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { ago } from '../model/time.js';
-import { childrenOf, heldBy, pathTo, progress } from '../model/tree.js';
+import { childrenOf, heldBy, pathTo, progress, summarize } from '../model/tree.js';
 import type { SessionRef, Tree, TreeNode } from '../model/types.js';
 import { pictureLines } from './image-view.js';
 import { liveLabel } from './rows.js';
@@ -270,6 +271,120 @@ export function NodeDetails(props: {
     gap();
     heading(t('ЖУРНАЛ'));
     for (const entry of journal.slice(-6).reverse()) wrap(entry.replace(/^\d{4}-(\d\d)-(\d\d)/, '$2.$1'), C.dim);
+  }
+
+  return (
+    <Pane width={width} height={props.height}>
+      {lines.slice(0, props.height).map((line) => (
+        <Box key={line.key} width={inner}>
+          {line.node}
+        </Box>
+      ))}
+    </Pane>
+  );
+}
+
+/** The root's card: the goal, how far the project is, its documents and how the tree is run. */
+export function ProjectDetails(props: { tree: Tree; docs: DocFile[] | undefined; width: number; height: number }) {
+  const { tree, width } = props;
+  const { project } = tree;
+  const inner = Math.max(10, width - 2);
+  const lines: LineSpec[] = [];
+  let n = 0;
+  const push = (content: ReactNode) => lines.push({ key: String(n++), node: content });
+  const wrap = (text: string, color?: string, indent = 0) => {
+    for (const line of wrapAnsi(text, inner - indent, { hard: true, trim: false }).split('\n'))
+      push(
+        <Text color={color} wrap="truncate-end">
+          {' '.repeat(indent)}
+          {line}
+        </Text>,
+      );
+  };
+  const gap = () => push(<Text> </Text>);
+  const heading = (text: string) =>
+    push(
+      <Text color={C.faint} bold>
+        {text}
+      </Text>,
+    );
+
+  wrap(`◆ ${project.title}`, C.brand);
+  push(
+    <Text color={C.dim} wrap="truncate-end">
+      {[
+        t('корень дерева'),
+        project.template ? t('шаблон {template}', { template: project.template }) : undefined,
+        project.created ? t('с {date}', { date: project.created }) : undefined,
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+    </Text>,
+  );
+
+  gap();
+  heading(t('ЦЕЛЬ'));
+  if (project.goal) wrap(project.goal, C.text);
+  else wrap(t('не записана — в .tree/tree.md, поле goal'), C.faint);
+
+  const s = summarize(tree);
+  gap();
+  heading(t('ПРОГРЕСС'));
+  wrap(
+    t('{done}/{total} готово · ◐ {active} в работе · ◎ {review} на проверке · ‖ {waiting} ждут · ◇ {ideas} идей', {
+      done: s.done,
+      total: s.total,
+      active: s.active,
+      review: s.review,
+      waiting: s.waiting,
+      ideas: s.ideas,
+    }),
+    C.dim,
+  );
+  wrap(t('можно делать сейчас: {now} — вкладка 2', { now: s.now }), C.dim);
+
+  gap();
+  heading(props.docs ? t('ДОКУМЕНТЫ · {n}', { n: props.docs.length }) : t('ДОКУМЕНТЫ'));
+  if (!props.docs) wrap(t('ищу .md проекта…'), C.faint);
+  else if (!props.docs.length) wrap(t('В проекте нет .md файлов'), C.faint);
+  else {
+    const shown = props.docs.slice(0, 8);
+    for (const doc of shown)
+      push(
+        <Text wrap="truncate-end">
+          <Text>{doc.path}</Text>
+          <Text color={C.faint}>
+            {doc.path === TREE_DOC ? t(' · корень дерева') : ''} · {linesLabel(doc.lines)}
+          </Text>
+        </Text>,
+      );
+    if (props.docs.length > shown.length) wrap(t('… и ещё {p1}', { p1: props.docs.length - shown.length }), C.faint);
+  }
+  push(
+    <Text wrap="truncate-end">
+      <Text color={C.accent}>P</Text>
+      <Text color={C.faint}>{t(' — читать и править · ⏎ — меню проекта')}</Text>
+    </Text>,
+  );
+
+  // How the tree is run: the sections of tree.md, the first one in a few lines.
+  const sections = project.body
+    .split('\n')
+    .filter((line) => /^##\s/.test(line))
+    .map((line) => line.replace(/^##\s+/, '').trim());
+  if (sections.length) {
+    gap();
+    heading(t('КАК ВЕДЁТСЯ — .tree/tree.md'));
+    const body = project.body.split('\n');
+    const start = body.findIndex((line) => /^##\s/.test(line));
+    const paragraph: string[] = [];
+    for (const line of body.slice(start + 1)) {
+      if (/^#/.test(line) || (!line.trim() && paragraph.length)) break;
+      if (line.trim()) paragraph.push(line.trim());
+    }
+    wrap(sections[0]!, C.text);
+    for (const line of paragraph.slice(0, 3)) wrap(plain(line), C.dim);
+    if (sections.length > 1) wrap(sections.slice(1).join(' · '), C.faint);
   }
 
   return (
