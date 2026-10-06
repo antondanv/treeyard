@@ -1,0 +1,96 @@
+{
+  "title": "Larchwood Roasters",
+  "template": "stages",
+  "goal": "Ten strangers order our coffee online — and come back for a second bag.",
+  "decisions": [
+    "A static site with Stripe Checkout, no backend of our own: orders arrive as Stripe payments and emails.",
+    "Stripe test mode until the company is verified; live keys only after the bank confirms."
+  ],
+  "nodes": [
+    {
+      "title": "A stranger orders a bag from the site",
+      "status": "todo",
+      "done_when": "someone we do not know pays for a bag without our help",
+      "note": "The first milestone: the shortest path from opening the site to a paid order.",
+      "children": [
+        {
+          "title": "Landing page: our story and three coffees",
+          "status": "todo",
+          "who": "agent",
+          "done_when": "opens on a phone, Lighthouse ≥ 90",
+          "note": "Headline «Small-batch coffee, roasted every Tuesday», our story in three sentences, Ethiopia Guji, Colombia Huila and House Espresso with prices. The site lives in site/.",
+          "children": []
+        },
+        {
+          "title": "Product cards and cart",
+          "status": "todo",
+          "who": "agent",
+          "done_when": "add two bags, the total is right",
+          "note": "Each coffee gets a card with roast, notes and price, and an «Add to cart» button; the cart keeps bags and shows the total.",
+          "children": []
+        },
+        {
+          "title": "Checkout with Stripe (test mode)",
+          "status": "todo",
+          "who": "agent",
+          "done_when": "a test card payment shows up as an order",
+          "note": "Stripe Checkout from the cart; the success page thanks the customer and says when the bag ships.",
+          "children": []
+        },
+        {
+          "title": "Domain and hosting",
+          "status": "todo",
+          "who": "human",
+          "done_when": "the site opens on our domain over https",
+          "children": []
+        },
+        {
+          "title": "Show the site to three friends, watch silently",
+          "status": "todo",
+          "who": "human",
+          "done_when": "three people ordered without asking us a question — or we know what stopped them",
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Second orders: subscription and emails",
+      "status": "todo",
+      "done_when": "a customer orders a second bag without being reminded by us",
+      "children": [
+        {
+          "title": "Subscription: a bag every two weeks",
+          "status": "todo",
+          "who": "agent",
+          "done_when": "a test subscriber is charged again two weeks later",
+          "children": []
+        },
+        {
+          "title": "Order emails",
+          "status": "todo",
+          "who": "agent",
+          "done_when": "an order sends a confirmation and a «roasted and shipped» email",
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Stripe live keys",
+      "status": "waiting",
+      "who": "human",
+      "waiting": "company verification",
+      "until": "the bank confirms",
+      "children": []
+    },
+    {
+      "title": "Coffee quiz: find your roast",
+      "status": "idea",
+      "children": []
+    },
+    {
+      "title": "Gift cards",
+      "status": "idea",
+      "children": []
+    }
+  ]
+}

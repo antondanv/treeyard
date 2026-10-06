@@ -1,7 +1,7 @@
 /**
- * The README's pictures, taken again: the staged coffee roastery from the
- * promo video (video/demo/coffee), planted into a temporary folder by
- * treeyard itself, moved along a little and shot in English and in Russian.
+ * The README's pictures, taken again: the staged coffee roastery of the
+ * promo video (scripts/demo/coffee.*.json), planted into a temporary folder
+ * by treeyard itself, moved along a little and shot in English and in Russian.
  * A new key or label in the TUI — run it, and the README shows it.
  *
  *   npm run screenshots   → docs/screenshot{,-menu}{,.ru}.png
@@ -24,8 +24,8 @@ const COLUMNS = 130;
 
 type Lang = 'en' | 'ru';
 const TREES: Record<Lang, string> = {
-  en: join(repo, 'video/demo/coffee/tree.json'),
-  ru: join(repo, 'video/demo/coffee/tree.ru.json'),
+  en: join(repo, 'scripts/demo/coffee.en.json'),
+  ru: join(repo, 'scripts/demo/coffee.ru.json'),
 };
 const SUFFIX: Record<Lang, string> = { en: '', ru: '.ru' };
 
