@@ -5,39 +5,48 @@
  * 256 colours; FORCE_COLOR=3 shows a truecolor terminal.
  *
  *   FORCE_COLOR=2 npx tsx scripts/screenshot.ts <project dir> <out.png> [cols]x[rows] [keys…]
+ *
+ * `framePng()` is the same picture for a frame taken elsewhere
+ * (scripts/readme-screenshots.ts).
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-process.env.FORCE_COLOR ??= '2';
-
-const [dirArg, outArg, sizeArg = '130x38', ...keyArgs] = process.argv.slice(2);
-if (!dirArg || !outArg) {
-  console.error('usage: screenshot.ts <project dir> <out.png> [cols]x[rows] [keys…]');
-  process.exit(2);
+/** `<enter>`, `<down>`… as the bytes a terminal sends. */
+export function keysOf(names: string[]): string[] {
+  return names.map((key) =>
+    key
+      .replace(/<enter>/g, '\r')
+      .replace(/<esc>/g, '\u001b')
+      .replace(/<down>/g, '\u001b[B')
+      .replace(/<up>/g, '\u001b[A')
+      .replace(/<right>/g, '\u001b[C')
+      .replace(/<left>/g, '\u001b[D')
+      .replace(/<pgdn>/g, '\u001b[6~')
+      .replace(/<pgup>/g, '\u001b[5~')
+      .replace(/<tab>/g, '\t'),
+  );
 }
-const [columns, rows] = sizeArg.split('x').map(Number) as [number, number];
-const keys = keyArgs.map((key) =>
-  key
-    .replace(/<enter>/g, '\r')
-    .replace(/<esc>/g, '\u001b')
-    .replace(/<down>/g, '\u001b[B')
-    .replace(/<up>/g, '\u001b[A')
-    .replace(/<right>/g, '\u001b[C')
-    .replace(/<left>/g, '\u001b[D')
-    .replace(/<pgdn>/g, '\u001b[6~')
-    .replace(/<pgup>/g, '\u001b[5~')
-    .replace(/<tab>/g, '\t'),
-);
 
-let frame: string;
-if (dirArg.endsWith('.ans')) {
-  frame = (await import('node:fs')).readFileSync(dirArg, 'utf8');
-} else {
-  const { snapshot } = await import('../src/tui/snapshot.js');
-  frame = await snapshot(resolve(dirArg), { columns, rows, keys, settle: 200 });
+async function main(): Promise<void> {
+  process.env.FORCE_COLOR ??= '2';
+  const [dirArg, outArg, sizeArg = '130x38', ...keyArgs] = process.argv.slice(2);
+  if (!dirArg || !outArg) {
+    console.error('usage: screenshot.ts <project dir> <out.png> [cols]x[rows] [keys…]');
+    process.exit(2);
+  }
+  const [columns, rows] = sizeArg.split('x').map(Number) as [number, number];
+  let frame: string;
+  if (dirArg.endsWith('.ans')) {
+    frame = readFileSync(dirArg, 'utf8');
+  } else {
+    const { snapshot } = await import('../src/tui/snapshot.js');
+    frame = await snapshot(resolve(dirArg), { columns, rows, keys: keysOf(keyArgs), settle: 200 });
+  }
+  console.log(framePng(frame, outArg, columns, rows));
 }
 
 // ── ANSI → HTML ─────────────────────────────────────────────────────────────
@@ -154,32 +163,34 @@ function toHtml(text: string): string {
   return html;
 }
 
-const page = `<!doctype html><meta charset="utf-8"><style>
+/** The frame as a PNG at `out` (headless Chrome, twice the pixels); returns its full path. */
+export function framePng(frame: string, out: string, columns: number, rows: number): string {
+  const page = `<!doctype html><meta charset="utf-8"><style>
 html,body{margin:0;background:${BG}}
 pre{margin:0;padding:18px 20px;font:14px/1.0 'SF Mono','Menlo',monospace;color:${FG};white-space:pre;font-variant-ligatures:none}
 </style><pre>${toHtml(frame)}</pre>`;
-
-const dir = mkdtempSync(join(tmpdir(), 'treeyard-shot-'));
-const htmlPath = join(dir, 'frame.html');
-writeFileSync(htmlPath, page);
-const width = Math.ceil(columns * 8.45 + 40);
-const height = Math.ceil(rows * 14.2 + 40);
-const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const got = spawnSync(
-  chrome,
-  [
-    '--headless=new',
-    '--disable-gpu',
-    '--hide-scrollbars',
-    '--force-device-scale-factor=2',
-    `--window-size=${width},${height}`,
-    `--screenshot=${resolve(outArg)}`,
-    `file://${htmlPath}`,
-  ],
-  { encoding: 'utf8' },
-);
-if (got.status !== 0) {
-  console.error(got.stderr);
-  process.exit(1);
+  const dir = mkdtempSync(join(tmpdir(), 'treeyard-shot-'));
+  const htmlPath = join(dir, 'frame.html');
+  writeFileSync(htmlPath, page);
+  const width = Math.ceil(columns * 8.45 + 40);
+  const height = Math.ceil(rows * 14.2 + 40);
+  const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const got = spawnSync(
+    chrome,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--hide-scrollbars',
+      '--force-device-scale-factor=2',
+      `--window-size=${width},${height}`,
+      `--screenshot=${resolve(out)}`,
+      `file://${htmlPath}`,
+    ],
+    { encoding: 'utf8' },
+  );
+  rmSync(dir, { recursive: true, force: true });
+  if (got.status !== 0) throw new Error(`Chrome could not take the picture: ${got.stderr}`);
+  return resolve(out);
 }
-console.log(resolve(outArg));
+
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) await main();

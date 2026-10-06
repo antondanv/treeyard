@@ -42,7 +42,8 @@
     "format": "biome check --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "tsx src/cli/main.ts"
+    "dev": "tsx src/cli/main.ts",
+    "screenshots": "tsx scripts/readme-screenshots.ts"
   },
   "dependencies": {
     "@antondanv/brainyard": "^0.2.0",
