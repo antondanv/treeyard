@@ -9,6 +9,7 @@
 а агент сам запишет результат обратно в дерево. Так проект доходит до работы в реальной
 жизни, а не застревает на «код готов».
 
+[![CI](https://github.com/antondanv/treeyard/actions/workflows/ci.yml/badge.svg)](https://github.com/antondanv/treeyard/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@antondanv/treeyard?color=6d7dfc)](https://www.npmjs.com/package/@antondanv/treeyard)
 ![node](https://img.shields.io/badge/node-%E2%89%A522-3c873a)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)

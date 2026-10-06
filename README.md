@@ -8,6 +8,7 @@ Plan a project as a tree of goals with a “done when” on every node, open Cla
 Codex, Antigravity or OpenCode sessions straight from its nodes, and let the agents report
 back into the tree — until the project works in real life, not just “the code is done”.
 
+[![CI](https://github.com/antondanv/treeyard/actions/workflows/ci.yml/badge.svg)](https://github.com/antondanv/treeyard/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@antondanv/treeyard?color=6d7dfc)](https://www.npmjs.com/package/@antondanv/treeyard)
 ![node](https://img.shields.io/badge/node-%E2%89%A522-3c873a)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
