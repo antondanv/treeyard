@@ -9,3 +9,4 @@ video/.agents/skills/
 video/.claude/skills/
 video/snapshots/
 video/.tmp/
+video/style/*.png
