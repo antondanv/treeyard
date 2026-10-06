@@ -79,5 +79,5 @@
 
 - `src/templates/` + `templates/*.yaml` (`en/` — английские) — шаблоны посадки;
   `pointer.ts` — блок о дереве в AGENTS.md / CLAUDE.md.
-- `src/i18n/` — русский текст как ключ, `en.ts` — словарь; `src/settings.ts` —
-  `~/.treeyard/settings.json`, настройки проекта — в `.tree/tree.md`.
+- `src/i18n/` — русский текст как ключ, `en.ts` — словарь, по умолчанию — английский;
+  `src/settings.ts` — `~/.treeyard/settings.json`, настройки проекта — в `.tree/tree.md`.

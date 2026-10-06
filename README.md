@@ -14,6 +14,7 @@
 
 Нужен Node.js 22+. Brainyard приходит из npm (`@antondanv/brainyard`).
 Для сессий в панелях нужен tmux (`brew install tmux` на macOS).
+Интерфейс по умолчанию на английском; по-русски — `treeyard config lang ru`.
 
 ```sh
 npm install && npm run build && npm link   # команда treeyard
@@ -211,7 +212,7 @@ Markdown-файла, включая журнал, по-прежнему есть
 
 | Для всех проектов (`~/.treeyard/settings.json`) | |
 | --- | --- |
-| `lang` | `ru` или `en` — интерфейс, шаблоны и то, что получают агенты |
+| `lang` | `en` (по умолчанию) или `ru` — интерфейс, шаблоны и то, что получают агенты |
 | `confirm` | подтверждать запуск сессий и задач агента |
 | `theme` | `dark` или `light` — под цвет терминала |
 | `animation` | спиннеры и мигающий лист |
@@ -249,14 +250,14 @@ Code — псевдонимы fable, opus, sonnet, haiku, они всегда о
 
 ```sh
 treeyard config                 # всё, что настроено
-treeyard config lang en         # English
+treeyard config lang ru         # по-русски
 treeyard config confirm off     # не спрашивать перед запуском
 treeyard config sleep_after 15  # усыплять после 15 минут подтверждённого простоя
 treeyard config max_panes 3     # до трёх панелей; работающие и видимые защищены
 treeyard config status_order done-first  # готовые сверху
 treeyard config status_order todo,review,active,waiting,idea,done,dropped  # свой порядок
 treeyard config notes ~/Projects/Treeyard  # куда падают замечания
-TREEYARD_LANG=en treeyard       # язык на один запуск
+TREEYARD_LANG=ru treeyard       # язык на один запуск
 ```
 
 ## Сессии рядом с деревом
