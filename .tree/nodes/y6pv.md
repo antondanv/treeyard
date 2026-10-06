@@ -2,7 +2,7 @@
 id: y6pv
 title: Чистый npm-пакет
 parent: 5w6w
-order: 70
+order: 100
 status: todo
 who: agent
 done_when: "`npm pack --dry-run`: только dist, templates, skills, нужные картинки, README, LICENSE — без скриншотов-исходников и рабочих заметок"

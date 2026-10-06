@@ -9,8 +9,10 @@ needs:
   - ../Brainyard#hfnx
   - ../Brainyard#mhg2
   - ../Brainyard#c5wx
+commits:
+  - f4753b75182e6f51cc1c90fcb2c4b28e774b7798
 created: 2026-10-05
-updated: 2026-10-06T00:20:01+03:00
+updated: 2026-10-06T00:23:04+03:00
 ---
 
 ## Журнал
@@ -32,3 +34,4 @@ updated: 2026-10-06T00:20:01+03:00
 - 2026-10-06 00:18 · агент · картинка добавлена: 008.png — «Разбить на шаги» на OpenCode (Ling 3.1 Flash Free, variant medium через run()): 4 шага
 - 2026-10-06 00:20 · агент · OpenCode — четвёртый мозг: окно запуска (o), пункт «▶ OpenCode» (O) в меню узла, мозг проекта в «,» и в мастере посадки, «Разбить на шаги» и критерий, treeyard open/init/import/config --brain opencode. Сессии OpenCode хранятся в узлах (store раньше их выбрасывал), своя группа в «Сессиях», в карточке — opencode --session. «План» стартует агентом plan OpenCode, доступ — из его настроек; усилие сессии выбирается в самой сессии (ctrl+t), задачам агента идёт как variant. Вживую на временном дереве (сокет treeyard-vg8w): панель из окна запуска и из treeyard open --brain opencode --pane, id ses_… записан в узел, x → f будит тот же разговор (opencode --session), запуск в терминале записал сессию, «Разбить на шаги» на OpenCode дал 4 шага; скрины 001–008. Тесты: test/opencode-tmux.test.ts (поддельный opencode: панель → id → сон → пробуждение; CLI open --pane) и OpenCode в тестах форм, сессий, планов; typecheck, test (394), lint, build зелёные. Осталось — в Brainyard: «ждёт тебя» у OpenCode (hfnx), idle для автосна (mhg2), усилие в open() (c5wx, идея).
 - 2026-10-06 00:20 · агент · в работе → на проверке
+- 2026-10-06 00:23 · агент · привязан коммит f4753b75182e6f51cc1c90fcb2c4b28e774b7798

@@ -2,7 +2,7 @@
 id: genj
 title: Репозиторий antondanv/treeyard на GitHub и push
 parent: 5w6w
-order: 10
+order: 40
 status: todo
 who: human
 done_when: "`gh repo view antondanv/treeyard` открывается, main запушен"
