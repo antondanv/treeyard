@@ -160,7 +160,7 @@ dropped idea`; `who`: `agent human any`.
 ```sh
 treeyard import --from-json - <<'JSON'
 {
-  "title": "Factoyard",
+  "title": "Content Factory",
   "template": "directions",
   "goal": "One person runs 5–10 channels and sites through the factory and doesn't burn out",
   "decisions": ["Python + FastAPI: the stack is chosen and known"],
