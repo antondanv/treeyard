@@ -128,7 +128,7 @@ export function NodeForm(props: {
       title={
         props.mode === 'add'
           ? t('Новый узел{p1}', {
-              p1: props.place ? ` · в «${props.place}»` : '',
+              p1: props.place ? t(' · в «{place}»', { place: props.place }) : '',
             })
           : t('Изменить узел')
       }

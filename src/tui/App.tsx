@@ -851,7 +851,12 @@ export function App(props: AppProps) {
     say(
       t('↶ отменено: {label}{p2}', {
         label: done.label,
-        p2: done.skipped ? ` · ${done.skipped} файл(а) с тех пор менял кто-то ещё — их не трогал` : '',
+        p2: done.skipped
+          ? t(' · {n} {files} с тех пор менял кто-то ещё — их не трогал', {
+              n: done.skipped,
+              files: plural(done.skipped, ['файл', 'файла', 'файлов'], ['file', 'files']),
+            })
+          : '',
       }),
     );
   };

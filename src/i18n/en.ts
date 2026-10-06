@@ -270,6 +270,8 @@ export const EN: Record<string, string> = {
   Журнал: 'Journal',
   'отменять нечего': 'nothing to undo',
   '↶ отменено: {label}{p2}': '↶ undone: {label}{p2}',
+  ' · {n} {files} с тех пор менял кто-то ещё — их не трогал':
+    ' · {n} {files} changed by someone else since — left as they are',
   'подожди: {label}': 'wait: {label}',
   'запускаю {p1} в фоне': 'starting {p1} in the background',
   '{p1} работает в фоне над «{title}» · ⏎ — открыть': '{p1} works on «{title}» in the background · ⏎ to open',
@@ -493,7 +495,7 @@ export const EN: Record<string, string> = {
   действия: 'actions',
   имя: 'rename',
   разбить: 'split',
-  отмена: 'undo',
+  отмена: 'cancel',
   всё: 'all',
   'Журнал пуст. Сюда попадает всё, что пишут в узлы — ты, агенты и сессии.':
     'The journal is empty. Everything written to nodes lands here — by you, agents and sessions.',
@@ -520,6 +522,7 @@ export const EN: Record<string, string> = {
   'последнее ': 'last ',
   ВРУЧНУЮ: 'BY HAND',
   'Новый узел{p1}': 'New node{p1}',
+  ' · в «{place}»': ' · in «{place}»',
   'Изменить узел': 'Edit node',
   'описание — E в редакторе': 'description — E in the editor',
   'что сделать': 'what to do',
