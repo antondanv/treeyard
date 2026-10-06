@@ -40,7 +40,9 @@ npm run screenshots                # заново снять картинки RE
 - Всё, что видит человек, проверяй в TUI (`npm run dev` в копии дерева или
   `scripts/screenshot.ts`), а не только тестами; на узком экране (≈100×30) тоже.
 - Изменилось поведение или клавиши — поправь README.md и README.ru.md; изменился вид —
-  `npm run screenshots`.
+  `npm run screenshots`. В npm уходит только README.md: на время упаковки README.ru.md
+  отходит в сторону (`scripts/npm-readme.mjs`, prepack/postpack).
+- `video/` — исходники промо-ролика, только на этой машине (в `.gitignore`, на GitHub их нет).
 - Git: коммиты по смыслу (Conventional Commits), только своё; push и PR — по просьбе.
 
 <!-- treeyard -->

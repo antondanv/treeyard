@@ -1,19 +1,30 @@
 {
   "name": "@antondanv/treeyard",
   "version": "0.1.0",
-  "description": "A goal tree for a project, right in the terminal: stages and branches with finish criteria, and Claude Code, Codex and Antigravity sessions launched from its nodes.",
+  "description": "A goal tree for Agent-Driven Development in your terminal: a “done when” on every node, and Claude Code, Codex, Antigravity and OpenCode sessions opened from its nodes.",
   "keywords": [
-    "tree",
+    "agent-driven-development",
+    "goal-tree",
     "planning",
     "tui",
+    "cli",
+    "agents",
     "claude-code",
     "codex",
     "antigravity",
-    "agents",
-    "cli"
+    "opencode",
+    "vibe-coding"
   ],
   "license": "MIT",
   "author": "Anton Danilov",
+  "homepage": "https://github.com/antondanv/treeyard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/antondanv/treeyard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/antondanv/treeyard/issues"
+  },
   "type": "module",
   "bin": {
     "treeyard": "dist/cli/main.js"
@@ -28,12 +39,14 @@
     "dist",
     "templates",
     "skills",
-    "docs",
     "README.md",
     "LICENSE"
   ],
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/chmod.mjs",
@@ -43,7 +56,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "tsx src/cli/main.ts",
-    "screenshots": "tsx scripts/readme-screenshots.ts"
+    "screenshots": "tsx scripts/readme-screenshots.ts",
+    "prepack": "npm run build && node scripts/npm-readme.mjs hide",
+    "postpack": "node scripts/npm-readme.mjs show"
   },
   "dependencies": {
     "@antondanv/brainyard": "^0.2.0",
