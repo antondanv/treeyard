@@ -466,7 +466,7 @@ describe('connecting github', () => {
 
   it('finds the repository in git remotes and connects a chosen one', () => {
     expect(parseRepoUrl('git@github.com:antondanv/brainyard.git')).toEqual({ owner: 'antondanv', name: 'brainyard' });
-    expect(parseRepoUrl('https://github.com/antondanv/SMHUB')).toEqual({ owner: 'antondanv', name: 'SMHUB' });
+    expect(parseRepoUrl('https://github.com/acme/Widgets')).toEqual({ owner: 'acme', name: 'Widgets' });
     expect(parseRepoUrl('https://gitlab.com/a/b.git')).toBeUndefined();
     const dir = tempDir();
     expect(repoOf(dir)).toBeUndefined();

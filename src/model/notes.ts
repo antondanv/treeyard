@@ -65,7 +65,7 @@ export function noteOrigin(
   return { project: tree.project.title, ...(node ? { node } : {}) };
 }
 
-/** `Factoyard › «Закрыть один узел» (k3f9)`, or just the project. */
+/** `my-app › «Закрыть один узел» (k3f9)`, or just the project. */
 export function originText(origin: NoteOrigin): string {
   if (!origin.node) return origin.project;
   return `${origin.project} › «${origin.node.title}» (${origin.node.id})`;

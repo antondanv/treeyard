@@ -33,8 +33,8 @@ describe('sessions opened past the tree', () => {
     expect(offTree({ id: 'mine' }, owners)).toBe(false);
     expect(offTree({ id: 'other' }, owners)).toBe(true);
     expect(offTree({ id: 'pane:claude-1' }, owners)).toBe(false);
-    expect(offTree({ id: 'p', title: 'Factoyard · посадка дерева' }, owners)).toBe(false);
-    expect(offTree({ id: 'p', title: 'Factoyard · planting the tree' }, owners)).toBe(false);
+    expect(offTree({ id: 'p', title: 'my-app · посадка дерева' }, owners)).toBe(false);
+    expect(offTree({ id: 'p', title: 'my-app · planting the tree' }, owners)).toBe(false);
   });
 
   it('counts only the last 14 days', () => {

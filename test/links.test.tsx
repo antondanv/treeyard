@@ -56,12 +56,12 @@ function shell(cwd: string) {
 
 describe('links between trees', () => {
   it('reads and writes needs and for, not as unknown keys', () => {
-    const text = '---\nid: g9ph\ntitle: X\nstatus: todo\nneeds: ../Brainyard#hv95\nfor:\n  - ../Factoyard#e2ep\n---\n';
+    const text = '---\nid: g9ph\ntitle: X\nstatus: todo\nneeds: ../Brainyard#hv95\nfor:\n  - ../my-app#e2ep\n---\n';
     const node = nodeFromText(text, 'g9ph');
     expect(node.needs).toEqual(['../Brainyard#hv95']);
-    expect(node.neededBy).toEqual(['../Factoyard#e2ep']);
+    expect(node.neededBy).toEqual(['../my-app#e2ep']);
     expect(node.extra).toEqual({});
-    expect(nodeToText(node)).toContain('needs:\n  - ../Brainyard#hv95\nfor:\n  - ../Factoyard#e2ep');
+    expect(nodeToText(node)).toContain('needs:\n  - ../Brainyard#hv95\nfor:\n  - ../my-app#e2ep');
   });
 
   it('parses refs and writes them from the project folder', () => {

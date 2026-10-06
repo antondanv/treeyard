@@ -672,7 +672,7 @@ export function ProjectMenu(props: {
   );
 }
 
-/** «Factoyard · Медиа-цех» shown inside «Медиа-цех» is just noise before the point. */
+/** «my-app · Оплата» shown inside «Оплата» is just noise before the point. */
 function shortSessionName(name: string | undefined, title: string): string | undefined {
   if (!name) return undefined;
   const cut = name.indexOf(' · ');

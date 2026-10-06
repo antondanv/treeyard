@@ -47,10 +47,10 @@ describe('notes', () => {
     const branch = addNode(tree, { title: 'Замечания' });
     const from = emptyTree();
     const work = addNode(from, { title: 'Закрыть один узел' });
-    const note = addNote(tree, '  ширина\n  сбрасывается ', { project: 'Factoyard', node: work }, 'claude');
+    const note = addNote(tree, '  ширина\n  сбрасывается ', { project: 'my-app', node: work }, 'claude');
     const saved = loadTree(tree.project.dir).nodes.get(note.id)!;
     expect(saved).toMatchObject({ title: 'ширина сбрасывается', parent: branch.id, status: 'idea' });
-    expect(description(saved.body)).toBe(`Откуда: Factoyard › «Закрыть один узел» (${work.id})`);
+    expect(description(saved.body)).toBe(`Откуда: my-app › «Закрыть один узел» (${work.id})`);
     expect(journalEntries(saved.body)).toEqual([expect.stringContaining('· claude · завёл узел')]);
     expect(childrenOf(loadTree(tree.project.dir), branch.id).map((n) => n.id)).toEqual([note.id]);
   });
@@ -67,8 +67,8 @@ describe('notes', () => {
     expect(noteOrigin(tree, '/x', env).node?.id).toBe(started.id);
     expect(noteOrigin(tree, '/x', { ...env, [NODE_VAR]: 'gone' }).node?.id).toBe(holder.id);
     expect(noteOrigin(tree, '/x', { [NODE_VAR]: '', CLAUDE_CODE_SESSION_ID: 'other' })).toEqual({ project: 'Тест' });
-    expect(noteOrigin(undefined, '/somewhere/Factoyard', env)).toEqual({ project: 'Factoyard' });
-    expect(originText({ project: 'Factoyard' })).toBe('Factoyard');
+    expect(noteOrigin(undefined, '/somewhere/my-app', env)).toEqual({ project: 'my-app' });
+    expect(originText({ project: 'my-app' })).toBe('my-app');
   });
 
   it('the notes folder is a setting', () => {
@@ -159,9 +159,9 @@ describe('treeyard note', () => {
   it('writes from another project into «Замечания» of the notes tree, with the project and the node', async () => {
     const target = emptyTree();
     const branch = addNode(target, { title: 'Замечания' });
-    const factoyard = emptyTree();
-    const work = addNode(factoyard, { title: 'Закрыть один узел' });
-    const inside = join(factoyard.project.dir, 'src');
+    const myApp = emptyTree();
+    const work = addNode(myApp, { title: 'Закрыть один узел' });
+    const inside = join(myApp.project.dir, 'src');
     mkdirSync(inside);
     const home = tempDir('treeyard-home-');
 
@@ -180,16 +180,16 @@ describe('treeyard note', () => {
     expect(note).toMatchObject({ title: 'проверка', parent: branch.id, status: 'idea' });
     expect(description(note.body)).toBe(`Откуда: Тест › «Закрыть один узел» (${work.id})`);
     // The project it came from is only read.
-    expect(loadTree(factoyard.project.dir).nodes.size).toBe(1);
+    expect(loadTree(myApp.project.dir).nodes.size).toBe(1);
   });
 
   it('outside a session: the project only, or the node named with --node', async () => {
     const target = emptyTree();
-    const factoyard = emptyTree();
-    const work = addNode(factoyard, { title: 'Работа' });
+    const myApp = emptyTree();
+    const work = addNode(myApp, { title: 'Работа' });
     const home = tempDir('treeyard-home-');
     writeFileSync(join(home, 'settings.json'), JSON.stringify({ notes: target.project.dir }));
-    const note = (...args: string[]) => shell(factoyard.project.dir, home)('note', ...args);
+    const note = (...args: string[]) => shell(myApp.project.dir, home)('note', ...args);
 
     const plain = await note('просто', 'так');
     expect(plain.stdout).toMatch(/← Тест\n$/);

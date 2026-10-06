@@ -321,7 +321,7 @@ export function SessionRow(props: {
   sleeping?: boolean;
   /** Under its CLI's heading: no brain column. */
   grouped?: boolean;
-  /** The project's name: «Factoyard · Узел» inside Factoyard is just «Узел». */
+  /** The project's name: «my-app · Узел» inside my-app is just «Узел». */
   project?: string;
 }) {
   const { session, selected } = props;
