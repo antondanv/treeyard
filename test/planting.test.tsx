@@ -88,7 +88,7 @@ describe('planting from JSON, as the agent does', () => {
     spawnSync(join(root, 'node_modules', '.bin', 'tsx'), [join(root, 'src', 'cli', 'main.ts'), ...args], {
       cwd,
       ...(input ? { input } : {}),
-      env: { ...process.env, TREEYARD_HOME: tempDir('treeyard-home-'), TREEYARD_LANG: '', NO_COLOR: '1' },
+      env: { ...process.env, TREEYARD_HOME: tempDir('treeyard-home-'), TREEYARD_LANG: 'ru', NO_COLOR: '1' },
       encoding: 'utf8',
     });
 

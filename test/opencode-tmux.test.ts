@@ -103,7 +103,7 @@ describe.skipIf(!panesAvailable())('OpenCode in a pane', () => {
         BRAINYARD_TMUX_SOCKET: socket,
         BRAINYARD_OPENCODE_BIN: bin,
         XDG_DATA_HOME: data,
-        TREEYARD_LANG: '',
+        TREEYARD_LANG: 'ru',
         NO_COLOR: '1',
       },
       encoding: 'utf8',

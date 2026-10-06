@@ -138,7 +138,13 @@ describe('where notes go, from the settings screen', () => {
 
 describe('treeyard note', () => {
   function shell(cwd: string, home: string, extra: NodeJS.ProcessEnv = {}) {
-    const env: NodeJS.ProcessEnv = { ...process.env, TREEYARD_HOME: home, TREEYARD_LANG: '', NO_COLOR: '1', ...extra };
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      TREEYARD_HOME: home,
+      TREEYARD_LANG: 'ru',
+      NO_COLOR: '1',
+      ...extra,
+    };
     // This suite may itself run inside a session from a node.
     if (!(NODE_VAR in extra)) delete env[NODE_VAR];
     delete env.CLAUDE_CODE_SESSION_ID;

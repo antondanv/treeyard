@@ -41,7 +41,7 @@ function shell(cwd: string) {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     TREEYARD_HOME: tempDir('treeyard-home-'),
-    TREEYARD_LANG: '',
+    TREEYARD_LANG: 'ru',
     NO_COLOR: '1',
   };
   delete env[NODE_VAR];

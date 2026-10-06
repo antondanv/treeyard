@@ -1,5 +1,5 @@
 /**
- * Two languages: Russian, the source, and English.
+ * Two languages: Russian, the source, and English, the default.
  *
  * Russian text is the key: `t('Новая сессия')` reads like the screen does,
  * and English lives in a dictionary next to it. Placeholders are `{name}`.
@@ -15,7 +15,7 @@ export type Lang = 'ru' | 'en';
 
 export const LANGS: readonly Lang[] = ['ru', 'en'];
 
-let current: Lang = 'ru';
+let current: Lang = 'en';
 
 export function setLang(lang: Lang): void {
   current = lang;

@@ -4,7 +4,7 @@
  * belongs to one project — default brain, model, how sessions start — lives
  * in its `.tree/tree.md` instead, next to the tree.
  *
- * `TREEYARD_LANG=en` overrides the language for one run.
+ * `TREEYARD_LANG=ru` overrides the language for one run.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -51,7 +51,7 @@ export const SLEEP_AFTER = [0, 15, 30, 60] as const;
 export const MAX_PANES = [0, 3, 5, 8] as const;
 
 export const DEFAULTS: Settings = {
-  lang: 'ru',
+  lang: 'en',
   confirm: true,
   theme: 'dark',
   animation: true,

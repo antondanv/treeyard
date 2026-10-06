@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -117,6 +117,28 @@ describe('settings', () => {
     expect(run('config', 'confirm', 'off').stdout).toContain('confirm = false');
     expect(run('config', 'lang', 'de').status).toBe(2);
   }, 30_000);
+
+  it('without settings everything is in English; config lang ru and TREEYARD_LANG=ru bring Russian back', () => {
+    const home = tempDir('treeyard-home-');
+    const dir = tempDir();
+    const run = (args: string[], forced = '') =>
+      spawnSync(join(root, 'node_modules', '.bin', 'tsx'), [join(root, 'src', 'cli', 'main.ts'), ...args], {
+        cwd: dir,
+        env: { ...process.env, TREEYARD_HOME: home, TREEYARD_LANG: forced, NO_COLOR: '1' },
+        encoding: 'utf8',
+      });
+    expect(run(['--help']).stdout).toContain('Commands');
+    expect(run(['init', '--template', 'stages', '--goal', 'the first review']).status).toBe(0);
+    expect(readFileSync(join(dir, '.tree', 'tree.md'), 'utf8')).toContain('## Method: Stages');
+    const id = [...loadTree(dir).nodes.keys()][0]!;
+    expect(run(['context', id]).stdout).toContain('# You are working on a node of the project tree');
+    expect(existsSync(join(home, 'settings.json'))).toBe(false);
+
+    expect(run(['--help'], 'ru').stdout).toContain('Команды');
+    expect(run(['config', 'lang', 'ru']).stdout).toContain('lang = ru');
+    expect(run(['--help']).stdout).toContain('Команды');
+    expect(run(['context', id]).stdout).toContain('# Ты работаешь над узлом дерева проекта');
+  }, 60_000);
 });
 
 describe('the TUI in English and with confirmations', () => {
@@ -134,6 +156,18 @@ describe('the TUI in English and with confirmations', () => {
     expect(frame).toContain('goal  всё работает');
     expect(frame).toContain('in review');
     expect(frame).toContain('⏎ actions');
+  });
+
+  it('leaves no Russian on the main screens in English', async () => {
+    setLang('en');
+    const dir = tempDir();
+    createTree(dir, getTemplate('stages')!, { title: 'Pilot', answers: { goal: 'the first review' } });
+    const screens = [[], ['2'], ['3'], ['4'], ['5'], ['6'], ['?'], [','], ['\r'], ['j', '\r'], ['j', 'c'], ['j', 'S']];
+    for (const keys of screens) {
+      const frame = await snapshot(dir, { columns: 110, rows: 34, keys, settings: { lang: 'en' } });
+      // The language picker names Russian in Russian.
+      expect(frame.replace('Русский', ''), keys.join(' ') || 'tree').not.toMatch(/[А-Яа-яЁё]/);
+    }
   });
 
   it('asks before a session starts: who, where, how and the first message', async () => {
@@ -179,7 +213,7 @@ describe('the TUI in English and with confirmations', () => {
     const after = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', '\u001b[C'] });
     expect(after).toContain('Settings');
     expect(after).toContain('Confirm launches');
-    expect(loadSettings().lang).toBe('en');
+    expect(loadSettings({ ...process.env, TREEYARD_LANG: '' }).lang).toBe('en');
   });
 
   it('project settings land in tree.md', async () => {

@@ -268,7 +268,7 @@ describe('treeyard image', () => {
     const file = join(dir, 'shot.png');
     writeFileSync(file, RED_OVER_BLUE);
     mkdirSync(join(dir, 'sub'));
-    const env: NodeJS.ProcessEnv = { ...process.env, TREEYARD_LANG: '', NO_COLOR: '1' };
+    const env: NodeJS.ProcessEnv = { ...process.env, TREEYARD_LANG: 'ru', NO_COLOR: '1' };
     delete env[NODE_VAR];
     delete env.FORCE_COLOR;
     const treeyard = (...args: string[]) =>
