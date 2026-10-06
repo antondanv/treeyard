@@ -44,6 +44,7 @@ npm run screenshots                # заново снять картинки RE
   отходит в сторону (`scripts/npm-readme.mjs`, prepack/postpack).
 - `video/` — исходники промо-ролика, только на этой машине (в `.gitignore`, на GitHub их нет).
 - Git: коммиты по смыслу (Conventional Commits), только своё; push и PR — по просьбе.
+  Без строк `Co-Authored-By` и подписей агента в коммитах и PR.
 
 <!-- treeyard -->
 ## Дерево задач
