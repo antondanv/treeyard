@@ -1,523 +1,650 @@
-<p align="center"><img src="docs/logo.png" width="420" alt="treeyard"></p>
+<div align="center">
 
-Дерево целей проекта в терминале. Корень — цель, которую видно в жизни; ветки —
-этапы и направления; листья — задачи с критерием «готово, когда». Из любого узла
-открывается сессия Claude Code, Codex, Antigravity или OpenCode — и потом находится
-и в дереве, и в самом CLI (`claude --resume`, `codex resume`, `opencode --session`).
+<img src="docs/logo.png" width="420" alt="treeyard">
 
-Знак — три листа в цветах статусов дерева (готово, в работе, ждёт), сходящиеся в
-один ствол: работа, которая собирается в цель.
+**A goal tree for Agent-Driven Development (ADD), right in your terminal.**
 
-![Дерево Factoyard в treeyard](docs/screenshot.png)
+Plan a project as a tree of goals with a “done when” on every node, open Claude Code,
+Codex, Antigravity or OpenCode sessions straight from its nodes, and let the agents report
+back into the tree — until the project works in real life, not just “the code is done”.
 
-## Запуск
+[![npm](https://img.shields.io/npm/v/@antondanv/treeyard?color=6d7dfc)](https://www.npmjs.com/package/@antondanv/treeyard)
+![node](https://img.shields.io/badge/node-%E2%89%A522-3c873a)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Нужен Node.js 22+. Brainyard приходит из npm (`@antondanv/brainyard`).
-Для сессий в панелях нужен tmux (`brew install tmux` на macOS).
-Интерфейс по умолчанию на английском; по-русски — `treeyard config lang ru`.
+**English** · [Русский](README.ru.md)
+
+<!-- The promo video goes here (node kfg8): the same link in README.ru.md. -->
+
+<img src="docs/screenshot.png" width="860" alt="treeyard in a terminal: a coffee shop's goal tree — the goal at the top, two milestones with their tasks, a node waiting for the bank, two ideas; one task is selected, and the bar at the bottom says what “done” means for it">
+
+</div>
+
+## Why I built it
+
+I built Treeyard out of my own vibe coding. With agents, code gets written fast — and then
+the project stalls. It stalls on the steps only a person can take: a server, a domain,
+payments, showing it to a real person. Meanwhile the agents get side features, the plan
+grows into a log thousands of lines long, and every new session starts by rereading it.
+Code: done. Project: stuck.
+
+Treeyard is the practices that got my projects past that point, put into one tool. Agents
+do the work; the tree holds what the work is for and when it counts as done. That is what
+I mean by Agent-Driven Development. I run my own projects this way, Treeyard itself
+included.
+
+## What you get
+
+- **A goal you can see in real life at the root.** Not “build an MVP” but “ten strangers
+  order our coffee online — and come back for a second bag”. Tests say the code works; the
+  goal says the project did its job.
+- **A “done when” on every node.** One sentence you can see or run: a command, a scenario,
+  a screenshot, a number. If you can't write it, the node isn't understood yet.
+- **One node — one session.** A session opened from a node gets why it exists (the path
+  from the root), when it's done, its neighbours and the project's rules — not the whole
+  plan.
+- **Waiting is a status, not a dead end.** A branch blocked by the outside world is
+  “waiting”, with a reason and a condition to come back; work goes on in other branches.
+  **Now** shows everything you can do right now, across all of them.
+- **Your steps are in the tree too.** Nodes only a person can do are marked “done by: you”
+  and don't pile up at the end.
+- **Agents don't mark their own work done.** An agent sets “in review” and shows proof — a
+  command and its output, a screenshot, its commits; “done” is yours.
+- **A new idea is a new node, not “while I'm at it”.** The journal lives in the node, the
+  plan in the tree, decisions in one place with their reasons.
+- **Several agents side by side.** Claude Code, Codex, Antigravity and OpenCode in tmux
+  panes next to the tree; idle ones fall asleep and give their memory back; every session
+  stays in its node to be resumed.
+
+### In numbers
+
+- **~95% fewer tokens to get an agent going.** A session opened from a node starts with
+  about 3k tokens of context: 2.6k–4.0k, median 3.0k over seven nodes of this repository's
+  tree. Handing the agent the whole plan instead — every node with its description and
+  journal — is 65k tokens on the same tree of 105 nodes, 84k with `docs/` and the README:
+  the node's context is 95–96% smaller. Even the one-page overview (`treeyard show`, 5.5k)
+  is almost twice as big.
+- **The saving grows with the tree.** On a fresh tree of 12 nodes the whole plan (1.0k) is
+  smaller than a node's context (1.7k), so there is nothing to save yet. And most of a
+  session's tokens go into the code itself, not into its start.
+- **Built with itself.** Treeyard has been run by its own tree since the first commit: in
+  five days, 108 commits, 41 nodes done and 18 more in review, 35 agent sessions opened
+  from nodes (2026-10-02 → 2026-10-06).
+
+<sub>How the tokens were counted (2026-10-06): `treeyard context <id>` into a file, then
+`claude -p "/context" --system-prompt-file <file>` — Claude's own tokenizer, checked
+against a real request (3,387 tokens against “3.4k”). Codex and Gemini count with their
+own tokenizers.</sub>
+
+## When to use it — and when not
+
+**Use it when**
+
+- the project lives longer than one session — days, weeks, months;
+- there are several directions at once, and some of them wait for the outside world;
+- part of the work is yours alone: a server, a domain, payments, a contract, showing it to
+  people;
+- you run several agents or several CLIs in parallel and want to see who is doing what;
+- you keep several projects and come back to one after a break: the tree and the journals
+  say where you stopped.
+
+**Don't, when**
+
+- it's one small task: write a script, fix a bug, answer a question. Open plain `claude`
+  or `codex` — planting a tree, criteria and statuses won't pay off;
+- it's a throwaway prototype for one evening;
+- a team already lives in its own tracker: Treeyard is made for one person with agents (it
+  does sync with a GitHub Project board, though).
+
+Treeyard doesn't write code itself — your agents do. It keeps what they work on and when
+it counts as done.
+
+## Quick start
+
+You need Node.js 22+ and at least one agent CLI: Claude Code, Codex, Antigravity or
+OpenCode. For sessions in panes next to the tree, tmux (`brew install tmux` on macOS).
+macOS is the main platform.
 
 ```sh
-npm install && npm run build && npm link   # команда treeyard
-cd ../Factoyard && treeyard                # открыть дерево проекта
-treeyard init                              # новое дерево: с агентом или по шаблону
-treeyard init --agent --brain codex        # сразу с агентом, без мастера
-treeyard import                            # агент молча читает план проекта и строит дерево
+npm install -g @antondanv/treeyard
+cd my-project && treeyard                  # no tree yet: the planting wizard
 ```
 
-Treeyard по умолчанию запускает React/Ink в режиме `production`, чтобы анимации
-не накапливали отладочные замеры в памяти. Явно заданный `NODE_ENV` сохраняется;
-для отладки React можно запустить `NODE_ENV=development npm run dev`.
-
-## Посадить дерево с агентом
-
-В папке без дерева `treeyard` открывает мастер на весь экран: **с агентом**
-(Claude Code, Codex, Antigravity или OpenCode) или **сам, по шаблону**.
-
-Агент получает скилл [`treeyard-init`](skills/treeyard-init/SKILL.md) и ведёт
-так:
-
-1. **Смотрит, где мы.** В пустой папке просит выложить всё, что ты думаешь о
-   проекте, сплошным текстом. В проекте изучает код, документы и историю и даёт
-   короткий отчёт: что реально работает, что обещано и не сделано, где хвосты.
-2. **Задаёт вопросы.** По 1–3 за раз, каждый со своим предложением, так что
-   часто хватает «да». Не больше ~12, только то, что определяет форму дерева.
-   Ничего, что видно из репозитория. Мелочи вроде языка README — сразу узлами
-   в набросок.
-3. **Договаривается о цели и первой вехе — именно в таком порядке.**
-   - В корень идёт большая цель проекта: зачем он вообще существует («один
-     человек ведёт через завод 5–10 своих каналов и не выгорает»), а не
-     «сделать MVP».
-   - Первой веткой идёт первая веха: ближайшая проверка в жизни («неделю веду
-     канал только через бота»).
-   - Плюс аппетит: сколько времени готов вложить до этой вехи.
-4. **Спрашивает про шаги в мире, а не в коде.** Сервер, домен, оплата, договор,
-   живой пользователь. Они сразу встают в дерево узлами «делает: ты», а не
-   копятся в конце, где раньше вставали проекты.
-5. **Показывает набросок дерева текстом.** Ходячий скелет первым, у каждого узла
-   «готово, когда», блокеры — «ждёт», идеи — отдельной веткой. Сажает одной
-   командой (`treeyard import --from-json -`) только после твоего «да».
-6. **Пишет короткие документы вместо прежних десяти.** `docs/vision.md`,
-   `AGENTS.md` как единственный источник правил, `CLAUDE.md` из одной строки
-   `@AGENTS.md`. План и задачи живут в дереве.
-
-С tmux разговор открывается справа, а слева дерево появляется и растёт по мере
-посадки. Ввод сразу идёт агенту; `⌃Q` возвращает управление дереву, `f` — разговору,
-`F` — разговор на весь экран. Ничего запускать после посадки не нужно.
-Без tmux (или с настройкой `open=terminal`) агент работает на весь экран и в конце
-говорит: «выйди из сессии — откроется дерево».
-
-Чтобы тот же скилл знали обычные
-`claude`, `codex` и `agy` в любой папке:
+Planting a tree with an agent takes about 20 minutes. Other ways in:
 
 ```sh
-treeyard skills            # где скилл и куда он установлен
+treeyard init                              # a new tree: with an agent or from a template
+treeyard init --agent --brain codex        # straight to the agent, no wizard
+treeyard import                            # the agent quietly reads the project's plan and builds the tree
+treeyard config lang ru                    # Russian: the interface, templates and what agents get
+```
+
+## How you work with it
+
+1. **Now** (`2`) lists everything you can do right now, across all branches. Pick a node.
+2. `c` opens a Claude Code session for it, in a pane next to the tree; `⏎` — every action,
+   other agents among them.
+3. The agent gets the node's context, studies the code and proposes a plan. You agree; it
+   works.
+4. When the “done when” holds, the agent sets **in review** and shows proof: a command and
+   its output, a screenshot, its commits (`V`). You look and press `d` — **done**.
+5. Hit something outside — `w`: **waiting**, with a reason and when to come back. Go to
+   another branch.
+6. A new idea on the way — `a`, as an idea. Once a week, look through **Waiting** (`3`):
+   has the condition come?
+
+## Planting a tree with an agent
+
+In a folder without a tree, `treeyard` opens a full-screen wizard: **with an agent**
+(Claude Code, Codex, Antigravity or OpenCode) or **on your own, from a template**.
+
+The agent gets the [`treeyard-init`](skills/treeyard-init/SKILL.md) skill and goes like
+this:
+
+1. **Looks at where you are.** In an empty folder it asks you to pour out everything you
+   think about the project, as plain text. In a project it studies the code, the documents
+   and the history and gives a short report: what really works, what was promised and not
+   done, where the loose ends are.
+2. **Asks questions.** 1–3 at a time, each with its own suggestion, so “yes” is often
+   enough. No more than ~12, only what shapes the tree. Nothing it can see in the
+   repository. Small things like the README's language go straight into the draft as
+   nodes.
+3. **Agrees on the goal and the first milestone — in that order.**
+   - The root gets the project's big goal: why it exists at all (“ten strangers order our
+     coffee online — and come back for a second bag”), not “build an MVP”.
+   - The first branch is the first milestone: the nearest check in real life (“a stranger
+     orders a bag from the site”).
+   - Plus the appetite: how much time you're ready to put in before that milestone.
+4. **Asks about steps in the world, not in the code.** A server, a domain, payments, a
+   contract, a live user. They go into the tree at once as “done by: you” nodes instead of
+   piling up at the end, where projects used to stall.
+5. **Shows the draft tree as text.** The walking skeleton first, a “done when” on every
+   node, blockers as “waiting”, ideas in a separate branch. It plants it with one command
+   (`treeyard import --from-json -`) only after your “yes”.
+6. **Writes short documents instead of the old ten.** `docs/vision.md`, `AGENTS.md` as the
+   single source of rules, `CLAUDE.md` of one line, `@AGENTS.md`. The plan and the tasks
+   live in the tree.
+
+With tmux the conversation opens on the right, and on the left the tree appears and grows
+as it is planted. What you type goes straight to the agent; `⌃Q` gives control back to the
+tree, `f` to the conversation, `F` shows the conversation full screen. Nothing to run
+after planting. Without tmux (or with `open=terminal`) the agent works full screen in this
+terminal: leave the session, and the tree opens.
+
+For plain `claude`, `codex` and `agy` to know the same skill in any folder:
+
+```sh
+treeyard skills            # where the skill is and where it is installed
 treeyard skills install    # ~/.claude/skills, ~/.codex/skills, ~/.gemini/config/skills
 ```
 
-## Как это выглядит
+## What it looks like
 
-- **Граф** (по умолчанию): цель слева, ветки растут вправо, родитель — посередине
-  своих детей. Узел — одна строка, поэтому на экране помещается всё рабочее дерево.
-  Дети стоят сразу за названием своего родителя, а листья берут место, оставшееся
-  справа: короткое «Готовые · N» не отодвигает своих детей, длинные названия режутся реже.
-  Выбранный узел — зелёная «таблетка», путь к нему от корня подсвечен; если его
-  название не влезает, оно медленно и плавно едет до конца и обратно, с паузами на концах.
-  `z` — те же узлы карточками, `v` — дерево отступами, как список.
-  При открытой сессии ширина карточек подстраивается под место слева. В узком
-  списке длинные отступы сокращаются с `…`, сохраняя статус и название узла.
-  При открытой сессии граф и карточки смещаются к рабочей ветке; корень остаётся
-  левее, к нему можно сдвинуться через `⌥←` или перейти к верхней ветке.
-  Подписи агента переходят в компактный вид: `⠋ claude` — работает,
-  `? claude` — ждёт тебя, `▣ codex` — открытая панель агента;
-  они видны и на выбранном узле, с отступом от выделенного названия.
-- **Полоса внизу**: где ты, что значит «готово» для этого узла (или чего он ждёт)
-  и что с его сессиями — агент работает, ждёт тебя или сессий нет.
-  Место в первую очередь получает название выбранного узла и его статус;
-  промежуточный путь сокращается до `…`, если целиком не помещается.
-- **Вкладки**: `1` дерево · `2` сейчас — всё, что можно делать прямо сейчас по всем
-  веткам · `3` ждёт — заблокированные ветки с причиной и условием возврата ·
-  `4` идеи · `5` сессии папки — по группам Claude Code, Codex, Antigravity, OpenCode (`← →` между ними) ·
-  `6` журнал — что происходило в дереве.
+- **Graph** (the default): the goal on the left, branches grow to the right, a parent sits
+  in the middle of its children. A node is one line, so the whole working tree fits on the
+  screen. Children stand right after their parent's title, and leaves take the room left
+  on the right: a short “Done · N” doesn't push its children away, and long titles get cut
+  less often. The selected node is a green pill, and the path to it from the root is lit;
+  if its title doesn't fit, it slowly scrolls to the end and back, pausing at both ends.
+  `z` shows the same nodes as cards, `v` the tree as an indented list. With a session
+  open, the cards' width follows the room on the left. In a narrow list, long indents
+  shrink to `…`, keeping the node's status and title. With a session open, the graph and
+  the cards shift to the working branch; the root stays further left, and `⌥←` or going to
+  the top branch gets you there. Agent labels go compact: `⠋ claude` — working, `? claude`
+  — waits for you, `▣ codex` — an open agent pane; they show on the selected node too, set
+  off from its highlighted title.
+- **The bar at the bottom**: where you are, what “done” means for this node (or what it
+  waits for), and how its sessions are doing — an agent working, waiting for you, or no
+  sessions. The selected node's title and status get the room first; the path in between
+  shrinks to `…` when it doesn't fit.
+- **Tabs**: `1` Tree · `2` Now — everything you can do right now, across all branches ·
+  `3` Waiting — blocked branches with the reason and the condition to come back · `4`
+  Ideas · `5` Sessions — this folder's sessions, grouped by Claude Code, Codex,
+  Antigravity, OpenCode (`← →` between them) · `6` Journal — what happened in the tree.
 
-![Всё про узел — Enter](docs/screenshot-menu.png)
+<img src="docs/screenshot-menu.png" width="860" alt="Enter on a node: a menu with a new session — Claude Code, Claude Code in the background, Codex, Antigravity, OpenCode, set up the launch — and agent tasks without a session: break into steps, write a “done when”, run the check, node diffs, what the agent gets">
 
-Из корня `c` запускает ревью всего дерева агентом проекта; `⏎` открывает меню с ревью
-и разговором о статусе. В «Другой агент, место, модель…» (`o`) выбираются Claude Code,
-Codex, Antigravity или OpenCode, панель или терминал; Claude также может работать в фоне.
-Агент получает цель, обзор узлов, «Сейчас», «Ждёт», последние журналы, правила и решения.
-Ревью сначала выдаёт находки и команды `treeyard`, изменения — после согласия.
-В разговоре первое сообщение твоё: спросить о статусе, завести или закрыть узлы.
-Сессии проекта хранятся в `.tree/tree.md`, видны в меню корня и во вкладке «Сессии»
-как принадлежащие `◆` проекту; `f` продолжает панель, `x` усыпляет её.
+From the root, `c` starts a review of the whole tree by the project's agent; `⏎` opens a
+menu with the review and a conversation about the project. In “⚙ Another agent, place,
+model…” (`o`) you pick Claude Code, Codex, Antigravity or OpenCode, a pane or the
+terminal; Claude can also work in the background. The agent gets the goal, an overview of
+the nodes, Now, Waiting, the latest journals, the rules and the decisions. A review gives
+its findings and `treeyard` commands first, and changes only after you agree. In a
+conversation the first message is yours: ask about the status, open or close nodes. The
+project's sessions are kept in `.tree/tree.md`, shown in the root's menu and in the
+Sessions tab as belonging to the project `◆`; `f` resumes a pane, `x` puts it to sleep.
 
-## Клавиши
+## Keys
 
-Буквенные команды работают и в русской раскладке с тех же клавиш: `р о л д` —
-это `h j k l`, `ф` — `a`, `Ф` — `A`. Это действует в дереве, списках, меню и
-диалогах; Shift сохраняет смысл команды. Русский текст в поиске, формах и
-панелях агентов вводится как обычно.
-
-| | |
-| --- | --- |
-| `↑ ↓` `← →` | по колонке графа · к родителю и к детям (`j k` — все узлы подряд); с верхнего уровня `←` — к корню `◆` |
-| `space` `+` `−` | свернуть ветку · раскрыть всё · свернуть всё |
-| `:` или `⌃K` | палитра: найти любой узел или действие по словам |
-| `/` | фильтр дерева по названию |
-| `⏎` | всё про узел: продолжить сессию, начать новую, агент без сессии, проверка |
-| `c` `b` | Claude Code по узлу (в панели, если есть tmux) · в фоне |
-| `f` `F` `x` `p` | сессия справа: печатать в неё · во весь экран · усыпить · скрыть (подробнее ниже) |
-| `a` `A` | новый узел внутрь · рядом — строкой внизу; длинный текст переносится и виден весь (`tab` — с критерием) |
-| `r` `e` `E` | переименовать · поля и описание узла · узел в редакторе |
-| `d` `w` `s` | готово · ждёт с причиной · любой статус |
-| `G` | GitHub: подключить доску (мастер) или свериться с подключённой |
-| `I` | картинки узла: скрин из буфера (`v`), подпись (`n`), на весь экран (`o` — в полном размере в Preview), удалить (`D`); файл картинки можно перетащить в окно |
-| `V` | дифы узла: связанные коммиты → файлы → цветной диф; также в меню `⏎` и палитре `:` |
-| `P` | документы проекта: все `.md` — читать с разметкой и править встроенным редактором; также `⏎` на корне `◆` |
-| `S` | агент разбивает узел на 3–7 шагов, ты отмечаешь, какие добавить (кто разбивает — выбираешь в подтверждении) |
-| `t` | запустить проверку узла (команду из поля «проверка») |
-| `u` | отменить последнее изменение |
-| `tab` `⇧tab` | вложить · поднять на уровень |
-| `K` `J` или `⇧↑` `⇧↓` | поднять · опустить приоритет среди соседей одного статуса (также в меню `⏎` и палитре `:`) |
-| `⌥` + стрелки | сдвинуть граф · `f` — вернуться к выбранному |
-| `v` `z` `i` `.` | список ↔ граф · строки ↔ карточки · панель деталей · готовое |
-| `,` | настройки |
-| `?` `q` | все клавиши (не влезают — `↑↓` `PgUp` `PgDn` листают) · выход |
-
-В окне «Изменить узел» (`e`) есть многострочное поле «Описание»: `Enter` — новая
-строка, `↑↓` — курсор по строкам, `←→` — по тексту. Вставка сохраняет переносы строк;
-длинный текст переносится по ширине, видимая часть следует за курсором.
-`Tab` / `Shift+Tab` переключают поля, `Ctrl+S` сохраняет всё окно; в остальных
-полях `Enter` также сохраняет. `Esc` отменяет правки, `u` в дереве отменяет
-сохранение. Журнал сохраняется отдельно от описания. Для редактирования всего
-Markdown-файла, включая журнал, по-прежнему есть `E` из дерева.
-
-У каждого родителя узлы идут по статусу, по умолчанию: **в работе → на проверке →
-к работе → ждёт → идея → готово → отказ**. Внутри одного статуса порядок задаёшь сам
-сверху вниз; он сохраняется в `order` узлов, виден в CLI и `.tree/README.md`, `u`
-отменяет перестановку. Смена статуса автоматически переносит узел в соответствующую
-часть. Порядок статусов настраивается — «Порядок статусов» в `,` или
-`treeyard config status_order`:
-
-| Шаблон | Сверху вниз |
-| --- | --- |
-| `active-first` — в работе сверху (по умолчанию) | в работе → на проверке → к работе → ждёт → идея → готово → отказ |
-| `done-first` — готовые сверху | готово → в работе → на проверке → к работе → ждёт → идея → отказ |
-| `active-last` — в работе снизу | идея → ждёт → к работе → на проверке → в работе → готово → отказ |
-| `custom` — свой | как расставишь: `⏎` на строке «Порядок статусов» открывает список статусов, `K` `J` или `⇧↑` `⇧↓` двигают, `⏎` сохраняет |
-
-Подтверждённые готовые узлы собраны в свёрнутую группу **«Готовые · N»** — в конце
-ветки или там, где «готово» в выбранном порядке. Выбери группу и нажми `space`
-(или `⏎`), чтобы раскрыть её; `space` сворачивает обратно. `+` раскрывает и эти
-группы. Узлы «на проверке» остаются видимыми. Поиск `/` и палитра `:` находят и
-готовые узлы; внутри группы доступны их сессии и действия.
-Группа меняет только отображение: родители, история и файлы узлов остаются прежними.
-
-### Мышью
+Letter keys also work in the Russian layout, from the same keys: `р о л д` are `h j k l`,
+`ф` is `a`, `Ф` is `A` — in the tree, lists, menus and dialogs; Shift keeps the key's
+meaning. Russian text in search, forms and agent panes is typed as usual.
 
 | | |
 | --- | --- |
-| клик | выбрать узел в графе и в списке (и корень `◆`), строку в «Сейчас», «Ждёт», «Идеях», «Журнале», «Сессиях» · переключить вкладку |
-| двойной клик | то же, что `⏎`: действия узла, открыть сессию, из журнала — к узлу; в меню — выбрать пункт |
-| клик по `▸` `▾` или `›4` | раскрыть или свернуть ветку в списке · раскрыть свёрнутую ветку в графе и шагнуть в неё |
-| клик по подсказке | нажать её клавишу: подсказки внизу экрана, `,` `?` в шапке, кнопки панели сессии и подвалов диалогов |
+| `↑ ↓` `← →` | along the graph's column · to the parent and to the children (`j k` — every node in turn); from the top level `←` goes to the root `◆` |
+| `space` `+` `−` | fold a branch · unfold everything · fold everything |
+| `:` or `⌃K` | palette: find any node or action by words |
+| `/` | filter the tree by title |
+| `⏎` | everything about the node: resume a session, start a new one, an agent without a session, the check |
+| `c` `b` | Claude Code for the node (in a pane, with tmux) · in the background |
+| `f` `F` `x` `p` | the session on the right: type into it · full screen · put to sleep · hide (more below) |
+| `a` `A` | a new node inside · beside — on a line at the bottom; long text wraps and stays visible (`tab` — with a criterion) |
+| `r` `e` `E` | rename · the node's fields and description · the node in your editor |
+| `d` `w` `s` | done (on a done node — back to todo) · waiting, with a reason · any status |
+| `D` `y` | delete the node · copy its id |
+| `G` | GitHub: connect a board (wizard) or sync with the connected one |
+| `I` | node pictures: a screenshot from the clipboard (`v`), a caption (`n`), full screen (`o` — full size in Preview), delete (`D`); a picture file can be dragged into the window |
+| `V` | node diffs: linked commits → files → a coloured diff; also in the `⏎` menu and the `:` palette |
+| `P` | project documents: every `.md`, read with Markdown drawn and edited in the built-in editor; also `⏎` on the root `◆` |
+| `S` | an agent breaks the node into 3–7 steps, you tick the ones to add (who breaks it — you choose in the confirmation) |
+| `t` | run the node's check (the command in its “check” field) |
+| `u` | undo the last change |
+| `tab` `⇧tab` | nest · lift a level up |
+| `K` `J` or `⇧↑` `⇧↓` | raise · lower the priority among siblings of the same status (also in the `⏎` menu and the `:` palette) |
+| `⌥` + arrows | move the graph · `f` — back to the selected node |
+| `v` `z` `i` `.` | list ↔ graph · lines ↔ cards · details panel · done nodes |
+| `,` `⌃R` | settings · reread the tree from disk |
+| `?` `q` | all keys (if they don't fit, `↑↓` `PgUp` `PgDn` scroll) · quit |
 
-Клик по подсказке — это ровно нажатие её клавиши, так что мышь делает то же, что
-клавиатура. Пока открыт диалог, дерево слева клики не принимает.
+The “Edit node” window (`e`) has a multi-line “Description” field: `Enter` is a new line,
+`↑↓` move the cursor between lines, `←→` along the text. A paste keeps its line breaks;
+long text wraps to the width, and the visible part follows the cursor. `Tab` / `Shift+Tab`
+switch fields, `Ctrl+S` saves the whole window; in the other fields `Enter` saves too.
+`Esc` drops the edits, `u` in the tree undoes a save. The journal is saved apart from the
+description. To edit the whole Markdown file, journal included, there is still `E` from
+the tree.
 
-## Подтверждение и настройки
+Under each parent, nodes go by status, by default: **active → in review → todo → waiting →
+idea → done → dropped**. Within one status you set the order yourself, top to bottom; it
+is kept in the nodes' `order`, shows in the CLI and in `.tree/README.md`, and `u` undoes a
+move. Changing a status moves the node to its part. The order of statuses is a setting —
+“Status order” in `,` or `treeyard config status_order`:
 
-Перед каждой сессией и задачей агента treeyard спрашивает: какой узел, кто
-(Claude Code, Codex, Antigravity, OpenCode), где (в панели, в этом терминале или в фоне), как начать,
-модель — и показывает первое сообщение, которое уйдёт агенту. `⏎` запустить,
-`o` поменять параметры, `esc` отмена, `!` больше не спрашивать.
-`treeyard open` из shell спрашивает так же (`--yes` — без вопроса).
-
-Доступ Claude Code, Codex и OpenCode берут из своих настроек (у OpenCode — `permission`
-в его `opencode.json`). У Antigravity там есть только plan и accept-edits, и он
-спрашивает перед каждой командой, поэтому treeyard запускает и возобновляет его с
-полным доступом (`--dangerously-skip-permissions`).
-
-«План» Claude Code начинает в своём режиме plan, OpenCode — своим агентом plan: правки
-закрыты, пока ты не согласишься. Claude Code с готовым планом сам спрашивает, переходить
-ли к делу; OpenCode спрашивает так же или просит переключить агента — `Tab` в его панели
-включает агента build. Codex и Antigravity получают ту же просьбу словами.
-
-Перед «Разбить на шаги» и «Сформулировать «готово, когда»» подтверждение — маленькая
-форма: мозг (Claude Code, Codex, Antigravity, OpenCode), модель и усилие выбираются `←→`, поле —
-`↑↓`. Сначала там мозг проекта и `assist_model`; другой выбор действует только на эту
-задачу, настройки проекта не меняются. Усилие, которого у модели нет (у Haiku его нет
-вовсе), агенту не передаётся.
-
-Настройки — клавиша `,` (она всегда подписана в правом верхнем углу) или `treeyard config`:
-
-| Для всех проектов (`~/.treeyard/settings.json`) | |
+| Preset | Top to bottom |
 | --- | --- |
-| `lang` | `en` (по умолчанию) или `ru` — интерфейс, шаблоны и то, что получают агенты |
-| `confirm` | подтверждать запуск сессий и задач агента |
-| `theme` | `dark` или `light` — под цвет терминала |
-| `animation` | спиннеры и мигающий лист |
-| `marquee` | бегущее название: длинное название выбранного узла прокручивается, чтобы прочитать его целиком |
-| `status_order` | порядок статусов у каждого родителя: `active-first` (по умолчанию), `done-first`, `active-last`, `custom` или все семь статусов через запятую — свой |
-| `live` | живые статусы сессий Claude Code, Codex, Antigravity и OpenCode: кто работает, кто ждёт тебя |
-| `open` | открывать сессии в панели (`pane`, по умолчанию) или в терминале (`terminal`); без tmux — в терминале |
-| `sleep_after` | усыплять после 15/30/60 минут простоя (по умолчанию 30); `0` — выключить |
-| `max_panes` | лимит живых панелей проекта: 3/5/8 (по умолчанию 5); `0` — без предела |
-| `notes` | папка с деревом, куда `treeyard note` пишет замечания из любого проекта; `off` — убрать. В `,` — «Куда падают замечания»: путь (`~`, `.` — этот проект), пусто — убрать |
+| `active-first` — active on top (default) | active → in review → todo → waiting → idea → done → dropped |
+| `done-first` — done on top | done → active → in review → todo → waiting → idea → dropped |
+| `active-last` — active at the bottom | idea → waiting → todo → in review → active → done → dropped |
+| `custom` — your own | as you arrange it: `⏎` on the “Status order” line opens the list of statuses, `K` `J` or `⇧↑` `⇧↓` move them, `⏎` saves |
 
-При включённом `live` работающий Codex показывает спиннер у узла и входит в
-«работает агентов» сверху, в том числе в длинной сессии. Вопрос или запрос
-разрешения в панели показывает «ждёт тебя»; после ответа или отмены ожидание
-снимается на следующем обновлении. Статусы обновляются каждые 3 секунды.
-Верхний счётчик учитывает сессии, привязанные к узлам этого дерева.
-У OpenCode Brainyard пока видит только «работает»: его вопрос или запрос разрешения
-тоже выглядит как работа, а не «ждёт тебя».
+Confirmed done nodes are gathered into a folded group **“Done · N”** — at the end of the
+branch, or wherever “done” stands in the chosen order. Select the group and press `space`
+(or `⏎`) to unfold it; `space` folds it back. `+` unfolds these groups too. Nodes “in
+review” stay in sight. Search `/` and the palette `:` find done nodes as well; inside the
+group their sessions and actions are at hand. The group changes only the view: parents,
+history and node files stay as they were.
 
-| Этот проект (`.tree/tree.md`) | |
+### With the mouse
+
+| | |
 | --- | --- |
-| `brain` | мозг по умолчанию: claude, codex, antigravity, opencode |
-| `start` | как начинать сессию: plan, do, goal, chat |
-| `model`, `effort` | модель и усилие сессий — выбираются из списка, который отдаёт сам CLI |
-| `assist_model` | модель для «разбить на шаги» и критерия — можно дешевле |
+| click | select a node in the graph and in the list (the root `◆` too), a line in Now, Waiting, Ideas, Journal, Sessions · switch tabs |
+| double click | the same as `⏎`: the node's actions, open a session, from the journal — to the node; in a menu — pick the item |
+| click on `▸` `▾` or `›4` | unfold or fold a branch in the list · unfold a folded branch in the graph and step into it |
+| click on a hint | press its key: the hints at the bottom of the screen, `,` `?` in the header, the session pane's buttons and dialog footers |
 
-Модели не нужно вписывать руками: treeyard спрашивает их у CLI (`codex debug models`,
-`agy models`, `opencode models` — модели подключённых к OpenCode провайдеров; у Claude
-Code — псевдонимы fable, opus, sonnet, haiku, они всегда означают последнюю версию).
-Усилие предлагается только то, что понимает выбранная модель, `*` — её усилие по
-умолчанию. Модель и усилие относятся к мозгу проекта: при смене мозга они сбрасываются.
-Те же списки — в окне запуска (`o`). Сессии OpenCode усилие при запуске не передаётся:
-он меняет его — вариант модели — прямо в сессии (`ctrl+t`); «разбить на шаги» и
-критерий получают его и у OpenCode.
+A click on a hint is exactly a press of its key, so the mouse does what the keyboard does.
+While a dialog is open, the tree on the left takes no clicks.
+
+## Confirmation and settings
+
+Before every session and agent task treeyard asks: which node, who (Claude Code, Codex,
+Antigravity, OpenCode), where (in a pane, in this terminal or in the background), how to
+start, which model — and shows the first message the agent will get. `⏎` starts, `o`
+changes the parameters, `esc` cancels, `!` stops asking. `treeyard open` from the shell
+asks the same way (`--yes` — without asking).
+
+Claude Code, Codex and OpenCode take their permissions from their own settings (OpenCode —
+the `permission` in its `opencode.json`). Antigravity has only plan and accept-edits there
+and asks before every command, so treeyard starts and resumes it with full access
+(`--dangerously-skip-permissions`).
+
+“Plan” starts Claude Code in its plan mode and OpenCode with its plan agent: edits are
+closed until you agree. Claude Code with a plan ready asks itself whether to get to work;
+OpenCode asks the same or asks you to switch agents — `Tab` in its pane turns on the build
+agent. Codex and Antigravity get the same request in words.
+
+Before “Break into steps” and “Write a "done when"” the confirmation is a small form: the
+brain (Claude Code, Codex, Antigravity, OpenCode), the model and the effort are picked
+with `←→`, the field with `↑↓`. It starts with the project's brain and `assist_model`;
+another choice applies only to this task, and the project's settings stay as they were. An
+effort the model doesn't have (Haiku has none at all) is not passed to the agent.
+
+Settings — the `,` key (always shown in the top right corner) or `treeyard config`:
+
+| For all projects (`~/.treeyard/settings.json`) | |
+| --- | --- |
+| `lang` | `en` (default) or `ru` — the interface, templates and what agents get |
+| `confirm` | confirm before starting sessions and agent tasks |
+| `theme` | `dark` or `light` — to match your terminal |
+| `animation` | spinners and the blinking leaf |
+| `marquee` | running title: a long title of the selected node scrolls so you can read it whole |
+| `status_order` | the order of statuses under each parent: `active-first` (default), `done-first`, `active-last`, `custom`, or all seven statuses comma-separated — your own |
+| `live` | live status of Claude Code, Codex, Antigravity and OpenCode sessions: who is working, who waits for you |
+| `open` | open sessions in a pane (`pane`, the default) or in the terminal (`terminal`); without tmux — in the terminal |
+| `sleep_after` | put sessions to sleep after 15/30/60 idle minutes (default 30); `0` — never |
+| `max_panes` | the limit of the project's live panes: 3/5/8 (default 5); `0` — no limit |
+| `notes` | the folder with the tree where `treeyard note` writes notes from any project; `off` — none. In `,` — “Where notes go”: a path (`~`, `.` — this project), empty — none |
+
+With `live` on, a working Codex shows a spinner at its node and counts among “agents
+working” at the top, in a long session too. A question or a permission request in a pane
+shows “waits for you”; after an answer or a cancel the wait clears on the next update.
+Statuses update every 3 seconds. The counter at the top counts the sessions attached to
+this tree's nodes. For OpenCode Brainyard sees only “working” so far: its question or
+permission request also looks like work, not “waits for you”.
+
+| This project (`.tree/tree.md`) | |
+| --- | --- |
+| `brain` | the default brain: claude, codex, antigravity, opencode |
+| `start` | how a session starts: plan, do, goal, chat |
+| `model`, `effort` | the sessions' model and effort — picked from the list the CLI itself gives |
+| `assist_model` | the model for “break into steps” and the criterion — can be a cheaper one |
+
+Models don't need typing in: treeyard asks the CLIs for them (`codex debug models`, `agy
+models`, `opencode models` — the models of the providers connected to OpenCode; for Claude
+Code — the aliases fable, opus, sonnet, haiku, which always mean the latest version). Only
+the efforts the chosen model understands are offered, `*` marks its default one. The model
+and the effort belong to the project's brain: they reset when the brain changes. The same
+lists are in the launch window (`o`). An OpenCode session doesn't get the effort at start:
+OpenCode changes it — the model's variant — right in the session (`ctrl+t`); “break into
+steps” and the criterion do pass it to OpenCode.
 
 ```sh
-treeyard config                 # всё, что настроено
-treeyard config lang ru         # по-русски
-treeyard config confirm off     # не спрашивать перед запуском
-treeyard config sleep_after 15  # усыплять после 15 минут подтверждённого простоя
-treeyard config max_panes 3     # до трёх панелей; работающие и видимые защищены
-treeyard config status_order done-first  # готовые сверху
-treeyard config status_order todo,review,active,waiting,idea,done,dropped  # свой порядок
-treeyard config notes ~/Projects/Treeyard  # куда падают замечания
-TREEYARD_LANG=ru treeyard       # язык на один запуск
+treeyard config                 # everything that is set
+treeyard config lang ru         # Russian
+treeyard config confirm off     # don't ask before starting
+treeyard config sleep_after 15  # sleep after 15 minutes of confirmed idling
+treeyard config max_panes 3     # up to three panes; working and visible ones are protected
+treeyard config status_order done-first  # done on top
+treeyard config status_order todo,review,active,waiting,idea,done,dropped  # your own order
+treeyard config notes ~/Projects/my-notes  # where notes go
+TREEYARD_LANG=ru treeyard       # the language for one run
 ```
 
-## Сессии рядом с деревом
+## Sessions next to the tree
 
-Сессия, открытая «в панели», живёт в tmux: её экран виден справа от дерева, в неё
-можно печатать, не выходя из treeyard, а закрытие treeyard её не останавливает —
-при следующем запуске она снова в своём узле. Так работают все четыре CLI.
+A session opened “in a pane” lives in tmux: its screen shows to the right of the tree, you
+can type into it without leaving treeyard, and closing treeyard doesn't stop it — next
+time it is back in its node. All four CLIs work this way.
 
 | | |
 | --- | --- |
-| `f` или клик по панели | печатать в сессию: всё, включая стрелки, вставку и `⌃C`, уходит в CLI |
-| `⌃Q` или клик по дереву | обратно к дереву |
-| `F` | во весь экран; `⌃Q` — назад в дерево |
-| `x` | усыпить: CLI закрывается и отдаёт память, разговор остаётся в его истории |
-| `f` на узле со спящей сессией | разбудить: тот же разговор в новой панели (с подтверждением) |
-| `p` | скрыть или показать панель |
-| `⇧←` `⇧→` или `<` `>` | шире, уже — граница панели идёт за стрелкой; клик по `⇧← ⇧→` в правом углу панели — то же |
-| колесо · `PgUp` `PgDn` · `End` | история панели · по страницам · к живому экрану |
-| протянуть мышью по экрану панели | выделить и скопировать в буфер обмена (Treeyard держит мышь, поэтому выделяет сам) |
+| `f` or a click on the pane | type into the session: everything, arrows, pastes and `⌃C` included, goes to the CLI |
+| `⌃Q` or a click on the tree | back to the tree |
+| `F` | full screen; `⌃Q` — back to the tree |
+| `x` | put to sleep: the CLI closes and gives its memory back, the conversation stays in its history |
+| `f` on a node with a sleeping session | wake it: the same conversation in a new pane (with a confirmation) |
+| `p` | hide or show the pane |
+| `⇧←` `⇧→` or `<` `>` | wider, narrower — the pane's border follows the arrow; a click on `⇧← ⇧→` in the pane's corner does the same |
+| wheel · `PgUp` `PgDn` · `End` | the pane's history · page by page · to the live screen |
+| drag the mouse over the pane's screen | select and copy to the clipboard (Treeyard holds the mouse, so it selects by itself) |
 
-Вверху справа видно, сколько сессий живо и сколько они занимают памяти
-(Claude Code — около 200–300 МБ, Codex — около 80, Antigravity — около 350,
-OpenCode — 0,5–1 ГБ).
-Treeyard читает экран только той сессии, что на виду, остальные не трогает. Тихие
-сессии засыпают сами (`sleep_after`, по умолчанию через 30 минут простоя), а когда
-живых больше `max_panes` (по умолчанию 5), засыпает самая давно простаивающая.
-Работающая, ждущая тебя или открытая на экране сессия не засыпает никогда.
-OpenCode сам пока не засыпает вовсе — Brainyard не сообщает, что он свободен, — его
-усыпляет `x`.
-Сессия, в которой не было ни одного сообщения, не засыпает, а просто закрывается:
-CLI не сохраняет пустой разговор, и будить было бы нечего.
+The top right shows how many sessions are alive and how much memory they take (Claude Code
+— about 200–300 MB, Codex — about 80, Antigravity — about 350, OpenCode — 0.5–1 GB).
+Treeyard reads the screen only of the session in sight and leaves the rest alone. Quiet
+sessions fall asleep by themselves (`sleep_after`, by default after 30 idle minutes), and
+when more than `max_panes` are alive (5 by default), the one idle the longest falls
+asleep. A session that is working, waiting for you or open on the screen never falls
+asleep. OpenCode doesn't fall asleep by itself at all yet — Brainyard can't tell that it's
+free — `x` puts it to sleep. A session without a single message doesn't fall asleep but
+just closes: the CLI doesn't keep an empty conversation, and there would be nothing to
+wake.
 
-Во вкладке «Сессии» (`5`) выбери сессию и нажми `x` — усыпится именно она,
-даже если её панель скрыта или она запущена в фоне через `b`. Фоновые сессии
-Claude Code останавливаются его командой `stop`; разговор и привязка к узлу
-сохраняются. В списке появится `☾ спит`, `⏎` продолжит тот же разговор.
-Ручное усыпление остановит и работающую сессию. Сессию, открытую во весь экран
-или в другом терминале, сначала закрой там.
+In the Sessions tab (`5`) select a session and press `x` — that very session falls asleep,
+even if its pane is hidden or it was started in the background with `b`. Claude Code
+background sessions stop with its own `stop` command; the conversation and its node stay.
+The list shows `☾ sleeping`, and `⏎` resumes the same conversation. Putting a working
+session to sleep by hand stops it. A session open full screen or in another terminal —
+close it there first.
 
-Сессии папки, которых нет ни в одном узле, помечены `без узла` — их открыли мимо
-дерева. Над списком — сколько сессий было за 14 дней и сколько из них мимо дерева;
-то же в конце `treeyard sessions`. Привязать такую сессию к узлу — `l`.
+This folder's sessions that are in no node are marked `no node` — they were opened past
+the tree. Above the list: how many sessions there were in the last 14 days and how many of
+them went past the tree; the same at the end of `treeyard sessions`. To attach such a
+session to a node — `l`.
 
-Нужен tmux: `brew install tmux`. У treeyard свой сервер tmux (`tmux -L brainyard`),
-твой собственный tmux и его настройки он не трогает.
+It needs tmux: `brew install tmux`. Treeyard has its own tmux server (`tmux -L brainyard`)
+and doesn't touch your own tmux or its settings.
 
-## Агенты и дерево
+## Agents and the tree
 
-Сессия из узла получает короткий контекст: путь от корня (зачем это), критерий,
-соседей, правила проекта и команды дерева. Агенты пишут обратно теми же
-командами, что и человек:
+A session from a node gets a short context: the path from the root (why this), the
+criterion, the neighbours, the project's rules and the tree's commands. Agents write back
+with the same commands a person uses:
 
 ```sh
-treeyard show                                   # дерево; treeyard show <id> — узел
-treeyard add "Показать продукт человеку" --who human --parent <id>
-treeyard set <id> status=waiting waiting="нет сервера" until="появится VPS"
-treeyard set <id> status=review                 # агент; «готово» ставит человек
-treeyard log <id> "что сделано; что осталось"
-treeyard note "справка не помещается в экран"   # замечание о treeyard — в «Замечания»
-treeyard image <id> shot.png --note "…"        # картинка к узлу (скрин, доказательство)
-treeyard diff <id> --add <sha>                  # привязать свой коммит к узлу для проверки
-treeyard add "Codex: статус хода" --project ../Brainyard --for <id>   # нужна правка в другом проекте
-treeyard open root --start plan --pane         # ревью дерева в панели
-treeyard open root --start chat --brain codex   # разговор о проекте
-treeyard open <id> --brain codex                # сессия по узлу прямо из shell
-treeyard open <id> --brain codex --pane         # запустить панель и вернуться в shell
-treeyard open <id> --brain opencode --pane      # то же с OpenCode
-treeyard sessions                               # сессии папки во всех CLI, «без узла» — мимо дерева
+treeyard show                                   # the tree; treeyard show <id> — a node
+treeyard add "Show the product to a person" --who human --parent <id>
+treeyard set <id> status=waiting waiting="no server" until="a VPS is up"
+treeyard set <id> status=review                 # the agent; “done” is set by a person
+treeyard log <id> "what is done; what is left"
+treeyard note "the help doesn't fit the screen" # a note about treeyard itself — into “Notes”
+treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
+treeyard diff <id> --add <sha>                  # attach your commit to the node for review
+treeyard add "Codex: turn status" --project ../api --for <id>   # a change needed in another project
+treeyard open root --start plan --pane          # a review of the tree in a pane
+treeyard open root --start chat --brain codex   # a conversation about the project
+treeyard open <id> --brain codex                # a session for the node right from the shell
+treeyard open <id> --brain codex --pane         # start a pane and return to the shell
+treeyard open <id> --brain opencode --pane      # the same with OpenCode
+treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree
+treeyard context <id>                           # exactly what an agent gets
+treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md
 ```
 
-Отмена (`u`) возвращает только твои изменения: если агент успел поправить тот же
-узел, его правка останется.
+Undo (`u`) brings back only your own changes: if an agent has already edited the same
+node, its edit stays.
 
-### Корень и документы проекта
+### The root and the project's documents
 
-Корень `◆ <проект>` — тоже остановка: `←` с ветки верхнего уровня, клик по нему
-или `↑` с первой строки списка. У корня своя карточка (`i`): цель, прогресс,
-документы проекта и как ведётся дерево. `⏎` на корне — меню проекта: документы,
-«Цель, правила и решения» (`.tree/tree.md`), настройки, новая ветка.
+The root `◆ <project>` is a stop too: `←` from a top-level branch, a click on it, or `↑`
+from the list's first line. The root has its own card (`i`): the goal, progress, the
+project's documents and how the tree is run. `⏎` on the root is the project's menu:
+documents, “Goal, rules and decisions” (`.tree/tree.md`), settings, a new branch.
 
-`P` (в русской раскладке — `З`) из любого места открывает «Документы»: все `.md`
-проекта из Git — отслеживаемые и новые, без игнорируемых файлов и узлов дерева;
-без Git — файлы папки. `.tree/tree.md` первым, затем README, AGENTS, CLAUDE.
-`⏎` читает документ: заголовки, списки, цитаты, код и ссылки выделены цветом,
-`↑↓` `PgUp/PgDn` `Home/End` листают. `e` открывает встроенный редактор там, где
-ты читал:
+`P` (`З` in the Russian layout) opens “Project documents” from anywhere: every `.md` of
+the project from Git — tracked and new, without ignored files and tree nodes; without Git
+— the folder's files. `.tree/tree.md` first, then README, AGENTS, CLAUDE. `⏎` reads a
+document: headings, lists, quotes, code and links in colour, `↑↓` `PgUp/PgDn` `Home/End`
+scroll. `e` opens the built-in editor where you were reading:
 
 | | |
 | --- | --- |
-| стрелки · `PgUp` `PgDn` · `Home` `End` | курсор · страница · начало и конец строки (`⌃Home` `⌃End` — всего текста) |
-| `⌥← ⌥→` · `⌃A` `⌃E` | по словам · к началу и концу строки |
-| `⌃W` · `⌃K` · `⌃U` | удалить слово · до конца строки · до начала строки |
-| `⌃S` · `⌃Z` | сохранить · отменить последнюю правку (по словам) |
-| `esc` | выйти; если есть несохранённое — `s` сохранить, `d` выбросить, `esc` остаться |
+| arrows · `PgUp` `PgDn` · `Home` `End` | cursor · page · start and end of the line (`⌃Home` `⌃End` — of the text) |
+| `⌥← ⌥→` · `⌃A` `⌃E` | by words · to the start and end of the line |
+| `⌃W` · `⌃K` · `⌃U` | delete a word · to the end of the line · to the start of the line |
+| `⌃S` · `⌃Z` | save · undo the last edit (by words) |
+| `esc` | leave; with unsaved changes — `s` save, `d` drop, `esc` stay |
 
-Если файл поменяли на диске, пока он открыт (агент, другой редактор), `⌃S` не
-затирает чужую правку молча: `o` — перезаписать, `r` — перечитать с диска.
-`tree.md` с YAML-шапкой, которая не читается, не сохраняется; его правку
-отменяет `u` в дереве, как любую правку дерева.
+If the file changes on disk while it is open (an agent, another editor), `⌃S` doesn't
+silently overwrite someone else's edit: `o` — overwrite, `r` — reload from disk. A
+`tree.md` whose YAML header doesn't parse is not saved; its edit is undone by `u` in the
+tree, like any edit of the tree.
 
-### Дифы узла
+### Node diffs
 
-`V` (в русской раскладке — `М`), `⏎` → «Дифы узла» или палитра `:` открывают
-связанные с выбранным узлом коммиты. `a` — выбрать коммит из Git-журнала;
-`n` в списке коммитов загружает ещё 100. Агент после коммита привязывает его SHA
-командой `treeyard diff <id> --add <sha>` — она есть в контексте узла.
-Связи хранятся в поле `commits` файла узла и коммитятся вместе с деревом.
-Привязывайте коммиты с работой по этому узлу: просмотр показывает весь выбранный коммит.
+`V` (`М` in the Russian layout), `⏎` → “Node diffs” or the palette `:` open the commits
+linked to the selected node. `a` picks a commit from the Git log; `n` in the list of
+commits loads 100 more. After a commit, the agent attaches its SHA with `treeyard diff
+<id> --add <sha>` — the command is in the node's context. The links are kept in the node
+file's `commits` field and are committed along with the tree. Attach the commits with work
+on this node: the view shows the whole selected commit.
 
-`↑↓` выбирают коммит или файл, `Enter` / `→` открывают его. В дифе рядом с кодом
-показаны номера строк до и после изменения. Добавления выделены зелёным,
-удаления красным; изменённые слова — более ярким фоном. Длинные строки переносятся
-с отметкой `↪`, отступы сохраняются. Служебные заголовки Git скрыты, блоки изменений
-разделены диапазонами строк. Статистика `+`/`−` в списке файлов тоже цветная. `↑↓`, `PgUp/PgDn`,
-`Home/End` прокручивают текст. `Esc` / `←` возвращают к файлам, затем к коммитам
-и в дерево; `r` перечитывает Git. Можно выбрать строку мышью и открыть двойным
-кликом. `D` в списке связанных коммитов убирает привязку; `u` после возврата в дерево
-отменяет привязку или её удаление. Сам Git-коммит остаётся на месте.
+`↑↓` pick a commit or a file, `Enter` / `→` open it. The diff shows line numbers before
+and after the change next to the code. Additions are green, deletions red; changed words
+get a brighter background. Long lines wrap with a `↪` mark and keep their indent. Git's
+service headers are hidden, and hunks are separated by line ranges. The `+`/`−` stats in
+the file list are coloured too. `↑↓`, `PgUp/PgDn`, `Home/End` scroll the text. `Esc` / `←`
+go back to the files, then to the commits and to the tree; `r` rereads Git. A line can be
+picked with the mouse and opened with a double click. `D` in the list of linked commits
+removes the link; `u` after going back to the tree undoes the link or its removal. The Git
+commit itself stays where it is.
 
-«Текущие изменения проекта» — отдельный пункт: файлы в индексе, правки в рабочей
-папке и новые неигнорируемые файлы. Они общие для всех узлов этого репозитория.
-Для привязанных коммитов показывается каждый диф отдельно, относительно родителя
-(у merge-коммита — первого), поэтому промежуточные коммиты других узлов не попадают
-в его диф. Для бинарных файлов показывается отметка Git вместо текстового содержимого.
-Просмотр не меняет файлы, индекс или историю Git.
+“Current project changes” is a separate item: files in the index, edits in the working
+folder and new files that aren't ignored. They are shared by all nodes of this repository.
+Each linked commit is shown on its own, against its parent (for a merge commit — the first
+one), so commits of other nodes in between don't get into its diff. Binary files show
+Git's mark instead of text. The view changes no files, no index and no Git history.
 
 ```sh
-treeyard diff <id>                              # дифы всех коммитов узла
-treeyard diff <id> --add <sha>                   # полный SHA или однозначное сокращение
-treeyard diff <id> --add <sha1> --add <sha2>      # несколько коммитов
-treeyard diff <id> --rm <sha>                    # убрать привязку, даже если коммит уже недоступен
+treeyard diff <id>                              # the diffs of every commit of the node
+treeyard diff <id> --add <sha>                  # a full SHA or an unambiguous short one
+treeyard diff <id> --add <sha1> --add <sha2>    # several commits
+treeyard diff <id> --rm <sha>                   # remove a link, even if the commit is gone
 treeyard diff <id> --commit <sha> --file src/app.ts
-treeyard diff <id> --stat                       # файлы и +/−, без текста дифа
-treeyard diff <id> --working                    # текущие общие изменения проекта
-treeyard diff <id> --json                       # коммиты, файлы и дифы для скрипта
-treeyard diff <id> --project ../X --add <sha>     # привязать к дереву другой папки или основного worktree
+treeyard diff <id> --stat                       # files and +/−, no diff text
+treeyard diff <id> --working                    # the current shared changes of the project
+treeyard diff <id> --json                       # commits, files and diffs for a script
+treeyard diff <id> --project ../X --add <sha>   # attach to the tree of another folder or the main worktree
 ```
 
-### Замечания
+### Notes
 
-Всё, где treeyard мешает или чего не хватает, — одной строкой, не отрываясь от работы,
-из любой папки: `treeyard note "…"`. Замечание становится идеей в ветке «Замечания»
-дерева из настройки `notes` (ветки нет — она появится; задать — `,` → «Куда падают замечания»
-или `treeyard config notes <папка>`). В описании — откуда оно пришло:
-`Откуда: Factoyard › «Закрыть один узел» (k3f9)`. Узел известен, когда команда запущена
-из сессии, открытой из узла: treeyard передаёт сессии `TREEYARD_NODE=<id>`, а сессии
-Claude Code, открытые раньше, узнаются по своему id. Из обычного shell записывается
-только проект; узел можно назвать сам: `--node <id>`. Когда `notes` задан, агент в сессии
-из узла тоже знает о `treeyard note`: строка про неё есть в его «Командах дерева».
+Anything where treeyard gets in the way or lacks something — one line, without leaving
+your work, from any folder: `treeyard note "…"`. The note becomes an idea in the “Notes”
+branch of the tree set by the `notes` setting (no such branch — it appears; to set it —
+`,` → “Where notes go” or `treeyard config notes <folder>`). Its description says where it
+came from: `From: my-app › «Close one node» (k3f9)`. The node is known when the command
+runs from a session opened from a node: treeyard passes the session `TREEYARD_NODE=<id>`,
+and Claude Code sessions opened earlier are recognised by their id. From a plain shell
+only the project is written; you can name the node yourself: `--node <id>`. When `notes`
+is set, an agent in a session from a node knows about `treeyard note` too: it's a line in
+its tree commands.
 
-### Картинки узла
+### Node pictures
 
-Скрин бага или макет прикрепляется к узлу, а не описывается словами. Скопируй скрин
-(`⌘⇧⌃4` на Mac), нажми `I` на узле и `v` — картинка из буфера прикрепится; само
-открытие окна ничего не прикрепляет. Файл картинки (PNG, а на Mac ещё JPG, HEIC,
-TIFF) можно просто перетащить в окно терминала: терминал вставит путь, и картинка
-прикрепится к выбранному узлу. В деталях узла (`i`) видны миниатюры с подписями, в окне `I` —
-список, превью, подпись (`n`), `←→` — листать, `o` — на весь экран: в полном размере
-в системном просмотрщике (Preview на Mac). Рисуются они
-символами `▀` в цвете — нужен терминал с truecolor. Apple Terminal пикселей
-рисовать не умеет, и превью там — мозаика, поэтому в нём `⏎` сразу открывает
-картинку в Preview.
+A screenshot of a bug or a mockup is attached to the node instead of described in words.
+Copy a screenshot (`⌘⇧⌃4` on a Mac), press `I` on the node and `v` — the picture from the
+clipboard is attached; opening the window alone attaches nothing. A picture file (PNG, and
+on a Mac also JPG, HEIC, TIFF, GIF, BMP, WebP) can simply be dragged into the terminal
+window: the terminal pastes its path, and the picture is attached to the selected node.
+The node's details (`i`) show thumbnails with captions; the `I` window shows a list, a
+preview, a caption (`n`), `←→` to flip through, `o` — full screen: full size in the system
+viewer (Preview on a Mac). They are drawn with `▀` characters in colour — a truecolor
+terminal is needed. Apple Terminal can't draw pixels and the preview there is a mosaic, so
+there `⏎` opens the picture in Preview right away.
 
-Картинки лежат в `.tree/.local/images/<id>/` — рядом с деревом, но не в git. Узел
-«готово» или «отказ» хранит их ещё неделю (отмена `u` возвращает узел вместе с ними),
-потом они удаляются; так же — через неделю после удаления узла.
+Pictures live in `.tree/.local/images/<id>/` — next to the tree, but not in git. A node
+that is “done” or “dropped” keeps them for another week (undo `u` brings the node back
+with them), then they are deleted; the same a week after a node is deleted.
 
-Сессия из узла получает пути картинок и подписи в контексте, и агент открывает их сам.
-Агент может и приложить скрин — например, доказательство для проверки:
+A session from a node gets the pictures' paths and captions in its context, and the agent
+opens them itself. An agent can attach a screenshot too — for example, as proof for
+review:
 
 ```sh
-treeyard image <id> shot.png --note "кнопка на месте"   # приложить; --paste — из буфера
-treeyard image <id>                                      # пути и подписи
-treeyard image <id> 001.png --note "…" · --rm 001.png    # подпись · удалить
+treeyard image <id> shot.png --note "the button is in place"   # attach; --paste — from the clipboard
+treeyard image <id>                                            # paths and captions
+treeyard image <id> 001.png --note "…" · --rm 001.png          # caption · delete
 ```
 
-### Совместные узлы
+### Shared nodes
 
-Узлу нужна правка в другом проекте — агент не правит там молча, а заводит узел в его дереве:
-`treeyard add "…" --project ../Brainyard --for <id>`. Узел ляжет в ветку «Совместные узлы»
-того дерева (ветки нет — она появится; `--parent` — другая ветка), в описании — откуда он.
-Оба узла связаны: в своём — `needs: [../Brainyard#hv95]`, в том — `for: [../Treeyard#g9ph]`;
-путь — от папки проекта. В обоих журналах — строка о связи.
+When a node needs a change in another project, the agent doesn't quietly edit there but
+opens a node in that project's tree: `treeyard add "…" --project ../api --for <id>`. The
+node lands in that tree's “Shared nodes” branch (no such branch — it appears; `--parent` —
+another branch), and its description says where it came from. The two nodes are linked: in
+yours — `needs: [../api#hv95]`, in that one — `for: [../my-app#g9ph]`; the path is from
+the project's folder. Both journals get a line about the link.
 
-Видно так: в карточке и под графом — «ждёт: ○ Brainyard › … · к работе» и «нужен для: Treeyard › …»,
-в строке дерева — `→ Brainyard ○`; папки или узла нет — серое «не найдено». Узел в статусе «ждёт»,
-у которого всё нужное готово, возвращается во вкладку «Сейчас» с пометкой «можно продолжать».
+What you see: on the card and under the graph — “waits for: ○ api › … · todo” and “needed
+for: my-app › …”, in the tree's line — `→ api ○`; no folder or node — a grey “not found”.
+A waiting node whose needs are all done comes back to the Now tab marked “can go on”.
 
-Закрывать совместный узел человеку не нужно: агент, сделавший там работу, ставит
-`treeyard set <id> status=done --project ../Brainyard` (для таких узлов агенту можно), а когда
-человек ставит «готово» своему узлу, совместный закрывается сам — если он больше никому не нужен.
-Связь руками: `treeyard set <id> needs=../Brainyard#y79a` (`needs=` — снять).
+A person doesn't need to close a shared node: the agent that did the work there sets
+`treeyard set <id> status=done --project ../api` (agents may do this for such nodes), and
+when a person marks their own node done, the shared one closes by itself — if nobody else
+needs it. A link by hand: `treeyard set <id> needs=../api#y79a` (`needs=` — remove).
 
-### Доска GitHub Project
+### A GitHub Project board
 
-Зачем: задачи с доски GitHub становятся узлами дерева, а статус ходит в обе стороны.
-Сдвинул карточку на GitHub — узел сменил статус; поставил узлу «в работе» или «готово» — карточка
-переехала в свою колонку.
+Why: tasks from a GitHub board become nodes of the tree, and status travels both ways.
+Move a card on GitHub — the node changes status; mark a node active or done — the card
+moves to its column.
 
-Пока доска не подключена, в корне дерева стоит узел **GitHub**. Это не файл, а предложение.
-`⏎` на нём (или `G` где угодно) открывает мастер из трёх шагов:
+Until a board is connected, the tree's root has a **GitHub** node. It's not a file but an
+offer. `⏎` on it (or `G` anywhere) opens a three-step wizard:
 
-1. **gh.** Если его нет, мастер подскажет `brew install gh`. Если вход не выполнен или нет доступа к доскам,
-   `gh auth login` / `gh auth refresh -s project` запускаются прямо в этом терминале.
-2. **Репозиторий** — берётся из `git remote`. Он нужен, чтобы узнать аккаунт: доска GitHub Project
-   принадлежит не репозиторию, а аккаунту (тебе или организации). Если его нет, можно выбрать один из своих репозиториев
-   (добавится remote) или создать новый: самому (с именем папки, приватный или публичный — `tab`, без push)
-   или агентом (узел и сессия: он спросит имя и видимость).
-3. **Доска.** Можно подключить одну из досок владельца репозитория или создать новую:
-   самому (колонки по умолчанию) или агентом (колонки под статусы дерева, подключит сам).
-   Или `i` — без доски, только issues репозитория.
+1. **gh.** If it's missing, the wizard suggests `brew install gh`. If you're not signed in
+   or have no access to boards, `gh auth login` / `gh auth refresh -s project` run right
+   in this terminal.
+2. **The repository** — taken from `git remote`. It tells the account: a GitHub Project
+   board belongs not to a repository but to an account (you or an organisation). If there
+   is none, you can pick one of your repositories (a remote is added) or create a new one:
+   yourself (named after the folder, private or public — `tab`, no push) or by an agent (a
+   node and a session: it asks the name and the visibility).
+3. **The board.** Connect one of the repository owner's boards or create a new one:
+   yourself (default columns) or by an agent (columns for the tree's statuses, connected
+   by the agent). Or `i` — no board, only the repository's issues.
 
-После подключения появляется настоящий узел «GitHub» (`github: hub`), и карточки ложатся
-внутрь него. `G` на нём сверяет дерево с доской и issues. Не нужно — в настройках `,` → «Узел GitHub» → скрыть
-(в `tree.md` это `github: off`).
+Once connected, a real “GitHub” node appears (`github: hub`), and the cards go inside it.
+`G` on it syncs the tree with the board and the issues. Don't need it — in the settings
+`,` → “GitHub node” → hide (in `tree.md` that's `github: off`).
 
-То же из shell:
+The same from the shell:
 
 ```sh
-treeyard github link antondanv/1 [--parent <id>] # или ссылка на доску; без --parent — в узел «GitHub»
-treeyard github link antondanv/app               # issues репозитория (или ссылка на него), можно рядом с доской
-treeyard github sync                             # в обе стороны: и доска, и issues
-treeyard github                                  # к чему привязано и какие колонки
+treeyard github link owner/1 [--parent <id>]    # or the board's link; without --parent — into the “GitHub” node
+treeyard github link owner/app                  # the repository's issues (or its link), next to a board is fine
+treeyard github sync                            # both ways: the board and the issues
+treeyard github                                 # what it's linked to and which columns
 ```
 
-`link` находит на доске поле Status и угадывает, в какой колонке живёт каждый статус
-(Todo → «к работе», In Progress → «в работе», Review → «на проверке», Done → «готово»…).
-Угаданное записывается в `.tree/tree.md` в `github.columns`, там его можно поправить. Если у статуса
-своей колонки нет, карточка при таком статусе остаётся на месте.
+`link` finds the board's Status field and guesses which column each status lives in (Todo
+→ todo, In Progress → active, Review → in review, Done → done…). The guess is written to
+`.tree/tree.md` in `github.columns`, where it can be fixed. If a status has no column of
+its own, a card with that status stays where it is.
 
-`sync` заводит узлы из карточек, которых ещё нет в дереве (готовые карточки остаются на доске),
-и без дублей: у узла в `github.item` записана его карточка. Если карточку с прошлого раза
-передвинули на доске, узел получает её статус, а в журнал пишется «github · … карточка в „Done“».
-Если вместо этого сменился статус узла, карточка едет в нужную колонку. Статус, поменянный
-в дереве (`treeyard set`, `d`/`w` в дереве, старт сессии), двигает карточку сразу. Если сдвинуть не
-вышло, это попадает в журнал узла, а следующий `sync` всё досдвинет. Всё идёт через `gh`
-с его входом; нужен scope `project` (`gh auth refresh -s project`).
+`sync` creates nodes for cards the tree doesn't have yet (done cards stay on the board),
+without duplicates: a node's `github.item` holds its card. If the card was moved on the
+board since last time, the node gets its status, and the journal gets “github · … card in
+„Done“”. If the node's status changed instead, the card goes to the right column. A status
+changed in the tree (`treeyard set`, `d`/`w` in the tree, the start of a session) moves
+the card at once. If the move fails, that goes into the node's journal, and the next
+`sync` finishes it. Everything goes through `gh` with its sign-in; the `project` scope is
+needed (`gh auth refresh -s project`).
 
-**Issues без доски.** После `link owner/репозиторий` (в `tree.md` — `github.repo`) `sync` заводит
-узел-идею из каждой открытой issue (pull request'ы не берутся), без дублей: у узла в `github.issue`
-записан номер. Закрыли issue на GitHub — узел становится «готово» (или «отказались», если закрыта как
-not planned); открыли снова — узел «к работе». И наоборот: «готово» в дереве закрывает issue сразу,
-«отказались» закрывает её как not planned, возврат в работу открывает снова. «На проверке» issue не
-закрывает: «готово» ставит человек. Если issue есть и карточкой на доске, это один узел. Удалённая
-или перенесённая issue — запись в журнале узла, сам узел остаётся.
+**Issues without a board.** After `link owner/repository` (`github.repo` in `tree.md`)
+`sync` makes an idea node from every open issue (pull requests are left out), without
+duplicates: a node's `github.issue` holds the number. An issue closed on GitHub makes the
+node done (or dropped, if closed as not planned); reopened — todo. And the other way: done
+in the tree closes the issue at once, dropped closes it as not planned, back to work
+reopens it. “In review” doesn't close the issue: “done” is set by a person. If an issue is
+also a card on the board, it's one node. A deleted or transferred issue is a line in the
+node's journal; the node itself stays.
 
-Дерево — это обычные md-файлы в `.tree/` (`tree.md` и `nodes/*.md`), их можно
-править чем угодно и коммитить вместе с кодом. Вид, выбранный узел и раскрытые
-ветки запоминаются в `.tree/.local/` — эта папка в git не идёт.
-`ui.json` сохраняется при изменении вида или выбора; кадры анимации не вызывают запись.
+The tree is plain md files in `.tree/` (`tree.md` and `nodes/*.md`): edit them with
+anything and commit them along with the code. The view, the selected node and the open
+branches are remembered in `.tree/.local/` — that folder doesn't go into git. `ui.json` is
+saved when the view or the selection changes; animation frames don't write it.
 
-Как вести проект деревом — [docs/practice.md](docs/practice.md). Шаблоны: этапы,
-направления, Микадо, поиск улучшений, заказ (`treeyard templates`).
+How to run a project as a tree — [docs/practice.md](docs/practice.md) (in Russian for
+now). Templates: Stages, Directions, Mikado, Finding improvements, Client work (`treeyard
+templates`).
 
-## Разработка
+## Development
 
 ```sh
+git clone https://github.com/antondanv/treeyard && cd treeyard
+npm install                     # with NODE_ENV=production: npm install --include=dev
+npm run build && npm link       # the treeyard command from dist/
+npm run dev -- <args>           # treeyard from the sources (tsx)
 npm run typecheck && npm test && npm run lint && npm run build
-FORCE_COLOR=2 npx tsx scripts/screenshot.ts ../Factoyard shot.png 130x36   # PNG интерфейса
+npm run screenshots             # the README's pictures again, in English and in Russian (needs Chrome)
+FORCE_COLOR=2 npx tsx scripts/screenshot.ts ../my-app shot.png 130x36   # a PNG of the interface
 ```
 
-`scripts/screenshot.ts` рисует кадр интерфейса и снимает его через headless Chrome;
-`FORCE_COLOR=2` показывает то, что видно в Apple Terminal (256 цветов).
+`scripts/screenshot.ts` renders a frame of the interface and has headless Chrome take it;
+`FORCE_COLOR=2` shows what Apple Terminal gets (256 colours). How it is built —
+[docs/architecture.md](docs/architecture.md).
+
+Treeyard runs React/Ink in `production` mode by default, so animations don't pile up debug
+measurements in memory. An explicitly set `NODE_ENV` is kept; to debug React, run
+`NODE_ENV=development npm run dev`.
+
+Sessions, panes and models go through [Brainyard](https://github.com/antondanv/brainyard)
+(`@antondanv/brainyard`), one layer for every agent CLI.
+
+## License
+
+[MIT](LICENSE)

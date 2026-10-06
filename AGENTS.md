@@ -20,6 +20,7 @@ npm run typecheck && npm test && npm run lint && npm run build   # перед «
 npm run format                     # biome check --write
 npm link                           # команда treeyard из dist/
 FORCE_COLOR=2 npx tsx scripts/screenshot.ts <папка-с-деревом> shot.png 130x36   # PNG интерфейса
+npm run screenshots                # заново снять картинки README (docs/, EN и RU; нужен Chrome)
 ```
 
 ## Правила
@@ -38,7 +39,8 @@ FORCE_COLOR=2 npx tsx scripts/screenshot.ts <папка-с-деревом> shot.
 - Комментарии в коде — по-английски, коротко и про «зачем»; стиль — как в соседнем коде.
 - Всё, что видит человек, проверяй в TUI (`npm run dev` в копии дерева или
   `scripts/screenshot.ts`), а не только тестами; на узком экране (≈100×30) тоже.
-- Изменилось поведение или клавиши — поправь README.
+- Изменилось поведение или клавиши — поправь README.md и README.ru.md; изменился вид —
+  `npm run screenshots`.
 - Git: коммиты по смыслу (Conventional Commits), только своё; push и PR — по просьбе.
 
 <!-- treeyard -->
