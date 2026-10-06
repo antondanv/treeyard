@@ -2206,8 +2206,8 @@ export function App(props: AppProps) {
         note = t('можно продолжать: всё, чего ждал, готово · {path}', { path: note });
       if (view === 'waiting') {
         note = t('{p1}{p2} · ждёт {p3}', {
-          p1: item.waiting ?? 'причина не записана',
-          p2: item.until ? ` → вернуться, когда: ${item.until}` : '',
+          p1: item.waiting ?? t('причина не записана'),
+          p2: item.until ? `${t(' → вернуться, когда: ')}${item.until}` : '',
           p3: duration(item.updated),
         });
       }
