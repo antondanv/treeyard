@@ -32,21 +32,29 @@ jobs:
             echo "::error::Release $TAG does not match package.json, which says $expected"
             exit 1
           fi
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      # Trusted publishing needs no token and adds provenance. npm sets up a trusted
-      # publisher only for a package that exists, so the first version is published by
-      # hand; a version npm already has is skipped. prepack builds dist and keeps
-      # README.ru.md out of the package.
-      - name: Publish what npm does not have yet
+      # npm sets up a trusted publisher only for a package that exists, so the first
+      # version is published by hand; a version npm already has leaves nothing to do.
+      - name: Is this version on npm already?
+        id: npm
         run: |
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
           # The version's own document: a new package's page takes minutes to appear.
           if curl -fsS -o /dev/null "https://registry.npmjs.org/$name/$version"; then
             echo "$name@$version is on npm already"
+            echo "published=true" >> "$GITHUB_OUTPUT"
           else
-            npm publish --access public
+            echo "published=false" >> "$GITHUB_OUTPUT"
           fi
+      - if: steps.npm.outputs.published == 'false'
+        run: npm ci
+      - if: steps.npm.outputs.published == 'false'
+        run: npm run lint
+      - if: steps.npm.outputs.published == 'false'
+        run: npm run typecheck
+      - if: steps.npm.outputs.published == 'false'
+        run: npm test
+      # Trusted publishing needs no token and adds provenance. prepack builds dist and
+      # keeps README.ru.md out of the package.
+      - if: steps.npm.outputs.published == 'false'
+        run: npm publish --access public

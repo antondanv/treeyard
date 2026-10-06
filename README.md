@@ -15,9 +15,7 @@ back into the tree — until the project works in real life, not just “the cod
 
 **English** · [Русский](README.ru.md)
 
-<!-- Node kfg8: the full promo video (its user-attachments link) replaces the screenshot below, and the screenshot moves to “What it looks like”. The same in README.ru.md. -->
-
-<img src="docs/screenshot.png" width="860" alt="treeyard in a terminal: a coffee shop's goal tree — the goal at the top, two milestones with their tasks, a node waiting for the bank, two ideas; one task is selected, and the bar at the bottom says what “done” means for it">
+https://github.com/user-attachments/assets/e2f796e4-2617-4ba7-97e9-ef8ba56e2ed3
 
 </div>
 
@@ -180,6 +178,8 @@ treeyard skills install    # ~/.claude/skills, ~/.codex/skills, ~/.gemini/config
 ```
 
 ## What it looks like
+
+<img src="docs/screenshot.png" width="860" alt="treeyard in a terminal: a coffee shop's goal tree — the goal at the top, two milestones with their tasks, a node waiting for the bank, two ideas; one task is selected, and the bar at the bottom says what “done” means for it">
 
 - **Graph** (the default): the goal on the left, branches grow to the right, a parent sits
   in the middle of its children. A node is one line, so the whole working tree fits on the
