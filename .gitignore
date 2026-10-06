@@ -3,3 +3,9 @@ dist/
 .scratch/
 coverage/
 .DS_Store
+video/out/
+video/recordings/*.mp4
+video/.agents/skills/
+video/.claude/skills/
+video/snapshots/
+video/.tmp/

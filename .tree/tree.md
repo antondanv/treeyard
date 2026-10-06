@@ -43,3 +43,4 @@ created: 2026-10-02
 - С CLI агентов treeyard говорит только через Brainyard (свой сервер tmux -L brainyard): один слой для Claude Code, Codex и Antigravity
 - Дерево — md-файлы в .tree/, коммитятся вместе с кодом; .tree/.local/ в git не идёт
 - Первая веха — я сам на своих проектах (Treeyard, Brainyard, Factoyard); публикация для других — вторая
+- Промо-ролик — HyperFrames + GSAP в video/ (свой package.json, вне npm-пакета): бесплатно (Apache-2.0), скиллы для агентов, рендер повторяется байт в байт, текст терминала резкий на ×3 (проба kyeu)
