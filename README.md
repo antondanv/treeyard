@@ -14,7 +14,7 @@ back into the tree — until the project works in real life, not just “the cod
 
 **English** · [Русский](README.ru.md)
 
-<!-- The promo video goes here (node kfg8): the same link in README.ru.md. -->
+<!-- Node kfg8: the full promo video (its user-attachments link) replaces the screenshot below, and the screenshot moves to “What it looks like”. The same in README.ru.md. -->
 
 <img src="docs/screenshot.png" width="860" alt="treeyard in a terminal: a coffee shop's goal tree — the goal at the top, two milestones with their tasks, a node waiting for the bank, two ideas; one task is selected, and the bar at the bottom says what “done” means for it">
 
