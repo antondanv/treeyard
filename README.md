@@ -428,6 +428,7 @@ treeyard note "the help doesn't fit the screen" # a note about treeyard itself �
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
 treeyard diff <id> --add <sha>                  # attach your commit to the node for review
 treeyard add "Codex: turn status" --project ../api --for <id>   # a change needed in another project
+treeyard set <id> needs=<other id>              # waits for a node of this tree (needs=../api#<id> — of another)
 treeyard open root --start plan --pane          # a review of the tree in a pane
 treeyard open root --start chat --brain codex   # a conversation about the project
 treeyard open <id> --brain codex                # a session for the node right from the shell
@@ -561,7 +562,10 @@ A waiting node whose needs are all done comes back to the Now tab marked “can 
 A person doesn't need to close a shared node: the agent that did the work there sets
 `treeyard set <id> status=done --project ../api` (agents may do this for such nodes), and
 when a person marks their own node done, the shared one closes by itself — if nobody else
-needs it. A link by hand: `treeyard set <id> needs=../api#y79a` (`needs=` — remove).
+needs it. A link by hand: `treeyard set <id> needs=../api#y79a` (`needs=` — remove). A node
+of the same tree is written with just its id: `needs=y79a` (or `#y79a`, or `.#y79a` — it is
+all the same); there is no such node — an error. Such a link is shown the same way, but
+doesn't close anything: done on the waiting node leaves the node it waits for alone.
 
 ### A GitHub Project board
 

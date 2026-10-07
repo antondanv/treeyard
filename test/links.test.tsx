@@ -6,7 +6,16 @@ import { describe, expect, it } from 'vitest';
 
 import { contextText } from '../src/agents/context.js';
 import { journalEntries } from '../src/model/journal.js';
-import { addLinkedNode, linksOf, parseRef, refTo, resolveLink, setNeeds, sharedBranch } from '../src/model/links.js';
+import {
+  addLinkedNode,
+  linksOf,
+  normalizeRef,
+  parseRef,
+  refTo,
+  resolveLink,
+  setNeeds,
+  sharedBranch,
+} from '../src/model/links.js';
 import { addNode, setStatus } from '../src/model/ops.js';
 import { loadTree, nodeFromText, nodeToText } from '../src/model/store.js';
 import { actionable } from '../src/model/tree.js';
@@ -148,6 +157,132 @@ describe('links between trees', () => {
     expect(contextText(here, waiter.id)).toContain(
       `Ждёт: Brainyard › Правка в Brainyard (\`../Brainyard#${made.id}\`, к работе)`,
     );
+  });
+});
+
+describe('needs inside one tree', () => {
+  it('reads a bare id and #id as .#id, and leaves other refs alone', () => {
+    expect(normalizeRef('y79a')).toBe('.#y79a');
+    expect(normalizeRef(' #y79a ')).toBe('.#y79a');
+    expect(normalizeRef('.#y79a')).toBe('.#y79a');
+    expect(normalizeRef('../Brainyard#y79a')).toBe('../Brainyard#y79a');
+    for (const odd of ['', '#', '../Brainyard', 'two words', '.', '..']) expect(normalizeRef(odd)).toBe(odd);
+  });
+
+  it('links a node of the same tree both ways, however the id is written', () => {
+    const { here } = neighbours();
+    const target = addNode(here, { title: 'Цель' });
+    for (const ref of [target.id, `#${target.id}`, `.#${target.id}`]) {
+      const waiter = addNode(here, { title: `Ждущий ${ref}` });
+      const links = setNeeds(here, waiter.id, [ref], 'claude');
+      expect(links).toHaveLength(1);
+      expect(links[0]).toMatchObject({ ref: `.#${target.id}`, project: 'Treeyard', node: { id: target.id } });
+      // The tree in hand and the files agree.
+      for (const tree of [here, loadTree(here.project.dir)]) {
+        expect(tree.nodes.get(waiter.id)!.needs).toEqual([`.#${target.id}`]);
+        expect(tree.nodes.get(target.id)!.neededBy).toContain(`.#${waiter.id}`);
+      }
+      expect(journalEntries(here.nodes.get(waiter.id)!.body).at(-1)).toContain(
+        `ждёт: Treeyard › «Цель» (${target.id})`,
+      );
+    }
+    // Written once per waiter, and unlinked from both sides.
+    const [first] = [...here.nodes.values()].filter((node) => node.title.startsWith('Ждущий'));
+    setNeeds(here, first!.id, [target.id, `#${target.id}`, `.#${target.id}`], 'claude');
+    expect(loadTree(here.project.dir).nodes.get(first!.id)!.needs).toEqual([`.#${target.id}`]);
+    setNeeds(here, first!.id, [], 'claude');
+    expect(loadTree(here.project.dir).nodes.get(first!.id)!.needs).toBeUndefined();
+    expect(loadTree(here.project.dir).nodes.get(target.id)!.neededBy).not.toContain(`.#${first!.id}`);
+  });
+
+  it('says so when the node is not in this tree, is the node itself, or the ref is nonsense', () => {
+    const { here } = neighbours();
+    const waiter = addNode(here, { title: 'Ждущий' });
+    expect(() => setNeeds(here, waiter.id, ['zzzz'], 'claude')).toThrow('нет узла «zzzz» в этом дереве');
+    expect(() => setNeeds(here, waiter.id, ['#zzzz'], 'claude')).toThrow('нет узла «zzzz» в этом дереве');
+    expect(() => setNeeds(here, waiter.id, ['.#zzzz'], 'claude')).toThrow('нет узла «zzzz» в этом дереве');
+    expect(() => setNeeds(here, waiter.id, [waiter.id], 'claude')).toThrow('не может ждать сам себя');
+    expect(() => setNeeds(here, waiter.id, ['../Brainyard'], 'claude')).toThrow('нужен id узла этого дерева');
+    expect(loadTree(here.project.dir).nodes.get(waiter.id)!.needs).toBeUndefined();
+    // A node of another project that is not there yet is still kept, as before.
+    expect(setNeeds(here, waiter.id, ['../Brainyard#abcd'], 'claude')[0]).toMatchObject({ missing: 'node' });
+    expect(setNeeds(here, waiter.id, ['../Nowhere#abcd'], 'claude')[0]).toMatchObject({ missing: 'project' });
+  });
+
+  it('shows the link in the card and the tree row like a link to another project', () => {
+    const { here } = neighbours();
+    const target = addNode(here, { title: 'Цель' });
+    const waiter = addNode(here, { title: 'Ждущий' });
+    setNeeds(here, waiter.id, [`#${target.id}`], 'claude');
+    const card = render(
+      <NodeDetails tree={here} node={here.nodes.get(waiter.id)!} width={70} height={30} live={new Map()} frame={0} />,
+    );
+    expect(card.lastFrame()).toContain('ЖДЁТ');
+    expect(card.lastFrame()).toContain('○ Treeyard › Цель · к работе');
+    const other = loadTree(here.project.dir);
+    const targetCard = render(
+      <NodeDetails tree={other} node={other.nodes.get(target.id)} width={70} height={30} live={new Map()} frame={0} />,
+    );
+    expect(targetCard.lastFrame()).toContain('НУЖЕН ДЛЯ');
+    expect(targetCard.lastFrame()).toContain('Treeyard › Ждущий · к работе');
+  });
+
+  it('does not close the node it waits for when it is done itself', () => {
+    const { here } = neighbours();
+    const target = addNode(here, { title: 'Цель' });
+    const waiter = addNode(here, { title: 'Ждущий' });
+    setNeeds(here, waiter.id, [target.id], 'claude');
+    setStatus(here, waiter.id, 'done');
+    expect(loadTree(here.project.dir).nodes.get(target.id)!.status).toBe('todo');
+  });
+});
+
+describe('treeyard set needs= inside one tree', () => {
+  it('takes an id, #id or an id prefix, shows the link, and refuses what is not here', async () => {
+    const { here } = neighbours();
+    const target = addNode(here, { title: 'Цель' });
+    const waiter = addNode(here, { title: 'Ждущий' });
+    const sh = treeyardIn(here.project.dir);
+
+    const bare = await sh('set', waiter.id, `needs=${target.id}`);
+    expect(bare.code).toBe(0);
+    expect(bare.stderr).toBe('');
+    expect(loadTree(here.project.dir).nodes.get(waiter.id)!.needs).toEqual([`.#${target.id}`]);
+    expect((await sh('show', waiter.id)).stdout).toContain('ждёт: ○ Treeyard › Цель · к работе');
+    expect((await sh('show')).stdout).toContain('→ Treeyard ○');
+
+    expect((await sh('set', waiter.id, 'needs=')).code).toBe(0);
+    expect(loadTree(here.project.dir).nodes.get(waiter.id)!.needs).toBeUndefined();
+    expect((await sh('set', waiter.id, `needs=#${target.id}`)).code).toBe(0);
+    expect((await sh('set', waiter.id, 'needs=')).code).toBe(0);
+    expect((await sh('set', waiter.id, `needs=${target.id.slice(0, 3)}`)).code).toBe(0);
+    expect(loadTree(here.project.dir).nodes.get(waiter.id)!.needs).toEqual([`.#${target.id}`]);
+
+    const missing = await sh('set', waiter.id, 'needs=zzzz');
+    expect(missing.code).not.toBe(0);
+    expect(missing.stderr).toContain('нет узла «zzzz»');
+    const self = await sh('set', waiter.id, `needs=${waiter.id}`);
+    expect(self.code).not.toBe(0);
+    expect(self.stderr).toContain('не может ждать сам себя');
+    // The old link survived the refusals.
+    expect(loadTree(here.project.dir).nodes.get(waiter.id)!.needs).toEqual([`.#${target.id}`]);
+  });
+
+  it('a node needed only from its own tree is still closed by a person, not by an agent', async () => {
+    const { here } = neighbours();
+    const target = addNode(here, { title: 'Цель' });
+    const waiter = addNode(here, { title: 'Ждущий' });
+    setNeeds(here, waiter.id, [target.id], 'claude');
+    const sh = treeyardIn(here.project.dir);
+    const closed = await sh('set', target.id, 'status=done', '--as', 'claude');
+    expect(closed.stderr).toContain('готово ставит человек');
+    expect(loadTree(here.project.dir).nodes.get(target.id)!.status).toBe('review');
+  });
+
+  it('shows needs=<id> in the help', async () => {
+    const { here } = neighbours();
+    const help = await treeyardIn(here.project.dir)('help');
+    expect(help.stdout).toContain('needs=<id>|../X#id');
   });
 });
 

@@ -42,7 +42,7 @@ import {
 import { pick, t } from '../i18n/i18n.js';
 import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
-import { addLinkedNode, setNeeds } from '../model/links.js';
+import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
 import { addNote, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import {
   addNode,
@@ -107,7 +107,7 @@ function commandLines(): string {
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
   treeyard set <id> ключ=значение…         status, title, who, done_when, check, waiting, until, parent,
                                            after=<id брата>|first|last (место среди братьев),
-                                           needs=../X#id (ждёт узла другого проекта); --project ../X — узел там
+                                           needs=<id>|../X#id (ждёт узла этого дерева или другого проекта); --project ../X — узел там
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
                 [--project <папка>]        писать в дерево другой папки, например основного worktree
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
@@ -138,7 +138,7 @@ function commandLines(): string {
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
   treeyard set <id> key=value…             status, title, who, done_when, check, waiting, until, parent,
                                            after=<sibling id>|first|last (the place among siblings),
-                                           needs=../X#id (waits for a node of another project); --project ../X — a node there
+                                           needs=<id>|../X#id (waits for a node of this tree or of another project); --project ../X — a node there
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
                 [--project <dir>]          write to the tree of another folder, e.g. the main worktree
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
@@ -809,7 +809,9 @@ async function setCommand(args: string[]): Promise<number> {
     const refs = fields.needs
       .split(',')
       .map((ref) => ref.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      // `y79a` and `#y79a` are nodes of this tree: an id prefix is enough, like in every command.
+      .map((ref) => (normalizeRef(ref) === ref ? ref : `.#${nodeArg(tree, ref.replace(/^#/, ''))}`));
     let links: ReturnType<typeof setNeeds>;
     try {
       links = setNeeds(tree, id, refs, source);
@@ -836,7 +838,8 @@ async function setCommand(args: string[]): Promise<number> {
     const status = fields.status !== undefined ? statusArg(fields.status) : node.status;
     // A shared node (made from another project) is closed by the agent that did the work:
     // nobody comes to this tree to close it by hand.
-    const shared = Boolean(tree.nodes.get(id)?.neededBy?.length);
+    // A node of this same tree waiting for it does not make it shared.
+    const shared = Boolean(tree.nodes.get(id)?.neededBy?.some((ref) => !isSameTree(tree.project.dir, ref)));
     const agentDone = status === 'done' && !shared && !byPerson(values.as);
     if (agentDone) {
       process.stderr.write(

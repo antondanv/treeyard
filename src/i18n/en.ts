@@ -848,7 +848,9 @@ export const EN: Record<string, string> = {
   'Совместные узлы': 'Shared nodes',
   'Сюда падают узлы, заведённые из других проектов (`treeyard add "…" --project … --for <id>`): там их ждут. Каждый закрывается по своему критерию.':
     'Nodes added from other projects land here (`treeyard add "…" --project … --for <id>`): they are waited for there. Each closes by its own criterion.',
-  '«{ref}» — нужно ../Проект#id': '«{ref}» — expected ../Project#id',
+  '«{ref}» — нужен id узла этого дерева или ../Проект#id': '«{ref}» — expected a node id of this tree or ../Project#id',
+  'узел не может ждать сам себя': 'a node cannot wait for itself',
+  'нет узла «{id}» в этом дереве': 'no node «{id}» in this tree',
   'можно продолжать: всё, чего ждал, готово · {path}': 'can go on: everything it waited for is done · {path}',
   'НУЖЕН ДЛЯ': 'NEEDED FOR',
   'ждёт: ': 'waits for: ',

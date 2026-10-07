@@ -3,6 +3,7 @@
  * in another project keeps `needs: [../Brainyard#hv95]`; that node keeps the
  * other side, `for: [../Treeyard#g9ph]`. The path goes from the project's
  * folder, like `file:../Brainyard` in package.json: no registry of projects.
+ * A node of the same tree is `.#id` (typed by hand as `id` or `#id`).
  *
  * Reading forgives here too: a folder that moved or a node that was deleted
  * shows as «не найдено», and nothing else breaks.
@@ -38,6 +39,22 @@ export function parseRef(ref: string): LinkRef | undefined {
   const path = ref.slice(0, cut).trim();
   const id = ref.slice(cut + 1).trim();
   return path && id ? { path, id } : undefined;
+}
+
+/**
+ * A bare `id` or `#id` names a node of this very tree: it is written `.#id`, the
+ * ref the tree's own folder gives. Anything else is left for `parseRef` to judge.
+ */
+export function normalizeRef(ref: string): string {
+  const text = ref.trim();
+  const id = text.startsWith('#') ? text.slice(1) : text;
+  return /^[^\s#/\\.][^\s#/\\]*$/.test(id) ? `.#${id}` : text;
+}
+
+/** The ref leads into the tree in `fromDir` itself: a node of the same project, not of another. */
+export function isSameTree(fromDir: string, ref: string): boolean {
+  const parsed = parseRef(ref);
+  return parsed !== undefined && real(refDir(fromDir, parsed)) === real(fromDir);
 }
 
 /** `../Brainyard#hv95`: how a node in `fromDir` names node `id` in `toDir`. */
@@ -188,6 +205,8 @@ export function addLinkedNode(from: Tree, fromId: string, to: Tree, input: NewNo
 export function closeNeeds(tree: Tree, node: TreeNode, source: string): TreeNode[] {
   const closed: TreeNode[] = [];
   for (const ref of node.needs ?? []) {
+    // A node of the same tree is not made for this one: waiting for it does not close it.
+    if (isSameTree(tree.project.dir, ref)) continue;
     const other = otherTree(tree, ref);
     const target = other?.tree.nodes.get(other.id);
     if (!other || !target || target.status === 'done' || target.status === 'dropped') continue;
@@ -213,11 +232,23 @@ export function closeNeeds(tree: Tree, node: TreeNode, source: string): TreeNode
 /**
  * Replaces what a node waits for (`treeyard set <id> needs=…`). The other
  * side follows where it is found: `for` is added to new targets and removed
- * from dropped ones. A ref that leads nowhere is kept — it shows «не найдено».
+ * from dropped ones. A ref into another project that leads nowhere is kept —
+ * it shows «не найдено»; a node of this tree has to exist.
  */
-export function setNeeds(tree: Tree, id: string, refs: string[], source: string): Link[] {
+export function setNeeds(tree: Tree, id: string, wanted: string[], source: string): Link[] {
   const node = need(tree, id);
-  for (const ref of refs) if (!parseRef(ref)) throw new Error(t('«{ref}» — нужно ../Проект#id', { ref }));
+  const refs: string[] = [];
+  for (const given of wanted) {
+    let ref = normalizeRef(given);
+    const parsed = parseRef(ref);
+    if (!parsed) throw new Error(t('«{ref}» — нужен id узла этого дерева или ../Проект#id', { ref: given }));
+    if (isSameTree(tree.project.dir, ref)) {
+      if (parsed.id === id) throw new Error(t('узел не может ждать сам себя'));
+      if (!tree.nodes.has(parsed.id)) throw new Error(t('нет узла «{id}» в этом дереве', { id: parsed.id }));
+      ref = `.#${parsed.id}`;
+    }
+    if (!refs.includes(ref)) refs.push(ref);
+  }
   const before = node.needs ?? [];
   for (const ref of before.filter((old) => !refs.includes(old))) {
     const other = otherTree(tree, ref);
@@ -253,6 +284,8 @@ function otherTree(tree: Tree, ref: string): { tree: Tree; id: string } | undefi
   const parsed = parseRef(ref);
   if (!parsed) return undefined;
   const dir = refDir(tree.project.dir, parsed);
+  // Same folder, same tree: both sides of the link are written into the one in hand.
+  if (isSameTree(tree.project.dir, ref)) return { tree, id: parsed.id };
   if (findProject(dir) !== dir) return undefined;
   return { tree: loadTree(dir), id: parsed.id };
 }
