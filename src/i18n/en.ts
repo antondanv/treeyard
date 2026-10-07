@@ -154,6 +154,7 @@ export const EN: Record<string, string> = {
   'в терминале': 'in the terminal',
   'новая сессия {how} ({p2})': 'new session {how} ({p2})',
   'нет такой команды «{command}» — treeyard help': 'no such command «{command}» — treeyard help',
+  'все команды — treeyard help': 'all commands — treeyard help',
   'здесь нет дерева (.tree/) — treeyard init, чтобы посадить': 'no tree here (.tree/) — treeyard init to plant one',
   'укажи id узла — он виден в treeyard show': 'give a node id — treeyard show lists them',
   'id «{id}» подходит к нескольким узлам': 'id «{id}» matches several nodes',

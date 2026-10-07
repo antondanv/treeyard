@@ -469,6 +469,7 @@ treeyard open <id> --brain opencode --pane      # то же с OpenCode
 treeyard sessions                               # сессии папки во всех CLI; «без узла» — открытые мимо дерева
 treeyard context <id>                           # ровно то, что получит агент
 treeyard pointer                                # добавить блок о дереве в AGENTS.md / CLAUDE.md
+treeyard help                                   # все команды; treeyard <команда> --help — строки одной
 ```
 
 Отмена (`u`) возвращает только твои собственные изменения: если агент успел поправить тот

@@ -90,16 +90,10 @@ const err = paint(process.stderr);
 
 class UsageError extends Error {}
 
-function helpText(): string {
-  const statuses = STATUSES.map((s) => `${s} (${STATUS_LABEL[s]})`).join(' · ');
-  const head = `${out.c('#7ee2a8', out.bold(WORDMARK))} ${VERSION}`;
+/** The command lines of the help, an entry (one line or a few) per command, in the current language. */
+function commandLines(): string {
   return pick({
-    ru: `${head} — дерево целей проекта в терминале, с сессиями агентов в узлах
-
-${out.bold('Без аргументов')}  открывает дерево (или мастер, если дерева ещё нет)
-
-${out.bold('Команды')}
-  treeyard init [--template <id>]          посадить дерево: с агентом или по шаблону (мастер)
+    ru: `  treeyard init [--template <id>]          посадить дерево: с агентом или по шаблону (мастер)
   treeyard init --agent [--brain codex]    агент изучит папку, задаст вопросы и посадит дерево
   treeyard import [--brain claude]         агент молча читает план проекта и строит дерево
   treeyard import --from-json <файл|->     посадить дерево из JSON (так сажает агент)
@@ -128,16 +122,8 @@ ${out.bold('Команды')}
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
                                            репозитория (открытые — узлы, закрытие — в обе стороны)
-  treeyard config [ключ [значение]]        настройки: lang ru|en, confirm, theme…
-
-${out.bold('Статусы')}  ${statuses}
-${out.bold('Пример')}   treeyard set k3f9 status=waiting waiting="нет сервера" until="появится VPS"`,
-    en: `${head} — a project's goal tree in the terminal, with agent sessions on its nodes
-
-${out.bold('No arguments')}    opens the tree (or a wizard when there is no tree yet)
-
-${out.bold('Commands')}
-  treeyard init [--template <id>]          plant a tree: with an agent or from a template (wizard)
+  treeyard config [ключ [значение]]        настройки: lang ru|en, confirm, theme…`,
+    en: `  treeyard init [--template <id>]          plant a tree: with an agent or from a template (wizard)
   treeyard init --agent [--brain codex]    an agent studies the folder, asks questions, plants the tree
   treeyard import [--brain claude]         an agent silently reads the project's plan and builds the tree
   treeyard import --from-json <file|->     plant a tree from JSON (how the agent plants it)
@@ -166,7 +152,57 @@ ${out.bold('Commands')}
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            a GitHub Project board (cards are nodes, columns are statuses) or a
                                            repository's issues (open ones are nodes, closing goes both ways)
-  treeyard config [key [value]]            settings: lang ru|en, confirm, theme…
+  treeyard config [key [value]]            settings: lang ru|en, confirm, theme…`,
+  });
+}
+
+/** Command words that run another command's code. */
+const COMMAND_ALIASES: Record<string, string> = { tree: 'show', skill: 'skills', images: 'image', settings: 'config' };
+
+/** The lines of the general help that belong to one command; undefined for a word that is not a command. */
+function commandHelp(name: string): string | undefined {
+  const word = COMMAND_ALIASES[name] ?? name;
+  const lines: string[] = [];
+  let mine = false;
+  for (const line of commandLines().split('\n')) {
+    // An indented line without `treeyard` continues the entry above it.
+    const head = /^ {2}treeyard (\S+)/.exec(line);
+    if (head) mine = head[1] === word;
+    if (mine) lines.push(line);
+  }
+  return lines.length ? `${lines.join('\n')}\n${out.dim(t('все команды — treeyard help'))}` : undefined;
+}
+
+/** Whether the arguments, up to a `--`, ask for help. */
+function asksForHelp(args: string[]): boolean {
+  const end = args.indexOf('--');
+  return (end < 0 ? args : args.slice(0, end)).some((arg) => arg === '--help' || arg === '-h');
+}
+
+function unknownCommand(command: string): UsageError {
+  return new UsageError(t('нет такой команды «{command}» — treeyard help', { command }));
+}
+
+function helpText(): string {
+  const commands = commandLines();
+  const statuses = STATUSES.map((s) => `${s} (${STATUS_LABEL[s]})`).join(' · ');
+  const head = `${out.c('#7ee2a8', out.bold(WORDMARK))} ${VERSION}`;
+  return pick({
+    ru: `${head} — дерево целей проекта в терминале, с сессиями агентов в узлах
+
+${out.bold('Без аргументов')}  открывает дерево (или мастер, если дерева ещё нет)
+
+${out.bold('Команды')}
+${commands}
+
+${out.bold('Статусы')}  ${statuses}
+${out.bold('Пример')}   treeyard set k3f9 status=waiting waiting="нет сервера" until="появится VPS"`,
+    en: `${head} — a project's goal tree in the terminal, with agent sessions on its nodes
+
+${out.bold('No arguments')}    opens the tree (or a wizard when there is no tree yet)
+
+${out.bold('Commands')}
+${commands}
 
 ${out.bold('Statuses')}  ${statuses}
 ${out.bold('Example')}   treeyard set k3f9 status=waiting waiting="no server" until="a VPS is rented"`,
@@ -179,6 +215,14 @@ async function main(argv: string[]): Promise<number> {
   // A status changed by any command moves its card on the GitHub board.
   followStatuses();
   const [command, ...rest] = argv;
+  // `treeyard <command> --help` prints that command's lines, not an "unknown option" error.
+  if (command && command !== 'help' && asksForHelp(rest)) {
+    const help = commandHelp(command);
+    if (help) {
+      process.stdout.write(`${help}\n`);
+      return 0;
+    }
+  }
   switch (command) {
     case undefined:
       return openTui();
@@ -221,6 +265,7 @@ async function main(argv: string[]): Promise<number> {
     case 'settings':
       return configCommand(rest);
     case 'help':
+      return helpCommand(rest[0]);
     case '--help':
     case '-h':
       process.stdout.write(`${helpText()}\n`);
@@ -231,12 +276,16 @@ async function main(argv: string[]): Promise<number> {
       process.stdout.write(`${VERSION}\n`);
       return 0;
     default:
-      throw new UsageError(
-        t('нет такой команды «{command}» — treeyard help', {
-          command,
-        }),
-      );
+      throw unknownCommand(command);
   }
+}
+
+/** `treeyard help` is the whole help; `treeyard help <command>`, the lines of one command. */
+function helpCommand(name: string | undefined): number {
+  const text = name && name !== 'help' ? commandHelp(name) : helpText();
+  if (text === undefined) throw unknownCommand(name!);
+  process.stdout.write(`${text}\n`);
+  return 0;
 }
 
 function parse<T extends NonNullable<Parameters<typeof parseArgs>[0]>['options']>(args: string[], options: T) {

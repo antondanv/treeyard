@@ -432,6 +432,7 @@ treeyard open <id> --brain opencode --pane      # the same with OpenCode
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree
 treeyard context <id>                           # exactly what an agent gets
 treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md
+treeyard help                                   # all the commands; treeyard <command> --help — the lines of one
 ```
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
