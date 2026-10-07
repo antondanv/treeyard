@@ -2,7 +2,7 @@
 id: bvfq
 title: Английский язык по умолчанию
 parent: 5w6w
-order: 80
+order: 60
 status: done
 who: agent
 done_when: без ~/.treeyard интерфейс, шаблоны и тексты агентам — на английском; `treeyard config lang ru` и `TREEYARD_LANG=ru` возвращают русский

@@ -2,8 +2,8 @@
 id: vg8w
 title: "OpenCode в Treeyard: запускать из диалогов и open --brain opencode, хранить его сессии в узлах (Brainyard 0.2 его уже умеет)"
 parent: 5w6w
-order: 150
-status: review
+order: 100
+status: done
 done_when: "`treeyard open <id> --brain opencode --pane` и выбор OpenCode в окне запуска открывают OpenCode из узла в панели рядом с деревом; сессия записана в узле и продолжается после сна; typecheck, test, lint и build зелёные; README перечисляет OpenCode среди агентов"
 needs:
   - ../Brainyard#hfnx
@@ -12,7 +12,8 @@ needs:
 commits:
   - 84d0a3ae22d863ee835f76a357af9d26628a6bc5
 created: 2026-10-05
-updated: 2026-10-06T00:23:04+03:00
+updated: 2026-10-07T09:43:12+03:00
+closed: 2026-10-07
 ---
 
 ## Журнал
@@ -35,3 +36,4 @@ updated: 2026-10-06T00:23:04+03:00
 - 2026-10-06 00:20 · агент · OpenCode — четвёртый мозг: окно запуска (o), пункт «▶ OpenCode» (O) в меню узла, мозг проекта в «,» и в мастере посадки, «Разбить на шаги» и критерий, treeyard open/init/import/config --brain opencode. Сессии OpenCode хранятся в узлах (store раньше их выбрасывал), своя группа в «Сессиях», в карточке — opencode --session. «План» стартует агентом plan OpenCode, доступ — из его настроек; усилие сессии выбирается в самой сессии (ctrl+t), задачам агента идёт как variant. Вживую на временном дереве (сокет treeyard-vg8w): панель из окна запуска и из treeyard open --brain opencode --pane, id ses_… записан в узел, x → f будит тот же разговор (opencode --session), запуск в терминале записал сессию, «Разбить на шаги» на OpenCode дал 4 шага; скрины 001–008. Тесты: test/opencode-tmux.test.ts (поддельный opencode: панель → id → сон → пробуждение; CLI open --pane) и OpenCode в тестах форм, сессий, планов; typecheck, test (394), lint, build зелёные. Осталось — в Brainyard: «ждёт тебя» у OpenCode (hfnx), idle для автосна (mhg2), усилие в open() (c5wx, идея).
 - 2026-10-06 00:20 · агент · в работе → на проверке
 - 2026-10-06 00:23 · агент · привязан коммит 84d0a3ae22d863ee835f76a357af9d26628a6bc5
+- 2026-10-07 09:43 · ты · на проверке → готово

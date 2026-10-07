@@ -2,7 +2,7 @@
 id: c2ge
 title: Зависимость `file:../Brainyard` → версия с npm
 parent: 5w6w
-order: 70
+order: 130
 status: todo
 who: agent
 done_when: в чистом клоне без ../Brainyard `npm ci && npm test` зелёный

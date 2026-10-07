@@ -2,7 +2,7 @@
 id: brvd
 title: "README в npm: ссылки и картинки — в репозиторий (forNpm, как в Brainyard)"
 parent: 5w6w
-order: 150
+order: 200
 status: idea
 created: 2026-10-06
 updated: 2026-10-06T21:25:48+03:00

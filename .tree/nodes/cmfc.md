@@ -2,7 +2,7 @@
 id: cmfc
 title: "CI зелёный: тесты не зависят от агентов и tmux на раннере"
 parent: 5w6w
-order: 140
+order: 160
 status: todo
 who: agent
 done_when: "gh run list: CI на main — success на ubuntu и macos, Node 22 и 24"
