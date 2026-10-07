@@ -42,7 +42,7 @@ npm run screenshots                # заново снять картинки RE
 - Изменилось поведение или клавиши — поправь README.md и README.ru.md; изменился вид —
   `npm run screenshots`. В npm уходит только README.md: на время упаковки README.ru.md
   отходит в сторону (`scripts/npm-readme.mjs`, prepack/postpack).
-- `video/` — исходники промо-ролика, только на этой машине (в `.gitignore`, на GitHub их нет).
+- Промо-ролик и другие ролики — в отдельном проекте `../Motionlab` (`videos/treeyard/`), не здесь.
 - Git: коммиты по смыслу (Conventional Commits), только своё; push и PR — по просьбе.
   Без строк `Co-Authored-By` и подписей агента в коммитах и PR.
 
