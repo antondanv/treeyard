@@ -456,6 +456,7 @@ treeyard add "Показать продукт человеку" --who human --pa
 treeyard set <id> status=waiting waiting="нет сервера" until="появится VPS"
 treeyard set <id> status=review                 # агент отправляет на проверку; «готово» ставит человек
 treeyard log <id> "что сделано; что осталось"
+treeyard log <id> "…" --project ../main         # из git worktree: писать в основное дерево (show тоже принимает)
 treeyard note "справка не помещается в экран"   # замечание о самом treeyard — в «Замечания»
 treeyard image <id> shot.png --note "…"         # приложить к узлу картинку (скриншот, доказательство)
 treeyard diff <id> --add <sha>                  # привязать свой коммит к узлу, чтобы его проверили

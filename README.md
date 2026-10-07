@@ -419,6 +419,7 @@ treeyard add "Show the product to a person" --who human --parent <id>
 treeyard set <id> status=waiting waiting="no server" until="a VPS is up"
 treeyard set <id> status=review                 # the agent; “done” is set by a person
 treeyard log <id> "what is done; what is left"
+treeyard log <id> "…" --project ../main         # from a git worktree: write to the main tree (show takes it too)
 treeyard note "the help doesn't fit the screen" # a note about treeyard itself — into “Notes”
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
 treeyard diff <id> --add <sha>                  # attach your commit to the node for review

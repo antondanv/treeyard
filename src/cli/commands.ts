@@ -107,12 +107,14 @@ ${out.bold('Команды')}
   treeyard skills [install]                скилл посадки: где он, поставить в Claude Code, Codex, Antigravity
   treeyard templates                       шаблоны: этапы, направления, микадо…
   treeyard show [id] [--json] [--open]     дерево или узел текстом (--open — без готового)
+                [--project <папка>]        дерево другой папки, например основного worktree
   treeyard add "<название>" [--parent id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
   treeyard set <id> ключ=значение…         status, title, who, done_when, check, waiting, until, parent,
                                            needs=../X#id (ждёт узла другого проекта); --project ../X — узел там
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
+                [--project <папка>]        писать в дерево другой папки, например основного worktree
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
   treeyard image <id> [файл…|--paste] [--note "…"]   картинки узла: список, приложить файл или из буфера
   treeyard image <id> 001.png --note "…" | --rm 001.png   подпись к картинке · удалить её
@@ -143,12 +145,14 @@ ${out.bold('Commands')}
   treeyard skills [install]                the planting skill: where it is, install into Claude Code, Codex, Antigravity
   treeyard templates                       templates: stages, directions, mikado…
   treeyard show [id] [--json] [--open]     the tree or a node as text (--open hides finished work)
+                [--project <dir>]          the tree of another folder, e.g. the main worktree
   treeyard add "<title>" [--parent id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
   treeyard set <id> key=value…             status, title, who, done_when, check, waiting, until, parent,
                                            needs=../X#id (waits for a node of another project); --project ../X — a node there
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
+                [--project <dir>]          write to the tree of another folder, e.g. the main worktree
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
   treeyard image <id> [file…|--paste] [--note "…"]   a node's pictures: the list, attach a file or the clipboard
   treeyard image <id> 001.png --note "…" | --rm 001.png   caption a picture · remove it
@@ -243,10 +247,18 @@ function parse<T extends NonNullable<Parameters<typeof parseArgs>[0]>['options']
   }
 }
 
-function project(): Tree {
-  const dir = findProject();
+/**
+ * The folder with the tree: the current one, or the one `--project` names. Any folder inside
+ * a project does, so a git worktree reaches the main tree the same way.
+ */
+function projectDir(folder?: string): string {
+  const dir = folder ? findProject(folderArg(folder)) : findProject();
   if (!dir) throw new UsageError(t('здесь нет дерева (.tree/) — treeyard init, чтобы посадить'));
-  const tree = loadTree(dir);
+  return dir;
+}
+
+function project(folder?: string): Tree {
+  const tree = loadTree(projectDir(folder));
   purgeImages(tree);
   return tree;
 }
@@ -583,8 +595,12 @@ function templatesCommand(): number {
 // ── Reading and writing the tree ───────────────────────────────────────────
 
 function showCommand(args: string[]): number {
-  const { values, positionals } = parse(args, { json: { type: 'boolean' }, open: { type: 'boolean' } });
-  const tree = project();
+  const { values, positionals } = parse(args, {
+    json: { type: 'boolean' },
+    open: { type: 'boolean' },
+    project: { type: 'string' },
+  });
+  const tree = project(values.project);
   if (positionals[0]) {
     const id = nodeArg(tree, positionals[0]);
     const node = tree.nodes.get(id);
@@ -874,8 +890,8 @@ function printBoard(board: Board, tree: Tree): void {
 }
 
 function logCommand(args: string[]): number {
-  const { values, positionals } = parse(args, { as: { type: 'string' } });
-  const tree = project();
+  const { values, positionals } = parse(args, { as: { type: 'string' }, project: { type: 'string' } });
+  const tree = project(values.project);
   const id = nodeArg(tree, positionals[0]);
   const text = positionals.slice(1).join(' ').trim();
   if (!text) throw new UsageError(t('treeyard log <id> "что сделано; что осталось"'));
@@ -901,8 +917,7 @@ async function diffCommand(args: string[]): Promise<number> {
     project: { type: 'string' },
     as: { type: 'string' },
   });
-  const dir = values.project ? findProject(resolve(values.project)) : findProject();
-  if (!dir) throw new UsageError(t('здесь нет дерева (.tree/) — treeyard init, чтобы посадить'));
+  const dir = projectDir(values.project);
   let tree = loadTree(dir);
   const id = nodeArg(tree, positionals[0]);
   if (!tree.nodes.has(id)) throw new UsageError(t('выбери узел, чтобы посмотреть его дифы'));
