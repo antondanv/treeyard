@@ -8,7 +8,7 @@ done_when: treeyard <команда> --help печатает ключи этой
 commits:
   - fb56010b4b552b6e1afd632bc421f0cd6f5483e8
 created: 2026-10-04
-updated: 2026-10-07T15:18:57+03:00
+updated: 2026-10-07T16:16:45+03:00
 ---
 
 Откуда: Brainyard › «Веха 1: Treeyard 2 недели живёт на Brainyard 0.2 из npm» (qpjt)

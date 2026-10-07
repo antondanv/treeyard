@@ -8,7 +8,7 @@ done_when: treeyard log <id> "…" --project <папка> и treeyard show [id] 
 commits:
   - 0f8751a3362d1554271ff028cf4a228e1c74f567
 created: 2026-10-04
-updated: 2026-10-07T15:18:57+03:00
+updated: 2026-10-07T16:16:45+03:00
 ---
 
 Откуда: Brainyard › «Два пакета: @antondanv/brainyard (API) и @antondanv/brainyard-cli (CLI и веб)» (xq8s)

@@ -8,7 +8,7 @@ done_when: "treeyard set <id> needs=<id> (или #id) — ждёт узла св
 commits:
   - de8d29fc793549e3e5d7b69c9c93bc037611e310
 created: 2026-10-04
-updated: 2026-10-07T15:18:58+03:00
+updated: 2026-10-07T16:16:45+03:00
 ---
 
 Откуда: Brainyard › «Brainyard 0.2: панели, open, sessions — версия, CHANGELOG, тесты» (hv95)
