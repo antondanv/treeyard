@@ -1,6 +1,6 @@
 {
   "name": "@antondanv/treeyard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A goal tree for Agent-Driven Development in your terminal: a “done when” on every node, and Claude Code, Codex, Antigravity and OpenCode sessions opened from its nodes.",
   "keywords": [
     "agent-driven-development",
