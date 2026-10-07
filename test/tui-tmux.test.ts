@@ -66,6 +66,8 @@ describe.skipIf(!hasTmux)('the tree in a real terminal', () => {
       BRAINYARD_OPENCODE_BIN: 'treeyard-test-no-opencode',
       CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR!,
       TERM: 'xterm-256color',
+      // As on a CI runner: the tree still draws in a terminal.
+      CI: 'true',
     };
     await term(
       'new-session',

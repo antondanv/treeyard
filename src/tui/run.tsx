@@ -57,6 +57,8 @@ async function loop(dir: string, plantingPane?: Pane): Promise<void> {
         {
           stdin: input as unknown as NodeJS.ReadStream,
           stdout: screen.stdout,
+          // Ink stops drawing when CI is set; a terminal is still a terminal there.
+          interactive: Boolean(process.stdout.isTTY),
           alternateScreen: true,
           exitOnCtrlC: false,
           patchConsole: false,

@@ -37,7 +37,8 @@ export async function runInit(dir: string, templateId?: string): Promise<InitRes
   const result: InitResult = { created: false };
   const instance = render(
     <Wizard dir={dir} {...(templateId ? { templateId } : {})} onDone={(done) => Object.assign(result, done)} />,
-    { alternateScreen: true, exitOnCtrlC: true, patchConsole: false },
+    // Ink stops drawing when CI is set; a terminal is still a terminal there.
+    { interactive: Boolean(process.stdout.isTTY), alternateScreen: true, exitOnCtrlC: true, patchConsole: false },
   );
   await instance.waitUntilExit();
   if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
