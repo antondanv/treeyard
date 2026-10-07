@@ -13,6 +13,20 @@ sessions:
     opened: 2026-10-07T09:40:50+03:00
     mode: pane
     pane: claude-6a76d63a
+  - brain: claude
+    id: 8dbb2750-0b6e-4512-8547-3596cddceda3
+    name: Treeyard · разговор о проекте
+    started: 2026-10-07T16:21:25+03:00
+    opened: 2026-10-07T16:21:25+03:00
+    mode: pane
+    pane: claude-4f977c90
+  - brain: claude
+    id: d1174ac0-b05a-41ed-a477-06bdcd2ef9cf
+    name: Treeyard · разговор о проекте
+    started: 2026-10-07T17:19:15+03:00
+    opened: 2026-10-07T17:19:15+03:00
+    mode: pane
+    pane: claude-54c1a507
 ---
 
 ## Метод: Направления
@@ -51,4 +65,5 @@ sessions:
 - С CLI агентов treeyard говорит только через Brainyard (свой сервер tmux -L brainyard): один слой для Claude Code, Codex и Antigravity
 - Дерево — md-файлы в .tree/, коммитятся вместе с кодом; .tree/.local/ в git не идёт
 - Первая веха — я сам на своих проектах (Treeyard, Brainyard, Factoyard); публикация для других — вторая
-- Промо-ролик — HyperFrames + GSAP в video/ (свой package.json, вне npm-пакета): бесплатно (Apache-2.0), скиллы для агентов, рендер повторяется байт в байт, текст терминала резкий на ×3 (проба kyeu)
+- Дерево главное, узлы не становятся issues: на GitHub узлы попадают только файлами в git, и только публичные; локальный узел не попадает ни в git, ни на GitHub; его публичный ребёнок локально стоит под ним, а в git и на GitHub — под публичным родителем (вторая связь) (2026-10-07, веха 3)
+- Ролики Treeyard делаются в отдельном проекте ~/Projects/Motionlab (videos/treeyard/), не в этом репозитории: там их исходники, история и узлы; здесь узел ролика ждёт ../Motionlab#id (2026-10-07)
