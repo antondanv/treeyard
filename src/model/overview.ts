@@ -2,11 +2,13 @@
  * `.tree/README.md` — the whole tree as one page, rebuilt on every change.
  * GitHub shows it when you open the folder, and an agent gets the shape of
  * the project from it in one read. It is generated: edits go to the nodes.
+ * Siblings go by `order` (execution order), not by status: the file is
+ * committed, so it may not depend on anyone's `status_order` setting.
  */
 
 import { t } from '../i18n/i18n.js';
 import { atomicWrite, TREE_DIR } from './store.js';
-import { childrenOf, progress, summarize } from './tree.js';
+import { childrenByOrder, childrenOf, progress, summarize } from './tree.js';
 import { ROOT, type Status, type Tree, type TreeNode } from './types.js';
 
 export const GLYPH: Record<Status, string> = {
@@ -45,7 +47,7 @@ export function overviewText(tree: Tree): string {
     '',
   );
   const walk = (parent: string, depth: number) => {
-    for (const node of childrenOf(tree, parent)) {
+    for (const node of childrenByOrder(tree, parent)) {
       lines.push(`${'  '.repeat(depth)}- ${line(tree, node)}`);
       walk(node.id, depth + 1);
     }

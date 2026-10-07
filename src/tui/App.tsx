@@ -101,7 +101,7 @@ import {
   updateNode,
   WHO_LABEL,
 } from '../model/ops.js';
-import { GLYPH, writeOverview } from '../model/overview.js';
+import { GLYPH } from '../model/overview.js';
 import { loadTree, treeStamp, writeProject } from '../model/store.js';
 import { ago, duration } from '../model/time.js';
 import {
@@ -135,7 +135,7 @@ import {
   type Tree,
   type TreeNode,
 } from '../model/types.js';
-import { MAX_PANES, type Settings, SLEEP_AFTER, settings, updateSettings } from '../settings.js';
+import { MAX_PANES, SLEEP_AFTER, settings, updateSettings } from '../settings.js';
 import { catalogHint, effortOptions, effortsFor, fitChoice, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './components/controls.js';
 import { NodeDetails, ProjectDetails, SessionDetails } from './details.js';
@@ -2310,7 +2310,7 @@ export function App(props: AppProps) {
             order={statusOrder()}
             width={Math.min(width - 2, 72)}
             onSave={(order) => {
-              changeStatusOrder({ statusOrder: 'custom', customOrder: order });
+              updateSettings({ statusOrder: 'custom', customOrder: order });
               setModal({ kind: 'settings', at: 'statusOrder' });
             }}
             onCancel={() => setModal({ kind: 'settings', at: 'statusOrder' })}
@@ -3034,13 +3034,6 @@ export function App(props: AppProps) {
     ];
   };
 
-  const changeStatusOrder = (patch: Partial<Pick<Settings, 'statusOrder' | 'customOrder'>>) => {
-    updateSettings(patch);
-    // The overview in git follows the order you see.
-    writeOverview(tree);
-    stampRef.current = treeStamp(props.dir);
-  };
-
   const changeSetting = (key: string, value: string) => {
     const on = value === 'on';
     if (key === 'lang' && (value === 'ru' || value === 'en')) updateSettings({ lang: value });
@@ -3049,7 +3042,7 @@ export function App(props: AppProps) {
     else if (key === 'animation') updateSettings({ animation: on });
     else if (key === 'marquee') updateSettings({ marquee: on });
     else if (key === 'statusOrder' && STATUS_ORDER_NAMES.includes(value as StatusOrderName))
-      changeStatusOrder({ statusOrder: value as StatusOrderName });
+      updateSettings({ statusOrder: value as StatusOrderName });
     else if (key === 'live') updateSettings({ live: on });
     else if (key === 'open' && (value === 'pane' || value === 'terminal')) updateSettings({ open: value });
     else if (key === 'sleepAfter') updateSettings({ sleepAfter: Number(value) });

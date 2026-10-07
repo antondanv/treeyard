@@ -54,7 +54,6 @@ import {
   setStatus,
   updateNode,
 } from '../model/ops.js';
-import { writeOverview } from '../model/overview.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
 import { ago } from '../model/time.js';
 import {
@@ -1420,7 +1419,6 @@ function configCommand(args: string[]): number {
             statuses: STATUSES.join(','),
           }),
         );
-      if (tree) writeOverview(tree);
     } else if (key === 'sleepAfter' || key === 'maxPanes') {
       const choices: readonly number[] = key === 'sleepAfter' ? SLEEP_AFTER : MAX_PANES;
       const n = /^(off|none)$/i.test(value) ? 0 : Number(value);

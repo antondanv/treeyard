@@ -61,12 +61,22 @@ export function childrenOf(tree: Tree, id: string): TreeNode[] {
 }
 
 export function bySiblingOrder(a: TreeNode, b: TreeNode): number {
-  return (
-    statusRank[a.status] - statusRank[b.status] ||
-    a.order - b.order ||
-    (a.created ?? '').localeCompare(b.created ?? '') ||
-    a.title.localeCompare(b.title)
-  );
+  return statusRank[a.status] - statusRank[b.status] || byExecutionOrder(a, b);
+}
+
+/** Siblings by `order` alone: it reads the same whatever the personal status order is. */
+export function byExecutionOrder(a: TreeNode, b: TreeNode): number {
+  return a.order - b.order || (a.created ?? '').localeCompare(b.created ?? '') || a.title.localeCompare(b.title);
+}
+
+/**
+ * Children in execution order, status ignored. For what is committed (the
+ * overview): it must not depend on whose settings wrote it last.
+ */
+export function childrenByOrder(tree: Tree, id: string): TreeNode[] {
+  const out: TreeNode[] = [];
+  for (const node of tree.nodes.values()) if (node.parent === id) out.push(node);
+  return out.sort(byExecutionOrder);
 }
 
 /** From the top-level node down to `id`, inclusive. */
