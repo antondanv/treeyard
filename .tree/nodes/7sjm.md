@@ -3,12 +3,13 @@ id: 7sjm
 title: "treeyard log и show принимают --project: из worktree или другой папки — журнал и просмотр узла основного дерева"
 parent: 8gtc
 order: 330
-status: review
+status: done
 done_when: treeyard log <id> "…" --project <папка> и treeyard show [id] --project <папка> работают из другой папки (как diff --project); тест и строка в help
 commits:
   - 0f8751a3362d1554271ff028cf4a228e1c74f567
 created: 2026-10-04
-updated: 2026-10-07T16:16:45+03:00
+updated: 2026-10-07T16:20:35+03:00
+closed: 2026-10-07
 ---
 
 Откуда: Brainyard › «Два пакета: @antondanv/brainyard (API) и @antondanv/brainyard-cli (CLI и веб)» (xq8s)
@@ -21,3 +22,4 @@ updated: 2026-10-07T16:16:45+03:00
 - 2026-10-07 15:13 · агент · привязан коммит 0f8751a3362d1554271ff028cf4a228e1c74f567
 - 2026-10-07 15:18 · агент · Сделано (0f8751a): log и show принимают --project <папка> — как diff, общий helper projectDir(); help и оба README; test/cli-project.test.ts. Проверка из другой папки: log 7sjm … --project ../main → «written», show --project показывает запись.
 - 2026-10-07 15:18 · агент · к работе → на проверке
+- 2026-10-07 16:20 · ты · на проверке → готово
