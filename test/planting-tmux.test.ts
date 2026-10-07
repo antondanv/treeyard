@@ -56,7 +56,6 @@ async function start(name: string, columns: number, fallback = false) {
     TREEYARD_TEST_TSCONFIG: tsconfig,
     TREEYARD_TEST_MAIN: main,
     TREEYARD_NODE: 'parent-session',
-    PATH: `${bin}:${process.env.PATH}`,
     TERM: 'xterm-256color',
   };
   await term(
@@ -74,7 +73,8 @@ async function start(name: string, columns: number, fallback = false) {
     '--',
     'sh',
     '-c',
-    `${quote(tsx)} --tsconfig ${quote(tsconfig)} ${quote(main)}; printf 'treeyard returned\\n'; sleep 60`,
+    // PATH in the command, not in -e: tmux 3.4 gives the command the PATH of the client that ran new-session.
+    `PATH=${quote(bin)}:"$PATH" ${quote(tsx)} --tsconfig ${quote(tsconfig)} ${quote(main)}; printf 'treeyard returned\\n'; sleep 60`,
   );
   await until(async () => (await screen(name)).includes('Как посадим дерево?'));
   await term('send-keys', '-t', `=${name}:`, 'Enter');

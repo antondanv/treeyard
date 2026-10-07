@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { render } from 'ink';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { addDecisions } from '../src/agents/importer.js';
 import {
@@ -185,6 +185,14 @@ describe('the first-run wizard', () => {
     }
   }
   const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
+  afterEach(() => vi.unstubAllEnvs());
+
+  // The menu looks for agent CLIs on PATH: these are installed, whatever this machine has.
+  function installed(agents: string[]) {
+    const bin = tempDir('treeyard-wizard-bin-');
+    for (const agent of agents) writeFileSync(join(bin, agent), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    vi.stubEnv('PATH', agents.length ? `${bin}${delimiter}${process.env.PATH}` : bin);
+  }
 
   async function wizard(keys: string[], columns = 120, rows = 34) {
     const stdout = new Out(columns, rows);
@@ -224,11 +232,20 @@ describe('the first-run wizard', () => {
   });
 
   it('an agent is confirmed first, and a quick second Enter does not start it', async () => {
-    // The first available agent: whichever CLI this machine has.
+    installed(['claude']);
     const fast = await wizard(['\r', '\r']);
-    expect(fast.frame).toMatch(/Посадить дерево с .+\?/);
+    expect(fast.frame).toContain('Посадить дерево с Claude Code?');
     expect(fast.result.agent).toBeUndefined();
     const confirmed = await wizard(['\r', 'WAIT', '\r']);
-    expect(confirmed.result.agent).toBeDefined();
+    expect(confirmed.result.agent).toBe('claude');
+  });
+
+  it('without an agent CLI, the agents are marked and Enter goes to a template', async () => {
+    installed([]);
+    expect((await wizard([])).frame).toContain('· не установлен');
+    const { frame, result } = await wizard(['\r']);
+    expect(frame).toContain('шаблон ');
+    expect(frame).not.toContain('Посадить дерево с');
+    expect(result.agent).toBeUndefined();
   });
 });

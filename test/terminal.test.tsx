@@ -205,6 +205,8 @@ describe('terminal panes in the tree', () => {
     expect(app.stdout.frame).not.toContain('Продолжить сессию?');
     app.stdin.write('\u0011');
     await until(() => app.stdout.frame.includes('f печатать'));
+    // The tree takes keys again once its handlers resubscribe, a moment after the frame.
+    await pause(50);
     app.stdin.write('\r');
     await until(() => app.stdout.frame.includes('☾ Усыпить'));
     app.stdin.write('F');
