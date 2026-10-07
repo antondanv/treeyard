@@ -2,7 +2,7 @@
  * Links between the trees of different projects. A node that waits for work
  * in another project keeps `needs: [../Brainyard#hv95]`; that node keeps the
  * other side, `for: [../Treeyard#g9ph]`. The path goes from the project's
- * folder, like `file:../Brainyard` in package.json: no registry of projects.
+ * folder, like a `file:../…` dependency in package.json: no registry of projects.
  * A node of the same tree is `.#id` (typed by hand as `id` or `#id`).
  *
  * Reading forgives here too: a folder that moved or a node that was deleted

@@ -9,7 +9,7 @@
 
 TypeScript (ESM, strict), Node.js 22+, Ink 7 + React 19, `yaml`. Тесты — Vitest
 (+ ink-testing-library), lint и формат — Biome. Сессии и tmux — через
-`@antondanv/brainyard` из npm (`^0.2`); его исходники — в `../Brainyard`.
+`@antondanv/brainyard` из npm (`^0.3`); его исходники — в `../Brainyard`.
 
 ## Команды
 
