@@ -1,9 +1,5 @@
-import { execFile } from 'node:child_process';
 import { mkdirSync, renameSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
 
 import { render } from 'ink-testing-library';
 import { describe, expect, it } from 'vitest';
@@ -11,7 +7,6 @@ import { describe, expect, it } from 'vitest';
 import { contextText } from '../src/agents/context.js';
 import { journalEntries } from '../src/model/journal.js';
 import { addLinkedNode, linksOf, parseRef, refTo, resolveLink, setNeeds, sharedBranch } from '../src/model/links.js';
-import { NODE_VAR } from '../src/model/notes.js';
 import { addNode, setStatus } from '../src/model/ops.js';
 import { loadTree, nodeFromText, nodeToText } from '../src/model/store.js';
 import { actionable } from '../src/model/tree.js';
@@ -19,11 +14,7 @@ import { ROOT, type Tree } from '../src/model/types.js';
 import { createTree, getTemplate } from '../src/templates/templates.js';
 import { NodeDetails } from '../src/tui/details.js';
 import { TreeRow } from '../src/tui/rows.js';
-import { tempDir } from './helpers.js';
-
-const run = promisify(execFile);
-const cli = fileURLToPath(new URL('../src/cli/main.ts', import.meta.url));
-const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
+import { tempDir, treeyardIn } from './helpers.js';
 
 /** Two projects side by side, like ~/Projects/Treeyard and ~/Projects/Brainyard. */
 function neighbours(): { here: Tree; there: Tree; root: string } {
@@ -35,23 +26,6 @@ function neighbours(): { here: Tree; there: Tree; root: string } {
     return loadTree(dir);
   };
   return { here: plant('Treeyard'), there: plant('Brainyard'), root };
-}
-
-function shell(cwd: string) {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    TREEYARD_HOME: tempDir('treeyard-home-'),
-    TREEYARD_LANG: 'ru',
-    NO_COLOR: '1',
-  };
-  delete env[NODE_VAR];
-  delete env.CLAUDE_CODE_SESSION_ID;
-  delete env.FORCE_COLOR;
-  return (...args: string[]) =>
-    run(process.execPath, ['--import', tsx, cli, ...args], { cwd, env, timeout: 30_000 }).then(
-      ({ stdout, stderr }) => ({ code: 0, stdout, stderr }),
-      (error: { code: number; stdout: string; stderr: string }) => error,
-    );
 }
 
 describe('links between trees', () => {
@@ -181,7 +155,7 @@ describe('treeyard add --project --for', () => {
   it('makes the node there, links it, lets an agent close it, and survives a moved folder', async () => {
     const { here, there, root } = neighbours();
     const waiter = addNode(here, { title: 'Статус Codex' });
-    const sh = shell(here.project.dir);
+    const sh = treeyardIn(here.project.dir);
     const added = await sh(
       'add',
       'Codex: статус хода',
@@ -217,7 +191,7 @@ describe('treeyard add --project --for', () => {
     const { here, root } = neighbours();
     const waiter = addNode(here, { title: 'X' });
     mkdirSync(join(root, 'Empty'));
-    const sh = shell(here.project.dir);
+    const sh = treeyardIn(here.project.dir);
     expect((await sh('add', 'Y', '--for', waiter.id)).code).not.toBe(0);
     const empty = await sh('add', 'Y', '--project', '../Empty', '--for', waiter.id);
     expect(empty.code).not.toBe(0);

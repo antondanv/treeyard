@@ -178,6 +178,11 @@ export const EN: Record<string, string> = {
   'treeyard add "<название>" [--parent id]': 'treeyard add "<title>" [--parent id]',
   '«{pair}» — нужно ключ=значение': '«{pair}» — key=value expected',
   'не знаю поле «{key}»': 'unknown field «{key}»',
+  'порядок задаётся местом, а не числом: after=<id брата>|first|last':
+    'the order is a place, not a number: after=<sibling id>|first|last',
+  'after= не может указывать на сам узел': 'after= cannot point at the node itself',
+  'after=«{id}»: это не узел того же родителя — нужен брат, first или last':
+    'after=«{id}»: not a node under the same parent — use a sibling, first or last',
   '{p1} готово ставит человек — ставлю «на проверке»\n': '{p1} done is set by a person — setting review\n',
   'treeyard log <id> "что сделано; что осталось"': 'treeyard log <id> "what is done; what is left"',
   '{id} · записано\n': '{id} · written\n',

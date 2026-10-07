@@ -102,10 +102,11 @@ function commandLines(): string {
   treeyard templates                       шаблоны: этапы, направления, микадо…
   treeyard show [id] [--json] [--open]     дерево или узел текстом (--open — без готового)
                 [--project <папка>]        дерево другой папки, например основного worktree
-  treeyard add "<название>" [--parent id] [--status s] [--who agent|human|any]
-                [--done-when "…"] [--check "команда"] [--note "…"]
+  treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
+                [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
   treeyard set <id> ключ=значение…         status, title, who, done_when, check, waiting, until, parent,
+                                           after=<id брата>|first|last (место среди братьев),
                                            needs=../X#id (ждёт узла другого проекта); --project ../X — узел там
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
                 [--project <папка>]        писать в дерево другой папки, например основного worktree
@@ -132,10 +133,11 @@ function commandLines(): string {
   treeyard templates                       templates: stages, directions, mikado…
   treeyard show [id] [--json] [--open]     the tree or a node as text (--open hides finished work)
                 [--project <dir>]          the tree of another folder, e.g. the main worktree
-  treeyard add "<title>" [--parent id] [--status s] [--who agent|human|any]
-                [--done-when "…"] [--check "command"] [--note "…"]
+  treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
+                [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
   treeyard set <id> key=value…             status, title, who, done_when, check, waiting, until, parent,
+                                           after=<sibling id>|first|last (the place among siblings),
                                            needs=../X#id (waits for a node of another project); --project ../X — a node there
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
                 [--project <dir>]          write to the tree of another folder, e.g. the main worktree
@@ -328,6 +330,21 @@ function nodeArg(tree: Tree, id: string | undefined): string {
           id,
         }),
   );
+}
+
+/** `after=`: a sibling's id (or its start), `first` or `last` — the place among the children of `parent`. */
+function placeArg(tree: Tree, id: string, parent: string, value: string | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const word = value.trim().toLowerCase();
+  // No node id has an `i` or an `l`, so these words never clash with one.
+  if (word === 'first') return null;
+  if (word === 'last') return undefined;
+  const sibling = nodeArg(tree, value.trim());
+  if (sibling === id) throw new UsageError(t('after= не может указывать на сам узел'));
+  if (tree.nodes.get(sibling)?.parent !== parent) {
+    throw new UsageError(t('after=«{id}»: это не узел того же родителя — нужен брат, first или last', { id: sibling }));
+  }
+  return sibling;
 }
 
 function statusArg(value: string): Status {
@@ -753,14 +770,28 @@ async function setCommand(args: string[]): Promise<number> {
     fields[pair.slice(0, cut).trim().replace(/-/g, '_')] = pair.slice(cut + 1);
   }
   const source = sourceOf(values.as);
-  const known = new Set(['status', 'title', 'who', 'done_when', 'check', 'waiting', 'until', 'parent', 'needs']);
-  for (const key of Object.keys(fields))
+  const known = new Set([
+    'status',
+    'title',
+    'who',
+    'done_when',
+    'check',
+    'waiting',
+    'until',
+    'parent',
+    'after',
+    'needs',
+  ]);
+  for (const key of Object.keys(fields)) {
+    // `order` is a stored number in steps of 10: the way to change it is a place, not a number.
+    if (key === 'order') throw new UsageError(t('порядок задаётся местом, а не числом: after=<id брата>|first|last'));
     if (!known.has(key))
       throw new UsageError(
         t('не знаю поле «{key}»', {
           key,
         }),
       );
+  }
   if (
     fields.title !== undefined ||
     fields.who !== undefined ||
@@ -790,7 +821,16 @@ async function setCommand(args: string[]): Promise<number> {
         t('{p1} {ref} — не найдено, связь записана\n', { p1: err.c('#ffcf70', '!'), ref: link.ref }),
       );
   }
-  if (fields.parent !== undefined) moveNode(tree, id, fields.parent === ROOT ? ROOT : nodeArg(tree, fields.parent));
+  if (fields.parent !== undefined || fields.after !== undefined) {
+    // One move for both: `parent=` alone puts the node last, `after=` alone keeps its parent.
+    const parent =
+      fields.parent === undefined
+        ? (tree.nodes.get(id)?.parent ?? ROOT)
+        : fields.parent === ROOT
+          ? ROOT
+          : nodeArg(tree, fields.parent);
+    moveNode(tree, id, parent, placeArg(tree, id, parent, fields.after));
+  }
   if (fields.status !== undefined || fields.waiting !== undefined || fields.until !== undefined) {
     const node = tree.nodes.get(id)!;
     const status = fields.status !== undefined ? statusArg(fields.status) : node.status;

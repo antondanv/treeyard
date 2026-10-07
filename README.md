@@ -259,7 +259,9 @@ the tree.
 Under each parent, nodes go by status, by default: **active → in review → todo → waiting →
 idea → done → dropped**. Within one status you set the order yourself, top to bottom; it
 is kept in the nodes' `order`, shows in the CLI and in `.tree/README.md`, and `u` undoes a
-move. Changing a status moves the node to its part. The order of statuses is a setting —
+move. From the CLI: `treeyard set <id> after=<sibling id>|first|last` (a sibling of another
+status works too: the node takes the nearest place in its own group). Changing a status
+moves the node to its part. The order of statuses is a setting —
 “Status order” in `,` or `treeyard config status_order`:
 
 | Preset | Top to bottom |
@@ -416,6 +418,8 @@ with the same commands a person uses:
 ```sh
 treeyard show                                   # the tree; treeyard show <id> — a node
 treeyard add "Show the product to a person" --who human --parent <id>
+treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
+treeyard set <id> after=<sibling id>|first|last # the place among siblings; with parent=<id> — in a new parent
 treeyard set <id> status=waiting waiting="no server" until="a VPS is up"
 treeyard set <id> status=review                 # the agent; “done” is set by a person
 treeyard log <id> "what is done; what is left"
