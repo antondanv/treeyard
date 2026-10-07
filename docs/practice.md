@@ -1,80 +1,82 @@
-# Как вести проект с агентами
+**English** · [Русский](practice.ru.md)
 
-Одна страница, на которой держится treeyard. Собрана из того, что сработало в
-моих проектах с агентами, и из чужих практик, проверенных годами. Шаблоны — это разные способы растить дерево, а правила ниже
-общие для всех.
+# How to run a project with agents
 
-## Двенадцать правил
+The one page treeyard stands on. It's built from what worked in my own projects with
+agents and from other people's practices that have held up for years. Templates are
+different ways to grow the tree; the rules below are shared by all of them.
 
-1. **У корня — цель в жизни, а не в коде.** «Неделю веду канал только через
-   бота», «боевой контур принял настоящий отзыв». Тесты
-   говорят, что код работает; цель говорит, что проект сделал своё дело.
-   Без неё «вроде сделал, а вроде не всё» — нормальное состояние.
+## Twelve rules
 
-2. **У каждого узла есть «готово, когда».** Одно предложение, которое можно
-   увидеть или запустить: команда, сценарий, скриншот, число. Если его нельзя
-   сформулировать — узел ещё не понят, сначала разбей или исследуй.
+1. **The root is a goal in life, not in code.** "For a week I run the channel only
+   through the bot", "production accepted a real review". Tests say the code works;
+   the goal says the project did its job. Without one, "sort of done, but not quite"
+   becomes the normal state.
 
-3. **Узел — это одна сессия или один PR.** Больше ~10 пунктов внутри, «ещё
-   чуть-чуть» после закрытия, два агента правят одни файлы — пора делить.
+2. **Every node has a "done when".** One sentence you can see or run: a command, a
+   scenario, a screenshot, a number. If you can't write it, the node isn't understood
+   yet — split it or research it first.
 
-4. **Ветки независимы.** Упёрся во внешнее — сервера нет, ждёшь юриста, нет
-   доступа к API — ставь узлу «ждёт» с причиной и условием возврата и иди в
-   другую ветку. Тупик — это не «проект встал», а «эта ветка ждёт».
+3. **A node is one session or one PR.** More than ~10 items inside, "just a bit more"
+   after closing it, two agents editing the same files — time to split.
 
-5. **Твоё — отдельно от агентского.** Узлы, которые может сделать только
-   человек (договор, юрист, показать живому пользователю, неделю пожить с
-   продуктом), помечены «делает: ты». Их не видно в чек-листе — их видно в
-   дереве. Агент не сделает их за тебя, но подготовит всё, чтобы твой шаг занял
-   20 минут.
+4. **Branches are independent.** Stuck on something external — no server, waiting for a
+   lawyer, no API access — mark the node "waiting" with a reason and a condition to
+   come back, and move to another branch. A dead end isn't "the project stalled", it's
+   "this branch is waiting".
 
-6. **Сначала понять, потом план, потом код.** Новая сессия по умолчанию
-   начинается с плана: агент изучает код и предлагает, ты соглашаешься
-   (Explore → Plan → Code).
+5. **Your work is separate from the agents'.** Nodes only a human can do (a contract, a
+   lawyer, showing it to a real user, living with the product for a week) are marked
+   "done by: you". They don't hide in a checklist — they're visible in the tree. An
+   agent won't do them for you, but it will prepare everything so your step takes 20
+   minutes.
 
-7. **Агент не ставит «готово» сам.** Он ставит «на проверке» и показывает
-   доказательства: команду и её вывод, скриншот. «Готово» ставит человек или
-   отдельная проверяющая сессия со свежим контекстом.
+6. **Understand first, then plan, then code.** A new session starts with a plan by
+   default: the agent studies the code and proposes, you agree (Explore → Plan → Code).
 
-8. **Новая идея — новый узел, а не «заодно».** Всплыла по ходу — заведи узлом
-   со статусом «идея» и вернись к своему узлу. Так этап заканчивается, а идеи
-   не теряются.
+7. **An agent doesn't mark "done" itself.** It marks "review" and shows evidence: a
+   command and its output, a screenshot. "Done" is set by a human or by a separate
+   reviewing session with a fresh context.
 
-9. **Журнал — в узле, план — в дереве.** История, находки и «что осталось»
-   пишутся в журнал узла. Дорожная карта не превращается в лог на 2500 строк.
+8. **A new idea is a new node, not "while I'm at it".** If one comes up along the way,
+   add it as a node with the status "idea" and get back to your node. That's how a
+   stage ends and ideas don't get lost.
 
-10. **Решения записываются коротко и с причиной.** То, что дорого менять
-    (модель данных, инварианты, стек), — в раздел «Решения» дерева:
-    что решили и почему, одна строка — одно решение.
+9. **The log lives in the node, the plan lives in the tree.** History, findings and
+   "what's left" go into the node's log. The roadmap doesn't turn into a 2,500-line log.
 
-11. **Агенту — только нужный контекст.** Путь от корня до узла, сам узел,
-    правила проекта. Не «прочитай docs/ целиком»: длинный контекст размывает
-    инструкции. CLAUDE.md / AGENTS.md — короткие, с указателем на дерево.
+10. **Decisions are written down briefly, with a reason.** What's expensive to change
+    (the data model, invariants, the stack) goes into the tree's "Decisions" section:
+    what was decided and why, one line per decision.
 
-12. **Git ведёт агент, push — ты.** Перед работой — `git status` и ветка;
-    чужие незакоммиченные правки не трогать; коммитить только своё, по смыслу
-    (Conventional Commits); push и PR — по просьбе.
+11. **Give the agent only the context it needs.** The path from the root to the node,
+    the node itself, the project rules. Not "read all of docs/": long context blurs the
+    instructions. CLAUDE.md / AGENTS.md stay short, with a pointer to the tree.
 
-## Откуда это
+12. **The agent does git, you push.** Before work — `git status` and a branch; don't
+    touch other people's uncommitted changes; commit only your own, by meaning
+    (Conventional Commits); push and PRs only on request.
 
-- **Mikado Method** — дерево предпосылок для больших изменений: пробуешь цель
-  в лоб, при поломке откатываешь и записываешь, что мешает, детьми.
-- **Opportunity Solution Tree** (Тереза Торрес) — исход → возможности →
-  решения → проверки допущений. Для момента «не понимаю, как улучшить».
-- **Shape Up** (Basecamp) — аппетит вместо оценки: сколько времени готов
-  потратить, а объём подстраивается. Лекарство от бесконечной доработки.
-- **GTD** — «следующее действие» и список «ждёт»: заблокированное не
-  исчезает и не мешает делать остальное.
-- **Рекомендации Anthropic по Claude Code** — дать агенту способ проверить
-  себя, план до кода, короткий CLAUDE.md, свежий контекст для ревью, `/goal`
-  для работы до выполнения критерия.
+## Where this comes from
 
-## Шаблоны
+- **Mikado Method** — a tree of prerequisites for big changes: try the goal head-on,
+  and when it breaks, roll back and write down what's in the way as children.
+- **Opportunity Solution Tree** (Teresa Torres) — outcome → opportunities → solutions
+  → assumption tests. For the moment of "I don't know how to make it better".
+- **Shape Up** (Basecamp) — appetite instead of estimates: how much time you're willing
+  to spend, and the scope adjusts. A cure for endless polishing.
+- **GTD** — the "next action" and the "waiting for" list: blocked work doesn't vanish
+  and doesn't get in the way of everything else.
+- **Anthropic's Claude Code best practices** — give the agent a way to check itself,
+  a plan before code, a short CLAUDE.md, a fresh context for review, `/goal` to work
+  until a criterion is met.
 
-| Шаблон | Когда |
+## Templates
+
+| Template | When |
 |---|---|
-| **Этапы** | Новый проект с понятной целью: этапы с критериями, следующий — после проверки |
-| **Направления** | Живой проект: независимые ветки, одна ждёт — работаешь в другой |
-| **Микадо** | Большое изменение или рефакторинг, где всё цепляется за всё |
-| **Поиск улучшений** | Продукт работает, но непонятно, что делать дальше |
-| **Заказ** | Проект для клиента: этапы, согласования, ссылка на стенд после каждого |
+| **Stages** | A new project with a clear goal: stages with criteria, the next one after review |
+| **Directions** | A living project: independent branches, one waits — you work in another |
+| **Mikado** | A big change or refactoring where everything is tangled with everything |
+| **Finding improvements** | The product works, but it's unclear what to do next |
+| **Client work** | A project for a client: stages, sign-offs, a link to the staging after each |

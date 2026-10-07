@@ -619,9 +619,8 @@ anything and commit them along with the code. The view, the selected node and th
 branches are remembered in `.tree/.local/` — that folder doesn't go into git. `ui.json` is
 saved when the view or the selection changes; animation frames don't write it.
 
-How to run a project as a tree — [docs/practice.md](docs/practice.md) (in Russian for
-now). Templates: Stages, Directions, Mikado, Finding improvements, Client work (`treeyard
-templates`).
+How to run a project as a tree — [docs/practice.md](docs/practice.md). Templates: Stages,
+Directions, Mikado, Finding improvements, Client work (`treeyard templates`).
 
 ## Development
 
