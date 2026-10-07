@@ -4,6 +4,7 @@ title: Если подключить гитхаб ишью то мастер п�
 parent: smug
 order: 10
 status: todo
+done_when: после подключения Issues в узле GitHub видно, как подключить доску
 created: 2026-10-04
-updated: 2026-10-04T17:01:16+03:00
+updated: 2026-10-07T09:41:41+03:00
 ---

@@ -5,6 +5,14 @@ template: directions
 brain: claude
 start: plan
 created: 2026-10-02
+sessions:
+  - brain: claude
+    id: d5c1df4a-3dad-481a-b20b-893350c98b09
+    name: Treeyard · ревью дерева
+    started: 2026-10-07T09:40:50+03:00
+    opened: 2026-10-07T09:40:50+03:00
+    mode: pane
+    pane: claude-6a76d63a
 ---
 
 ## Метод: Направления
