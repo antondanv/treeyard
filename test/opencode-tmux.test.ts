@@ -30,7 +30,7 @@ const ready = async (pane: string) =>
 
 /** What the stand-in was started with, by session id. */
 const recorded = (dir: string, id: string) =>
-  JSON.parse(readFileSync(join(dir, `opencode-${id}.json`), 'utf8')) as { args: string[] };
+  JSON.parse(readFileSync(join(dir, `opencode-${id}.json`), 'utf8')) as { args: string[]; config: string | null };
 
 describe.skipIf(!panesAvailable())('OpenCode in a pane', () => {
   beforeAll(() => {
@@ -64,14 +64,17 @@ describe.skipIf(!panesAvailable())('OpenCode in a pane', () => {
       const ref = loadTree(tree.project.dir).nodes.get(node.id)!.sessions[0]!;
       expect(ref).toMatchObject({ brain: 'opencode', mode: 'pane', pane: launched.pane });
       expect(ref.id).toMatch(/^ses_/);
-      // A plan starts in OpenCode's plan agent; the context goes in front of the first message.
-      const first = recorded(tree.project.dir, ref.id).args;
+      // A plan starts in OpenCode's plan agent; the context is the agent's system prompt,
+      // the first message is only the task.
+      const { args: first, config } = recorded(tree.project.dir, ref.id);
       expect(first).toContain('--agent');
       expect(first[first.indexOf('--agent') + 1]).toBe('plan');
       const prompt = first.find((arg) => arg.startsWith('--prompt='))!;
-      expect(prompt).toContain('# Ты работаешь над узлом дерева проекта');
-      expect(prompt).toContain('Готово, когда: товар доходит до оплаты');
       expect(prompt).toContain(`Работаем над узлом «Корзина» (${node.id})`);
+      expect(prompt).not.toContain('# Ты работаешь над узлом дерева проекта');
+      const system = (JSON.parse(config!) as { agent: { plan: { prompt: string } } }).agent.plan.prompt;
+      expect(system).toContain('# Ты работаешь над узлом дерева проекта');
+      expect(system).toContain('Готово, когда: товар доходит до оплаты');
 
       const pane = (await readPanes()).find((p) => p.pane === launched.pane)!;
       expect(pane.sessionId).toBe(ref.id);

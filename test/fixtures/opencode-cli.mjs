@@ -61,7 +61,10 @@ if (!id) {
   );
 }
 db.close();
-writeFileSync(join(cwd, `opencode-${id}.json`), JSON.stringify({ args, id }));
+writeFileSync(
+  join(cwd, `opencode-${id}.json`),
+  JSON.stringify({ args, id, config: process.env.OPENCODE_CONFIG_CONTENT ?? null }),
+);
 console.log(`opencode stand-in ready ${id}`);
 process.stdin.setRawMode?.(true);
 process.stdin.resume();

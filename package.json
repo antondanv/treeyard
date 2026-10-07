@@ -61,7 +61,7 @@
     "postpack": "node scripts/npm-readme.mjs show"
   },
   "dependencies": {
-    "@antondanv/brainyard": "^0.2.0",
+    "@antondanv/brainyard": "^0.3.0",
     "ink": "^7.1.1",
     "pngjs": "^7.0.0",
     "react": "^19.2.0",
