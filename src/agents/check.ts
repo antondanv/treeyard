@@ -5,6 +5,8 @@
  */
 import { spawn } from 'node:child_process';
 
+import { childEnv } from '../node-env.js';
+
 export interface CheckResult {
   command: string;
   code: number | null;
@@ -21,7 +23,8 @@ export function runCheck(command: string, cwd: string, timeoutMs = 10 * 60_000):
   return new Promise((done) => {
     let output = '';
     let timedOut = false;
-    const child = spawn(command, { cwd, shell: true, env: { ...process.env, FORCE_COLOR: '0', CI: '1' } });
+    // Not our NODE_ENV=production default: `npm test` in a check must see what the shell had.
+    const child = spawn(command, { cwd, shell: true, env: childEnv({ FORCE_COLOR: '0', CI: '1' }) });
     const take = (chunk: Buffer) => {
       output += chunk.toString('utf8');
       // The end of a long log is where the verdict is.

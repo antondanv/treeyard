@@ -9,8 +9,10 @@ process.argv = [process.execPath, 'treeyard', '--version'];
 // Exercise the real entry before importing anything that can load React.
 await import('../../src/cli/main.js');
 const { default: React } = await import('react');
+const { ownNodeEnv } = await import('../../src/node-env.js');
 const startup = {
   nodeEnv: process.env.NODE_ENV,
+  ownNodeEnv: ownNodeEnv(),
   developmentReact: '_store' in React.createElement('test'),
 };
 

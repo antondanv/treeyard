@@ -27,6 +27,7 @@ async function probe(args: string[], nodeEnv?: string) {
   });
   return JSON.parse(stdout.split('\n').findLast((line) => line.startsWith('{'))!) as {
     nodeEnv: string;
+    ownNodeEnv: boolean;
     developmentReact: boolean;
     heaps: number[];
     measuresBefore: number;
@@ -39,12 +40,18 @@ async function probe(args: string[], nodeEnv?: string) {
 
 describe('CLI runtime', () => {
   it('loads production React by default, before the command imports Ink', async () => {
-    expect(await probe(['startup'])).toMatchObject({ nodeEnv: 'production', developmentReact: false });
+    // The production default is Treeyard's own: children (checks, sessions) are told so.
+    expect(await probe(['startup'])).toMatchObject({
+      nodeEnv: 'production',
+      ownNodeEnv: true,
+      developmentReact: false,
+    });
   });
 
   it.each(['development', 'test', 'production'])('preserves an explicit NODE_ENV=%s', async (nodeEnv) => {
     expect(await probe(['startup'], nodeEnv)).toMatchObject({
       nodeEnv,
+      ownNodeEnv: false,
       developmentReact: nodeEnv !== 'production',
     });
   });
