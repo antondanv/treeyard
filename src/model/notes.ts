@@ -6,8 +6,10 @@
  */
 import { homedir } from 'node:os';
 import { basename, resolve } from 'node:path';
+import type { EnvOverrides } from '@antondanv/brainyard';
 
 import { t } from '../i18n/i18n.js';
+import { ownNodeEnv } from '../node-env.js';
 import { addNode } from './ops.js';
 import { findProject } from './store.js';
 import { sessionOwners } from './tree.js';
@@ -35,8 +37,9 @@ export function homeShort(dir: string): string {
 /** Every session started from a node gets the node's id here. */
 export const NODE_VAR = 'TREEYARD_NODE';
 
-export function nodeEnv(id: string): Record<string, string> {
-  return { [NODE_VAR]: id };
+/** The env of a session started from a node: its id, and without the NODE_ENV Treeyard set for itself. */
+export function nodeEnv(id: string): EnvOverrides {
+  return ownNodeEnv() ? { [NODE_VAR]: id, NODE_ENV: undefined } : { [NODE_VAR]: id };
 }
 
 export interface NoteOrigin {

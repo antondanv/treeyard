@@ -3,13 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyTree } from './helpers.js';
 
 /** The modules fresh, so the «did we set it» flag starts clean under the NODE_ENV the test picked. */
-async function load(nodeEnv: string | undefined) {
-  if (nodeEnv === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = nodeEnv;
+async function load(value: string | undefined) {
+  if (value === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = value;
   vi.resetModules();
   const env = await import('../src/node-env.js');
   const { runCheck } = await import('../src/agents/check.js');
-  return { ...env, runCheck };
+  const { nodeEnv } = await import('../src/model/notes.js');
+  return { ...env, runCheck, nodeEnv };
 }
 
 describe('NODE_ENV that Treeyard sets itself', () => {
@@ -32,6 +33,20 @@ describe('NODE_ENV that Treeyard sets itself', () => {
     expect(child).not.toHaveProperty('NODE_ENV');
     expect(child.CI).toBe('1');
     expect(process.env.NODE_ENV).toBe('production');
+  });
+
+  it('is removed from the env of an agent session, which Brainyard then unsets', async () => {
+    const { defaultNodeEnv, nodeEnv } = await load(undefined);
+    defaultNodeEnv();
+    const env = nodeEnv('k3f9');
+    expect(env).toHaveProperty('NODE_ENV', undefined);
+    expect(env.TREEYARD_NODE).toBe('k3f9');
+  });
+
+  it('is passed on to an agent session untouched when the shell set it', async () => {
+    const { defaultNodeEnv, nodeEnv } = await load('development');
+    defaultNodeEnv();
+    expect(nodeEnv('k3f9')).toEqual({ TREEYARD_NODE: 'k3f9' });
   });
 
   it.each(['development', 'test', 'production'])('is not ours when the shell set %s', async (nodeEnv) => {
