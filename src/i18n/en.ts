@@ -983,6 +983,26 @@ export const EN: Record<string, string> = {
   'Агентом — узел и сессия: колонки под статусы дерева, подключит сам':
     "With an agent — a node and a session: columns for the tree's statuses, it connects the board itself",
   'GitHub · шаг 3 из 3 — доска': 'GitHub · step 3 of 3 — board',
+  'GitHub · доска': 'GitHub · board',
+  'Issues {repo} подключены и останутся. Выбери доску — её карточки станут узлами рядом с ними.':
+    'Issues of {repo} are linked and stay linked. Pick a board — its cards become nodes next to them.',
+  'Подключены issues {repo}, доски нет. Что сделать?': 'Issues of {repo} are linked, there is no board. What next?',
+  'Свериться с issues': 'Check against issues',
+  'новые issues — идеями в дереве; закрытие ходит в обе стороны':
+    'new issues become ideas in the tree; closing goes both ways',
+  'Подключить доску GitHub Project': 'Connect a GitHub Project board',
+  'карточки станут узлами рядом с issues, колонки — статусами; issues остаются подключены':
+    'cards become nodes next to the issues, columns become statuses; the issues stay linked',
+  'Действия узла «GitHub»': 'Actions of the «GitHub» node',
+  'G — свериться с issues или подключить доску': 'G — check against issues or connect a board',
+  'issues есть, доски нет  ': 'issues linked, no board  ',
+  '⏎ — свериться или подключить доску': '⏎ — sync or connect a board',
+  'ДОСКА GITHUB': 'GITHUB BOARD',
+  'не подключена — issues {repo} уже в дереве': 'not connected — the issues of {repo} are in the tree already',
+  '⏎ или G — свериться с issues или подключить доску GitHub Project':
+    '⏎ or G — check against issues or connect a GitHub Project board',
+  'С доской карточки становятся узлами, а статус ходит в обе стороны: карточка на GitHub и узел здесь.':
+    'With a board, cards become nodes and status goes both ways: the card on GitHub and the node here.',
   'Репозиторий {repo}. Выбери доску — её карточки станут узлами в «GitHub».':
     'Repository {repo}. Pick a board — its cards become nodes under «GitHub».',
   'Репозиторий {repo}. Досок у {owner} пока нет.': 'Repository {repo}. {owner} has no boards yet.',

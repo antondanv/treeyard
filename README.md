@@ -234,7 +234,7 @@ meaning. Russian text in search, forms and agent panes is typed as usual.
 | `r` `e` `E` | rename · the node's fields and description · the node in your editor |
 | `d` `w` `s` | done (on a done node — back to todo) · waiting, with a reason · any status |
 | `D` `y` | delete the node · copy its id |
-| `G` | GitHub: connect a board (wizard) or sync with the connected one |
+| `G` | GitHub: the wizard when nothing is connected; sync with the board; with only issues linked — a choice: sync them or connect a board |
 | `I` | node pictures: a screenshot from the clipboard (`v`), a caption (`n`), full screen (`o` — full size in Preview), delete (`D`); a picture file can be dragged into the window |
 | `V` | node diffs: linked commits → files → a coloured diff; also in the `⏎` menu and the `:` palette |
 | `P` | project documents: every `.md`, read with Markdown drawn and edited in the built-in editor; also `⏎` on the root `◆` |
@@ -575,7 +575,7 @@ Why: tasks from a GitHub board become nodes of the tree, and status travels both
 Move a card on GitHub — the node changes status; mark a node active or done — the card
 moves to its column.
 
-Until a board is connected, the tree's root has a **GitHub** node. It's not a file but an
+Until anything is connected, the tree's root has a **GitHub** node. It's not a file but an
 offer. `⏎` on it (or `G` anywhere) opens a three-step wizard:
 
 1. **gh.** If it's missing, the wizard suggests `brew install gh`. If you're not signed in
@@ -590,9 +590,16 @@ offer. `⏎` on it (or `G` anywhere) opens a three-step wizard:
    yourself (default columns) or by an agent (columns for the tree's statuses, connected
    by the agent). Or `i` — no board, only the repository's issues.
 
-Once connected, a real “GitHub” node appears (`github: hub`), and the cards go inside it.
-`G` on it syncs the tree with the board and the issues. Don't need it — in the settings
-`,` → “GitHub node” → hide (in `tree.md` that's `github: off`).
+As soon as anything is connected — a board, or only the issues — the offer gives way to a
+real “GitHub” node (`github: hub`), and the cards and issues go inside it. With a board,
+`G` syncs the tree with the board and the issues. With only the issues the offer to
+connect a board doesn't go away, it moves to that node: its line and details say “no
+board”, and `⏎` on it (or `G`) asks what to do — check against the issues, or connect a
+board. The second opens the same wizard at its last step, the board (the repository is
+already known; the issues stay linked), and the cards come in next to the issues' nodes.
+The node's own actions stay in that dialog too. Don't want the offer before anything is
+connected — in the settings `,` → “GitHub node” → hide (in `tree.md` that's
+`github: off`).
 
 The same from the shell:
 

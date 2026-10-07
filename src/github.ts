@@ -297,6 +297,14 @@ export function ensureHub(tree: Tree): TreeNode {
 export const GITHUB_TITLE = 'GitHub';
 
 /**
+ * Issues are linked, a board is not: the «GitHub» node is a real one by now,
+ * and it is where connecting a board is still on offer.
+ */
+export function boardOffered(tree: Tree): boolean {
+  return Boolean(linkedRepo(tree)) && !boardOf(tree);
+}
+
+/**
  * No board yet, and nobody said no: the tree shows a «GitHub» node that offers
  * to connect one. `github: off` in tree.md hides it.
  */

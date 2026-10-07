@@ -66,6 +66,7 @@ import {
 import { type DocFile, projectDocs, TREE_DOC, writeDoc } from '../docs.js';
 import {
   boardOf,
+  boardOffered,
   ensureHub,
   hubNode,
   type IssueSyncResult,
@@ -166,7 +167,7 @@ import {
 } from './dialogs.js';
 import { DiffsDialog } from './diffs-dialog.js';
 import { DocsDialog, type DocsOpen } from './docs-dialog.js';
-import { type AgentTask, GithubConnect } from './github-connect.js';
+import { type AgentTask, GithubChoice, GithubConnect } from './github-connect.js';
 import { follow, Graph, type GraphStyle, layoutGraph, neighbour, selectedOverflow, type Viewport } from './graph.js';
 import { History } from './history.js';
 import { ImagesDialog } from './images-dialog.js';
@@ -223,6 +224,8 @@ type Modal =
   | { kind: 'statusOrder' }
   | { kind: 'help' }
   | { kind: 'github' }
+  /** Issues are linked, a board is not: sync, or connect one. `actions` adds the node's own menu. */
+  | { kind: 'githubChoice'; actions?: boolean }
   | { kind: 'images'; node: string }
   | { kind: 'diffs'; node: string }
   /** ⏎ on the root: the project's documents and settings. */
@@ -721,6 +724,7 @@ export function App(props: AppProps) {
       'statusOrder',
       'confirm',
       'github',
+      'githubChoice',
       'images',
       'diffs',
       'docs',
@@ -1275,11 +1279,20 @@ export function App(props: AppProps) {
   };
 
   /** G: connect a board or issues when there are none, otherwise check the tree against them. */
-  const github = () => {
+  const github = (actions = false) => {
     if (job) return say(t('подожди: {label}', { label: job.label }), C.warn);
     const board = boardOf(treeRef.current);
     const repo = linkedRepo(treeRef.current);
     if (!board && !repo) return setModal({ kind: 'github' });
+    // Issues only: syncing is not the only thing left to do, a board can still be connected.
+    if (!board) return setModal({ kind: 'githubChoice', actions });
+    syncGithub();
+  };
+
+  const syncGithub = () => {
+    if (job) return say(t('подожди: {label}', { label: job.label }), C.warn);
+    const board = boardOf(treeRef.current);
+    const repo = linkedRepo(treeRef.current);
     githubJob(t('сверяюсь с GitHub'), async (current) => {
       const said: string[] = [];
       if (board) said.push(boardSummary(await syncBoard(current)));
@@ -1673,7 +1686,7 @@ export function App(props: AppProps) {
         setView('tree');
       },
     },
-    github: { label: t('GitHub: подключить доску или issues, свериться с ними'), keys: 'G', run: github },
+    github: { label: t('GitHub: подключить доску или issues, свериться с ними'), keys: 'G', run: () => github() },
     docs: {
       label: t('Документы проекта: читать и править .md'),
       keys: 'P',
@@ -1739,8 +1752,9 @@ export function App(props: AppProps) {
   const enter = () => {
     if (rootSelected) return setModal({ kind: 'project' });
     if (currentGroup) return expandTo(currentGroup.id, !expanded.has(currentGroup.id));
-    if (currentOffer || (current && current.id === hubNode(tree)?.id && !boardOf(tree) && !linkedRepo(tree)))
-      return github();
+    if (currentOffer) return github();
+    // The «GitHub» node without a board: connect one, or sync what is linked.
+    if (current && current.id === hubNode(tree)?.id && !boardOf(tree)) return github(true);
     if (view === 'sessions') {
       const session = currentSession;
       if (!session) return;
@@ -2398,12 +2412,34 @@ export function App(props: AppProps) {
             }}
           />
         );
+      case 'githubChoice': {
+        const repo = linkedRepo(tree);
+        if (!repo) return null;
+        return (
+          <GithubChoice
+            width={w}
+            repo={repo}
+            actions={Boolean(modal.actions)}
+            onCancel={close}
+            onPick={(key) => {
+              if (key === 'board') return setModal({ kind: 'github' });
+              if (key === 'actions') {
+                const hub = hubNode(tree);
+                return setModal(hub ? { kind: 'menu', node: hub.id } : undefined);
+              }
+              close();
+              syncGithub();
+            }}
+          />
+        );
+      }
       case 'github':
         return (
           <GithubConnect
             dir={props.dir}
             width={w}
             height={bodyHeight}
+            repo={boardOffered(tree) ? linkedRepo(tree) : undefined}
             onLink={(ref) => {
               close();
               connectGithub(ref);
@@ -3006,7 +3042,9 @@ export function App(props: AppProps) {
             label: 'GitHub',
             options: [{ value: 'linked', label: githubLabel(tree) }],
             value: 'linked',
-            hint: t('G — свериться с GitHub · колонки доски — в .tree/tree.md, github.columns'),
+            hint: boardOf(tree)
+              ? t('G — свериться с GitHub · колонки доски — в .tree/tree.md, github.columns')
+              : t('G — свериться с issues или подключить доску'),
           }
         : {
             key: 'github',
@@ -3553,7 +3591,14 @@ function SelectionStrip(props: {
   const links = linksOf(tree, node);
   // Another project's node speaks first: it is what this one waits for, or what it is for.
   const link = links.needs.find((item) => item.node?.status !== 'done') ?? links.needs[0] ?? links.neededBy[0];
-  if (link) {
+  if (boardOffered(tree) && hubNode(tree)?.id === node.id) {
+    second = (
+      <Text wrap="truncate-end">
+        <Text color={C.brand}>{t('issues есть, доски нет  ')}</Text>
+        <Text color={C.faint}>{t('⏎ — свериться или подключить доску')}</Text>
+      </Text>
+    );
+  } else if (link) {
     const waits = links.needs.includes(link);
     second = (
       <Text wrap="truncate-end">

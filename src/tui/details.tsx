@@ -11,6 +11,7 @@ import wrapAnsi from 'wrap-ansi';
 
 import { BRAIN_SHORT, resumeCommand } from '../agents/launch.js';
 import { type DocFile, linesLabel, TREE_DOC } from '../docs.js';
+import { boardOffered, hubNode, linkedRepo } from '../github.js';
 import { t } from '../i18n/i18n.js';
 import { daysLeft, imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
@@ -106,6 +107,19 @@ export function NodeDetails(props: {
         {t('ветка выше: ')}
         {STATUS_LABEL[held.status]} — «{held.title}»
       </Text>,
+    );
+  }
+
+  // The «GitHub» node with issues but no board: where a board is connected.
+  const issuesRepo = boardOffered(tree) && hubNode(tree)?.id === node.id ? linkedRepo(tree) : undefined;
+  if (issuesRepo) {
+    gap();
+    heading(t('ДОСКА GITHUB'));
+    wrap(t('не подключена — issues {repo} уже в дереве', { repo: `${issuesRepo.owner}/${issuesRepo.name}` }), C.warn);
+    wrap(t('⏎ или G — свериться с issues или подключить доску GitHub Project'), C.brand);
+    wrap(
+      t('С доской карточки становятся узлами, а статус ходит в обе стороны: карточка на GitHub и узел здесь.'),
+      C.faint,
     );
   }
 

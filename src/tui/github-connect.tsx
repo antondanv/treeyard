@@ -43,6 +43,8 @@ export function GithubConnect(props: {
   dir: string;
   width: number;
   height: number;
+  /** The repository whose issues are linked already: the wizard starts at the board. */
+  repo?: Repo | undefined;
   /** A board (`owner/N`) or, without one, the repository (`owner/name`): link it and bring its cards or issues in. */
   onLink: (ref: string) => void;
   /** Give the job to an agent: a node and a session for it. */
@@ -98,6 +100,7 @@ export function GithubConnect(props: {
       ghState(),
       (state) => {
         if (!ghReady(state)) return show({ kind: 'gh', state });
+        if (props.repo) return boards(props.repo);
         const repo = repoOf(props.dir);
         if (repo) return verify(repo);
         show({ kind: 'repo' });
@@ -385,25 +388,25 @@ export function GithubConnect(props: {
           hotkey: 'a',
           label: <Text>{t('Агентом — узел и сессия: колонки под статусы дерева, подключит сам')}</Text>,
         },
-        {
+      );
+      // Issues are linked already: «issues only» is what there is, not a choice.
+      if (!props.repo)
+        items.push({
           key: 'issues',
           hotkey: 'i',
           section: t('Без доски'),
           label: <Text>{t('Только issues {repo}', { repo: `${repo.owner}/${repo.name}` })}</Text>,
           hint: t('открытые — идеи в дереве; закрыл issue — узел закрыт, «готово» в дереве — issue закрыта'),
-        },
-      );
+        });
+      const place = { repo: `${repo.owner}/${repo.name}`, owner: repo.owner };
       return frame(
-        t('GitHub · шаг 3 из 3 — доска'),
+        props.repo ? t('GitHub · доска') : t('GitHub · шаг 3 из 3 — доска'),
         note(
           step.list.length
-            ? t('Репозиторий {repo}. Выбери доску — её карточки станут узлами в «GitHub».', {
-                repo: `${repo.owner}/${repo.name}`,
-              })
-            : t('Репозиторий {repo}. Досок у {owner} пока нет.', {
-                repo: `${repo.owner}/${repo.name}`,
-                owner: repo.owner,
-              }),
+            ? props.repo
+              ? t('Issues {repo} подключены и останутся. Выбери доску — её карточки станут узлами рядом с ними.', place)
+              : t('Репозиторий {repo}. Выбери доску — её карточки станут узлами в «GitHub».', place)
+            : t('Репозиторий {repo}. Досок у {owner} пока нет.', place),
           C.text,
         ),
         items,
@@ -429,6 +432,51 @@ export function GithubConnect(props: {
         />
       );
   }
+}
+
+/** Issues are linked and there is no board: sync what is linked, or go on to a board. */
+export function GithubChoice(props: {
+  width: number;
+  repo: Repo;
+  /** Also offer the node's own actions: ⏎ on the «GitHub» node used to open them. */
+  actions: boolean;
+  onPick: (key: 'sync' | 'board' | 'actions') => void;
+  onCancel: () => void;
+}) {
+  const items: MenuItem[] = [
+    {
+      key: 'sync',
+      hotkey: 's',
+      label: <Text>{t('Свериться с issues')}</Text>,
+      hint: t('новые issues — идеями в дереве; закрытие ходит в обе стороны'),
+    },
+    {
+      key: 'board',
+      hotkey: 'b',
+      label: <Text>{t('Подключить доску GitHub Project')}</Text>,
+      hint: t('карточки станут узлами рядом с issues, колонки — статусами; issues остаются подключены'),
+    },
+  ];
+  if (props.actions) items.push({ key: 'actions', hotkey: 'a', label: <Text>{t('Действия узла «GitHub»')}</Text> });
+  return (
+    <Frame
+      title="GitHub"
+      width={props.width}
+      footer={[{ key: '⏎', label: t('выбрать') }, { label: t('буква — сразу') }, { key: 'esc', label: t('закрыть') }]}
+    >
+      <Box marginBottom={1}>
+        <Text wrap="wrap">
+          {t('Подключены issues {repo}, доски нет. Что сделать?', { repo: `${props.repo.owner}/${props.repo.name}` })}
+        </Text>
+      </Box>
+      <Menu
+        items={items}
+        active
+        onPick={(key) => props.onPick(key as 'sync' | 'board' | 'actions')}
+        onCancel={props.onCancel}
+      />
+    </Frame>
+  );
 }
 
 function Waiting(props: { width: number; label: string; hint: KeyHint; onBack: () => void }) {
