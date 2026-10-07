@@ -2,7 +2,7 @@
 
 **Цель:** Соло-разработчик ведёт свои проекты с агентами через дерево и доводит их до проверки в жизни, а не до вечного «код готов, проект стоит»
 
-Готово 57 из 74 · в работе 1 · на проверке 10 · ждут 2 · идей 18
+Готово 57 из 74 · в работе 1 · на проверке 12 · ждут 0 · идей 18
 
 > Этот файл собирает treeyard из `nodes/` — правьте узлы, а не его.
 > `○` к работе · `◐` в работе · `◎` на проверке · `‖` ждёт · `✓` готово · `◇` идея · `✗` отказ
@@ -56,7 +56,7 @@
   - ◇ [Мышь в формах: клик по полю и по варианту выбора (новый узел, запуск, настройки, шаги)](nodes/rkuh.md)
   - ◇ [Колесо мыши над деревом и списками — сейчас колесо работает только в панели сессии](nodes/7msc.md)
   - ◇ [В меню узла k листает вверх, а не запускает «Сформулировать «готово, когда»» (подсказка «⏎ k» врёт)](nodes/pkca.md)
-  - ‖ [NODE_ENV=production утекает из Treeyard в панели агентов: Treeyard ставит его себе (src/cli/main.ts:4 — без него React в dev-режиме держит props на каждом кадре, это оставить), но через process.env его наследуют tmux-сервер brainyard и все CLI в панелях — npm ci и npm install там молча пропускают devDependencies (в worktree Brainyard не поставились vitest, tsc, biome). Нужно: запомнить, что NODE_ENV поставил сам Treeyard, и не передавать его в open/startPane/run; уже запущенный сервер brainyard держит его глобально до перезапуска (tmux -L brainyard set-environment -g -u NODE_ENV — для новых панелей)](nodes/vzyp.md) · ждёт: правка Brainyard (xh97, b833f83) не выпущена в npm
+  - ◎ [NODE_ENV=production утекает из Treeyard в панели агентов: Treeyard ставит его себе (src/cli/main.ts:4 — без него React в dev-режиме держит props на каждом кадре, это оставить), но через process.env его наследуют tmux-сервер brainyard и все CLI в панелях — npm ci и npm install там молча пропускают devDependencies (в worktree Brainyard не поставились vitest, tsc, biome). Нужно: запомнить, что NODE_ENV поставил сам Treeyard, и не передавать его в open/startPane/run; уже запущенный сервер brainyard держит его глобально до перезапуска (tmux -L brainyard set-environment -g -u NODE_ENV — для новых панелей)](nodes/vzyp.md)
 - ◎ [Замечания](nodes/smug.md) — 0/1 · *ты*
   - ✗ [treeyard show не принимает --project: из worktree или другой папки нельзя посмотреть узел или дерево другого проекта (set и add принимают)](nodes/5tk8.md)
   - ✗ [проверка](nodes/zdx7.md)
@@ -102,7 +102,7 @@
   - ◎ [Нет справки по команде: treeyard add --help → «Unknown option '--help'», ключи видно только в общем treeyard help](nodes/p3wa.md)
   - ◇ [package.json exports указывает на dist/index.js, а src/index.ts нет — пакет не импортируется как библиотека](nodes/ay85.md)
   - ◇ [README в npm: ссылки и картинки — в репозиторий (forNpm, как в Brainyard)](nodes/brvd.md)
-  - ‖ [Режим запуска «просто открыть» (--start chat) у Codex, Antigravity и OpenCode шлёт инструкции treeyard первым сообщением — в панели стена текста, хотя режим обещает без первого сообщения (у Claude это системный промпт)](nodes/gufv.md) · ждёт: правка Brainyard (rsen, 7404a92) не выпущена в npm
+  - ◎ [Режим запуска «просто открыть» (--start chat) у Codex, Antigravity и OpenCode шлёт инструкции treeyard первым сообщением — в панели стена текста, хотя режим обещает без первого сообщения (у Claude это системный промпт)](nodes/gufv.md)
 - ✓ [Сделано](nodes/ykwt.md) — 1/1
   - ✓ [Дерево в терминале: граф, список, карточки, вкладки, палитра, шаблоны ru/en](nodes/juka.md)
   - ✓ [Посадка: мастер, скилл treeyard-init, import (агентом и из JSON), pointer, skills install](nodes/4h7t.md)

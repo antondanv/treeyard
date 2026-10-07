@@ -3,14 +3,14 @@ id: gufv
 title: Режим запуска «просто открыть» (--start chat) у Codex, Antigravity и OpenCode шлёт инструкции treeyard первым сообщением — в панели стена текста, хотя режим обещает без первого сообщения (у Claude это системный промпт)
 parent: 5w6w
 order: 210
-status: waiting
+status: review
 done_when: "treeyard open <id> --brain codex|antigravity|opencode --start chat: в панели нет первого сообщения — инструкции уходят как системные (или, где слота нет, это сказано в README)"
-waiting: правка Brainyard (rsen, 7404a92) не выпущена в npm
-until: выйдет @antondanv/brainyard с system-слотом — поднять зависимость, проверить chat у Codex и OpenCode
 needs:
   - ../Brainyard#rsen
+commits:
+  - 0ffe869ebba7923cf36de00074304ad83bb61a3f
 created: 2026-10-06
-updated: 2026-10-07T15:36:30+03:00
+updated: 2026-10-07T16:14:32+03:00
 ---
 
 Откуда: Treeyard › «Сделать видео с Motion Design с красивой презентацией работы триярда» (6vy3)
@@ -23,3 +23,6 @@ updated: 2026-10-07T15:36:30+03:00
 - 2026-10-07 09:59 · агент · ждёт: Brainyard › «Режим chat у Codex, Antigravity и OpenCode: system не первым сообщением — Codex через developer_instructions, OpenCode через OPENCODE_CONFIG_CONTENT; у Antigravity — выяснить, есть ли слот» (rsen)
 - 2026-10-07 15:36 · агент · Brainyard (rsen, 7404a92): у Codex system идёт через -c developer_instructions, у OpenCode — через agent.build/plan.prompt (заменяет базовый промпт OpenCode для этих двух агентов); у Antigravity 1.3.0 слота нет — описано. В Treeyard менять нечего — нужен релиз Brainyard и подъём зависимости.
 - 2026-10-07 15:36 · агент · к работе → ждёт: правка Brainyard (rsen, 7404a92) не выпущена в npm
+- 2026-10-07 16:14 · агент · привязан коммит 0ffe869ebba7923cf36de00074304ad83bb61a3f
+- 2026-10-07 16:14 · агент · Сделано: Treeyard на brainyard 0.3.0 (0ffe869). В «просто открыть» контекст у Codex идёт через -c developer_instructions, у OpenCode — системным промптом агента (тест opencode-tmux проверяет, что первое сообщение — только задача, а контекст в OPENCODE_CONFIG_CONTENT). У Antigravity слота нет — по-старому. Живые сессии Codex и OpenCode не открывал: проверено debug-командами самих CLI.
+- 2026-10-07 16:14 · агент · ждёт → на проверке
