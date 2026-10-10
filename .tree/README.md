@@ -2,7 +2,7 @@
 
 **Цель:** Соло-разработчик ведёт свои проекты с агентами через дерево и доводит их до проверки в жизни, а не до вечного «код готов, проект стоит»
 
-Готово 58 из 76 · в работе 1 · на проверке 5 · ждут 0 · идей 15
+Готово 58 из 76 · в работе 1 · на проверке 5 · ждут 0 · идей 16
 
 > Этот файл собирает treeyard из `nodes/` — правьте узлы, а не его.
 > `○` к работе · `◐` в работе · `◎` на проверке · `‖` ждёт · `✓` готово · `◇` идея · `✗` отказ
@@ -82,6 +82,7 @@
   - ✓ [CI и публикация из GitHub release (как в Brainyard)](nodes/z3u9.md)
   - ◎ [CI зелёный: тесты не зависят от агентов и tmux на раннере](nodes/cmfc.md) — 0/1
     - ○ [Нестабильный тест: terminal.test.tsx «the node menu shows a live pane…» раз упал под нагрузкой полного прогона](nodes/vqek.md)
+    - ◇ [Нестабильный тест: mouse.test.tsx «presses the panel buttons without starting to type, and types after a click inside» упал в CI на Node 24 / macos-latest](nodes/ev5s.md)
   - ✓ [Самому поставить из npm и посадить дерево на чистом аккаунте за ≤20 мин](nodes/222x.md)
   - ✓ [Нет справки по команде: treeyard add --help → «Unknown option '--help'», ключи видно только в общем treeyard help](nodes/p3wa.md)
   - ◇ [package.json exports указывает на dist/index.js, а src/index.ts нет — пакет не импортируется как библиотека](nodes/ay85.md)
