@@ -293,8 +293,8 @@ the tree. Above the list: how many sessions there were in the last 14 days and h
 them went past the tree; the same at the end of `treeyard sessions`. To attach such a
 session to a node — `l`.
 
-It needs tmux: `brew install tmux`. Treeyard has its own tmux server (`tmux -L brainyard`)
-and doesn't touch your own tmux or its settings.
+It needs tmux. Treeyard has its own tmux server (`tmux -L brainyard`) and doesn't touch
+your own tmux or its settings.
 
 ## Agents and the tree
 

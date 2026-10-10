@@ -160,21 +160,22 @@ its task and shows where the project stands.
 ## Quick start
 
 You need Node.js 22+ and at least one agent CLI: Claude Code, Codex, Antigravity or
-OpenCode. For sessions in panes next to the tree, tmux (`brew install tmux` on macOS).
-macOS is the main platform.
+OpenCode. To have agents work in a pane next to the tree, also install
+[tmux](https://github.com/tmux/tmux/wiki/Installing) (the link has the commands for every
+system); without it, sessions open in this terminal.
 
 ```sh
 npm install -g @antondanv/treeyard
 cd my-project && treeyard                  # no tree yet: the planting wizard
 ```
 
+The language, the theme and the rest are yours to set up in the settings — the `,` key.
 Other ways in:
 
 ```sh
 treeyard init                              # a new tree: with an agent or from a template
 treeyard init --agent --brain codex        # straight to the agent, no wizard
 treeyard import                            # the agent quietly reads the project's plan and builds the tree
-treeyard config lang ru                    # Russian: the interface, templates and what agents get
 ```
 
 ## How you work with it
