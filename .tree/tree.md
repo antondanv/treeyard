@@ -27,6 +27,13 @@ sessions:
     opened: 2026-10-07T17:19:15+03:00
     mode: pane
     pane: claude-54c1a507
+  - brain: claude
+    id: bf0a55fd-93c0-4840-96d9-5c0ab4d0e77f
+    name: Treeyard · разговор о проекте
+    started: 2026-10-10T13:34:44+03:00
+    opened: 2026-10-10T13:34:44+03:00
+    mode: pane
+    pane: claude-da91c6ea
 ---
 
 ## Метод: Направления
