@@ -168,7 +168,7 @@ npm install -g @antondanv/treeyard
 cd my-project && treeyard                  # no tree yet: the planting wizard
 ```
 
-Planting a tree with an agent takes about 20 minutes. Other ways in:
+Other ways in:
 
 ```sh
 treeyard init                              # a new tree: with an agent or from a template
