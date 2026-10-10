@@ -39,9 +39,11 @@ npm run screenshots                # заново снять картинки RE
 - Комментарии в коде — по-английски, коротко и про «зачем»; стиль — как в соседнем коде.
 - Всё, что видит человек, проверяй в TUI (`npm run dev` в копии дерева или
   `scripts/screenshot.ts`), а не только тестами; на узком экране (≈100×30) тоже.
-- Изменилось поведение или клавиши — поправь README.md и README.ru.md; изменился вид —
-  `npm run screenshots`. В npm уходит только README.md: на время упаковки README.ru.md
-  отходит в сторону (`scripts/npm-readme.mjs`, prepack/postpack).
+- README.md и README.ru.md — коротко о сути; клавиши, настройки и команды — в
+  `docs/reference.md` и `docs/reference.ru.md`. Изменилось поведение или клавиши — поправь
+  справочник на обоих языках; изменился вид — `npm run screenshots`. В npm уходит только
+  README.md: на время упаковки README.ru.md отходит в сторону (`scripts/npm-readme.mjs`,
+  prepack/postpack).
 - Промо-ролик и другие ролики — в отдельном проекте `../Motionlab` (`videos/treeyard/`), не здесь.
 - Git: коммиты по смыслу (Conventional Commits), только своё; push и PR — по просьбе.
   Без строк `Co-Authored-By` и подписей агента в коммитах и PR.
