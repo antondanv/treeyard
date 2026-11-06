@@ -181,8 +181,8 @@ const TEXT = {
     rules: '## Как ведётся проект',
     commands: '## Команды дерева',
     command: 'Команда',
-    show: 'узел целиком',
-    showAll: 'всё дерево',
+    show: 'шапка и последние записи (без --brief — целиком; можно несколько id)',
+    showAll: 'открытое дерево (`--all` — всё)',
     log: 'что сделано; что осталось',
     logWhat: 'итог в журнал узла',
     add: 'Заголовок',
@@ -233,8 +233,8 @@ const TEXT = {
     rules: '## How the project is run',
     commands: '## Tree commands',
     command: 'The command is',
-    show: 'the whole node',
-    showAll: 'the whole tree',
+    show: 'header and latest entries (without --brief — in full; several ids work)',
+    showAll: 'the open tree (`--all` — everything)',
     log: 'what is done; what is left',
     logWhat: 'a summary in the node journal',
     add: 'Title',
@@ -335,7 +335,7 @@ export function contextText(tree: Tree, id: string): string {
 
   lines.push(L.commands, '');
   lines.push(`${L.command} \`${self}\`.`);
-  lines.push(`- \`${self} show ${node.id}\` — ${L.show}; \`${self} show\` — ${L.showAll}`);
+  lines.push(`- \`${self} show ${node.id} --brief\` — ${L.show}; \`${self} show\` — ${L.showAll}`);
   lines.push(`- \`${self} log ${node.id} "${L.log}"\` — ${L.logWhat}`);
   lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea\` — ${L.addWhat}`);
   lines.push(`- \`${self} set ${node.id} status=review\` — ${L.review}`);
@@ -396,7 +396,7 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
   if (mode === 'plan') {
     plan.prompt = pick({
       ru:
-        `Проведи ревью всего дерева проекта «${tree.project.title}». Пройди узлы (\`${selfCommand()} show <id>\`, файлы .tree/nodes/), ` +
+        `Проведи ревью всего дерева проекта «${tree.project.title}». Пройди узлы (\`${selfCommand()} show <id> --brief\`, файлы .tree/nodes/), ` +
         'загляни в код и git log, сколько нужно, и найди, что в дереве криво: узлы без «готово, когда» или с критерием, ' +
         'который нельзя увидеть или запустить; переростки, которые пора разбить; «в работе» и «на проверке» без движения больше недели, ' +
         '«на проверке» без доказательств в журнале; «ждёт», у которых условие возврата, похоже, наступило; работу, которая по коду и ' +
@@ -405,7 +405,7 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
         'Потом находки по важности — у каждой команда treeyard, которая её исправит. Ничего не меняй, пока я не соглашусь; ' +
         'после согласия выполни команды и покажи, что вышло.',
       en:
-        `Review the whole tree of project «${tree.project.title}». Go through the nodes (\`${selfCommand()} show <id>\`, the files in .tree/nodes/), ` +
+        `Review the whole tree of project «${tree.project.title}». Go through the nodes (\`${selfCommand()} show <id> --brief\`, the files in .tree/nodes/), ` +
         'look into the code and git log as much as you need, and find what is crooked in the tree: nodes without "done when" or with ' +
         'a criterion nobody can see or run; nodes grown too big to be one session; "in progress" and "in review" without movement for ' +
         'over a week, "in review" without evidence in the journal; "waiting" whose condition to come back seems to have come; work ' +
@@ -445,7 +445,7 @@ const ROOT_TEXT = {
     rules: '## Как ведётся проект',
     commands: '## Команды дерева',
     command: 'Команда',
-    show: 'всё дерево; узел целиком — `show <id>`',
+    show: 'открытое дерево (`--all` — всё); `show <id…> --brief` — шапки и последние записи узлов',
     add: 'новый узел (родитель — по смыслу; `--status idea` для идеи)',
     set: 'поменять узел: status, title, parent, done_when, who, check, waiting, until',
     keyValue: 'ключ=значение',
@@ -485,7 +485,7 @@ const ROOT_TEXT = {
     rules: '## How the project is run',
     commands: '## Tree commands',
     command: 'The command is',
-    show: 'the whole tree; a node in full — `show <id>`',
+    show: 'the open tree (`--all` — everything); `show <id…> --brief` — headers and latest entries of nodes',
     add: 'a new node (pick the parent by meaning; `--status idea` for an idea)',
     set: 'change a node: status, title, parent, done_when, who, check, waiting, until',
     keyValue: 'key=value',

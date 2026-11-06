@@ -425,11 +425,11 @@ describe('status order setting', () => {
     const baseline = overview();
     expect(run('config').stdout).toMatch(/status_order\s+active-first\s+active,review,todo/);
     expect(run('config', 'status_order', 'done-first').stdout).toContain('status_order = done-first  done,active');
-    inOrder(run('show').stdout, ['Подтверждено', 'Работаю', 'Проверяю', 'Первый']);
+    inOrder(run('show', '--all').stdout, ['Подтверждено', 'Работаю', 'Проверяю', 'Первый']);
     expect(overview()).toBe(baseline);
     const mine = 'todo,review,active,waiting,idea,done,dropped';
     expect(run('config', 'status_order', mine).stdout).toContain(`status_order = custom  ${mine}`);
-    inOrder(run('show').stdout, ['Первый', 'Проверяю', 'Работаю', 'Подтверждено']);
+    inOrder(run('show', '--all').stdout, ['Первый', 'Проверяю', 'Работаю', 'Подтверждено']);
     expect(overview()).toBe(baseline);
     expect(run('config', 'status_order', 'active-first').status).toBe(0);
     expect(run('config', 'status_order', 'custom').stdout).toContain(`custom  ${mine}`);

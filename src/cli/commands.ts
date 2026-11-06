@@ -101,7 +101,9 @@ function commandLines(): string {
   treeyard pointer                         дописать блок о дереве в AGENTS.md / CLAUDE.md
   treeyard skills [install]                скилл посадки: где он, поставить в Claude Code, Codex, Antigravity
   treeyard templates                       шаблоны: этапы, направления, микадо…
-  treeyard show [id] [--json] [--open]     дерево или узел текстом (--open — без готового)
+  treeyard show [id…] [--json] [--open]    дерево или узлы текстом (--open — без готового; вне терминала готовое
+                                           свёрнуто в «✓ готово: N», --all — всё)
+                [--brief] [--journal N|all]  --brief — шапка, критерий и 3 последние записи; --journal — сколько записей
                 [--project <папка>]        дерево другой папки, например основного worktree
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
@@ -136,7 +138,9 @@ function commandLines(): string {
   treeyard pointer                         add the block about the tree to AGENTS.md / CLAUDE.md
   treeyard skills [install]                the planting skill: where it is, install into Claude Code, Codex, Antigravity
   treeyard templates                       templates: stages, directions, mikado…
-  treeyard show [id] [--json] [--open]     the tree or a node as text (--open hides finished work)
+  treeyard show [id…] [--json] [--open]    the tree or nodes as text (--open hides finished work; off a terminal
+                                           finished work folds into «✓ done: N», --all shows everything)
+                [--brief] [--journal N|all]  --brief — header, criterion and the last 3 entries; --journal — how many entries
                 [--project <dir>]          the tree of another folder, e.g. the main worktree
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
@@ -684,27 +688,55 @@ function showCommand(args: string[]): number {
   const { values, positionals } = parse(args, {
     json: { type: 'boolean' },
     open: { type: 'boolean' },
+    all: { type: 'boolean' },
+    brief: { type: 'boolean' },
+    journal: { type: 'string' },
     project: { type: 'string' },
   });
   const tree = project(values.project);
-  if (positionals[0]) {
-    const id = nodeArg(tree, positionals[0]);
-    const node = tree.nodes.get(id);
-    if (!node)
-      throw new UsageError(
-        t('нет узла «{id}»', {
-          id,
-        }),
-      );
-    const stale = staleFn(tree)(node);
-    if (values.json) process.stdout.write(`${JSON.stringify({ ...node, ...staleJson(stale) }, null, 2)}\n`);
-    else process.stdout.write(`${nodeText(tree, node, out, stale)}\n`);
+  if (positionals.length > 0) {
+    // Resolve every id first: an unknown one fails the call without partial output.
+    const nodes = positionals.map((arg) => {
+      const id = nodeArg(tree, arg);
+      const node = tree.nodes.get(id);
+      if (!node)
+        throw new UsageError(
+          t('нет узла «{id}»', {
+            id,
+          }),
+        );
+      return node;
+    });
+    const staleOfNode = staleFn(tree);
+    if (values.json) {
+      const rows = nodes.map((node) => ({ ...node, ...staleJson(staleOfNode(node)) }));
+      process.stdout.write(`${JSON.stringify(rows.length === 1 ? rows[0] : rows, null, 2)}\n`);
+      return 0;
+    }
+    const options = { brief: values.brief === true, ...journalOption(values.journal) };
+    const text = nodes.map((node) => {
+      const stale = staleOfNode(node);
+      return nodeText(tree, node, out, { ...options, ...(stale ? { stale } : {}) });
+    });
+    process.stdout.write(`${text.join('\n\n')}\n`);
     return 0;
   }
   if (values.json) process.stdout.write(`${JSON.stringify(treeJson(tree, staleFn(tree)), null, 2)}\n`);
-  else process.stdout.write(`${treeText(tree, out, { closed: !values.open, stale: staleFn(tree) })}\n`);
+  else {
+    // Off a terminal (agents, pipes) finished work folds into a counter, as in the TUI; --all brings it back.
+    const fold = !process.stdout.isTTY && !values.all && !values.open;
+    process.stdout.write(`${treeText(tree, out, { closed: !values.open, foldDone: fold, stale: staleFn(tree) })}\n`);
+  }
   for (const problem of tree.problems) process.stderr.write(`${err.c('#ff7b72', '!')} ${problem}\n`);
   return 0;
+}
+
+function journalOption(raw: string | undefined): { journal?: number } {
+  if (raw === undefined) return {};
+  if (raw === 'all') return { journal: Number.POSITIVE_INFINITY };
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) throw new UsageError(t('--journal: число записей или all'));
+  return { journal: n };
 }
 
 function addCommand(args: string[]): number {

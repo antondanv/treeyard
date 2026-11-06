@@ -113,7 +113,7 @@ describe('where it shows', () => {
     const added = addNode(tree, { title: 'Брошенный', status: 'active' });
     const stale = { ...old(14), lastEntry: '2026-11-05 11:00 · агент · второе' };
     const p = paint(process.stdout);
-    const text = nodeText(tree, tree.nodes.get(added.id)!, p, stale);
+    const text = nodeText(tree, tree.nodes.get(added.id)!, p, { stale });
     expect(text).toContain('в работе · без сессии 14 ч');
     expect(text).toContain('последняя запись журнала');
     expect(treeText(tree, p, { stale: () => stale })).toContain('без сессии 14 ч');

@@ -52,7 +52,7 @@ export type StaleFn = (node: TreeNode) => Stale | undefined;
 export function treeText(
   tree: Tree,
   p: Paint,
-  options: { closed?: boolean; under?: string; stale?: StaleFn } = {},
+  options: { closed?: boolean; under?: string; foldDone?: boolean; stale?: StaleFn } = {},
 ): string {
   const { project } = tree;
   const total = summarize(tree);
@@ -87,11 +87,23 @@ export function treeText(
     return hex ? p.c(hex, GLYPH[node.status]) : GLYPH[node.status];
   };
   const walk = (parent: string, prefix: string) => {
-    const kids = childrenOf(tree, parent).filter(
+    const all = childrenOf(tree, parent).filter(
       (kid) => options.closed !== false || (kid.status !== 'done' && kid.status !== 'dropped'),
     );
+    // Like the TUI's «Готовые» group: finished children collapse into one counter at the first one's place.
+    const doneCount = options.foldDone ? all.filter((kid) => kid.status === 'done').length : 0;
+    const kids: (TreeNode | number)[] = [];
+    for (const kid of all) {
+      if (doneCount && kid.status === 'done') {
+        if (!kids.some((item) => typeof item === 'number')) kids.push(doneCount);
+      } else kids.push(kid);
+    }
     kids.forEach((node, index) => {
       const last = index === kids.length - 1;
+      if (typeof node === 'number') {
+        lines.push(`${prefix}${p.dim(`${last ? '└─ ' : '├─ '}✓ ${t('готово: {n}', { n: node })}`)}`);
+        return;
+      }
       let line = `${prefix}${p.dim(last ? '└─ ' : '├─ ')}${glyph(node)} ${node.status === 'done' ? p.dim(node.title) : node.title}`;
       line += p.dim(`  ${node.id}`);
       const grandkids = childrenOf(tree, node.id);
@@ -121,7 +133,19 @@ export function treeText(
   return lines.join('\n');
 }
 
-export function nodeText(tree: Tree, node: TreeNode, p: Paint, stale?: Stale): string {
+export interface NodeTextOptions {
+  /** Header, criterion and the last journal entries only: for agents that skim. */
+  brief?: boolean;
+  /** How many journal entries to show; `Infinity` for all. Default 12 (3 when brief). */
+  journal?: number;
+  /** An «in progress» node nobody works on: the mark in the status line and the card note. */
+  stale?: Stale;
+}
+
+export function nodeText(tree: Tree, node: TreeNode, p: Paint, options: NodeTextOptions = {}): string {
+  const brief = options.brief === true;
+  const keep = options.journal ?? (brief ? 3 : 12);
+  const stale = options.stale;
   const lines: string[] = [];
   const path = pathTo(tree, node.id);
   lines.push(`${GLYPH[node.status]} ${p.bold(node.title)}  ${p.dim(node.id)}`);
@@ -145,7 +169,7 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint, stale?: Stale): s
         .join(' · '),
     ),
   );
-  if (path.length > 1)
+  if (!brief && path.length > 1)
     lines.push(
       p.dim(
         t('путь: {p1}', {
@@ -177,16 +201,19 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint, stale?: Stale): s
       : p.dim(linkLabel(link));
   for (const link of links.needs) lines.push(`${p.dim(t('ждёт:'))} ${linkLine(link)}`);
   for (const link of links.neededBy) lines.push(`${p.dim(t('нужен для:'))} ${linkLine(link)}`);
-  if (node.commits?.length) {
+  if (!brief && node.commits?.length) {
     lines.push('', p.dim(t('коммиты:')));
     for (const sha of node.commits) lines.push(`  ${sha}`);
   }
   const kids = childrenOf(tree, node.id);
-  if (kids.length > 0) {
+  if (kids.length > 0 && brief) {
+    const { done, total } = progress(tree, node.id);
+    lines.push(p.dim(t('внутри: {total}, готово {done}', { total, done })));
+  } else if (kids.length > 0) {
     lines.push('', p.dim(t('внутри:')));
     lines.push(treeText(tree, p, { under: node.id }));
   }
-  if (node.sessions.length > 0) {
+  if (!brief && node.sessions.length > 0) {
     lines.push('', p.dim(t('сессии:')));
     for (const ref of node.sessions) {
       lines.push(
@@ -194,12 +221,15 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint, stale?: Stale): s
       );
     }
   }
-  const about = description(node.body);
+  const about = brief ? undefined : description(node.body);
   if (about) lines.push('', about);
   const journal = journalEntries(node.body);
   if (journal.length > 0) {
     lines.push('', p.dim(t('журнал:')));
-    for (const entry of journal.slice(-12)) lines.push(`  - ${entry}`);
+    const hidden = Math.max(0, journal.length - keep);
+    if (hidden > 0 && (brief || options.journal !== undefined))
+      lines.push(p.dim(t('  … ещё {n} (--journal all)', { n: hidden })));
+    for (const entry of journal.slice(journal.length - Math.min(keep, journal.length))) lines.push(`  - ${entry}`);
   }
   return lines.join('\n');
 }
