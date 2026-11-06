@@ -215,6 +215,7 @@ Settings — the `,` key (always shown in the top right corner) or `treeyard con
 | `open` | open sessions in a pane (`pane`, the default) or in the terminal (`terminal`); without tmux — in the terminal |
 | `sleep_after` | put sessions to sleep after 15/30/60 idle minutes (default 30); `0` — never |
 | `max_panes` | the limit of the project's live panes: 3/5/8 (default 5); `0` — no limit |
+| `stale_after` | hours after which an «in progress» node with no live session and no records is marked «no session N h» (default 2); `0` — off |
 | `notes` | the folder with the tree where `treeyard note` writes notes from any project; `off` — none. In `,` — “Where notes go”: a path (`~`, `.` — this project), empty — none |
 
 With `live` on, a working Codex shows a spinner at its node and counts among “agents
@@ -246,6 +247,7 @@ treeyard config lang ru         # Russian
 treeyard config confirm off     # don't ask before starting
 treeyard config sleep_after 15  # sleep after 15 minutes of confirmed idling
 treeyard config max_panes 3     # up to three panes; working and visible ones are protected
+treeyard config stale_after 4   # mark «in progress» nodes nobody has touched for 4 hours
 treeyard config status_order done-first  # done on top
 treeyard config status_order todo,review,active,waiting,idea,done,dropped  # your own order
 treeyard config notes ~/Projects/my-notes  # where notes go
@@ -550,3 +552,15 @@ The commands to build and test are in the [README](../README.md#development).
 Treeyard runs React/Ink in `production` mode by default, so animations don't pile up debug
 measurements in memory. An explicitly set `NODE_ENV` is kept; to debug React, run
 `NODE_ENV=development npm run dev`.
+
+## Abandoned «in progress»
+
+A node in `active` that has no live session and has seen no activity for `stale_after` hours
+(2 by default) is shown as «in progress · no session N h»: in tree and list rows, on the
+node card (with the last journal line, to continue from), in `treeyard show` (the status
+line; `--json` has `stale: { hours }`) and in the root review context, which offers to put
+such nodes back to work or to continue them. Activity is the latest of: the node updated, a
+journal line, a session started or opened, so a fresh node that a coordinator handed to a
+subagent is not marked. A node with open children is not marked
+either: its work lives in the children, and an abandoned child gets the mark itself. The TUI knows live sessions and panes; the CLI and the review
+context judge by time alone. The setting is in the settings window («,»).
