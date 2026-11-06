@@ -42,6 +42,8 @@ export interface Settings {
   sleepAfter: number;
   /** At most this many live panes per project; the quietest sleeps first. 0 — no limit. */
   maxPanes: number;
+  /** An «in progress» node with no live session and quiet this many hours is marked; 0 — never. */
+  staleAfter: number;
   /** The folder whose tree takes `treeyard note` from every project; empty — not set. */
   notes: string;
 }
@@ -49,6 +51,7 @@ export interface Settings {
 export type OpenIn = 'pane' | 'terminal';
 export const SLEEP_AFTER = [0, 15, 30, 60] as const;
 export const MAX_PANES = [0, 3, 5, 8] as const;
+export const STALE_AFTER = [0, 1, 2, 4, 8, 24] as const;
 
 export const DEFAULTS: Settings = {
   lang: 'en',
@@ -62,6 +65,7 @@ export const DEFAULTS: Settings = {
   open: 'pane',
   sleepAfter: 30,
   maxPanes: 5,
+  staleAfter: 2,
   notes: '',
 };
 
@@ -75,6 +79,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     const data = JSON.parse(readFileSync(settingsPath(env), 'utf8')) as Partial<Settings> & {
       sleep_after?: unknown;
       max_panes?: unknown;
+      stale_after?: unknown;
       status_order?: unknown;
       custom_order?: unknown;
     };
@@ -89,6 +94,9 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     const maxPanes = data.max_panes ?? data.maxPanes;
     if ((SLEEP_AFTER as readonly unknown[]).includes(sleepAfter)) settings.sleepAfter = sleepAfter as number;
     if ((MAX_PANES as readonly unknown[]).includes(maxPanes)) settings.maxPanes = maxPanes as number;
+    const staleAfter = data.stale_after ?? data.staleAfter;
+    if (typeof staleAfter === 'number' && Number.isInteger(staleAfter) && staleAfter >= 0)
+      settings.staleAfter = staleAfter;
     const statusOrder = data.status_order ?? data.statusOrder;
     const customOrder = data.custom_order ?? data.customOrder;
     if ((STATUS_ORDER_NAMES as readonly unknown[]).includes(statusOrder))
@@ -106,13 +114,14 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
 export function saveSettings(settings: Settings, env: NodeJS.ProcessEnv = process.env): void {
   const path = settingsPath(env);
   mkdirSync(dirname(path), { recursive: true });
-  const { sleepAfter, maxPanes, statusOrder, customOrder, ...rest } = settings;
+  const { sleepAfter, maxPanes, staleAfter, statusOrder, customOrder, ...rest } = settings;
   const data = {
     ...rest,
     status_order: statusOrder,
     custom_order: customOrder,
     sleep_after: sleepAfter,
     max_panes: maxPanes,
+    stale_after: staleAfter,
   };
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }

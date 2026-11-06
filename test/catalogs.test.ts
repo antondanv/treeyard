@@ -13,7 +13,7 @@ const RIGHT = '\u001b[C';
 const LEFT = '\u001b[D';
 const downs = (n: number) => Array.from({ length: n }, () => DOWN);
 /** Rows of the settings screen before «Модель сессий»: language … status order … live, panes, notes, brain, start. */
-const MODEL_ROW = 13;
+const MODEL_ROW = 14;
 
 beforeEach(() => {
   process.env.TREEYARD_HOME = tempDir('treeyard-home-');
@@ -88,7 +88,7 @@ describe('models come from the CLI, not from typing', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(11), RIGHT, DOWN, DOWN],
+      keys: [',', ...downs(12), RIGHT, DOWN, DOWN],
     });
     const project = loadTree(tree.project.dir).project;
     expect(project.brain).toBe('codex');
@@ -108,7 +108,7 @@ describe('models come from the CLI, not from typing', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(11), LEFT, DOWN, DOWN, DOWN],
+      keys: [',', ...downs(12), LEFT, DOWN, DOWN, DOWN],
     });
     const project = loadTree(tree.project.dir).project;
     expect(project.brain).toBe('opencode');
@@ -117,7 +117,7 @@ describe('models come from the CLI, not from typing', () => {
     expect(frame).toMatch(/Усилие\s+в самой сессии/);
     expect(frame).toContain('OpenCode меняет усилие — вариант модели — прямо в сессии: ctrl+t');
     // Pressing ←→ on it changes nothing.
-    await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(14), RIGHT, LEFT] });
+    await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(15), RIGHT, LEFT] });
     expect(loadTree(tree.project.dir).project.effort).toBeUndefined();
   });
 

@@ -12,10 +12,10 @@ import { formatMemory, type Pane } from '../agents/panes.js';
 import { t } from '../i18n/i18n.js';
 import type { Link } from '../model/links.js';
 import { GLYPH } from '../model/overview.js';
+import { type Stale, staleLabel } from '../model/stale.js';
 import { ago, duration } from '../model/time.js';
 import { type Progress, progress, type Row } from '../model/tree.js';
 import { type BrainId, ROOT, type Tree, type TreeNode } from '../model/types.js';
-
 import { agentBadge, type Badge, fitBadge } from './badges.js';
 import { marquee, overflows } from './marquee.js';
 import { clip } from './text.js';
@@ -30,6 +30,8 @@ export interface Badges {
   pane?: BrainId | undefined;
   /** Nodes of other projects it waits for. */
   needs?: Link[];
+  /** An «in progress» node nobody works on. */
+  stale?: Stale;
 }
 
 const MIN_TITLE = 10;
@@ -220,6 +222,10 @@ function badgeFor(
   const props = { dim };
   const agent = agentBadge(badges.live, badges.pane, badges.frame);
   if (agent) return agent;
+  if (badges.stale) {
+    const text = staleLabel(badges.stale);
+    return { text, compact: text, mark: '·', color: C.faint };
+  }
   if (badges.needs?.length) {
     // The first one not done yet speaks for all; when all are done, the work can go on.
     const open = badges.needs.filter((link) => link.node?.status !== 'done');

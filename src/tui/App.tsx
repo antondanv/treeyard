@@ -103,6 +103,7 @@ import {
   WHO_LABEL,
 } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
+import { staleOf } from '../model/stale.js';
 import { loadTree, treeStamp, writeProject } from '../model/store.js';
 import { ago, duration } from '../model/time.js';
 import {
@@ -136,7 +137,7 @@ import {
   type Tree,
   type TreeNode,
 } from '../model/types.js';
-import { MAX_PANES, SLEEP_AFTER, settings, updateSettings } from '../settings.js';
+import { MAX_PANES, SLEEP_AFTER, STALE_AFTER, settings, updateSettings } from '../settings.js';
 import { catalogHint, effortOptions, effortsFor, fitChoice, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './components/controls.js';
 import { NodeDetails, ProjectDetails, SessionDetails } from './details.js';
@@ -786,13 +787,23 @@ export function App(props: AppProps) {
     return brains;
   }, [panes, tree]);
 
+  // «In progress» with no live session (neither a running CLI nor a pane) and no recent record.
+  const staleFor = (node: TreeNode) =>
+    staleOf(node, {
+      afterHours: settings().staleAfter,
+      live: node.sessions.some((ref) => live.get(ref.id)?.live) || Boolean(nodePane(node, panes)),
+      tree,
+    });
+
   const badgesFor = (node: TreeNode) => {
     const sessions = node.sessions.map((ref) => live.get(ref.id)).filter((s): s is SessionInfo => Boolean(s?.live));
     const kids = childrenOf(tree, node.id);
+    const stale = staleFor(node);
     return {
       live: sessions,
       frame,
       pane: nodePane(node, panes)?.pane.brain,
+      ...(stale ? { stale } : {}),
       ...(kids.length > 0 ? { progress: progress(tree, node.id) } : {}),
       ...(node.needs ? { needs: linksOf(tree, node).needs } : {}),
     };
@@ -2979,6 +2990,13 @@ export function App(props: AppProps) {
         hint: t('при превышении засыпает самая давно простаивающая'),
       },
       {
+        key: 'staleAfter',
+        label: t('Помечать «в работе» без сессии'),
+        options: STALE_AFTER.map((n) => ({ value: String(n), label: n ? t('{n} ч', { n }) : t('выкл') })),
+        value: String(s.staleAfter),
+        hint: t('узел в работе без живой сессии и без записей дольше этого срока'),
+      },
+      {
         key: 'notes',
         label: t('Куда падают замечания'),
         value: s.notes ? homeShort(s.notes) : '',
@@ -3085,6 +3103,7 @@ export function App(props: AppProps) {
     else if (key === 'open' && (value === 'pane' || value === 'terminal')) updateSettings({ open: value });
     else if (key === 'sleepAfter') updateSettings({ sleepAfter: Number(value) });
     else if (key === 'maxPanes') updateSettings({ maxPanes: Number(value) });
+    else if (key === 'staleAfter') updateSettings({ staleAfter: Number(value) });
     else if (key === 'github') {
       if (value !== 'linked') change(t('узел GitHub'), () => setOffer(tree, on));
     } else if (key === 'notes') {
@@ -3409,6 +3428,7 @@ export function App(props: AppProps) {
                     height={bodyHeight}
                     live={live}
                     frame={frame}
+                    stale={current ? staleFor(current) : undefined}
                   />
                 )
               ) : null}

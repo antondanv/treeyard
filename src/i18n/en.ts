@@ -1145,4 +1145,13 @@ export const EN: Record<string, string> = {
   'Claude Code, Codex, Antigravity или OpenCode · в панели, в терминале или в фоне':
     'Claude Code, Codex, Antigravity or OpenCode · in a pane, in the terminal or in the background',
   'всё дерево, журналы, правила и команды': 'the whole tree, journals, rules and commands',
+  'без сессии {time}': 'no session {time}',
+  'в работе, но живой сессии нет {time} — последняя запись журнала: {entry}':
+    'in progress, but no live session for {time} — last journal line: {entry}',
+  'в работе, но живой сессии нет {time}': 'in progress, but no live session for {time}',
+  'Помечать «в работе» без сессии': 'Mark «in progress» with no session',
+  '{n} ч': '{n} h',
+  'узел в работе без живой сессии и без записей дольше этого срока':
+    'a node in progress with no live session and no records for longer than this',
+  '{key}: часы целым числом, 0 — выключено': '{key}: hours as a whole number, 0 — off',
 };

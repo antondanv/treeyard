@@ -18,6 +18,7 @@ import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
+import { type Stale, staleLabel, staleNote } from '../model/stale.js';
 import { ago } from '../model/time.js';
 import { childrenOf, heldBy, pathTo, progress, summarize } from '../model/tree.js';
 import { ROOT, type SessionRef, type Tree, type TreeNode } from '../model/types.js';
@@ -37,6 +38,7 @@ export function NodeDetails(props: {
   height: number;
   live: Map<string, SessionInfo>;
   frame: number;
+  stale?: Stale | undefined;
 }) {
   const { tree, node, width } = props;
   const inner = Math.max(10, width - 2);
@@ -71,6 +73,7 @@ export function NodeDetails(props: {
   // Title and status line.
   wrap(`${GLYPH[node.status]} ${node.title}`, STATUS_COLOR[node.status] ?? undefined);
   const meta: string[] = [STATUS_LABEL[node.status]];
+  if (props.stale) meta.push(staleLabel(props.stale));
   if (node.who)
     meta.push(
       t('делает: {p1}', {
@@ -100,6 +103,7 @@ export function NodeDetails(props: {
       </Text>,
     );
   }
+  if (props.stale) wrap(staleNote(props.stale), C.faint);
   const held = heldBy(tree, node.id);
   if (held) {
     push(

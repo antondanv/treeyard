@@ -13,6 +13,7 @@ import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
+import { staleNodes } from '../model/stale.js';
 import { actionable, childrenOf, pathTo, progress, summarize, waitingNodes } from '../model/tree.js';
 import { type BrainId, ROOT, type StartMode, type Tree, type TreeNode } from '../model/types.js';
 import { loadSettings } from '../settings.js';
@@ -447,6 +448,11 @@ const ROOT_TEXT = {
     open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
     doneWhen: 'готово, когда',
     more: 'ещё',
+    stale: '## В работе, но без живой сессии',
+    staleHint:
+      'Над ними никто не работает: предложи человеку вернуть узел к работе (`set <id> status=todo`) или продолжить его.',
+    staleLine: (h: number, last: string) =>
+      `без сессии ${h >= 48 ? `${Math.floor(h / 24)} дн` : `${h} ч`}${last ? ` · последняя запись: ${last}` : ''}`,
   },
   en: {
     heading: '# You are working with the whole project tree',
@@ -482,6 +488,11 @@ const ROOT_TEXT = {
     open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
     doneWhen: 'done when',
     more: 'more',
+    stale: '## In progress, but no live session',
+    staleHint:
+      'Nobody works on these: offer the person to put the node back to work (`set <id> status=todo`) or to continue it.',
+    staleLine: (h: number, last: string) =>
+      `no session for ${h >= 48 ? `${Math.floor(h / 24)} d` : `${h} h`}${last ? ` · last record: ${last}` : ''}`,
   },
 };
 
@@ -542,6 +553,17 @@ export function projectContext(tree: Tree): string {
     const why = node.waiting ? clip(node.waiting, 200) : L.noReason;
     return `- ${node.title} (\`${node.id}\`): ${why}${node.until ? ` · ${L.until}: ${clip(node.until, 160)}` : ''}`;
   });
+
+  // Only by the time threshold: this text is built without asking who is alive.
+  const abandoned = staleNodes(tree, { afterHours: loadSettings().staleAfter });
+  if (abandoned.length) {
+    lines.push(L.stale, '', L.staleHint, '');
+    for (const { node, stale } of abandoned.slice(0, 20)) {
+      lines.push(`${brief(node)} — ${L.staleLine(stale.hours, stale.lastEntry ? clip(stale.lastEntry, 160) : '')}`);
+    }
+    if (abandoned.length > 20) lines.push(`- … ${L.more} ${abandoned.length - 20}`);
+    lines.push('');
+  }
 
   const events = activity(tree, 25);
   if (events.length) {

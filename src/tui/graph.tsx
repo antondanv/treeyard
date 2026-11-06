@@ -21,8 +21,10 @@ import { t } from '../i18n/i18n.js';
 import { linksOf } from '../model/links.js';
 import { STATUS_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
+import { staleLabel, staleOf } from '../model/stale.js';
 import { childrenOf, progress, type Row } from '../model/tree.js';
 import { type BrainId, ROOT, type Tree } from '../model/types.js';
+import { settings } from '../settings.js';
 import { agentBadge, type Badge, fitBadge } from './badges.js';
 import { marquee, overflows } from './marquee.js';
 import { type Click, useClick } from './mouse.js';
@@ -575,6 +577,12 @@ export function graphCells(props: GraphProps): Cell[][] {
         metaColor = agent.color ?? color;
       } else {
         meta = STATUS_LABEL[node.status];
+        const stale = staleOf(node, {
+          afterHours: settings().staleAfter,
+          live: sessions.length > 0 || Boolean(props.panes?.has(node.id)),
+          tree,
+        });
+        if (stale) meta += ` · ${staleLabel(stale)}`;
         if (node.who === 'human' && node.status !== 'done' && node.status !== 'dropped') meta += t(' · ты');
         if (item.row?.hasChildren) {
           const p = progress(tree, node.id);

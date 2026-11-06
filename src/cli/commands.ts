@@ -54,6 +54,7 @@ import {
   setStatus,
   updateNode,
 } from '../model/ops.js';
+import { staleOf } from '../model/stale.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
 import { ago } from '../model/time.js';
 import {
@@ -80,7 +81,7 @@ import {
 import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
-import { nodeText, paint, treeJson, treeText } from './print.js';
+import { nodeText, paint, type StaleFn, staleJson, treeJson, treeText } from './print.js';
 
 const require = createRequire(import.meta.url);
 const VERSION = (require('../../package.json') as { version: string }).version;
@@ -665,6 +666,15 @@ function templatesCommand(): number {
 
 // ── Reading and writing the tree ───────────────────────────────────────────
 
+/**
+ * Abandoned nodes by the threshold alone: a CLI call does not ask the CLIs or tmux who is
+ * alive, and a session that works writes to the node (opened, journal) anyway.
+ */
+function staleFn(tree: Tree): StaleFn {
+  const afterHours = settings().staleAfter;
+  return (node) => staleOf(node, { afterHours, tree });
+}
+
 function showCommand(args: string[]): number {
   const { values, positionals } = parse(args, {
     json: { type: 'boolean' },
@@ -681,12 +691,13 @@ function showCommand(args: string[]): number {
           id,
         }),
       );
-    if (values.json) process.stdout.write(`${JSON.stringify(node, null, 2)}\n`);
-    else process.stdout.write(`${nodeText(tree, node, out)}\n`);
+    const stale = staleFn(tree)(node);
+    if (values.json) process.stdout.write(`${JSON.stringify({ ...node, ...staleJson(stale) }, null, 2)}\n`);
+    else process.stdout.write(`${nodeText(tree, node, out, stale)}\n`);
     return 0;
   }
-  if (values.json) process.stdout.write(`${JSON.stringify(treeJson(tree), null, 2)}\n`);
-  else process.stdout.write(`${treeText(tree, out, { closed: !values.open })}\n`);
+  if (values.json) process.stdout.write(`${JSON.stringify(treeJson(tree, staleFn(tree)), null, 2)}\n`);
+  else process.stdout.write(`${treeText(tree, out, { closed: !values.open, stale: staleFn(tree) })}\n`);
   for (const problem of tree.problems) process.stderr.write(`${err.c('#ff7b72', '!')} ${problem}\n`);
   return 0;
 }
@@ -1372,10 +1383,16 @@ const GLOBAL_KEYS = [
   'open',
   'sleepAfter',
   'maxPanes',
+  'staleAfter',
   'notes',
 ] as const;
 /** Keys in settings.json and on the command line, where they differ from the code. */
-const SNAKE: Record<string, string> = { sleepAfter: 'sleep_after', maxPanes: 'max_panes', statusOrder: 'status_order' };
+const SNAKE: Record<string, string> = {
+  sleepAfter: 'sleep_after',
+  maxPanes: 'max_panes',
+  staleAfter: 'stale_after',
+  statusOrder: 'status_order',
+};
 const PROJECT_KEYS = ['brain', 'start', 'model', 'effort', 'assist_model'] as const;
 
 function configCommand(args: string[]): number {
@@ -1449,6 +1466,11 @@ function configCommand(args: string[]): number {
       if (!choices.includes(n))
         throw new UsageError(t('{key}: выбери {choices}', { key: requestedKey, choices: choices.join('/') }));
       updateSettings({ [key]: n });
+    } else if (key === 'staleAfter') {
+      const n = /^(off|none)$/i.test(value) ? 0 : Number(value);
+      if (!Number.isInteger(n) || n < 0)
+        throw new UsageError(t('{key}: часы целым числом, 0 — выключено', { key: requestedKey }));
+      updateSettings({ staleAfter: n });
     } else if (key === 'notes') {
       try {
         updateSettings({ notes: notesFolder(value) });

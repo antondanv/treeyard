@@ -8,6 +8,7 @@ import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
+import { type Stale, staleLabel, staleNote } from '../model/stale.js';
 import { ago } from '../model/time.js';
 import { childrenOf, pathTo, progress, summarize } from '../model/tree.js';
 import { ROOT, type Status, type Tree, type TreeNode } from '../model/types.js';
@@ -45,7 +46,14 @@ const HEX: Record<Status, string | undefined> = {
   dropped: '#5c6370',
 };
 
-export function treeText(tree: Tree, p: Paint, options: { closed?: boolean; under?: string } = {}): string {
+/** Which active nodes nobody works on; the CLI passes the threshold from the settings. */
+export type StaleFn = (node: TreeNode) => Stale | undefined;
+
+export function treeText(
+  tree: Tree,
+  p: Paint,
+  options: { closed?: boolean; under?: string; stale?: StaleFn } = {},
+): string {
   const { project } = tree;
   const total = summarize(tree);
   const lines: string[] = [];
@@ -103,6 +111,8 @@ export function treeText(tree: Tree, p: Paint, options: { closed?: boolean; unde
           }),
         );
       }
+      const stale = options.stale?.(node);
+      if (stale) line += p.dim(`  ${staleLabel(stale)}`);
       lines.push(line);
       walk(node.id, `${prefix}${last ? '   ' : p.dim('│  ')}`);
     });
@@ -111,7 +121,7 @@ export function treeText(tree: Tree, p: Paint, options: { closed?: boolean; unde
   return lines.join('\n');
 }
 
-export function nodeText(tree: Tree, node: TreeNode, p: Paint): string {
+export function nodeText(tree: Tree, node: TreeNode, p: Paint, stale?: Stale): string {
   const lines: string[] = [];
   const path = pathTo(tree, node.id);
   lines.push(`${GLYPH[node.status]} ${p.bold(node.title)}  ${p.dim(node.id)}`);
@@ -119,6 +129,7 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint): string {
     p.dim(
       [
         STATUS_LABEL[node.status],
+        stale ? staleLabel(stale) : undefined,
         node.who
           ? t('делает: {p1}', {
               p1: WHO_LABEL[node.who],
@@ -142,6 +153,7 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint): string {
         }),
       ),
     );
+  if (stale) lines.push(p.dim(staleNote(stale)));
   lines.push('');
   lines.push(`${p.dim(t('готово, когда:'))} ${node.doneWhen ?? p.dim(t('не задано'))}`);
   if (node.check) lines.push(`${p.dim(t('проверка:'))} ${node.check}`);
@@ -193,7 +205,7 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint): string {
 }
 
 /** For scripts and agents: the tree as nested JSON. */
-export function treeJson(tree: Tree): unknown {
+export function treeJson(tree: Tree, stale?: StaleFn): unknown {
   const nodeJson = (node: TreeNode): Record<string, unknown> => ({
     id: node.id,
     title: node.title,
@@ -206,6 +218,7 @@ export function treeJson(tree: Tree): unknown {
     ...(node.needs ? { needs: node.needs } : {}),
     ...(node.neededBy ? { for: node.neededBy } : {}),
     ...(node.sessions.length ? { sessions: node.sessions } : {}),
+    ...staleJson(stale?.(node)),
     ...(node.commits?.length ? { commits: node.commits } : {}),
     children: childrenOf(tree, node.id).map(nodeJson),
   });
@@ -215,4 +228,9 @@ export function treeJson(tree: Tree): unknown {
     summary: summarize(tree),
     nodes: childrenOf(tree, ROOT).map(nodeJson),
   };
+}
+
+/** The `stale` field of `--json`: whole hours without a live session or a record. */
+export function staleJson(stale: Stale | undefined): { stale?: { hours: number } } {
+  return stale ? { stale: { hours: stale.hours } } : {};
 }
