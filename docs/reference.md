@@ -315,7 +315,7 @@ treeyard log <id> "what is done; what is left"
 treeyard log <id> "…" --project ../main         # from a git worktree: write to the main tree (show takes it too)
 treeyard note "the help doesn't fit the screen" # a note about treeyard itself — into “Notes”
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
-treeyard diff <id> --add <sha>                  # attach your commit to the node for review
+treeyard diff <id> --add HEAD                   # attach your commit to the node for review
 treeyard add "Codex: turn status" --project ../api --for <id>   # a change needed in another project
 treeyard set <id> needs=<other id>              # waits for a node of this tree (needs=../api#<id> — of another)
 treeyard open root --start plan --pane          # a review of the tree in a pane
@@ -373,8 +373,9 @@ tree, like any edit of the tree.
 
 `V` (`М` in the Russian layout), `⏎` → “Node diffs” or the palette `:` open the commits
 linked to the selected node. `a` picks a commit from the Git log; `n` in the list of
-commits loads 100 more. After a commit, the agent attaches its SHA with `treeyard diff
-<id> --add <sha>` — the command is in the node's context. The links are kept in the node
+commits loads 100 more. After a commit, the agent attaches it with `treeyard diff
+<id> --add HEAD` — the command is in the node's context — or the
+[commit hook](#commit-hook) does it by itself. The links are kept in the node
 file's `commits` field and are committed along with the tree. Attach the commits with work
 on this node: the view shows the whole selected commit.
 
@@ -396,15 +397,46 @@ Git's mark instead of text. The view changes no files, no index and no Git histo
 
 ```sh
 treeyard diff <id>                              # the diffs of every commit of the node
-treeyard diff <id> --add <sha>                  # a full SHA or an unambiguous short one
-treeyard diff <id> --add <sha1> --add <sha2>    # several commits
+treeyard diff <id> --add HEAD                   # any ref: HEAD, HEAD~1, a branch, a tag, a short SHA; the node keeps the full SHA
+treeyard diff <id> --add <ref1> --add <ref2>    # several commits
 treeyard diff <id> --rm <sha>                   # remove a link, even if the commit is gone
-treeyard diff <id> --commit <sha> --file src/app.ts
+treeyard diff <id> --commit <ref> --file src/app.ts
 treeyard diff <id> --stat                       # files and +/−, no diff text
 treeyard diff <id> --working                    # the current shared changes of the project
 treeyard diff <id> --json                       # commits, files and diffs for a script
-treeyard diff <id> --project ../X --add <sha>   # attach to the tree of another folder or the main worktree
+treeyard diff <id> --project ../X --add HEAD    # attach to the tree of another folder or the main worktree
 ```
+
+#### Commit hook
+
+`treeyard hook install` puts a `post-commit` hook into the repository of the current
+folder, so a commit made in a session started from a node attaches to that node by itself
+(the journal gets “commit attached …”, the message of the commit is untouched). The
+commands:
+
+```sh
+treeyard hook install    # add the hook; an existing shell post-commit gets a block between "# >>> treeyard" / "# <<< treeyard"
+treeyard hook status     # is it in place, and where
+treeyard hook remove     # remove only that block (the file too, if nothing else is in it)
+```
+
+The hook is one quiet line: it does nothing, and never fails a commit, when `treeyard` is
+not on `PATH`. Every session from a node gets `TREEYARD_NODE` (the node) and
+`TREEYARD_PROJECT` (the folder of its tree); the hook binds the commit to that node of that
+tree. It does not fire when:
+
+- the commit is made outside a node's session (no `TREEYARD_NODE`);
+- the commit is in another repository than the tree's (the agent stepped into a neighbour);
+  commits in worktrees of the project do fire;
+- a session started before `TREEYARD_PROJECT` existed looks for the tree in the current
+  folder, so the commit has to be inside the project;
+- `core.hooksPath` points into the repository (husky and the like): those files are
+  versioned, so `install` writes nothing and prints the line to add to your `post-commit`
+  yourself;
+- the existing `post-commit` is not a shell script: `install` refuses; add the call
+  `treeyard hook post-commit` there.
+
+With the hook in place the agent's context no longer asks for a manual `--add`.
 
 ### Notes
 
