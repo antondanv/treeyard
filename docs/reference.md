@@ -321,11 +321,22 @@ treeyard open root --start chat --brain codex   # a conversation about the proje
 treeyard open <id> --brain codex                # a session for the node right from the shell
 treeyard open <id> --brain codex --pane         # start a pane and return to the shell
 treeyard open <id> --brain opencode --pane      # the same with OpenCode
+treeyard open <id> --bg --task "no paid calls" --model sonnet --effort high   # a coordinator hands the node to its own session
+treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes — from stdin
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree
 treeyard context <id>                           # exactly what an agent gets
 treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md
 treeyard help                                   # all the commands; treeyard <command> --help — the lines of one
 ```
+
+Flags of `treeyard open`: `--task "…"` adds your assignment to the end of the first
+message, after the standard one, under “Task for this node:” (in a `chat` start it
+becomes the first message; `--task -` reads it from stdin; `treeyard context <id> --task "…"`
+shows the result; with `--start goal` it becomes part of the `/goal` condition).
+`--model` and `--effort` set the model and the effort for this launch only; without them the CLI
+uses its own defaults. `--worktree` is passed to Claude Code, which starts the session in a new git
+worktree; Codex, Antigravity and OpenCode ignore it and print a warning. `--bg` (Claude Code)
+starts the session in the background and returns at once; the session is saved in the node.
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
 node, its edit stays.

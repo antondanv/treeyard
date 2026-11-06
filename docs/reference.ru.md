@@ -347,11 +347,22 @@ treeyard open root --start chat --brain codex   # разговор о проек
 treeyard open <id> --brain codex                # сессия по узлу прямо из shell
 treeyard open <id> --brain codex --pane         # открыть панель и вернуться в shell
 treeyard open <id> --brain opencode --pane      # то же с OpenCode
+treeyard open <id> --bg --task "без платных вызовов" --model sonnet --effort high   # координатор отдаёт узел отдельной сессии
+treeyard open <id> --bg --task - < task.txt     # длинное задание с кавычками — из stdin
 treeyard sessions                               # сессии папки во всех CLI; «без узла» — открытые мимо дерева
 treeyard context <id>                           # ровно то, что получит агент
 treeyard pointer                                # добавить блок о дереве в AGENTS.md / CLAUDE.md
 treeyard help                                   # все команды; treeyard <команда> --help — строки одной
 ```
+
+Флаги `treeyard open`: `--task "…"` дописывает твоё задание в конец первого сообщения, после
+стандартного, под подписью «Задание к узлу:» (при старте `chat` задание становится первым
+сообщением; `--task -` читает текст из stdin; `treeyard context <id> --task "…"` показывает
+результат; при `--start goal` задание входит в условие `/goal`). `--model` и `--effort` задают
+модель и усилие только для этого запуска; без них CLI берёт свои значения. `--worktree` передаётся
+Claude Code и запускает сессию в новом git worktree; Codex, Antigravity и OpenCode его не умеют и
+выводят предупреждение. `--bg` (Claude Code) запускает сессию в фоне и сразу возвращается; сессия
+сохраняется в узле.
 
 Отмена (`u`) возвращает только твои собственные изменения: если агент успел поправить тот
 же узел, его правка останется.
