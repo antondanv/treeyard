@@ -24,6 +24,7 @@ import {
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { launchInPane } from '../agents/panes.js';
+import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, removeHook } from '../commit-hook.js';
 import { parsePatch } from '../diff.js';
 import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, gitRepository } from '../git.js';
 import {
@@ -43,7 +44,7 @@ import { pick, t } from '../i18n/i18n.js';
 import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
 import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
-import { addNote, noteOrigin, notesFolder, originText } from '../model/notes.js';
+import { addNote, homeShort, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import {
   addNode,
   attachCommit,
@@ -113,9 +114,10 @@ function commandLines(): string {
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
   treeyard image <id> [файл…|--paste] [--note "…"]   картинки узла: список, приложить файл или из буфера
   treeyard image <id> 001.png --note "…" | --rm 001.png   подпись к картинке · удалить её
-  treeyard diff <id> [--commit <sha>] [--file <путь>] [--stat|--json]   дифы коммитов узла
-  treeyard diff <id> --add <sha> | --rm <sha>   привязать коммит · убрать привязку
+  treeyard diff <id> [--commit <ref>] [--file <путь>] [--stat|--json]   дифы коммитов узла
+  treeyard diff <id> --add <ref> | --rm <sha>   привязать коммит (HEAD, ветка, тег, SHA) · убрать привязку
   treeyard diff <id> --working              текущие изменения проекта (общие для узлов)
+  treeyard hook install|remove|status      git-хук post-commit: коммиты сессии из узла привязываются к узлу сами
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   что получит агент
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
                                            сессия по узлу прямо из shell
@@ -147,9 +149,10 @@ function commandLines(): string {
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
   treeyard image <id> [file…|--paste] [--note "…"]   a node's pictures: the list, attach a file or the clipboard
   treeyard image <id> 001.png --note "…" | --rm 001.png   caption a picture · remove it
-  treeyard diff <id> [--commit <sha>] [--file <path>] [--stat|--json]   patches of the node's commits
-  treeyard diff <id> --add <sha> | --rm <sha>   attach a commit · remove the link
+  treeyard diff <id> [--commit <ref>] [--file <path>] [--stat|--json]   patches of the node's commits
+  treeyard diff <id> --add <ref> | --rm <sha>   attach a commit (HEAD, a branch, a tag, a SHA) · remove the link
   treeyard diff <id> --working              current project changes (shared by nodes)
+  treeyard hook install|remove|status      git post-commit hook: commits of a node's session attach to the node by themselves
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   what an agent gets
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
                                            a session for a node straight from the shell
@@ -261,6 +264,8 @@ async function main(argv: string[]): Promise<number> {
       return imageCommand(rest);
     case 'diff':
       return diffCommand(rest);
+    case 'hook':
+      return hookCommand(rest);
     case 'context':
       return contextCommand(rest);
     case 'open':
@@ -1243,6 +1248,53 @@ export function taskArg(
   const text = (value === '-' ? stdin() : value).trim();
   if (!text) throw new UsageError(t('--task без текста'));
   return text;
+}
+
+/** The post-commit hook: installed by a person, run by git (`post-commit`) after each commit. */
+function hookCommand(args: string[]): number {
+  const [action, ...extra] = args;
+  if (action === 'post-commit') {
+    // Called by git; whatever goes wrong, the commit stays untouched.
+    try {
+      bindHeadCommit(process.env, process.cwd());
+    } catch {
+      // Silent by design.
+    }
+    return 0;
+  }
+  if (!['install', 'remove', 'status'].includes(action ?? '') || extra.length)
+    throw new UsageError(t('treeyard hook install | remove | status'));
+  const cwd = process.cwd();
+  const where = (file: string) => homeShort(file);
+  if (action === 'status') {
+    const { installed, file, tracked } = hookStatus(cwd);
+    process.stdout.write(
+      installed
+        ? `${t('хук стоит: {file}', { file: where(file) })}\n`
+        : `${t('хука нет — treeyard hook install (файл: {file})', { file: where(file) })}\n`,
+    );
+    if (tracked && !installed)
+      process.stdout.write(`${t('хуки лежат внутри репозитория — добавь строку сам:')}\n${HOOK_LINE}\n`);
+    return 0;
+  }
+  const result = action === 'install' ? installHook(cwd) : removeHook(cwd);
+  const file = where(result.file);
+  if (result.kind === 'manual') {
+    process.stdout.write(
+      action === 'install'
+        ? `${t('core.hooksPath ведёт внутрь репозитория ({file}) — файлы там лежат в git, туда не пишу. Добавь в post-commit строку сам:', { file })}\n${HOOK_LINE}\n`
+        : `${t('хуки лежат внутри репозитория ({file}) — убери строку treeyard hook post-commit из post-commit сам', { file })}\n`,
+    );
+  } else {
+    const text = {
+      installed: t('хук поставлен: {file}', { file }),
+      already: t('хук уже стоит: {file}', { file }),
+      removed: t('хук убран: {file}', { file }),
+      absent: t('хука нет: {file}', { file }),
+    }[result.kind];
+    process.stdout.write(`${text}\n`);
+  }
+  return 0;
 }
 
 function contextCommand(args: string[]): number {

@@ -83,7 +83,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.background ? { background: true } : {}),
     ...(options.worktree ? { worktree: true } : {}),
-    env: nodeEnv(id),
+    env: nodeEnv(id, tree.project.dir),
   });
   if (!result.sessionId) return { result };
   const ref: SessionRef = {
@@ -118,7 +118,7 @@ export async function resume(tree: Tree, id: string, ref: SessionRef): Promise<O
     cwd: tree.project.dir,
     resume: ref.id,
     ...fullAccess(ref.brain),
-    env: nodeEnv(id),
+    env: nodeEnv(id, tree.project.dir),
   });
   if (holderOf(tree, id)) attachSession(tree, id, { ...ref, opened: nowIso() });
   return result;

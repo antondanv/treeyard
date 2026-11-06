@@ -6,6 +6,7 @@
  */
 import { realpathSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
+import { hookInstalled } from '../commit-hook.js';
 import { labels, pick, t } from '../i18n/i18n.js';
 import { activity } from '../model/activity.js';
 import { imagePath, listImages } from '../model/images.js';
@@ -205,7 +206,8 @@ const TEXT = {
     coordinator:
       'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
     diffWhat:
-      'после коммита привяжи его SHA к узлу, чтобы человек мог посмотреть диф; без --add — просмотр. Привязывай только коммиты с работой по этому узлу',
+      'после коммита привяжи его к узлу (HEAD, ветка или SHA), чтобы человек мог посмотреть диф; без --add — просмотр. Привязывай только коммиты с работой по этому узлу',
+    diffAuto: 'коммиты этой сессии привязываются к узлу сами (post-commit); чужие коммиты — так; без --add — просмотр',
   },
   en: {
     heading: '# You are working on a node of the project tree',
@@ -257,7 +259,9 @@ const TEXT = {
     coordinator:
       'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
     diffWhat:
-      'after committing, attach its SHA to the node so the person can inspect the patch; without --add — view. Attach only commits with work on this node',
+      'after committing, attach it to the node (HEAD, a branch or a SHA) so the person can inspect the patch; without --add — view. Attach only commits with work on this node',
+    diffAuto:
+      "this session's commits attach to the node by themselves (post-commit); commits of others — like this; without --add — view",
   },
 };
 
@@ -339,7 +343,9 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} add "${L.other}" --project ../X --for ${node.id}\` — ${L.otherWhat}`);
   lines.push(`- \`${self} set <id> status=done --project ../X\` — ${L.closeOther}`);
   lines.push(`- \`${self} image ${node.id} ${L.image} --note "…"\` — ${L.imageWhat}`);
-  lines.push(`- \`${self} diff ${node.id} --add <sha>\` — ${L.diffWhat}`);
+  // With the hook in place the session's own commits need no command; the check is one cheap git call.
+  if (hookInstalled(project.dir)) lines.push(`- \`${self} diff ${node.id} --add <ref>\` — ${L.diffAuto}`);
+  else lines.push(`- \`${self} diff ${node.id} --add HEAD\` — ${L.diffWhat}`);
   // Only where work is handed out: a leaf would pay for the line in every session.
   if (kids.some((kid) => kid.status !== 'done' && kid.status !== 'dropped')) {
     lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.coordinator}`);

@@ -96,7 +96,7 @@ describe('node commit links', () => {
     expect(loadTree(dir).nodes.get(a.id)!.commits).not.toContain(last);
     history.undo();
     expect(loadTree(dir).nodes.get(a.id)!.commits).toContain(last);
-    expect(contextText(tree, a.id)).toContain(`diff ${a.id} --add <sha>`);
+    expect(contextText(tree, a.id)).toContain(`diff ${a.id} --add HEAD`);
   });
 });
 

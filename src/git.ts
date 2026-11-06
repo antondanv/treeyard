@@ -5,7 +5,6 @@ import { t } from './i18n/i18n.js';
 
 const exec = promisify(execFile);
 const MAX_BYTES = 8 * 1024 * 1024;
-const SHA = /^[a-f0-9]{4,64}$/i;
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--no-textconv', '--find-renames'];
 
 async function git(dir: string, args: string[], difference = false): Promise<string> {
@@ -122,12 +121,13 @@ export class GitRepository {
   constructor(readonly dir: string) {}
 
   async commit(ref: string): Promise<GitCommit> {
-    if (!SHA.test(ref)) throw new Error(t('укажи SHA коммита (от 4 шестнадцатеричных символов)'));
+    // A ref is anything git resolves (HEAD, a branch, a tag, a short SHA); an option is not a ref.
+    if (!ref.trim() || ref.startsWith('-')) throw new Error(t('укажи коммит: SHA, HEAD, ветку или тег'));
     let sha: string;
     try {
-      sha = (await git(this.dir, ['rev-parse', '--verify', `${ref}^{commit}`])).trim();
+      sha = (await git(this.dir, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).trim();
     } catch {
-      throw new Error(t('коммит {sha} не найден или SHA неоднозначен', { sha: ref }));
+      throw new Error(t('коммит {sha} не найден или ссылка неоднозначна', { sha: ref }));
     }
     return commitRow(await git(this.dir, ['show', '-s', '--format=%H%x00%cs%x00%P%x00%s', sha, '--']));
   }

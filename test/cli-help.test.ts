@@ -30,6 +30,7 @@ const COMMANDS = [
   'note',
   'image',
   'diff',
+  'hook',
   'context',
   'open',
   'sessions',
@@ -89,8 +90,8 @@ describe('treeyard <command> --help', () => {
   it('keeps every line of a command that takes several, continuations included', async () => {
     const sh = shell(tempDir(), 'en');
     const diff = (await sh('diff', '--help')).stdout;
-    expect(diff).toContain('treeyard diff <id> [--commit <sha>]');
-    expect(diff).toContain('treeyard diff <id> --add <sha> | --rm <sha>');
+    expect(diff).toContain('treeyard diff <id> [--commit <ref>]');
+    expect(diff).toContain('treeyard diff <id> --add <ref> | --rm <sha>');
     expect(diff).toContain('treeyard diff <id> --working');
     expect(diff).not.toContain('treeyard image');
 

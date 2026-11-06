@@ -37,9 +37,18 @@ export function homeShort(dir: string): string {
 /** Every session started from a node gets the node's id here. */
 export const NODE_VAR = 'TREEYARD_NODE';
 
-/** The env of a session started from a node: its id, and without the NODE_ENV Treeyard set for itself. */
-export function nodeEnv(id: string): EnvOverrides {
-  return ownNodeEnv() ? { [NODE_VAR]: id, NODE_ENV: undefined } : { [NODE_VAR]: id };
+/** The folder of the node's tree: the post-commit hook binds a commit to the node of this tree. */
+export const PROJECT_VAR = 'TREEYARD_PROJECT';
+
+/**
+ * The env of a session started from a node: its id and tree, and without the NODE_ENV Treeyard
+ * set for itself. A session of no node (empty id) has no tree to bind commits to either.
+ */
+export function nodeEnv(id: string, project?: string): EnvOverrides {
+  const env: EnvOverrides = { [NODE_VAR]: id };
+  if (id && project) env[PROJECT_VAR] = project;
+  if (ownNodeEnv()) env.NODE_ENV = undefined;
+  return env;
 }
 
 export interface NoteOrigin {

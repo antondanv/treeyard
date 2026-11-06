@@ -5,8 +5,25 @@ export const EN: Record<string, string> = {
   'Git не ответил за 15 секунд': 'Git did not respond within 15 seconds',
   'Git: {message}': 'Git: {message}',
   'здесь нет Git-репозитория — дифы недоступны': 'there is no Git repository here — patches are unavailable',
+  'здесь нет Git-репозитория — хук ставить некуда': 'there is no Git repository here — nowhere to put the hook',
+  '{file} — не shell-скрипт: добавь вызов treeyard hook post-commit сам':
+    '{file} is not a shell script: add a call to treeyard hook post-commit yourself',
+  'treeyard hook install | remove | status': 'treeyard hook install | remove | status',
+  'хук стоит: {file}': 'the hook is in place: {file}',
+  'хука нет — treeyard hook install (файл: {file})': 'no hook — treeyard hook install (file: {file})',
+  'хуки лежат внутри репозитория — добавь строку сам:':
+    'the hooks live inside the repository — add this line yourself:',
+  'core.hooksPath ведёт внутрь репозитория ({file}) — файлы там лежат в git, туда не пишу. Добавь в post-commit строку сам:':
+    'core.hooksPath points inside the repository ({file}) — those files are in git, so I do not write there. Add this line to post-commit yourself:',
+  'хуки лежат внутри репозитория ({file}) — убери строку treeyard hook post-commit из post-commit сам':
+    'the hooks live inside the repository ({file}) — remove the treeyard hook post-commit line from post-commit yourself',
+  'хук поставлен: {file}': 'hook installed: {file}',
+  'хук уже стоит: {file}': 'the hook is already in place: {file}',
+  'хук убран: {file}': 'hook removed: {file}',
+  'хука нет: {file}': 'no hook: {file}',
   'укажи SHA коммита (от 4 шестнадцатеричных символов)': 'give a commit SHA (at least 4 hexadecimal characters)',
-  'коммит {sha} не найден или SHA неоднозначен': 'commit {sha} was not found or its SHA is ambiguous',
+  'укажи коммит: SHA, HEAD, ветку или тег': 'give a commit: a SHA, HEAD, a branch or a tag',
+  'коммит {sha} не найден или ссылка неоднозначна': 'commit {sha} was not found or the ref is ambiguous',
   'выбери новый файл для просмотра': 'choose a new file to view',
   'бинарный файл': 'binary file',
   до: 'old',
