@@ -331,7 +331,10 @@ Treeyard читает экран только той сессии, котора�
 деревом. Агенты пишут в дерево теми же командами, что и человек:
 
 ```sh
-treeyard show                                   # всё дерево; treeyard show <id> — один узел
+treeyard show                                   # дерево; вне терминала готовое свёрнуто в «✓ готово: N» (--all — всё, --open — без готового)
+treeyard show <id>                              # один узел; несколько сразу: treeyard show a b c (--json — массив)
+treeyard show <id> --brief                      # шапка, критерий, проверка/ждёт и 3 последние записи журнала
+treeyard show <id> --journal 5                  # только 5 последних записей (--journal all — все)
 treeyard add "Показать продукт человеку" --who human --parent <id>
 treeyard add "Поправить справку" --parent <id> --after <id>   # сразу после соседа с тем же статусом (без --after — последним)
 treeyard set <id> after=<id соседа>|first|last  # место среди соседей; вместе с parent=<id> — в новом родителе
