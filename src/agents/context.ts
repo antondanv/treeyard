@@ -67,8 +67,24 @@ export function sessionName(tree: Tree, node: TreeNode): string {
   return name.length > 64 ? `${name.slice(0, 63)}…` : name;
 }
 
-export function sessionPlan(tree: Tree, id: string, start: StartMode, brain: BrainId): SessionPlan {
-  if (id === ROOT) return projectPlan(tree, start, brain);
+/**
+ * A coordinator's own assignment goes after the standard first message, as a separate
+ * paragraph; with no first message (`chat`) it becomes the first message.
+ */
+function withTask(plan: SessionPlan, task?: string): SessionPlan {
+  const text = task?.trim();
+  if (!text) return plan;
+  const label = pick({ ru: 'Задание к узлу:', en: 'Task for this node:' });
+  plan.prompt = plan.prompt ? `${plan.prompt}\n\n${label}\n${text}` : text;
+  return plan;
+}
+
+export function sessionPlan(tree: Tree, id: string, start: StartMode, brain: BrainId, task?: string): SessionPlan {
+  return withTask(basePlan(tree, id, start, brain, Boolean(task?.trim())), task);
+}
+
+function basePlan(tree: Tree, id: string, start: StartMode, brain: BrainId, hasTask: boolean): SessionPlan {
+  if (id === ROOT) return projectPlan(tree, start, brain, hasTask);
   const node = tree.nodes.get(id);
   if (!node) throw new Error(t('нет узла {id}', { id }));
   const mode: StartMode = start === 'goal' && (brain !== 'claude' || !node.doneWhen) ? 'do' : start;
@@ -81,7 +97,7 @@ export function sessionPlan(tree: Tree, id: string, start: StartMode, brain: Bra
   const title = `«${node.title}» (${node.id})`;
   const check = node.check ? `\`${node.check}\`` : '';
   const self = selfCommand();
-  if (mode === 'chat') {
+  if (mode === 'chat' && !hasTask) {
     // Some CLIs deliver the context as a first message instead of a system instruction.
     plan.system += pick({
       ru: '\n\nЭто разговор о проекте. Дождись моего вопроса; до него не начинай ревью и не выполняй команды. Можно коротко сказать, что готов обсуждать проект.',
@@ -185,6 +201,8 @@ const TEXT = {
     images: 'Картинки узла — открой файлы, чтобы посмотреть:',
     image: 'файл.png',
     imageWhat: 'приложить к узлу картинку или скрин (например, доказательство для проверки); без файла — список',
+    coordinator:
+      'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
     diffWhat:
       'после коммита привяжи его SHA к узлу, чтобы человек мог посмотреть диф; без --add — просмотр. Привязывай только коммиты с работой по этому узлу',
   },
@@ -235,6 +253,8 @@ const TEXT = {
     images: 'Pictures of the node — open the files to look at them:',
     image: 'file.png',
     imageWhat: 'attach a picture or a screenshot to the node (evidence for review, say); without a file — the list',
+    coordinator:
+      'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
     diffWhat:
       'after committing, attach its SHA to the node so the person can inspect the patch; without --add — view. Attach only commits with work on this node',
   },
@@ -319,6 +339,10 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} set <id> status=done --project ../X\` — ${L.closeOther}`);
   lines.push(`- \`${self} image ${node.id} ${L.image} --note "…"\` — ${L.imageWhat}`);
   lines.push(`- \`${self} diff ${node.id} --add <sha>\` — ${L.diffWhat}`);
+  // Only where work is handed out: a leaf would pay for the line in every session.
+  if (kids.some((kid) => kid.status !== 'done' && kid.status !== 'dropped')) {
+    lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.coordinator}`);
+  }
   // Read, not applied: the context must not switch the language or the theme of whoever asks.
   if (loadSettings().notes) lines.push(`- \`${self} note "${L.note}"\` — ${L.noteWhat}`);
   lines.push(`- ${L.done}`);
@@ -346,7 +370,7 @@ export const ROOT_START_HINT: Record<StartMode, string> = labels(() => ({
   chat: t('статус, на чём остановились, завести или закрыть узлы — первое сообщение твоё'),
 }));
 
-function projectPlan(tree: Tree, start: StartMode, brain: BrainId): SessionPlan {
+function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = false): SessionPlan {
   const mode = rootStart(start);
   const name = `${tree.project.title} · ${ROOT_START_LABEL[mode]}`;
   const plan: SessionPlan = {
@@ -355,7 +379,7 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId): SessionPlan 
     start: mode,
     ...fullAccess(brain),
   };
-  if (mode === 'chat') {
+  if (mode === 'chat' && !hasTask) {
     // Some CLIs deliver the context as a first message instead of a system instruction.
     plan.system += pick({
       ru: '\n\nЭто разговор о проекте. Дождись моего вопроса; до него не начинай ревью и не выполняй команды. Можно коротко сказать, что готов обсуждать проект.',
@@ -420,6 +444,7 @@ const ROOT_TEXT = {
     keyValue: 'ключ=значение',
     log: 'запись в журнал узла',
     sessions: 'сессии папки и чьи они',
+    open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
     doneWhen: 'готово, когда',
     more: 'ещё',
   },
@@ -454,6 +479,7 @@ const ROOT_TEXT = {
     keyValue: 'key=value',
     log: 'a line in the node journal',
     sessions: 'the sessions of the folder and whose they are',
+    open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
     doneWhen: 'done when',
     more: 'more',
   },
@@ -538,6 +564,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} set <id> ${L.keyValue}…\` — ${L.set}`);
   lines.push(`- \`${self} log <id> "…"\` — ${L.log}`);
   lines.push(`- \`${self} sessions\` — ${L.sessions}`);
+  lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
   if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);
   lines.push(`- ${L.doneRule(self)}`);
   return lines.join('\n');

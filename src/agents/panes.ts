@@ -77,7 +77,7 @@ export async function launchInPane(
         id,
       }),
     );
-  const plan = sessionPlan(tree, id, options.start, options.brain);
+  const plan = sessionPlan(tree, id, options.start, options.brain, options.task);
   const started = await startPane({
     brain: options.brain,
     cwd: tree.project.dir,

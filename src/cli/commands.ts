@@ -115,9 +115,12 @@ function commandLines(): string {
   treeyard diff <id> [--commit <sha>] [--file <путь>] [--stat|--json]   дифы коммитов узла
   treeyard diff <id> --add <sha> | --rm <sha>   привязать коммит · убрать привязку
   treeyard diff <id> --working              текущие изменения проекта (общие для узлов)
-  treeyard context <id> [--start plan|do|goal|chat]   что получит агент
+  treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   что получит агент
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
                                            сессия по узлу прямо из shell
+                [--task "…"|-]             задание сверх контекста узла: в конец первого сообщения (- — из stdin)
+                [--model <модель>] [--effort <уровень>]   только на этот запуск
+                [--worktree]               только Claude Code: в новом git worktree (остальные CLI предупредят)
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
@@ -146,9 +149,12 @@ function commandLines(): string {
   treeyard diff <id> [--commit <sha>] [--file <path>] [--stat|--json]   patches of the node's commits
   treeyard diff <id> --add <sha> | --rm <sha>   attach a commit · remove the link
   treeyard diff <id> --working              current project changes (shared by nodes)
-  treeyard context <id> [--start plan|do|goal|chat]   what an agent gets
+  treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   what an agent gets
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
                                            a session for a node straight from the shell
+                [--task "…"|-]             an assignment on top of the node's context: added to the first message (- reads stdin)
+                [--model <model>] [--effort <level>]   for this launch only
+                [--worktree]               Claude Code only: in a new git worktree (other CLIs warn)
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            a GitHub Project board (cards are nodes, columns are statuses) or a
@@ -1217,12 +1223,27 @@ function noteCommand(args: string[]): number {
   return 0;
 }
 
+/** The coordinator's assignment: the text itself, or stdin for `-` (long text with quotes). */
+export function taskArg(
+  value: string | undefined,
+  stdin: () => string = () => readFileSync(0, 'utf8'),
+): string | undefined {
+  if (value === undefined) return undefined;
+  const text = (value === '-' ? stdin() : value).trim();
+  if (!text) throw new UsageError(t('--task без текста'));
+  return text;
+}
+
 function contextCommand(args: string[]): number {
-  const { values, positionals } = parse(args, { start: { type: 'string' }, brain: { type: 'string' } });
+  const { values, positionals } = parse(args, {
+    start: { type: 'string' },
+    brain: { type: 'string' },
+    task: { type: 'string' },
+  });
   const tree = project();
   const id = nodeArg(tree, positionals[0]);
   const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
-  const plan = sessionPlan(tree, id, startArg(values.start, tree.project.start ?? 'plan'), brain);
+  const plan = sessionPlan(tree, id, startArg(values.start, tree.project.start ?? 'plan'), brain, taskArg(values.task));
   process.stdout.write(
     t('{p1}\n\n# Первое сообщение ({start})\n\n{p3}\n', {
       p1: contextText(tree, id),
@@ -1242,12 +1263,14 @@ async function openCommand(args: string[]): Promise<number> {
     model: { type: 'string' },
     effort: { type: 'string' },
     worktree: { type: 'boolean' },
+    task: { type: 'string' },
     yes: { type: 'boolean', short: 'y' },
   });
   const tree = project();
   const id = nodeArg(tree, positionals[0]);
   const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
   if (values.pane && values.bg) throw new UsageError(t('выбери одно: --pane или --bg'));
+  const task = taskArg(values.task);
   const options = {
     brain,
     start: startArg(values.start, tree.project.start ?? 'plan'),
@@ -1256,10 +1279,11 @@ async function openCommand(args: string[]): Promise<number> {
     ...(values.model ? { model: values.model } : {}),
     ...(values.effort ? { effort: values.effort } : {}),
     ...(values.worktree ? { worktree: true } : {}),
+    ...(task ? { task } : {}),
   };
   if (settings().confirm && !values.yes && process.stdin.isTTY) {
     const node = holderOf(tree, id)!;
-    const plan = sessionPlan(tree, id, options.start, brain);
+    const plan = sessionPlan(tree, id, options.start, brain, task);
     process.stderr.write(
       `\n${inlineMark(err.c)}\n` +
         `  ${err.dim(t('Узел'))}        ${node.title}\n` +

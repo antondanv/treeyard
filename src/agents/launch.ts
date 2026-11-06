@@ -52,6 +52,8 @@ export interface LaunchOptions {
   worktree?: boolean;
   /** In a pane next to the tree (tmux), not in this terminal. */
   pane?: boolean;
+  /** A coordinator's assignment, added to the session's first message. */
+  task?: string;
 }
 
 export interface Launched {
@@ -68,7 +70,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
         id,
       }),
     );
-  const plan = sessionPlan(tree, id, options.start, options.brain);
+  const plan = sessionPlan(tree, id, options.start, options.brain, options.task);
   const result = await open({
     brain: options.brain,
     cwd: tree.project.dir,

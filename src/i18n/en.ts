@@ -108,6 +108,7 @@ export const EN: Record<string, string> = {
   '{n} МБ': '{n} MB',
   '{n} ГБ': '{n} GB',
   'выбери одно: --pane или --bg': 'choose one: --pane or --bg',
+  '--task без текста': '--task without text',
   'в панели': 'in a pane',
   'сессия запущена в панели {pane} · открой treeyard, чтобы увидеть её\n':
     'session started in pane {pane} · open treeyard to see it\n',
