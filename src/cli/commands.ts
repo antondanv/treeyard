@@ -56,6 +56,7 @@ import {
   updateNode,
 } from '../model/ops.js';
 import { staleOf } from '../model/stale.js';
+import { parseStatus } from '../model/status-words.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
 import { ago } from '../model/time.js';
 import {
@@ -211,6 +212,7 @@ ${out.bold('Команды')}
 ${commands}
 
 ${out.bold('Статусы')}  ${statuses}
+           в командах — ключом, словом на любом языке или алиасом: review, на проверке, проверка
 ${out.bold('Пример')}   treeyard set k3f9 status=waiting waiting="нет сервера" until="появится VPS"`,
     en: `${head} — a project's goal tree in the terminal, with agent sessions on its nodes
 
@@ -220,6 +222,7 @@ ${out.bold('Commands')}
 ${commands}
 
 ${out.bold('Statuses')}  ${statuses}
+           in commands — the key, the word in either language or an alias: review, in review, check
 ${out.bold('Example')}   treeyard set k3f9 status=waiting waiting="no server" until="a VPS is rented"`,
   });
 }
@@ -362,16 +365,16 @@ function placeArg(tree: Tree, id: string, parent: string, value: string | undefi
   return sibling;
 }
 
+/** `idea, todo (к работе), …`: the keys, with the label where it says more. */
+function statusChoices(): string {
+  return STATUSES.map((s) => (STATUS_LABEL[s] === s ? s : `${s} (${STATUS_LABEL[s]})`)).join(', ');
+}
+
+/** A status by its key, its label in either language, a short alias or its glyph. */
 function statusArg(value: string): Status {
-  const normalized = value.trim().toLowerCase();
-  if ((STATUSES as readonly string[]).includes(normalized)) return normalized as Status;
-  const byLabel = STATUSES.find((status) => STATUS_LABEL[status] === normalized);
-  if (byLabel) return byLabel;
-  throw new UsageError(
-    t('статус бывает: {p1}', {
-      p1: STATUSES.join(', '),
-    }),
-  );
+  const status = parseStatus(value);
+  if (status) return status;
+  throw new UsageError(t('статус бывает: {p1}', { p1: statusChoices() }));
 }
 
 /** An absolute folder; `~` too, which a quoted path brings unexpanded. */
@@ -713,7 +716,11 @@ function showCommand(args: string[]): number {
       process.stdout.write(`${JSON.stringify(rows.length === 1 ? rows[0] : rows, null, 2)}\n`);
       return 0;
     }
-    const options = { brief: values.brief === true, ...journalOption(values.journal) };
+    const options = {
+      brief: values.brief === true,
+      ...journalOption(values.journal),
+      ...(process.stdout.isTTY ? {} : { words: true }),
+    };
     const text = nodes.map((node) => {
       const stale = staleOfNode(node);
       return nodeText(tree, node, out, { ...options, ...(stale ? { stale } : {}) });
@@ -724,8 +731,12 @@ function showCommand(args: string[]): number {
   if (values.json) process.stdout.write(`${JSON.stringify(treeJson(tree, staleFn(tree)), null, 2)}\n`);
   else {
     // Off a terminal (agents, pipes) finished work folds into a counter, as in the TUI; --all brings it back.
-    const fold = !process.stdout.isTTY && !values.all && !values.open;
-    process.stdout.write(`${treeText(tree, out, { closed: !values.open, foldDone: fold, stale: staleFn(tree) })}\n`);
+    // There statuses are words too: an agent filters by a word, never by a glyph.
+    const piped = !process.stdout.isTTY;
+    const fold = piped && !values.all && !values.open;
+    process.stdout.write(
+      `${treeText(tree, out, { closed: !values.open, foldDone: fold, stale: staleFn(tree), words: piped })}\n`,
+    );
   }
   for (const problem of tree.problems) process.stderr.write(`${err.c('#ff7b72', '!')} ${problem}\n`);
   return 0;

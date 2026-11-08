@@ -334,6 +334,11 @@ treeyard pointer                                # the block about the tree in AG
 treeyard help                                   # all the commands; treeyard <command> --help — the lines of one
 ```
 
+Statuses in commands are the key (`review`), the word in either language (`in review`,
+`на проверке`) or a short alias (`check`, `wip`, `проверка`); a glyph copied from the output
+works too. Off a terminal every line of the tree carries its status as a word after the id —
+an agent never has to read or type `◐ ◎ ○`.
+
 Flags of `treeyard open`: `--task "…"` adds your assignment to the end of the first
 message, after the standard one, under “Task for this node:” (in a `chat` start it
 becomes the first message; `--task -` reads it from stdin; `treeyard context <id> --task "…"`

@@ -49,11 +49,19 @@ const HEX: Record<Status, string | undefined> = {
 /** Which active nodes nobody works on; the CLI passes the threshold from the settings. */
 export type StaleFn = (node: TreeNode) => Stale | undefined;
 
-export function treeText(
-  tree: Tree,
-  p: Paint,
-  options: { closed?: boolean; under?: string; foldDone?: boolean; stale?: StaleFn } = {},
-): string {
+export interface TreeTextOptions {
+  /** `false` hides done and dropped work. */
+  closed?: boolean;
+  /** The branch to print instead of the whole tree, without the project's header. */
+  under?: string;
+  /** Finished children fold into one «✓ готово: N» line, as in the TUI. */
+  foldDone?: boolean;
+  stale?: StaleFn;
+  /** The status as a word after the id: off a terminal, so `grep` by a word finds it and nobody reads glyphs. */
+  words?: boolean;
+}
+
+export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): string {
   const { project } = tree;
   const total = summarize(tree);
   const lines: string[] = [];
@@ -106,6 +114,8 @@ export function treeText(
       }
       let line = `${prefix}${p.dim(last ? '└─ ' : '├─ ')}${glyph(node)} ${node.status === 'done' ? p.dim(node.title) : node.title}`;
       line += p.dim(`  ${node.id}`);
+      // A waiting node says «ждёт» further on, with its reason.
+      if (options.words && node.status !== 'waiting') line += p.dim(`  ${STATUS_LABEL[node.status]}`);
       const grandkids = childrenOf(tree, node.id);
       if (grandkids.length > 0) {
         const { done, total } = progress(tree, node.id);
@@ -140,6 +150,8 @@ export interface NodeTextOptions {
   journal?: number;
   /** An «in progress» node nobody works on: the mark in the status line and the card note. */
   stale?: Stale;
+  /** Status words in the lines of the children, as in `treeText`. */
+  words?: boolean;
 }
 
 export function nodeText(tree: Tree, node: TreeNode, p: Paint, options: NodeTextOptions = {}): string {
@@ -211,7 +223,7 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint, options: NodeText
     lines.push(p.dim(t('внутри: {total}, готово {done}', { total, done })));
   } else if (kids.length > 0) {
     lines.push('', p.dim(t('внутри:')));
-    lines.push(treeText(tree, p, { under: node.id }));
+    lines.push(treeText(tree, p, { under: node.id, ...(options.words ? { words: true } : {}) }));
   }
   if (!brief && node.sessions.length > 0) {
     lines.push('', p.dim(t('сессии:')));

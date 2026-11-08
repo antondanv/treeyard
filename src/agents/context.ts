@@ -517,7 +517,7 @@ export function projectContext(tree: Tree): string {
   const outline: string[] = [];
   const walk = (parent: string, depth: number) => {
     for (const node of childrenOf(tree, parent)) {
-      let line = `${'  '.repeat(depth)}- ${GLYPH[node.status]} ${node.title} (\`${node.id}\`)`;
+      let line = `${'  '.repeat(depth)}- ${GLYPH[node.status]} ${node.title} (\`${node.id}\`, ${STATUS_LABEL[node.status]})`;
       const kids = childrenOf(tree, node.id);
       if (kids.length) {
         const p = progress(tree, node.id);
@@ -598,8 +598,9 @@ export function projectContext(tree: Tree): string {
   return lines.join('\n');
 }
 
+/** A neighbour in one line: the status as a word too — agents do not read glyphs. */
 function brief(node: TreeNode): string {
-  return `${GLYPH[node.status]} ${node.title} (${node.id})`;
+  return `${GLYPH[node.status]} ${node.title} (${node.id}, ${STATUS_LABEL[node.status]})`;
 }
 
 function firstParagraph(text: string, limit: number): string {
