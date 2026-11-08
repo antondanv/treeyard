@@ -199,6 +199,10 @@ export const EN: Record<string, string> = {
   '… ещё {n} — уточни запрос, добавь --status или --under, или --limit all':
     '… {n} more — narrow the query, add --status or --under, or --limit all',
   '--limit: число узлов или all': '--limit: a number of nodes or all',
+  'title= — у каждого узла своё название: меняй по одному':
+    'title= — each node has its own title: change them one by one',
+  'after= для нескольких узлов — им нужен один родитель: добавь parent=<id>':
+    'after= for several nodes — they need one parent: add parent=<id>',
   'история статусов:': 'status history:',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
   'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',

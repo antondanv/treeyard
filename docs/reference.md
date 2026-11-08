@@ -316,6 +316,7 @@ treeyard find "rounding|cents"                  # search every node, done ones t
 treeyard add "Show the product to a person" --who human --parent <id>
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
 treeyard set <id> after=<sibling id>|first|last # the place among siblings; with parent=<id> — in a new parent
+treeyard set <a> <b> <c> status=todo            # several nodes: the same change to each (after=<id> puts them one after another); an error changes none
 treeyard set <id> status=waiting waiting="no server" until="a VPS is up"
 treeyard set <id> status=review                 # the agent; “done” is set by a person
 treeyard log <id> "what is done; what is left"

@@ -129,9 +129,10 @@ function commandLines(): string {
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
-  treeyard set <id> ключ=значение…         status, title, who, done_when, check, waiting, until, parent,
+  treeyard set <id> [<id>…] ключ=значение…  status, title, who, done_when, check, waiting, until, parent,
                                            after=<id брата>|first|last (место среди братьев),
                                            needs=<id>|../X#id (ждёт узла этого дерева или другого проекта); --project ../X — узел там
+                                           несколько id — то же всем (after= ставит их подряд); ошибка — не меняется ни один
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
                 [--project <папка>]        писать в дерево другой папки, например основного worktree
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
@@ -172,9 +173,10 @@ function commandLines(): string {
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
-  treeyard set <id> key=value…             status, title, who, done_when, check, waiting, until, parent,
+  treeyard set <id> [<id>…] key=value…     status, title, who, done_when, check, waiting, until, parent,
                                            after=<sibling id>|first|last (the place among siblings),
                                            needs=<id>|../X#id (waits for a node of this tree or of another project); --project ../X — a node there
+                                           several ids — the same to each (after= puts them one after another); an error changes none
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
                 [--project <dir>]          write to the tree of another folder, e.g. the main worktree
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
@@ -997,6 +999,24 @@ function otherProject(here: Tree, folder: string): Tree {
   return loadTree(dir);
 }
 
+const SET_FIELDS = new Set([
+  'status',
+  'title',
+  'who',
+  'done_when',
+  'check',
+  'waiting',
+  'until',
+  'parent',
+  'after',
+  'needs',
+]);
+
+/**
+ * `treeyard set <id> [<id>…] key=value…`: one node or several, the same change to each. Ids
+ * come first, pairs after; everything is checked before the first write, so an unknown id or
+ * a bad value leaves every node as it was.
+ */
 async function setCommand(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, {
     as: { type: 'string' },
@@ -1006,9 +1026,14 @@ async function setCommand(args: string[]): Promise<number> {
   const here = project();
   // `--project ../X`: a node of another tree, the way an agent closes the shared node it made there.
   const tree = values.project ? otherProject(here, values.project) : here;
-  const id = nodeArg(tree, positionals[0]);
-  const pairs = positionals.slice(1);
-  if (pairs.length === 0) throw new UsageError('treeyard set <id> status=review [waiting="…"] …');
+  const firstPair = positionals.findIndex((arg) => arg.includes('='));
+  const idArgs = firstPair < 0 ? positionals : positionals.slice(0, firstPair);
+  const pairs = firstPair < 0 ? [] : positionals.slice(firstPair);
+  // `status = review` with spaces: a field name among the ids.
+  const loose = idArgs.find((arg) => SET_FIELDS.has(arg.replace(/-/g, '_')) && !tree.nodes.has(arg));
+  if (loose) throw new UsageError(t('«{pair}» — нужно ключ=значение', { pair: loose }));
+  const ids = [...new Set((idArgs.length ? idArgs : [undefined]).map((arg) => nodeArg(tree, arg)))];
+  if (pairs.length === 0) throw new UsageError('treeyard set <id> [<id>…] status=review [waiting="…"] …');
   const fields: Record<string, string> = {};
   for (const pair of pairs) {
     const cut = pair.indexOf('=');
@@ -1021,94 +1046,118 @@ async function setCommand(args: string[]): Promise<number> {
     fields[pair.slice(0, cut).trim().replace(/-/g, '_')] = pair.slice(cut + 1);
   }
   const source = sourceOf(values.as);
-  const known = new Set([
-    'status',
-    'title',
-    'who',
-    'done_when',
-    'check',
-    'waiting',
-    'until',
-    'parent',
-    'after',
-    'needs',
-  ]);
   for (const key of Object.keys(fields)) {
     // `order` is a stored number in steps of 10: the way to change it is a place, not a number.
     if (key === 'order') throw new UsageError(t('порядок задаётся местом, а не числом: after=<id брата>|first|last'));
-    if (!known.has(key))
+    if (!SET_FIELDS.has(key))
       throw new UsageError(
         t('не знаю поле «{key}»', {
           key,
         }),
       );
   }
-  if (
-    fields.title !== undefined ||
-    fields.who !== undefined ||
-    fields.done_when !== undefined ||
-    fields.check !== undefined
-  ) {
-    updateNode(tree, id, {
-      ...(fields.title !== undefined ? { title: fields.title } : {}),
-      ...(fields.who !== undefined ? { who: fields.who ? whoArg(fields.who) : null } : {}),
-      ...(fields.done_when !== undefined ? { doneWhen: fields.done_when } : {}),
-      ...(fields.check !== undefined ? { check: fields.check } : {}),
-    });
-  }
-  if (fields.needs !== undefined) {
-    const refs = fields.needs
-      .split(',')
-      .map((ref) => ref.trim())
-      .filter(Boolean)
-      // `y79a` and `#y79a` are nodes of this tree: an id prefix is enough, like in every command.
-      .map((ref) => (normalizeRef(ref) === ref ? ref : `.#${nodeArg(tree, ref.replace(/^#/, ''))}`));
-    let links: ReturnType<typeof setNeeds>;
-    try {
-      links = setNeeds(tree, id, refs, source);
-    } catch (error) {
-      throw new UsageError((error as Error).message);
+  // Everything that can fail is checked here, before the first node is written.
+  if (fields.title !== undefined && ids.length > 1)
+    throw new UsageError(t('title= — у каждого узла своё название: меняй по одному'));
+  const who = fields.who === undefined ? undefined : fields.who ? whoArg(fields.who) : null;
+  const status = fields.status !== undefined ? statusArg(fields.status) : undefined;
+  const refs = fields.needs !== undefined ? needsArg(tree, fields.needs) : undefined;
+  if (refs && ids.some((id) => refs.includes(`.#${id}`))) throw new UsageError(t('узел не может ждать сам себя'));
+  const moves = fields.parent !== undefined || fields.after !== undefined ? planMoves(tree, ids, fields) : [];
+
+  for (const id of ids) {
+    if (
+      who !== undefined ||
+      fields.title !== undefined ||
+      fields.done_when !== undefined ||
+      fields.check !== undefined
+    ) {
+      updateNode(tree, id, {
+        ...(fields.title !== undefined ? { title: fields.title } : {}),
+        ...(who !== undefined ? { who } : {}),
+        ...(fields.done_when !== undefined ? { doneWhen: fields.done_when } : {}),
+        ...(fields.check !== undefined ? { check: fields.check } : {}),
+      });
     }
-    for (const link of links.filter((item) => item.missing))
-      process.stderr.write(
-        t('{p1} {ref} — не найдено, связь записана\n', { p1: err.c('#ffcf70', '!'), ref: link.ref }),
-      );
+    if (refs) {
+      let links: ReturnType<typeof setNeeds>;
+      try {
+        links = setNeeds(tree, id, refs, source);
+      } catch (error) {
+        throw new UsageError((error as Error).message);
+      }
+      for (const link of links.filter((item) => item.missing))
+        process.stderr.write(
+          t('{p1} {ref} — не найдено, связь записана\n', { p1: err.c('#ffcf70', '!'), ref: link.ref }),
+        );
+    }
   }
-  if (fields.parent !== undefined || fields.after !== undefined) {
-    // One move for both: `parent=` alone puts the node last, `after=` alone keeps its parent.
-    const parent =
-      fields.parent === undefined
-        ? (tree.nodes.get(id)?.parent ?? ROOT)
-        : fields.parent === ROOT
-          ? ROOT
-          : nodeArg(tree, fields.parent);
-    moveNode(tree, id, parent, placeArg(tree, id, parent, fields.after));
+  for (const move of moves) moveNode(tree, move.id, move.parent, move.after);
+  if (status !== undefined || fields.waiting !== undefined || fields.until !== undefined) {
+    let warned = false;
+    for (const id of ids) {
+      const node = tree.nodes.get(id)!;
+      const next = status ?? node.status;
+      // A shared node (made from another project) is closed by the agent that did the work:
+      // nobody comes to this tree to close it by hand.
+      // A node of this same tree waiting for it does not make it shared.
+      const shared = Boolean(node.neededBy?.some((ref) => !isSameTree(tree.project.dir, ref)));
+      const agentDone = next === 'done' && !shared && !byPerson(values.as);
+      if (agentDone && !warned) {
+        warned = true;
+        process.stderr.write(
+          t('{p1} готово ставит человек — ставлю «на проверке»\n', {
+            p1: err.c('#ffcf70', '!'),
+          }),
+        );
+      }
+      setStatus(tree, id, agentDone ? 'review' : next, {
+        ...(fields.waiting !== undefined ? { waiting: fields.waiting } : {}),
+        ...(fields.until !== undefined ? { until: fields.until } : {}),
+        source,
+        ...(values.note ? { note: values.note } : {}),
+      });
+    }
   }
-  if (fields.status !== undefined || fields.waiting !== undefined || fields.until !== undefined) {
+  for (const id of ids) {
     const node = tree.nodes.get(id)!;
-    const status = fields.status !== undefined ? statusArg(fields.status) : node.status;
-    // A shared node (made from another project) is closed by the agent that did the work:
-    // nobody comes to this tree to close it by hand.
-    // A node of this same tree waiting for it does not make it shared.
-    const shared = Boolean(tree.nodes.get(id)?.neededBy?.some((ref) => !isSameTree(tree.project.dir, ref)));
-    const agentDone = status === 'done' && !shared && !byPerson(values.as);
-    if (agentDone) {
-      process.stderr.write(
-        t('{p1} готово ставит человек — ставлю «на проверке»\n', {
-          p1: err.c('#ffcf70', '!'),
-        }),
-      );
-    }
-    setStatus(tree, id, agentDone ? 'review' : status, {
-      ...(fields.waiting !== undefined ? { waiting: fields.waiting } : {}),
-      ...(fields.until !== undefined ? { until: fields.until } : {}),
-      source,
-      ...(values.note ? { note: values.note } : {}),
-    });
+    process.stdout.write(`${node.id} · ${STATUS_LABEL[node.status]} · ${node.title}\n`);
   }
-  const node = tree.nodes.get(id)!;
-  process.stdout.write(`${node.id} · ${STATUS_LABEL[node.status]} · ${node.title}\n`);
   return 0;
+}
+
+/** `needs=a,../X#b`: `y79a` and `#y79a` are nodes of this tree — an id prefix is enough, like in every command. */
+function needsArg(tree: Tree, value: string): string[] {
+  return value
+    .split(',')
+    .map((ref) => ref.trim())
+    .filter(Boolean)
+    .map((ref) => (normalizeRef(ref) === ref ? ref : `.#${nodeArg(tree, ref.replace(/^#/, ''))}`));
+}
+
+/**
+ * Where `parent=` and `after=` put each node. `parent=` alone puts them last, `after=` alone
+ * keeps their parent; several nodes stand one after another in the order given.
+ */
+function planMoves(
+  tree: Tree,
+  ids: string[],
+  fields: Record<string, string>,
+): { id: string; parent: string; after: string | null | undefined }[] {
+  const target = fields.parent === undefined ? undefined : fields.parent === ROOT ? ROOT : nodeArg(tree, fields.parent);
+  const parents = ids.map((id) => {
+    const parent = target ?? tree.nodes.get(id)?.parent ?? ROOT;
+    if (parent === id || descendants(tree, id).some((kid) => kid.id === parent))
+      throw new UsageError(t('нельзя перенести узел внутрь самого себя'));
+    return parent;
+  });
+  if (fields.after === undefined) return ids.map((id, i) => ({ id, parent: parents[i]!, after: undefined }));
+  if (new Set(parents).size > 1)
+    throw new UsageError(t('after= для нескольких узлов — им нужен один родитель: добавь parent=<id>'));
+  const place = placeArg(tree, ids[0]!, parents[0]!, fields.after);
+  if (typeof place === 'string' && ids.includes(place))
+    throw new UsageError(t('after= не может указывать на сам узел'));
+  return ids.map((id, i) => ({ id, parent: parents[i]!, after: i === 0 ? place : ids[i - 1] }));
 }
 
 /** Says where the cards moved by this command went, or why they did not. */

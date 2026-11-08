@@ -342,6 +342,7 @@ treeyard find "округлен|копейк"                 # поиск по 
 treeyard add "Показать продукт человеку" --who human --parent <id>
 treeyard add "Поправить справку" --parent <id> --after <id>   # сразу после соседа с тем же статусом (без --after — последним)
 treeyard set <id> after=<id соседа>|first|last  # место среди соседей; вместе с parent=<id> — в новом родителе
+treeyard set <a> <b> <c> status=todo            # несколько узлов: то же всем (after=<id> ставит их подряд); ошибка — не меняется ни один
 treeyard set <id> status=waiting waiting="нет сервера" until="появится VPS"
 treeyard set <id> status=review                 # агент отправляет на проверку; «готово» ставит человек
 treeyard log <id> "что сделано; что осталось"

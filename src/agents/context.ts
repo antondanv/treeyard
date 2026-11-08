@@ -209,6 +209,7 @@ const TEXT = {
     imageWhat: 'приложить к узлу картинку или скрин (например, доказательство для проверки); без файла — список',
     coordinator:
       'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
+    setMany: 'одно изменение нескольким узлам сразу (after= ставит их подряд), а не цикл',
     diffWhat:
       'после коммита привяжи его к узлу (HEAD, ветка или SHA), чтобы человек мог посмотреть диф; без --add — просмотр. Привязывай только коммиты с работой по этому узлу',
     diffAuto: 'коммиты этой сессии привязываются к узлу сами (post-commit); чужие коммиты — так; без --add — просмотр',
@@ -266,6 +267,7 @@ const TEXT = {
     imageWhat: 'attach a picture or a screenshot to the node (evidence for review, say); without a file — the list',
     coordinator:
       'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
+    setMany: 'the same change to several nodes at once (after= puts them one after another), not a loop',
     diffWhat:
       'after committing, attach it to the node (HEAD, a branch or a SHA) so the person can inspect the patch; without --add — view. Attach only commits with work on this node',
     diffAuto:
@@ -359,6 +361,7 @@ export function contextText(tree: Tree, id: string): string {
   // Only where work is handed out: a leaf would pay for the line in every session.
   if (kids.some((kid) => kid.status !== 'done' && kid.status !== 'dropped')) {
     lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.coordinator}`);
+    lines.push(`- \`${self} set <id> <id>… status=todo\` — ${L.setMany}`);
   }
   // Read, not applied: the context must not switch the language or the theme of whoever asks.
   if (loadSettings().notes) lines.push(`- \`${self} note "${L.note}"\` — ${L.noteWhat}`);
@@ -457,7 +460,7 @@ const ROOT_TEXT = {
     command: 'Команда',
     show: 'открытое дерево (`--all` — всё); `show <id…> --brief` — шапки и последние записи узлов',
     add: 'новый узел (родитель — по смыслу; `--status idea` для идеи)',
-    set: 'поменять узел: status, title, parent, done_when, who, check, waiting, until',
+    set: 'поменять узел или несколько сразу (то же всем, after= ставит их подряд): status, title, parent, done_when, who, check, waiting, until',
     keyValue: 'ключ=значение',
     log: 'запись в журнал узла',
     sessions: 'сессии папки и чьи они',
@@ -497,7 +500,7 @@ const ROOT_TEXT = {
     command: 'The command is',
     show: 'the open tree (`--all` — everything); `show <id…> --brief` — headers and latest entries of nodes',
     add: 'a new node (pick the parent by meaning; `--status idea` for an idea)',
-    set: 'change a node: status, title, parent, done_when, who, check, waiting, until',
+    set: 'change a node or several at once (the same to each, after= puts them one after another): status, title, parent, done_when, who, check, waiting, until',
     keyValue: 'key=value',
     log: 'a line in the node journal',
     sessions: 'the sessions of the folder and whose they are',
@@ -601,7 +604,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} show --status review,idea [--under <id>]\` — ${T.showStatus}`);
   lines.push(`- \`${self} find "${T.findWhat}"\` — ${T.find}`);
   lines.push(`- \`${self} add "${T.add}" --parent <id> --done-when "…"\` — ${L.add}`);
-  lines.push(`- \`${self} set <id> ${L.keyValue}…\` — ${L.set}`);
+  lines.push(`- \`${self} set <id> [<id>…] ${L.keyValue}…\` — ${L.set}`);
   lines.push(`- \`${self} log <id> "…"\` — ${L.log}`);
   lines.push(`- \`${self} sessions\` — ${L.sessions}`);
   lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
