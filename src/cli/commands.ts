@@ -152,10 +152,11 @@ function commandLines(): string {
   treeyard decide ["<решение>"]            дописать решение в «Решения» .tree/tree.md (с датой); без текста — список
   treeyard commit [<id>…] [-m "…"]         закоммитить файлы дерева этих узлов, README и tree.md (chore(tree): …);
                                            код, другие узлы и чужой индекс не берёт; без id — узел этой сессии
-  treeyard image <id> [файл…|--paste] [--note "…"]   картинки узла: список, приложить файл или из буфера
+  treeyard image <id> [файл…|--paste] [--note "…"]…   картинки узла: список, приложить файлы или из буфера;
+                                           по --note на каждый файл по порядку или одна подпись на все
   treeyard image <id> 001.png --note "…" | --rm 001.png   подпись к картинке · удалить её
   treeyard diff <id> [--commit <ref>] [--file <путь>] [--stat|--json]   дифы коммитов узла
-  treeyard diff <id> --add <ref> | --rm <sha>   привязать коммит (HEAD, ветка, тег, SHA) · убрать привязку
+  treeyard diff <id> --add <ref>… | --rm <sha>   привязать коммиты (HEAD, ветка, тег, SHA) · убрать привязку
   treeyard diff <id> --working              текущие изменения проекта (общие для узлов)
   treeyard hook install|remove|status      git-хук post-commit: коммиты сессии из узла привязываются к узлу сами
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   что получит агент
@@ -206,10 +207,11 @@ function commandLines(): string {
   treeyard decide ["<decision>"]           add a decision to «Decisions» in .tree/tree.md (dated); without text — the list
   treeyard commit [<id>…] [-m "…"]         commit the tree files of these nodes, README and tree.md (chore(tree): …);
                                            never the code, other nodes or what others staged; no ids — this session's node
-  treeyard image <id> [file…|--paste] [--note "…"]   a node's pictures: the list, attach a file or the clipboard
+  treeyard image <id> [file…|--paste] [--note "…"]…   a node's pictures: the list, attach files or the clipboard;
+                                           a --note per file in order, or one caption for all
   treeyard image <id> 001.png --note "…" | --rm 001.png   caption a picture · remove it
   treeyard diff <id> [--commit <ref>] [--file <path>] [--stat|--json]   patches of the node's commits
-  treeyard diff <id> --add <ref> | --rm <sha>   attach a commit (HEAD, a branch, a tag, a SHA) · remove the link
+  treeyard diff <id> --add <ref>… | --rm <sha>   attach commits (HEAD, a branch, a tag, a SHA) · remove the link
   treeyard diff <id> --working              current project changes (shared by nodes)
   treeyard hook install|remove|status      git post-commit hook: commits of a node's session attach to the node by themselves
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   what an agent gets
@@ -1161,19 +1163,18 @@ async function setCommand(args: string[]): Promise<number> {
     }
   }
   for (const move of moves) moveNode(tree, move.id, move.parent, move.after);
+  const demoted = new Set<string>();
   if (status !== undefined || fields.waiting !== undefined || fields.until !== undefined) {
-    let warned = false;
     for (const id of ids) {
       const next = closingStatus(tree, id, status ?? tree.nodes.get(id)!.status, values.as);
-      const agentDone = next.demoted;
-      if (agentDone && !warned) {
-        warned = true;
+      if (next.demoted && !demoted.size) {
         process.stderr.write(
           t('{p1} готово ставит человек — ставлю «на проверке»\n', {
             p1: err.c('#ffcf70', '!'),
           }),
         );
       }
+      if (next.demoted) demoted.add(id);
       setStatus(tree, id, next.status, {
         ...(fields.waiting !== undefined ? { waiting: fields.waiting } : {}),
         ...(fields.until !== undefined ? { until: fields.until } : {}),
@@ -1184,7 +1185,9 @@ async function setCommand(args: string[]): Promise<number> {
   }
   for (const id of ids) {
     const node = tree.nodes.get(id)!;
-    process.stdout.write(`${node.id} · ${STATUS_LABEL[node.status]} · ${node.title}\n`);
+    // Done turned into review is said here too: stderr is often thrown away (`2>/dev/null`).
+    const note = demoted.has(id) ? ` · ${demotedNote(values.as)}` : '';
+    process.stdout.write(`${node.id} · ${STATUS_LABEL[node.status]} · ${node.title}${note}\n`);
   }
   return 0;
 }
@@ -1469,7 +1472,7 @@ function demotedNote(as: string | undefined): string {
 
 /** A node's explicit commit links and the project's separate working changes. */
 async function diffCommand(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, {
+  const { values, positionals } = parse(spreadRefs(args, '--add'), {
     add: { type: 'string', multiple: true },
     rm: { type: 'string' },
     commit: { type: 'string' },
@@ -1505,7 +1508,8 @@ async function diffCommand(args: string[]): Promise<number> {
   }
   const repo = await gitRepository(dir);
   if (values.add) {
-    const commits = await Promise.all(values.add.map((sha) => repo.commit(sha)));
+    const refs = values.add.flatMap((ref) => ref.split(',')).filter((ref) => ref.trim());
+    const commits = await Promise.all(refs.map((sha) => repo.commit(sha.trim())));
     // Git reads are asynchronous; keep any journal entries written in the meantime.
     tree = loadTree(dir);
     for (const commit of commits) attachCommit(tree, id, commit.sha, source);
@@ -1612,7 +1616,7 @@ async function diffCommand(args: string[]): Promise<number> {
 /** Pictures of a node: list, attach (files or the clipboard), caption, remove. */
 function imageCommand(args: string[]): number {
   const { values, positionals } = parse(args, {
-    note: { type: 'string' },
+    note: { type: 'string', multiple: true },
     paste: { type: 'boolean' },
     rm: { type: 'string' },
     as: { type: 'string' },
@@ -1622,6 +1626,7 @@ function imageCommand(args: string[]): number {
   const { dir } = tree.project;
   const source = sourceOf(values.as);
   const files = positionals.slice(1);
+  const notes = values.note ?? [];
   const known = new Set(listImages(dir, id).map((image) => image.file));
   if (values.rm) {
     if (!known.has(values.rm)) throw new UsageError(t('у узла {id} нет картинки {file}', { id, file: values.rm }));
@@ -1630,19 +1635,31 @@ function imageCommand(args: string[]): number {
     process.stdout.write(t('{id} · удалена {file}\n', { id, file: values.rm }));
     return 0;
   }
-  if (files.length === 1 && known.has(files[0]!) && values.note !== undefined) {
-    const image = setImageNote(dir, id, files[0]!, values.note);
+  if (files.length === 1 && known.has(files[0]!) && notes.length) {
+    if (notes.length > 1) throw new UsageError(t('у одной картинки одна подпись'));
+    const image = setImageNote(dir, id, files[0]!, notes[0]!);
     if (image.note) logToNode(tree, id, t('подпись к {file}: {note}', { file: image.file, note: image.note }), source);
     process.stdout.write(t('{id} · подпись к {file} сохранена\n', { id, file: image.file }));
     return 0;
   }
+  // A caption for each file in order, or one for all of them; checked before the first is added.
+  const count = files.length + (values.paste ? 1 : 0);
+  if (notes.length > 1 && notes.length !== count)
+    throw new UsageError(
+      t('подписей {notes}, картинок {files}: по --note на каждую или одна на все', {
+        notes: notes.length,
+        files: count,
+      }),
+    );
+  const missing = files.find((file) => !existsSync(resolve(file)));
+  if (missing) throw new UsageError(t('нет файла {file}', { file: missing }));
   const sources: (Buffer | string)[] = [...files];
   const found = values.paste ? clipboardImage() : undefined;
   if (values.paste && !found) throw new UsageError(t('в буфере нет картинки'));
   if (found) sources.push(found.kind === 'png' ? found.data : found.path);
   try {
-    for (const item of sources) {
-      const image = addImage(dir, id, item, values.note);
+    for (const [i, item] of sources.entries()) {
+      const image = addImage(dir, id, item, notes.length > 1 ? notes[i] : notes[0]);
       logToNode(
         tree,
         id,

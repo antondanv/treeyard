@@ -247,6 +247,10 @@ export const EN: Record<string, string> = {
   'корень — это .tree/tree.md, он входит в коммит сам: укажи узлы':
     'the root is .tree/tree.md, it goes into the commit by itself: name the nodes',
   'в дереве нечего коммитить: {ids}': 'nothing to commit in the tree: {ids}',
+  'у одной картинки одна подпись': 'one picture has one caption',
+  'подписей {notes}, картинок {files}: по --note на каждую или одна на все':
+    '{notes} captions for {files} pictures: a --note for each or one for all',
+  'нет файла {file}': 'no file {file}',
   'история статусов:': 'status history:',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
   'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',

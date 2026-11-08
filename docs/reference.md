@@ -320,6 +320,7 @@ treeyard set <id> after=<sibling id>|first|last # the place among siblings; with
 treeyard set <a> <b> <c> status=todo            # several nodes: the same change to each (after=<id> puts them one after another); an error changes none
 treeyard set <id> status=waiting waiting="no server" until="a VPS is up"
 treeyard set <id> status=review                 # the agent; “done” is set by a person
+treeyard set <id> status=done --as you          # only at the person's word; from an agent (or --as not a person) done turns into review — the output line says so
 treeyard log <id> "what is done; what is left"
 treeyard log <id> "summary, evidence" --status review --commit HEAD   # closing in one command: the entry, the status and the commits (--commit a b, --commit a,b)
 treeyard log <id> --fix "corrected text"        # replace your own last entry (its time stays; status changes and commits are not touched)
@@ -425,7 +426,7 @@ Git's mark instead of text. The view changes no files, no index and no Git histo
 ```sh
 treeyard diff <id>                              # the diffs of every commit of the node
 treeyard diff <id> --add HEAD                   # any ref: HEAD, HEAD~1, a branch, a tag, a short SHA; the node keeps the full SHA
-treeyard diff <id> --add <ref1> --add <ref2>    # several commits
+treeyard diff <id> --add <ref1> <ref2>          # several commits (--add a,b and repeated --add work too)
 treeyard diff <id> --rm <sha>                   # remove a link, even if the commit is gone
 treeyard diff <id> --commit <ref> --file src/app.ts
 treeyard diff <id> --stat                       # files and +/−, no diff text
@@ -502,6 +503,7 @@ review:
 
 ```sh
 treeyard image <id> shot.png --note "the button is in place"   # attach; --paste — from the clipboard
+treeyard image <id> wide.png narrow.png --note "1440" --note "390"   # several files, a caption for each in order (one --note — for all)
 treeyard image <id>                                            # paths and captions
 treeyard image <id> 001.png --note "…" · --rm 001.png          # caption · delete
 ```

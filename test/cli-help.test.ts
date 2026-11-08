@@ -95,7 +95,7 @@ describe('treeyard <command> --help', () => {
     const sh = shell(tempDir(), 'en');
     const diff = (await sh('diff', '--help')).stdout;
     expect(diff).toContain('treeyard diff <id> [--commit <ref>]');
-    expect(diff).toContain('treeyard diff <id> --add <ref> | --rm <sha>');
+    expect(diff).toContain('treeyard diff <id> --add <ref>… | --rm <sha>');
     expect(diff).toContain('treeyard diff <id> --working');
     expect(diff).not.toContain('treeyard image');
 

@@ -346,6 +346,7 @@ treeyard set <id> after=<id соседа>|first|last  # место среди с
 treeyard set <a> <b> <c> status=todo            # несколько узлов: то же всем (after=<id> ставит их подряд); ошибка — не меняется ни один
 treeyard set <id> status=waiting waiting="нет сервера" until="появится VPS"
 treeyard set <id> status=review                 # агент отправляет на проверку; «готово» ставит человек
+treeyard set <id> status=done --as ты           # только по слову человека; от агента (или с --as не человека) готово становится «на проверке» — строка вывода говорит об этом
 treeyard log <id> "что сделано; что осталось"
 treeyard log <id> "итог, доказательства" --status review --commit HEAD   # закрыть узел одной командой: запись, статус и коммиты (--commit a b, --commit a,b)
 treeyard log <id> --fix "исправленный текст"    # заменить свою последнюю запись (время остаётся; смены статуса и коммиты не трогает)
@@ -454,7 +455,7 @@ README, AGENTS и CLAUDE. `⏎` открывает документ для чт�
 ```sh
 treeyard diff <id>                              # дифы всех коммитов узла
 treeyard diff <id> --add HEAD                   # любая ссылка: HEAD, HEAD~1, ветка, тег, короткий SHA; в узел пишется полный SHA
-treeyard diff <id> --add <ref1> --add <ref2>    # сразу несколько коммитов
+treeyard diff <id> --add <ref1> <ref2>          # сразу несколько коммитов (можно --add a,b и повтор --add)
 treeyard diff <id> --rm <sha>                   # снять привязку, даже если коммита уже нет
 treeyard diff <id> --commit <ref> --file src/app.ts
 treeyard diff <id> --stat                       # только файлы и +/−, без текста дифа
@@ -531,6 +532,7 @@ TIFF, GIF, BMP и WebP) можно просто перетащить в окно
 
 ```sh
 treeyard image <id> shot.png --note "кнопка на месте"   # приложить; --paste — из буфера
+treeyard image <id> wide.png narrow.png --note "1440" --note "390"   # несколько файлов, подпись к каждому по порядку (один --note — всем)
 treeyard image <id>                                      # пути и подписи
 treeyard image <id> 001.png --note "…" · --rm 001.png    # подписать · удалить
 ```
