@@ -34,6 +34,13 @@ sessions:
     opened: 2026-10-10T13:34:44+03:00
     mode: pane
     pane: claude-da91c6ea
+  - brain: antigravity
+    id: 1d1445b1-2ced-401b-8950-e757d3adfac7
+    name: Treeyard · разговор о проекте
+    started: 2026-10-10T16:15:43+03:00
+    opened: 2026-10-10T16:15:43+03:00
+    mode: pane
+    pane: agy-b9c454bd
 ---
 
 ## Метод: Направления

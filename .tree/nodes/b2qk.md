@@ -2,7 +2,7 @@
 id: b2qk
 title: Идеи
 parent: root
-order: 60
+order: 80
 status: todo
 created: 2026-10-02
 updated: 2026-10-08T11:42:23+03:00

@@ -3,7 +3,7 @@ id: cmfc
 title: "CI зелёный: тесты не зависят от агентов и tmux на раннере"
 parent: 5w6w
 order: 160
-status: review
+status: done
 who: agent
 done_when: "gh run list: CI на main — success на ubuntu и macos, Node 22 и 24"
 commits:
@@ -18,7 +18,8 @@ sessions:
     mode: pane
     pane: claude-549c6c9e
 created: 2026-10-06
-updated: 2026-10-07T20:35:23+03:00
+updated: 2026-11-08T12:06:06+03:00
+closed: 2026-11-08
 ---
 
 Первые прогоны CI (6 окт.): локально 396 из 396, на раннерах падают 8 тестов на Linux и 1–2 на macOS. Linux: planting-tmux (3), tui-tmux (1), terminal (1), planting (1) и др. — с настоящим tmux экран не доходит до ожидаемого за 15 с. macOS (tmux нет, tmux-тесты пропущены): planting.test «an agent is confirmed first…» ждёт «Посадить дерево с …?» — неявно требует установленного CLI агента; на Node 22 ещё terminal.test «node menu shows a live pane…». Логи: gh run view 37514618942 --log-failed.
@@ -35,3 +36,4 @@ updated: 2026-10-07T20:35:23+03:00
 - 2026-10-07 17:14 · агент · Push отложен по решению человека. Профиль colima treeyard-ci (4 CPU, Ubuntu 24.04 + tmux 3.4) остановлен, не удалён — на случай новых Linux-падений; скрипт linux-test.sh был в scratchpad сессии.
 - 2026-10-07 20:35 · агент · Push по слову человека 2026-10-07: main e3501b3 на origin (история перед этим переписана без video/). gh run 37659161262 (CI на e3501b3) — success: Node 22 и 24 на ubuntu-latest и macos-latest. Публикация 0.1.1 из релиза прошла lint, typecheck и тесты на раннере, упала только на npm publish: E404 — нет trusted publisher на npmjs.com.
 - 2026-10-07 20:35 · агент · ждёт → на проверке
+- 2026-11-08 12:06 · ты · на проверке → готово
