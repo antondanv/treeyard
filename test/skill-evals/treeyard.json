@@ -7,9 +7,9 @@
     "expected_behavior": [
       "Loads the treeyard skill before the first command",
       "Finds «Флаг --version» with treeyard show and names it to the person by title",
-      "Never pipes treeyard show into head, tail, grep or sed",
+      "Never pipes treeyard show into head, tail, grep or sed and never loops over treeyard commands",
       "Sets the node active, implements --version with a test and runs npm test",
-      "Commits its own files by path, attaches the commit with treeyard diff --add HEAD, then sets review and writes a journal entry with the evidence",
+      "Commits its own files by path, then finishes with one treeyard log <id> \"…\" --status review --commit HEAD carrying the evidence",
       "Adds the clipboard idea with a 2–6 word title and --status idea, without implementing it",
       "Never edits .tree/ by hand and never sets done; no node ids in the reply"
     ]
@@ -55,7 +55,7 @@
       "Has a node in money linked to the tipcalc node (treeyard add --project ../money --for <id>)",
       "Fixes round2 in money following money/AGENTS.md: a test on x.xx5 boundaries, npm test there",
       "Commits in money's repository and closes the shared node with treeyard set <id> status=done --project ../money",
-      "Adds a regression test in tipcalc, commits, sets the tipcalc node review with a journal entry"
+      "Adds a regression test in tipcalc, commits, and finishes the tipcalc node with treeyard log <id> \"…\" --status review --commit HEAD"
     ]
   },
   {

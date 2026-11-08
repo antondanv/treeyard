@@ -21,10 +21,12 @@ Agents break these most often. Follow them even when the task looks too small.
 
 1. **Before work**, find the task's node in `treeyard show` and tell the person which it is.
 2. **Read `treeyard show` whole.** Never pipe it into `head`, `tail`, `grep` or `sed`, not
-   even after `2>&1`. Too long → `--brief` or `--journal N`; several nodes → one call.
+   even after `2>&1`. Too long → `--brief`, `--journal N` or `--only journal,sessions`;
+   several nodes → one call; looking for something → `treeyard find "…"`.
 3. **Write `.tree/` only with `treeyard` commands**, never by hand.
-4. **Finish in order:** checks → commit → `treeyard set <id> status=review` →
-   `treeyard log <id> "…"`. Status `done` only when the person asks to close the node.
+4. **Finish in order:** checks → commit → one command:
+   `treeyard log <id> "…" --status review --commit HEAD`. Status `done` only when the person
+   asks to close the node.
 5. **A side idea** becomes `treeyard add "2–6 words" --parent <id> --status idea --note "…"`;
    then back to the task.
 6. **A change needed in another project** (`../X`) starts with
@@ -64,12 +66,19 @@ by title.
 
 - `treeyard show` — the open tree, finished work folded into a counter; `--all` — everything.
 - `treeyard show <id> [<id>…]` — whole nodes; `--brief` — header, criterion and the last 3
-  journal entries; `--journal N` (or `all`).
+  journal entries; `--journal N` (or `all`); `--only header,journal,sessions,commits,history`
+  — just those parts.
+- `treeyard show --status review,idea --under <id>` — the nodes of those statuses in a
+  branch, a line each. A status is a word (`review`, `на проверке`, `wip`), never a glyph.
+- `treeyard find "text"` — titles, criteria, descriptions and journals of every node, done
+  ones too. Instead of `grep` over `.tree/` or over `show`.
 - `--json` — only when a script needs the fields.
 
-A cut output drops what you came for: the criterion, why a node waits, the last entry. A
-form you need seems missing → check `treeyard <command> --help`; really missing → tell the
-person and run plain separate commands, without pipes or loops around treeyard.
+A cut output drops what you came for: the criterion, why a node waits, the last entry. Many
+nodes at once are one command too: `treeyard set a b c status=todo`, `treeyard add --parent
+<id> --from-json -`. A form you need seems missing → check `treeyard <command> --help`;
+really missing → tell the person and `treeyard note` the gap; no pipes or loops around
+treeyard.
 
 ## Finish: evidence, commit, review
 
@@ -79,9 +88,8 @@ Copy this checklist and check it off:
 Finish:
 - [ ] Every clause of the criterion checked: command + output, or a screenshot
 - [ ] Own changes committed
-- [ ] Commit attached: treeyard diff <id> --add HEAD (only after the commit succeeded)
-- [ ] treeyard set <id> status=review
-- [ ] treeyard log <id> "…" — result, evidence, commits, what is left
+- [ ] treeyard log <id> "…" --status review --commit HEAD — result, evidence, what is left
+      (--commit only after your own commit succeeded)
 - [ ] Reply to the person: each clause → its evidence; the node by title
 ```
 
@@ -91,14 +99,16 @@ read the result. A clause fails → fix it and check again. A clause can't be me
 (`treeyard set <id> done_when="…"` only after their yes). What the person will see goes to
 the node as a screenshot: `treeyard image <id> shot.png --note "what it shows"`.
 
-The commit fails or is not allowed → say so in the journal entry and to the person;
-`review` then means "proven, waiting for a commit".
+The commit fails or is not allowed → leave out `--commit`, say so in the journal entry and
+to the person; `review` then means "proven, waiting for a commit".
 
 **Journal entry** — the result, not the process:
 
 ```sh
-treeyard log <id> "--version prints the version from package.json (bin/tip.js, test/cli.test.js). npm test — 3/3; node bin/tip.js --version → 0.3.0. Commit a1b2c3d. Left: nothing."
+treeyard log <id> "--version prints the version from package.json (bin/tip.js, test/cli.test.js). npm test — 3/3; node bin/tip.js --version → 0.3.0. Left: nothing." --status review --commit HEAD
 ```
+
+A typo in your entry → `treeyard log <id> --fix "corrected text"`.
 
 Write one also before a break, when blocked, before switching nodes, and when the person
 decides something ("Person 08.11: JSON only, no CSV").
@@ -166,10 +176,12 @@ No Edit or Write tools, no `sed -i`, `echo >>` or heredocs on `.tree/nodes/*.md`
 `.tree/README.md`. treeyard keeps the format, timestamps, status history, order and the
 overview; a hand edit skips them. Reading the files is fine.
 
-- No command for what you need (fix a journal entry, delete a node)? Use what exists — a
-  correcting journal entry, `status=dropped`, `set <id> after=…` — tell the person and
-  `treeyard note` the gap.
-- `.tree/tree.md` (goal, rules, «Decisions») changes only when the person asks.
+- Your journal entry is wrong → `treeyard log <id> --fix "…"`; a node's description →
+  `treeyard set <id> note="…"`; a node you added by mistake → `treeyard rm <id>` (one with a
+  history → `status=dropped`); the order → `set <id> after=…`.
+- No command for what you need? Tell the person and `treeyard note` the gap.
+- `.tree/tree.md` (goal, rules, «Decisions») changes only when the person asks; a decision
+  then goes in with `treeyard decide "what and why"`.
 - `.tree/.local/` — never touch, never commit.
 
 ## Commits
@@ -179,10 +191,12 @@ overview; a hand edit skips them. Reading the files is fine.
 - Commit your own changes by meaning, in Conventional Commits, files by path (not
   `git add -A`).
 - Tree files changed by your treeyard commands are yours, but `.tree/` is shared by every
-  session: commit it the way the project does (`git log --oneline -- .tree`); with no clear
-  habit, leave it to the person and say so.
+  session. If the project commits its tree (`git log --oneline -- .tree`), commit yours with
+  `treeyard commit <id> [<id>…]` — the named nodes, README and tree.md, nothing else; with no
+  clear habit, leave it to the person and say so. Never `git add .tree/…` by hand.
 - A session opened from a node with the hook installed (`treeyard hook status`) attaches its
-  commits by itself; otherwise `treeyard diff <id> --add HEAD`.
+  commits by itself; otherwise `--commit HEAD` in the closing `log`, or
+  `treeyard diff <id> --add HEAD`.
 - Push, PR, merge — only when the person asks.
 
 ## Another project
@@ -210,15 +224,20 @@ What to look for and the commands — see [references/tree-order.md](references/
 
 ## Commands
 
-- `treeyard show [<id>…] [--brief] [--journal N]` — the tree, nodes
-- `treeyard set <id> status=active` · `status=review` · `status=todo`
+- `treeyard show [<id>…] [--brief] [--journal N] [--only …]` — the tree, nodes
+- `treeyard show --status review,idea [--under <id>]` · `treeyard find "…"` — look things up
+- `treeyard set <id> status=active` · `status=todo`; several ids — the same to each
 - `treeyard set <id> status=waiting waiting="…" until="…"` — blocked
-- `treeyard set <id> title="…" done_when="…" parent=<id> after=<id>` — change a node
-- `treeyard log <id> "…"` — a journal entry
+- `treeyard set <id> title="…" done_when="…" note="…" parent=<id> after=<id>` — change a node
+- `treeyard log <id> "…"` — a journal entry; `--status review --commit HEAD` — finish;
+  `--fix "…"` — correct your last entry
 - `treeyard add "Title" --parent <id> --status idea --note "…"` — a side idea
 - `treeyard add "Title" --parent <id> --done-when "…" [--who human] [--after <id>]` — work
 - `treeyard add "Title" --project ../X --for <id>` — a node in another project
-- `treeyard image <id> shot.png --note "…"` — a screenshot as evidence
+- `treeyard add --parent <id> --from-json -` — several nodes at once
+- `treeyard image <id> a.png b.png --note "…" --note "…"` — screenshots as evidence
 - `treeyard diff <id> --add HEAD` — attach a commit
+- `treeyard commit <id>…` — commit the tree files of these nodes
+- `treeyard rm <id>` — a node added by mistake · `treeyard decide "…"` — at the person's word
 - `treeyard note "…"` — an inconvenience of treeyard itself
 - `treeyard help`, `treeyard <command> --help` — everything else
