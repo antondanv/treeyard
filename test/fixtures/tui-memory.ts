@@ -25,6 +25,7 @@ if (mode === 'startup') {
   const { defaultUi, loadUi } = await import('../../src/tui/ui-state.js');
   const { DEFAULTS, resetSettings } = await import('../../src/settings.js');
   const { loadTree } = await import('../../src/model/store.js');
+  const { TerminalInput } = await import('../../src/tui/input.js');
 
   class Output extends Writable {
     readonly isTTY = true;
@@ -60,12 +61,13 @@ if (mode === 'startup') {
 
   resetSettings({ ...DEFAULTS, live: false, marquee: true });
   const stdout = new Output();
-  const stdin = new Input();
+  const source = new Input();
+  const stdin = new TerminalInput(source as unknown as NodeJS.ReadStream);
   const tree = loadTree(dir);
   const instance = render(
     React.createElement(App, {
       dir,
-      ui: { ...defaultUi(), selected, expanded: [...tree.nodes.keys()] },
+      ui: mode === 'profile' ? loadUi(dir) : { ...defaultUi(), selected, expanded: [...tree.nodes.keys()] },
       offline: true,
       onAction: () => undefined,
     }),
@@ -93,19 +95,41 @@ if (mode === 'startup') {
     const writesBefore = stdout.writes;
     const measuresBefore = performance.getEntriesByType('measure').length;
     const heaps = [sample()];
+    const cpuBefore = process.cpuUsage();
+    const timeBefore = performance.now();
     await pause(6_000);
     heaps.push(sample());
+    const cpu = process.cpuUsage(cpuBefore);
+    const cpuPercent = (cpu.user + cpu.system) / ((performance.now() - timeBefore) * 10);
     await pause(6_000);
     heaps.push(sample());
     const measuresAfter = performance.getEntriesByType('measure').length;
     const animationWrites = stdout.writes - writesBefore;
     const uiUnchanged = statSync(uiPath).mtimeMs === uiMtime;
-    stdin.write('2');
+    let background: { cpuPercent: number; writes: number } | undefined;
+    if (mode === 'profile') {
+      source.write('\u001b[O');
+      await pause(150);
+      const cpuBefore = process.cpuUsage();
+      const timeBefore = performance.now();
+      const writesBefore = stdout.writes;
+      await pause(6000);
+      const cpu = process.cpuUsage(cpuBefore);
+      background = {
+        cpuPercent: (cpu.user + cpu.system) / ((performance.now() - timeBefore) * 10),
+        writes: stdout.writes - writesBefore,
+      };
+      source.write('\u001b[I');
+      await pause(100);
+    }
+    source.write('2');
     await pause(100);
     process.stdout.write(
       `${JSON.stringify({
         ...startup,
         heaps,
+        cpuPercent,
+        background,
         measuresBefore,
         measuresAfter,
         animationWrites,
@@ -116,5 +140,6 @@ if (mode === 'startup') {
   } finally {
     instance.unmount();
     instance.cleanup();
+    stdin.destroy();
   }
 }

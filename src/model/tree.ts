@@ -160,8 +160,9 @@ export function actionable(tree: Tree): TreeNode[] {
     out.push(node);
   }
   const rank: Partial<Record<Status, number>> = { active: 0, review: 1, todo: 2 };
+  const positions = treePositions(tree);
   return out.sort(
-    (a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || treeOrder(tree, a.id) - treeOrder(tree, b.id),
+    (a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || position(positions, a.id) - position(positions, b.id),
   );
 }
 
@@ -172,26 +173,39 @@ export function waitingNodes(tree: Tree): TreeNode[] {
 }
 
 export function ideaNodes(tree: Tree): TreeNode[] {
+  const positions = treePositions(tree);
   return [...tree.nodes.values()]
     .filter((node) => node.status === 'idea')
-    .sort((a, b) => treeOrder(tree, a.id) - treeOrder(tree, b.id));
+    .sort((a, b) => position(positions, a.id) - position(positions, b.id));
+}
+
+/** Build the display order once per list, never by walking the tree inside a sort comparison. */
+function treePositions(tree: Tree): Map<string, number> {
+  const children = new Map<string, TreeNode[]>();
+  for (const node of tree.nodes.values()) {
+    const siblings = children.get(node.parent) ?? [];
+    siblings.push(node);
+    children.set(node.parent, siblings);
+  }
+  for (const siblings of children.values()) siblings.sort(bySiblingOrder);
+  const positions = new Map<string, number>();
+  const walk = (parent: string) => {
+    for (const child of children.get(parent) ?? []) {
+      positions.set(child.id, positions.size);
+      walk(child.id);
+    }
+  };
+  walk(ROOT);
+  return positions;
+}
+
+function position(positions: ReadonlyMap<string, number>, id: string): number {
+  return positions.get(id) ?? Number.MAX_SAFE_INTEGER;
 }
 
 /** Position of a node in a full depth-first walk: keeps lists in tree order. */
 export function treeOrder(tree: Tree, id: string): number {
-  let index = 0;
-  let found = -1;
-  const walk = (parent: string) => {
-    for (const child of childrenOf(tree, parent)) {
-      if (child.id === id) found = index;
-      index += 1;
-      if (found >= 0) return;
-      walk(child.id);
-      if (found >= 0) return;
-    }
-  };
-  walk(ROOT);
-  return found < 0 ? Number.MAX_SAFE_INTEGER : found;
+  return position(treePositions(tree), id);
 }
 
 export interface Summary {

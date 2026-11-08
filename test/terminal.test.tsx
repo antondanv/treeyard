@@ -26,7 +26,8 @@ vi.mock('@antondanv/brainyard', async (original) => ({
   paneMemory: async () => new Map([['claude-one', 180 * 1024 * 1024]]),
 }));
 
-import { addNode, attachSession } from '../src/model/ops.js';
+import { addNode, attachSession, updateNode } from '../src/model/ops.js';
+import * as store from '../src/model/store.js';
 import { loadTree } from '../src/model/store.js';
 import { DEFAULTS, resetSettings } from '../src/settings.js';
 import { type Action, App } from '../src/tui/App.js';
@@ -38,6 +39,7 @@ import { emptyTree } from './helpers.js';
 class Output extends EventEmitter {
   isTTY = true;
   frame = '';
+  writes = 0;
   constructor(
     readonly columns: number,
     readonly rows: number,
@@ -45,6 +47,7 @@ class Output extends EventEmitter {
     super();
   }
   write = (text: string) => {
+    this.writes++;
     this.frame = text;
     return true;
   };
@@ -164,6 +167,68 @@ function mount(columns = 120, rows = 30, options: { nested?: boolean; background
 }
 
 describe('terminal panes in the tree', () => {
+  it('does not animate this tree for a busy agent in another project', async () => {
+    backend.liveSessions.mockResolvedValue([
+      { brain: 'claude', id: 'foreign', cwd: '/another-project', live: { status: 'busy' } },
+    ]);
+    const app = mount();
+    await until(() => app.stdout.frame.includes('hello from the CLI'));
+    await pause(150);
+    const writes = app.stdout.writes;
+    await pause(350);
+    expect(app.stdout.writes).toBe(writes);
+  });
+
+  it('pauses drawing and screen capture without focus, keeps status discovery and resumes the CLI', async () => {
+    backend.liveSessions.mockResolvedValue([{ brain: 'claude', id: 'conversation', live: { status: 'busy' } }]);
+    const app = mount();
+    await until(() => app.stdout.frame.includes('hello from the CLI'));
+    app.stdin.write('f');
+    await until(() => app.stdout.frame.includes('печатаешь в Claude Code'));
+    app.stdin.write('\u001b[O');
+    await pause(150);
+    const captures = backend.capturePane.mock.calls.length;
+    const discoveries = backend.liveSessions.mock.calls.length;
+    const writes = app.stdout.writes;
+    backend.capturePane.mockResolvedValue({
+      lines: ['changed while hidden'],
+      width: 60,
+      height: 12,
+      cursor: { x: 0, y: 0, visible: false },
+      historySize: 100,
+      scrollOffset: 0,
+    });
+    updateNode(app.tree, app.node.id, { title: 'Changed node' });
+    await pause(3300);
+    expect(backend.capturePane.mock.calls.length).toBe(captures);
+    expect(backend.liveSessions.mock.calls.length).toBeGreaterThan(discoveries);
+    expect(app.stdout.writes).toBe(writes);
+    expect(backend.closePane).not.toHaveBeenCalled();
+    app.stdin.write('\u001b[I');
+    await until(() => app.stdout.frame.includes('changed while hidden') && app.stdout.frame.includes('Changed node'));
+    expect(backend.sendToPane).not.toHaveBeenCalled();
+    app.stdin.write('x');
+    await until(() => backend.sendToPane.mock.calls.length === 1);
+    expect(backend.sendToPane).toHaveBeenCalledWith('claude-one', 'x');
+  });
+
+  it('animates without rereading the tree and still notices external edits', async () => {
+    const reads = vi.spyOn(store, 'loadTree');
+    try {
+      const app = mount(100, 30, { background: true });
+      await until(() => app.stdout.frame.includes('работает агентов:'));
+      const loaded = reads.mock.calls.length;
+      await pause(350);
+      expect(reads.mock.calls.length).toBe(loaded);
+      // An agent writes a separate Tree instance while this App is animating.
+      updateNode(app.tree, app.node.id, { title: 'External change' });
+      await until(() => app.stdout.frame.includes('External change'));
+      expect(reads.mock.calls.length).toBeGreaterThan(loaded);
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
   it('captures only the selected pane and sends raw UTF-8, arrows, paste and Ctrl+C in order', async () => {
     const app = mount();
     backend.listPanes.mockResolvedValue([app.pane, { ...app.pane, pane: 'claude-unwatched', sessionId: 'other' }]);

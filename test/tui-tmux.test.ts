@@ -109,6 +109,18 @@ describe.skipIf(!hasTmux)('the tree in a real terminal', () => {
     expect(inside.filter((row) => !row.includes('got:')).every((row) => row.endsWith('│'))).toBe(true);
     expect(rows.some((row) => /^\s*│\s*$/.test(row))).toBe(false);
 
+    // The agent keeps writing while the outer terminal is unfocused.
+    await term('send-keys', '-l', '-t', '=tree:', '\u001b[O');
+    await pause(150);
+    await sendToPane(launched.pane, 'background-marker');
+    await until(
+      async () => (await capturePane(launched.pane))?.lines.join('\n').includes('background-marker') ?? false,
+    );
+    await pause(400);
+    expect((await screen()).join('\n')).not.toContain('background-marker');
+    await term('send-keys', '-l', '-t', '=tree:', '\u001b[I');
+    await until(async () => (await screen()).join('\n').includes('background-marker'));
+
     await term('send-keys', '-t', '=tree:', 'q');
     await until(async () => (await screen()).join('\n').includes('tree closed'));
     expect(await autowrap()).toBe('1');

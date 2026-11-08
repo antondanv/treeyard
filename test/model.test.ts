@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { parseDocument, stringifyDocument } from '../src/model/frontmatter.js';
 import { appendJournal, description, journalEntries } from '../src/model/journal.js';
@@ -18,7 +18,16 @@ import {
 } from '../src/model/ops.js';
 import { overviewText } from '../src/model/overview.js';
 import { loadTree, nodePath } from '../src/model/store.js';
-import { actionable, childrenOf, flatten, heldBy, progress, summarize, waitingNodes } from '../src/model/tree.js';
+import {
+  actionable,
+  childrenOf,
+  flatten,
+  heldBy,
+  ideaNodes,
+  progress,
+  summarize,
+  waitingNodes,
+} from '../src/model/tree.js';
 import { ROOT } from '../src/model/types.js';
 import { emptyTree } from './helpers.js';
 
@@ -123,6 +132,26 @@ describe('tree operations', () => {
 });
 
 describe('questions about the tree', () => {
+  it('orders work and ideas without a full tree walk on every sort comparison', () => {
+    const tree = emptyTree();
+    const seed = addNode(tree, { title: 'Seed' });
+    tree.nodes.clear();
+    for (let i = 127; i >= 0; i--)
+      tree.nodes.set(`n${i}`, { ...seed, id: `n${i}`, title: `Task ${i}`, order: i, status: i % 2 ? 'idea' : 'todo' });
+    const scans = vi.spyOn(tree.nodes, 'values');
+    const work = actionable(tree).map((node) => node.order);
+    const ideas = ideaNodes(tree).map((node) => node.order);
+    expect(work).toEqual(Array.from({ length: 64 }, (_, i) => i * 2));
+    expect(ideas).toEqual(Array.from({ length: 64 }, (_, i) => i * 2 + 1));
+    // Count complete map scans, not wall time: the budget is stable on slower CI machines.
+    expect(scans.mock.calls.length).toBeLessThan(tree.nodes.size * 2);
+    // Edits in place must be visible on the very next call.
+    tree.nodes.get('n126')!.order = -1;
+    tree.nodes.get('n127')!.order = -1;
+    expect(actionable(tree)[0]!.id).toBe('n126');
+    expect(ideaNodes(tree)[0]!.id).toBe('n127');
+  });
+
   it('counts progress over leaves, ignoring ideas and dropped work', () => {
     const tree = emptyTree();
     const stage = addNode(tree, { title: 'Этап' });

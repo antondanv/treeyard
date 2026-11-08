@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { setOffer } from '../src/github.js';
 
 import { addNode } from '../src/model/ops.js';
-import { columns, marquee, marqueeOffset } from '../src/tui/marquee.js';
+import { columns, marquee, marqueeOffset, nextMarqueeTick } from '../src/tui/marquee.js';
 import { snapshot } from '../src/tui/snapshot.js';
 import { emptyTree } from './helpers.js';
 
@@ -11,6 +11,20 @@ describe('running title', () => {
   const title = 'Автономный прогон Claude Code в контейнере';
   const width = 20;
   const overflow = title.length - width;
+
+  it.each([1, 2, 9, 50])('skips unchanged frames without changing the visible motion (%i columns)', (overflow) => {
+    let next = nextMarqueeTick(overflow, 0);
+    let last = 0;
+    for (let ms = 60; ms < 80_000; ms += 60) {
+      const offset = marqueeOffset(overflow, ms);
+      if (offset !== last) {
+        expect(next).toBe(ms);
+        next = nextMarqueeTick(overflow, ms);
+      }
+      last = offset;
+    }
+    expect(nextMarqueeTick(0, 0)).toBe(Number.POSITIVE_INFINITY);
+  });
 
   it('stays put when it fits', () => {
     expect(marquee('Короткое', 20, 5000)).toBe('Короткое');

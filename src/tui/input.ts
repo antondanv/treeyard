@@ -4,6 +4,7 @@ import { StringDecoder } from 'node:string_decoder';
 
 export type TerminalInputEvent =
   | { kind: 'input'; data: string; paste: boolean }
+  | { kind: 'focus'; focused: boolean }
   | { kind: 'mouse'; button: number; x: number; y: number; release: boolean };
 export type MouseEvent = Extract<TerminalInputEvent, { kind: 'mouse' }>;
 
@@ -71,7 +72,9 @@ export class TerminalInputDecoder {
       this.pending = this.pending.slice(length);
       // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR mouse coordinates are one-based.
       const mouse = /^\u001b\[<(\d+);(\d+);(\d+)([Mm])$/u.exec(sequence);
-      if (mouse) {
+      if (sequence === `${ESC}[I` || sequence === `${ESC}[O`) {
+        events.push({ kind: 'focus', focused: sequence.endsWith('I') });
+      } else if (mouse) {
         events.push({
           kind: 'mouse',
           button: Number(mouse[1]),
@@ -98,6 +101,7 @@ export class TerminalInputDecoder {
 /** Ink reads keyboard bytes here; pane input and mouse events retain their boundaries. */
 export class TerminalInput extends Readable {
   readonly isTTY: boolean;
+  terminalFocused = true;
   private readonly decoder = new TerminalInputDecoder();
   private readonly utf8 = new StringDecoder('utf8');
   private timer?: ReturnType<typeof setTimeout>;
@@ -138,12 +142,23 @@ export class TerminalInput extends Readable {
 
   private deliver(events: TerminalInputEvent[]): void {
     for (const event of events) {
-      if (event.kind === 'mouse') this.emit('mouse', event);
+      if (event.kind === 'focus') this.focus(event.focused);
       else {
-        this.emit('terminal-input', event);
-        this.push(event.data);
+        // Real input also wakes a terminal whose focus-in report was lost.
+        this.focus(true);
+        if (event.kind === 'mouse') this.emit('mouse', event);
+        else {
+          this.emit('terminal-input', event);
+          this.push(event.data);
+        }
       }
     }
+  }
+
+  private focus(focused: boolean): void {
+    if (this.terminalFocused === focused) return;
+    this.terminalFocused = focused;
+    this.emit('terminal-focus');
   }
 
   private readSource = (): void => {
@@ -165,6 +180,13 @@ export function captureMouse(stdout: NodeJS.WriteStream): () => void {
   if (!stdout.isTTY) return () => {};
   stdout.write(`${ESC}[?1000h${ESC}[?1002h${ESC}[?1006h`);
   return () => stdout.write(`${ESC}[?1006l${ESC}[?1002l${ESC}[?1000l`);
+}
+
+/** Terminals without focus reporting keep the normal foreground behaviour. */
+export function captureFocus(stdout: NodeJS.WriteStream): () => void {
+  if (!stdout.isTTY) return () => {};
+  stdout.write(`${ESC}[?1004h`);
+  return () => stdout.write(`${ESC}[?1004l`);
 }
 
 const ALTERNATE_SCREEN = `${ESC}[?1049h`;

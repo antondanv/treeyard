@@ -13,6 +13,7 @@ import type { MouseEvent, TerminalInputEvent } from './input.js';
 import { useClick } from './mouse.js';
 import type { PaneState } from './rows.js';
 import { type Cell, highlight, rowSpan, type Selection, selectedText } from './selection.js';
+import { useTerminalFocus } from './terminal-focus.js';
 import { C } from './theme.js';
 
 /** Ctrl+Q belongs to the tree; all other bytes belong to the CLI. */
@@ -72,6 +73,7 @@ export function TerminalPane(props: {
   onNotice?: (message: string) => void;
 }) {
   const { pane, width, height, focused } = props;
+  const terminalFocused = useTerminalFocus();
   const [screen, setScreen] = useState<PaneScreen>();
   // The tree owns the mouse, so the terminal cannot select here: a drag selects, its release copies.
   const [selection, setSelection] = useState<Selection>();
@@ -79,6 +81,7 @@ export function TerminalPane(props: {
   const size = useRef({ columns: width - 2, rows: height - 4 });
   size.current = { columns: width - 2, rows: height - 4 };
   const screenRef = useRef<PaneScreen>(undefined);
+  const capturedPane = useRef<string>(undefined);
   const viewport = useRef(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const box = useRef<DOMElement>(null);
@@ -110,10 +113,14 @@ export function TerminalPane(props: {
   controls.current = { scrollTo, send, copy };
 
   useEffect(() => {
+    if (!terminalFocused) return;
+    if (capturedPane.current !== pane.pane) {
+      capturedPane.current = pane.pane;
+      setScreen(undefined);
+      screenRef.current = undefined;
+    }
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
-    setScreen(undefined);
-    screenRef.current = undefined;
     const capture = async () => {
       const requested = viewport.current;
       try {
@@ -152,7 +159,7 @@ export function TerminalPane(props: {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [pane.pane, pane.attached, width, height]);
+  }, [pane.pane, pane.attached, width, height, terminalFocused]);
 
   // A click inside starts typing there; the buttons in the footer are clicks of their own.
   useClick(box, () => {

@@ -33,6 +33,24 @@ export function marqueeOffset(overflow: number, ms: number): number {
   return Math.round((1 - ease((t - 2 * REST - travel) / travel)) * overflow);
 }
 
+/** Next original clock tick that changes a visible column; skip every unchanged frame. */
+export function nextMarqueeTick(overflow: number, ms: number): number {
+  if (overflow <= 0) return Number.POSITIVE_INFINITY;
+  const travel = Math.max(MIN_TRAVEL, overflow * PER_COLUMN);
+  const cycle = 2 * REST + 2 * travel;
+  const phase = ((ms % cycle) + cycle) % cycle;
+  const offset = marqueeOffset(overflow, ms);
+  const inverse = (p: number) => Math.acos(1 - 2 * p) / Math.PI;
+  const next =
+    phase < REST + travel && offset < overflow
+      ? REST + travel * inverse((offset + 0.5) / overflow)
+      : offset > 0
+        ? 2 * REST + travel + travel * inverse((overflow - offset + 0.5) / overflow)
+        : cycle + REST + travel * inverse(0.5 / overflow);
+  // Round onto the old 60ms grid, just beyond a rounding boundary on the return trip.
+  return Math.ceil((ms - phase + next + 0.0001) / MARQUEE_TICK) * MARQUEE_TICK;
+}
+
 /** Slow out of the rest, slow into the next one. */
 function ease(p: number): number {
   return 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, p)));

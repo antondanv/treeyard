@@ -13,10 +13,12 @@ import { Logo, logoSize, WORDMARK } from './logo.js';
 import { MouseProvider } from './mouse.js';
 import { paneState } from './rows.js';
 import { TerminalPane } from './terminal.js';
+import { useTerminalFocus } from './terminal-focus.js';
 import { C } from './theme.js';
 
 export function PlantingApp(props: AppProps & { plantingPane: Pane }) {
   const { exit } = useApp();
+  const terminalFocused = useTerminalFocus();
   const { columns, rows } = useWindowSize();
   const [ready, setReady] = useState(() => findProject(props.dir) === props.dir);
   const [pane, setPane] = useState<Pane | undefined>(props.plantingPane);
@@ -25,12 +27,16 @@ export function PlantingApp(props: AppProps & { plantingPane: Pane }) {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    if (ready) return;
+    if (ready || !terminalFocused) return;
+    if (findProject(props.dir) === props.dir) {
+      setReady(true);
+      return;
+    }
     const timer = setInterval(() => {
       if (findProject(props.dir) === props.dir) setReady(true);
     }, 700);
     return () => clearInterval(timer);
-  }, [ready, props.dir]);
+  }, [ready, props.dir, terminalFocused]);
 
   const handOver = (action: Action) => {
     props.onAction(action);

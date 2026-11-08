@@ -1,8 +1,53 @@
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { captureMouse, TerminalInput, TerminalInputDecoder, withoutAutowrap } from '../src/tui/input.js';
+import { captureFocus, captureMouse, TerminalInput, TerminalInputDecoder, withoutAutowrap } from '../src/tui/input.js';
 
 describe('terminal input ownership', () => {
+  it('separates fragmented focus reports from keys and preserves reports inside pasted text', () => {
+    const decoder = new TerminalInputDecoder();
+    expect(decoder.push('\u001b[')).toEqual([]);
+    expect(decoder.push('O\u001b[Ix')).toEqual([
+      { kind: 'focus', focused: false },
+      { kind: 'focus', focused: true },
+      { kind: 'input', data: 'x', paste: false },
+    ]);
+    expect(decoder.push('\u001b[200~\u001b[O\u001b[I\u001b[201~')).toEqual([
+      { kind: 'input', data: '\u001b[200~\u001b[O\u001b[I\u001b[201~', paste: true },
+    ]);
+  });
+
+  it('keeps focus reports away from Ink and the CLI, and wakes on real input', async () => {
+    const source = new PassThrough();
+    const input = new TerminalInput(source as unknown as NodeJS.ReadStream);
+    const keyboard: string[] = [];
+    const cli = vi.fn();
+    input.on('data', (data: Buffer) => keyboard.push(data.toString()));
+    input.on('terminal-input', cli);
+    source.write('\u001b[O');
+    await new Promise((done) => setTimeout(done, 20));
+    expect(input.terminalFocused).toBe(false);
+    expect(cli).not.toHaveBeenCalled();
+    expect(keyboard).toEqual([]);
+    source.write('x');
+    await new Promise((done) => setTimeout(done, 20));
+    expect(input.terminalFocused).toBe(true);
+    expect(keyboard.join('')).toBe('x');
+    expect(cli).toHaveBeenCalledExactlyOnceWith({ kind: 'input', data: 'x', paste: false });
+    input.destroy();
+    source.destroy();
+  });
+
+  it('enables focus reporting only on a terminal and disables it on release', () => {
+    const write = vi.fn();
+    const release = captureFocus({ isTTY: true, write } as unknown as NodeJS.WriteStream);
+    expect(write).toHaveBeenCalledWith('\u001b[?1004h');
+    release();
+    expect(write).toHaveBeenLastCalledWith('\u001b[?1004l');
+    write.mockClear();
+    captureFocus({ isTTY: false, write } as unknown as NodeJS.WriteStream)();
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it('separates fragmented wheel reports from keys and ignores releases', () => {
     const decoder = new TerminalInputDecoder();
     expect(decoder.push('hello\u001b[<64;8')).toEqual([{ kind: 'input', data: 'hello', paste: false }]);

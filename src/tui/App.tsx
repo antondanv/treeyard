@@ -174,10 +174,12 @@ import { History } from './history.js';
 import { ImagesDialog } from './images-dialog.js';
 import { shortcutKey } from './keys.js';
 import { Logo, logoSize, WORDMARK } from './logo.js';
-import { MARQUEE_TICK, marquee } from './marquee.js';
+import { marquee } from './marquee.js';
+import { useMarqueeClock } from './marquee-clock.js';
 import { type Click, Clickable, MouseProvider, usePress } from './mouse.js';
 import { ListRow, paneState, RootRow, rowOverflow, SessionRow, TreeRow, treePrefix } from './rows.js';
 import { TerminalPane } from './terminal.js';
+import { useTerminalFocus } from './terminal-focus.js';
 import { breadcrumb } from './text.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
 import {
@@ -284,11 +286,18 @@ export interface AppProps {
 
 export function App(props: AppProps) {
   const { exit } = useApp();
+  const terminalFocused = useTerminalFocus();
+  const terminalFocusedRef = useRef(terminalFocused);
+  terminalFocusedRef.current = terminalFocused;
+  const lastDisplay = useRef<ReactNode>(undefined);
   const { columns, rows } = useWindowSize();
-  const treeRef = useRef<Tree>(loadTree(props.dir));
+  // Animation must not re-read and parse every node just to initialize an existing ref.
+  const treeRef = useRef<Tree>(null!);
+  if (!treeRef.current) treeRef.current = loadTree(props.dir);
   const historyRef = useRef(new History(props.dir));
   const initialized = useRef(false);
-  const stampRef = useRef(treeStamp(props.dir));
+  const stampRef = useRef<number>(undefined);
+  if (stampRef.current === undefined) stampRef.current = treeStamp(props.dir);
   const viewportRef = useRef<Viewport>({ x: 0, y: 0 });
   const viewportFollowRef = useRef({ key: '', manual: false });
   const [, setVersion] = useState(0);
@@ -332,8 +341,16 @@ export function App(props: AppProps) {
   /** The models of the project's CLI, asked once the settings open. */
   const catalog = useCatalog(tree.project.brain ?? 'claude', modal?.kind === 'settings');
 
-  const anyBusy = useMemo(() => [...live.values()].some((s) => s.live?.status === 'busy'), [live]);
-  const { frame } = useAnimation({ interval: 90, isActive: settings().animation && (anyBusy || Boolean(job)) });
+  const owners = sessionOwners(tree);
+  const anyBusy = [...live.values()].some(
+    (session) =>
+      session.live?.status === 'busy' &&
+      (owners.has(session.id) || panes.some((pane) => paneInProject(pane, props.dir) && pane.sessionId === session.id)),
+  );
+  const { frame } = useAnimation({
+    interval: 90,
+    isActive: terminalFocused && settings().animation && (anyBusy || Boolean(job)),
+  });
 
   const ui = useCallback(
     (): UiState => ({
@@ -387,20 +404,23 @@ export function App(props: AppProps) {
 
   // An agent edits `.tree/` too: notice it and reload.
   useEffect(() => {
-    const timer = setInterval(() => {
+    const refresh = () => {
       const stamp = treeStamp(props.dir);
       if (stamp !== stampRef.current) {
         stampRef.current = stamp;
         treeRef.current = loadTree(props.dir);
-        bump();
+        if (terminalFocusedRef.current) bump();
       }
-    }, 700);
+    };
+    refresh();
+    const timer = setInterval(refresh, terminalFocused ? 700 : 3000);
     return () => clearInterval(timer);
-  }, [props.dir, bump]);
+  }, [props.dir, bump, terminalFocused]);
 
   // Poll metadata and live status for all panes, but never their screens.
   const watching = !props.offline && settings().live;
   useEffect(() => {
+    if (!terminalFocused && !watching && !hasPanes) return;
     let stop = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -412,12 +432,12 @@ export function App(props: AppProps) {
         if (stop) return;
         if (await settlePending(treeRef.current, list)) {
           stampRef.current = treeStamp(props.dir);
-          bump();
+          if (terminalFocusedRef.current) bump();
         }
         if (stop) return;
         const states = watching ? await withPaneIdle(list, map) : map;
         if (stop) return;
-        setLive(states);
+        if (terminalFocusedRef.current) setLive(states);
         // Without live status, automatic sleep cannot protect working agents.
         const sleeping = watching
           ? panesToSleep(list, {
@@ -447,7 +467,7 @@ export function App(props: AppProps) {
             }),
           });
         }
-        if (!stop) setPanes(sleeping.length ? await readPanes() : list);
+        if (!stop && terminalFocusedRef.current) setPanes(sleeping.length ? await readPanes() : list);
       } catch {
         // Failed status discovery never leads to automatic sleep.
       }
@@ -458,9 +478,10 @@ export function App(props: AppProps) {
       stop = true;
       clearTimeout(timer);
     };
-  }, [watching, hasPanes, props.dir, bump]);
+  }, [watching, hasPanes, props.dir, bump, terminalFocused]);
 
   useEffect(() => {
+    if (!terminalFocused) return;
     if (view !== 'sessions') return;
     if (props.offline) {
       setAllSessions([]);
@@ -481,13 +502,13 @@ export function App(props: AppProps) {
       stop = true;
       clearInterval(timer);
     };
-  }, [view, props.offline]);
+  }, [view, props.offline, terminalFocused]);
 
   useEffect(() => {
-    if (!toast) return;
+    if (!toast || !terminalFocused) return;
     const timer = setTimeout(() => setToast(undefined), 7000);
     return () => clearTimeout(timer);
-  }, [toast]);
+  }, [toast, terminalFocused]);
 
   // A proposal that came while a dialog was open waits for it to close.
   useEffect(() => {
@@ -506,7 +527,6 @@ export function App(props: AppProps) {
   const waitingList = waitingNodes(tree);
   const ideasList = ideaNodes(tree);
   const events = view === 'journal' ? activity(tree) : [];
-  const owners = sessionOwners(tree);
   const sessionList: SessionInfo[] = (allSessions ?? []).map((session) => ({
     ...session,
     live: watching ? live.get(session.id)?.live : session.live,
@@ -824,14 +844,7 @@ export function App(props: AppProps) {
       return rowOverflow(current, leftWidth, 0, badgesFor(current));
     return undefined;
   })();
-  const { time: tick, reset: resetTick } = useAnimation({ interval: MARQUEE_TICK, isActive: Boolean(running) });
-  const tickedFor = useRef<string | undefined>(undefined);
-  const tickKey = `${view}:${current?.id}`;
-  if (tickedFor.current !== tickKey) {
-    tickedFor.current = tickKey;
-    // A new selection starts its title from the beginning.
-    queueMicrotask(resetTick);
-  }
+  const tick = useMarqueeClock(running, `${view}:${current?.id}`, terminalFocused);
 
   // ── Changing things ───────────────────────────────────────────────────────
 
@@ -3334,7 +3347,7 @@ export function App(props: AppProps) {
     </Box>
   );
 
-  return (
+  const display = (
     <MouseProvider>
       <Box flexDirection="column" width={width} height={height}>
         {/* Header: the mark, the project, the tabs. */}
@@ -3486,6 +3499,9 @@ export function App(props: AppProps) {
       </Box>
     </MouseProvider>
   );
+  // Background housekeeping may update state, but the last visible frame stays on screen.
+  if (terminalFocused) lastDisplay.current = display;
+  return lastDisplay.current ?? display;
 }
 
 /** Two lines under the tree: the path to the selection, and its "done" or what it waits for. */

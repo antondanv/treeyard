@@ -16,7 +16,7 @@ import { purgeImages } from '../model/images.js';
 import { loadTree, nodePath } from '../model/store.js';
 import { holderOf } from '../model/tree.js';
 import { type Action, App, type Toast } from './App.js';
-import { captureMouse, TerminalInput, withoutAutowrap } from './input.js';
+import { captureFocus, captureMouse, TerminalInput, withoutAutowrap } from './input.js';
 import { inlineMark } from './logo.js';
 import { PlantingApp } from './planting.js';
 import { C } from './theme.js';
@@ -42,6 +42,7 @@ async function loop(dir: string, plantingPane?: Pane): Promise<void> {
     let next = { type: 'quit' } as Action;
     const input = new TerminalInput(process.stdin);
     const releaseMouse = captureMouse(process.stdout);
+    const releaseFocus = captureFocus(process.stdout);
     const screen = withoutAutowrap(process.stdout);
     try {
       const props = {
@@ -70,6 +71,7 @@ async function loop(dir: string, plantingPane?: Pane): Promise<void> {
     } finally {
       // Unmounted Ink has left the alternate screen: the CLI or the shell gets wrapping back.
       screen.restore();
+      releaseFocus();
       releaseMouse();
       input.destroy();
     }
