@@ -3,13 +3,14 @@ id: ehkf
 title: "show --only: нужная часть узла"
 parent: s3sb
 order: 90
-status: review
+status: done
 who: agent
 done_when: treeyard show <id> --only sessions,commits,history,journal выводит только эти части; help, docs RU/EN; тесты
 commits:
   - cf8d79651723ae106a8d91ffdeac55f4eb0470f5
 created: 2026-11-08
-updated: 2026-11-08T14:18:05+03:00
+updated: 2026-11-08T17:21:28+03:00
+closed: 2026-11-08
 ---
 
 Разбор 08.11: grep -A4 '^сессии:', sed '/коммиты/,/журнал/p', grep "→ готово|на проверке →".
@@ -21,3 +22,4 @@ updated: 2026-11-08T14:18:05+03:00
 - 2026-11-08 14:18 · агент · привязан коммит cf8d79651723ae106a8d91ffdeac55f4eb0470f5
 - 2026-11-08 14:18 · агент · Сделано: show <id> --only header,criterion,commits,children,sessions,note,journal,history (и по-русски); пустая часть пишет «—»; history — смены статуса из журнала; с --json только эти поля. help, docs RU/EN, «Команды дерева». Тесты: test/show.test.ts.
 - 2026-11-08 14:18 · агент · к работе → на проверке
+- 2026-11-08 17:21 · ты · на проверке → готово

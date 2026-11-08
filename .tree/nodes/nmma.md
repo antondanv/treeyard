@@ -3,13 +3,14 @@ id: nmma
 title: "commit: коммит изменений дерева"
 parent: s3sb
 order: 100
-status: review
+status: done
 who: agent
 done_when: "treeyard commit [<id>…] коммитит файлы этих узлов, README и tree.md сообщением chore(tree): …; чужие изменения не берёт; тесты"
 commits:
   - 8cd641214037696c261a40457fb67230d0acc266
 created: 2026-11-08
-updated: 2026-11-08T17:13:36+03:00
+updated: 2026-11-08T17:21:28+03:00
+closed: 2026-11-08
 ---
 
 Разбор 08.11: git add .tree/nodes/X.md .tree/README.md руками 20 раз.
@@ -21,3 +22,4 @@ updated: 2026-11-08T17:13:36+03:00
 - 2026-11-08 17:13 · агент · привязан коммит 8cd641214037696c261a40457fb67230d0acc266
 - 2026-11-08 17:13 · агент · Сделано: treeyard commit [<id>…] [-m …] коммитит файлы этих узлов, .tree/README.md и .tree/tree.md сообщением chore(tree): <названия>; код, другие узлы и чужой индекс не берёт (git commit --only); без id — узел сессии (s3sb); узел, удалённый rm, тоже можно назвать. Хук post-commit больше не привязывает к узлу коммит одних файлов .tree/. help, docs RU/EN, «Команды дерева» (узел и корень), скилл. Тесты: test/tree-commit.test.ts; живая проверка на копии дерева: a8ff0b2 chore(tree)… с nmma.md, README.md, tree.md, чужой 8643.md остался незакоммиченным.
 - 2026-11-08 17:13 · агент · к работе → на проверке
+- 2026-11-08 17:21 · ты · на проверке → готово
