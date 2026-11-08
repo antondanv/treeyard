@@ -52,9 +52,9 @@ describe('treeyard set for several nodes', () => {
     const b = addNode(tree, { title: 'B', status: 'idea' });
     const kid = addNode(tree, { title: 'Kid', parent: a.id });
     const sh = treeyardIn(tree.project.dir);
-    const before = () =>
+    const state = () =>
       [...loadTree(tree.project.dir).nodes.values()].map((node) => `${node.id}:${node.status}:${node.parent}`).sort();
-    const snapshot = before();
+    const snapshot = state();
     for (const args of [
       [a.id, 'zzzz', 'status=todo'],
       [a.id, b.id, 'status=soon'],
@@ -68,7 +68,7 @@ describe('treeyard set for several nodes', () => {
     ]) {
       const res = await sh('set', ...args);
       expect(res.code, args.join(' ')).toBe(2);
-      expect(before(), args.join(' ')).toEqual(snapshot);
+      expect(state(), args.join(' ')).toEqual(snapshot);
     }
     expect((await sh('set', a.id, b.id, 'title=Одно')).stderr).toContain('меняй по одному');
     expect((await sh('set', kid.id, b.id, 'after=first')).stderr).toContain('один родитель');
