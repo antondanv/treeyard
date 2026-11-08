@@ -36,9 +36,15 @@ export function statusHistory(body: string): string[] {
   return journalEntries(body).filter((line) => isStatusChange(parseEntry(line).text));
 }
 
+/** The first line of a node added by a person or an agent, in either language. */
+const CREATED = new Set(['завёл узел', 'added the node']);
+
+export function isCreationLine(text: string): boolean {
+  return CREATED.has(text);
+}
+
 /** Lines treeyard writes by itself, keyed by their Russian text; `{x}` stands for anything. */
 const OWN = [
-  'завёл узел',
   'привязан коммит {sha}',
   'убрана привязка коммита {sha}',
   'картинка добавлена: {file}',
@@ -55,7 +61,7 @@ const BARE = new RegExp(`^(?:${LABELS})(?:$|\\. )`);
 
 /** Written by treeyard itself — a status change, a commit, a picture, a link — not by a person or an agent. */
 export function isOwnLine(text: string): boolean {
-  return isStatusChange(text) || BARE.test(text) || OWN_LINES.some((line) => line.test(text));
+  return isCreationLine(text) || isStatusChange(text) || BARE.test(text) || OWN_LINES.some((line) => line.test(text));
 }
 
 /** The last entry `source` wrote by hand — the one `log --fix` corrects — and its place in the journal. */

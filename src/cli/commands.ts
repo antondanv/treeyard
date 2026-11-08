@@ -21,7 +21,7 @@ import {
   START_LABEL,
   sessionPlan,
 } from '../agents/context.js';
-import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
+import { addDecisions, countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { launchInPane } from '../agents/panes.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, removeHook } from '../commit-hook.js';
@@ -43,14 +43,15 @@ import {
 import { pick, plural, t } from '../i18n/i18n.js';
 import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
 import { type FindField, findNodes } from '../model/find.js';
-import { lastOwnEntry } from '../model/history.js';
+import { isCreationLine, lastOwnEntry, parseEntry } from '../model/history.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
-import { replaceEntry } from '../model/journal.js';
+import { journalEntries, replaceEntry } from '../model/journal.js';
 import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
 import { addNote, homeShort, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import {
   addNode,
   attachCommit,
+  deleteNode,
   detachCommit,
   logToNode,
   moveNode,
@@ -61,8 +62,9 @@ import {
 import { staleOf } from '../model/stale.js';
 import { parseStatus, parseStatuses, UnknownStatus } from '../model/status-words.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
-import { ago } from '../model/time.js';
+import { ago, today } from '../model/time.js';
 import {
+  childrenOf,
   descendants,
   holderOf,
   isStatusOrder,
@@ -141,6 +143,9 @@ function commandLines(): string {
   treeyard log <id> --fix "<текст>"        исправить свою последнюю запись (время остаётся; статусы и коммиты не трогает)
                 [--project <папка>]        писать в дерево другой папки, например основного worktree
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
+  treeyard rm <id> [<id>…]                 удалить узел, заведённый по ошибке (без журнала, детей, сессий, коммитов);
+                                           узел с историей не удаляется — его закрывают: set <id> status=dropped
+  treeyard decide ["<решение>"]            дописать решение в «Решения» .tree/tree.md (с датой); без текста — список
   treeyard image <id> [файл…|--paste] [--note "…"]   картинки узла: список, приложить файл или из буфера
   treeyard image <id> 001.png --note "…" | --rm 001.png   подпись к картинке · удалить её
   treeyard diff <id> [--commit <ref>] [--file <путь>] [--stat|--json]   дифы коммитов узла
@@ -188,6 +193,9 @@ function commandLines(): string {
   treeyard log <id> --fix "<text>"         correct your last entry (its time stays; status changes and commits are left alone)
                 [--project <dir>]          write to the tree of another folder, e.g. the main worktree
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
+  treeyard rm <id> [<id>…]                 delete a node added by mistake (no journal, children, sessions, commits);
+                                           a node with a history is not deleted but closed: set <id> status=dropped
+  treeyard decide ["<decision>"]           add a decision to «Decisions» in .tree/tree.md (dated); without text — the list
   treeyard image <id> [file…|--paste] [--note "…"]   a node's pictures: the list, attach a file or the clipboard
   treeyard image <id> 001.png --note "…" | --rm 001.png   caption a picture · remove it
   treeyard diff <id> [--commit <ref>] [--file <path>] [--stat|--json]   patches of the node's commits
@@ -304,6 +312,10 @@ async function main(argv: string[]): Promise<number> {
       return logCommand(rest);
     case 'note':
       return noteCommand(rest);
+    case 'rm':
+      return rmCommand(rest);
+    case 'decide':
+      return decideCommand(rest);
     case 'image':
     case 'images':
       return imageCommand(rest);
@@ -1607,6 +1619,80 @@ function imageCommand(args: string[]): number {
     process.stdout.write(`${imagePath(dir, id, image.file)}${image.note ? ` — ${image.note}` : ''}\n`);
   }
   return 0;
+}
+
+/**
+ * `treeyard rm <id>…`: deletes a node added by mistake — no children, no journal beyond «завёл
+ * узел», no sessions, commits, pictures or links. A node with a history is dropped, not
+ * deleted: then nothing is deleted, and the command says why.
+ */
+function rmCommand(args: string[]): number {
+  const { positionals } = parse(args, {});
+  const tree = project();
+  const ids = [...new Set((positionals.length ? positionals : [undefined]).map((arg) => nodeArg(tree, arg)))];
+  if (ids.includes(ROOT)) throw new UsageError(t('корень не удаляется'));
+  const reasons: string[] = [];
+  for (const id of ids) {
+    const node = tree.nodes.get(id)!;
+    const why = keepReasons(tree, node);
+    if (why.length) reasons.push(`${id} «${node.title}»: ${why.join(', ')}`);
+  }
+  if (reasons.length)
+    throw new UsageError(
+      `${t('не удаляю — у узла есть история; закрой его: treeyard set {ids} status=dropped', { ids: ids.join(' ') })}\n  ${reasons.join('\n  ')}`,
+    );
+  for (const id of ids) {
+    const { title } = tree.nodes.get(id)!;
+    deleteNode(tree, id);
+    process.stdout.write(`${id} · ${t('удалён')} · ${title}\n`);
+  }
+  return 0;
+}
+
+/** What makes a node part of the record: anything beyond its title, criterion and description. */
+function keepReasons(tree: Tree, node: TreeNode): string[] {
+  const why: string[] = [];
+  const kids = childrenOf(tree, node.id).length;
+  if (kids) why.push(t('внутри узлов: {n}', { n: kids }));
+  const written = journalEntries(node.body).filter((line) => !isCreationLine(parseEntry(line).text)).length;
+  if (written) why.push(t('записей в журнале: {n}', { n: written }));
+  if (node.sessions.length) why.push(t('сессий: {n}', { n: node.sessions.length }));
+  if (node.commits?.length) why.push(t('коммитов: {n}', { n: node.commits.length }));
+  if (node.needs?.length || node.neededBy?.length) why.push(t('связи с другими узлами'));
+  const pictures = listImages(tree.project.dir, node.id).length;
+  if (pictures) why.push(t('картинок: {n}', { n: pictures }));
+  return why;
+}
+
+/** `treeyard decide "…"`: a line in «Решения» of `.tree/tree.md`, dated; without text, the list. */
+function decideCommand(args: string[]): number {
+  const { positionals } = parse(args, {});
+  const tree = project();
+  const text = positionals.join(' ').replace(/\s+/g, ' ').trim();
+  if (!text) {
+    const lines = decisionsOf(tree.project.body);
+    process.stdout.write(
+      lines.length ? `${lines.join('\n')}\n` : `${t('решений пока нет — treeyard decide "что решили и почему"')}\n`,
+    );
+    return 0;
+  }
+  const line = /\b\d{4}-\d\d-\d\d\b/.test(text) ? text : `${text} (${today()})`;
+  tree.project.body = addDecisions(tree.project.body, [line]);
+  writeProject(tree.project);
+  process.stdout.write(`${t('в «Решения» .tree/tree.md: {line}', { line })}\n`);
+  return 0;
+}
+
+/** The lines of «Решения» (or «Decisions»), as written. */
+function decisionsOf(body: string): string[] {
+  const match = /^##\s+(?:Решения|Decisions)\s*$/m.exec(body);
+  if (!match) return [];
+  const from = match.index + match[0].length;
+  const next = body.slice(from).search(/^##\s/m);
+  return body
+    .slice(from, next < 0 ? body.length : from + next)
+    .split('\n')
+    .filter((line) => line.trim().startsWith('- '));
 }
 
 /** One line about what gets in the way, from any folder into «Замечания» of the `notes` tree. */

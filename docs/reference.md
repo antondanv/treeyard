@@ -325,6 +325,8 @@ treeyard log <id> --fix "corrected text"        # replace your own last entry (i
 treeyard set <id> note="…"                      # the node's description; the journal stays as it is
 treeyard log <id> "…" --project ../main         # from a git worktree: write to the main tree (show takes it too)
 treeyard note "the help doesn't fit the screen" # a note about treeyard itself — into “Notes”
+treeyard rm <id>                                # delete a node added by mistake; one with a journal, children, sessions or commits is closed instead: status=dropped
+treeyard decide "SQLite, not Postgres: one user" # a dated line in «Decisions» of .tree/tree.md; without text — the list
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
 treeyard diff <id> --add HEAD                   # attach your commit to the node for review
 treeyard add "Codex: turn status" --project ../api --for <id>   # a change needed in another project

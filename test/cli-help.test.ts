@@ -29,6 +29,8 @@ const COMMANDS = [
   'set',
   'log',
   'note',
+  'rm',
+  'decide',
   'image',
   'diff',
   'hook',

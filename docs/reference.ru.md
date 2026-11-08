@@ -351,6 +351,8 @@ treeyard log <id> --fix "исправленный текст"    # замени�
 treeyard set <id> note="…"                      # описание узла; журнал остаётся как есть
 treeyard log <id> "…" --project ../main         # из git worktree: писать в основное дерево (show тоже принимает)
 treeyard note "справка не помещается в экран"   # замечание о самом treeyard — в «Замечания»
+treeyard rm <id>                                # удалить узел, заведённый по ошибке; узел с журналом, детьми, сессиями или коммитами закрывают: status=dropped
+treeyard decide "SQLite, а не Postgres: один пользователь"   # строка с датой в «Решения» .tree/tree.md; без текста — список
 treeyard image <id> shot.png --note "…"         # приложить к узлу картинку (скриншот, доказательство)
 treeyard diff <id> --add HEAD                   # привязать свой коммит к узлу, чтобы его проверили
 treeyard add "Codex: статус хода" --project ../api --for <id>   # нужна правка в другом проекте

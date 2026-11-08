@@ -220,7 +220,9 @@ export function addDecisions(body: string, decisions: readonly string[]): string
   const next = body.slice(from).search(/^##\s/m);
   const end = next < 0 ? body.length : from + next;
   const section = body.slice(from, end).trimEnd();
-  return `${body.slice(0, from)}${section}\n\n${lines}\n${next < 0 ? '' : `\n${body.slice(end)}`}`;
+  // A list goes on as a list; after the heading's paragraph, a blank line first.
+  const gap = /\n- [^\n]*$/.test(section) ? '\n' : '\n\n';
+  return `${body.slice(0, from)}${section}${gap}${lines}\n${next < 0 ? '' : `\n${body.slice(end)}`}`;
 }
 
 /** Plants a proposal under the root (or `parent`); returns how many nodes were added. */

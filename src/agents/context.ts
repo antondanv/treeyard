@@ -471,6 +471,8 @@ const ROOT_TEXT = {
     keyValue: 'ключ=значение',
     log: 'запись в журнал узла; с `--status` и `--commit` — заодно статус и коммиты',
     sessions: 'сессии папки и чьи они',
+    rm: 'удалить узел, заведённый по ошибке; узел с историей не удаляют, а закрывают — `set <id> status=dropped`',
+    decide: 'решение в «Решения» `.tree/tree.md` (с датой) — только когда человек так решил',
     open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
     doneWhen: 'готово, когда',
     more: 'ещё',
@@ -511,6 +513,8 @@ const ROOT_TEXT = {
     keyValue: 'key=value',
     log: 'a line in the node journal; with `--status` and `--commit` — the status and commits too',
     sessions: 'the sessions of the folder and whose they are',
+    rm: 'delete a node added by mistake; a node with a history is closed instead — `set <id> status=dropped`',
+    decide: 'a decision in «Decisions» of `.tree/tree.md` (dated) — only when the person decided so',
     open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
     doneWhen: 'done when',
     more: 'more',
@@ -613,6 +617,8 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} add "${T.add}" --parent <id> --done-when "…"\` — ${L.add}`);
   lines.push(`- \`${self} set <id> [<id>…] ${L.keyValue}…\` — ${L.set}`);
   lines.push(`- \`${self} log <id> "…" [--status s] [--commit <ref>…]\` — ${L.log}`);
+  lines.push(`- \`${self} rm <id>\` — ${L.rm}`);
+  lines.push(`- \`${self} decide "…"\` — ${L.decide}`);
   lines.push(`- \`${self} sessions\` — ${L.sessions}`);
   lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
   if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);
