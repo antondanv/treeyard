@@ -11,7 +11,7 @@ interface shows, every key, every setting and every command.
 - [Confirmation and settings](#confirmation-and-settings)
 - [Sessions next to the tree](#sessions-next-to-the-tree)
 - [Agents and the tree: the CLI commands](#agents-and-the-tree)
-  - [The root and the project's documents](#the-root-and-the-projects-documents)
+  - [Project status](#project-status) · [The root and the project's documents](#the-root-and-the-projects-documents)
   - [Node diffs](#node-diffs) · [Notes](#notes) · [Node pictures](#node-pictures)
   - [Shared nodes](#shared-nodes) · [A GitHub Project board](#a-github-project-board)
 - [Tree files and templates](#tree-files-and-templates)
@@ -55,12 +55,17 @@ tree, `f` to the conversation, `F` shows the conversation full screen. Nothing t
 after planting. Without tmux (or with `open=terminal`) the agent works full screen in this
 terminal: leave the session, and the tree opens.
 
-For plain `claude`, `codex` and `agy` to know the same skill in any folder:
+For plain `claude`, `codex` and `agy` to know treeyard's skills in any folder — `treeyard-init`
+(planting) and `treeyard` (working with a tree):
 
 ```sh
-treeyard skills            # where the skill is and where it is installed
-treeyard skills install    # ~/.claude/skills, ~/.codex/skills, ~/.gemini/config/skills
+treeyard skills            # where the skills are in each CLI: installed, outdated, not installed
+treeyard skills install    # ~/.claude/skills, ~/.codex/skills, ~/.gemini/config/skills; copies in the project — refreshed
 ```
+
+A skill is installed as a whole folder (SKILL.md and `references/`); a copy that is already
+current is left alone. Copies the project keeps for itself (`.claude/skills`, `.agents/skills`)
+are refreshed, never created.
 
 ## What it looks like
 
@@ -342,6 +347,7 @@ treeyard open <id> --brain opencode --pane      # the same with OpenCode
 treeyard open <id> --bg --task "no paid calls" --model sonnet --effort high   # a coordinator hands the node to its own session
 treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes — from stdin
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree
+treeyard status                                 # a summary: versions, tree, nodes, skills, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
 treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md
 treeyard help                                   # all the commands; treeyard <command> --help — the lines of one
@@ -370,6 +376,43 @@ starts the session in the background and returns at once; the session is saved i
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
 node, its edit stays.
+
+### Project status
+
+`treeyard status` shows in one command how the project is set up and what is wrong with it:
+
+- the versions of treeyard and Brainyard;
+- the folder and its tree; in a git worktree — the main tree (the one the person sees), not the
+  branch's copy, and a hint that tree commands go with `--project <main folder>`;
+- nodes by status and the abandoned ones — «in progress» with no live session and no pane for
+  longer than `stale_after` hours; unlike `show`, live sessions and panes count here;
+- the `treeyard` and `treeyard-init` skills in Claude Code, Codex and Antigravity: installed,
+  outdated (some file differs from what came with this version), not installed, or no CLI; copies
+  in the project folder (`.claude/skills`, `.agents/skills`) count too;
+- the block about the tree in CLAUDE.md, AGENTS.md and GEMINI.md: in place, outdated, no block,
+  via an import (`@AGENTS.md`), or no file;
+- the post-commit git hook;
+- the folder's live sessions in every CLI and its tmux panes — with the nodes they belong to;
+- the GitHub link: the board, issues, `gh`, and statuses that have not reached GitHub yet.
+
+It ends with «To fix»: every problem and the command that fixes it.
+
+| Problem | Command |
+|---|---|
+| no tree | `treeyard init` |
+| an abandoned node | `treeyard set <id> status=todo` or `treeyard open <id>` |
+| a skill is missing or outdated | `treeyard skills install` |
+| no block about the tree, or an outdated one | `treeyard pointer` |
+| no AGENTS.md, CLAUDE.md or GEMINI.md | `touch AGENTS.md && treeyard pointer` |
+| no git hook | `treeyard hook install`; hooks inside the repository — `echo '…' >> <post-commit>` |
+| no `gh`, not logged in, no access to boards | `brew install gh`, `gh auth login`, `gh auth refresh -s project` |
+| statuses that have not reached GitHub | `treeyard github sync` |
+| a broken tree file, a lost parent | `$EDITOR <file>`, `treeyard set <id> parent=root` |
+
+From a git worktree, commands that write the tree get `--project <main folder>`. `--json` gives
+the same as an object (problems have `kind`, `what`, `fix`); `--project <dir>` — the summary of
+another folder. The command only reads: it writes and starts nothing, and asks `gh` only when the
+tree is linked to GitHub. The exit code is 0 even with problems: it is a report, not a check.
 
 ### The root and the project's documents
 

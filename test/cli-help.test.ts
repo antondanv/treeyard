@@ -20,6 +20,7 @@ const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
 const COMMANDS = [
   'init',
   'import',
+  'status',
   'pointer',
   'skills',
   'templates',
@@ -103,6 +104,11 @@ describe('treeyard <command> --help', () => {
     expect(add).toContain('[--done-when "…"]');
     expect(add).toContain('treeyard add "<title>" --project ../X --for <id>');
     expect(add).not.toContain('treeyard set');
+
+    const status = (await sh('status', '--help')).stdout;
+    expect(status).toContain('treeyard status [--json] [--project <dir>]');
+    expect(status).toContain('every problem with the command that fixes it');
+    expect(status).not.toContain('treeyard pointer');
 
     const github = (await sh('github', '--help')).stdout;
     expect(github).toContain('a GitHub Project board');

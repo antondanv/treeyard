@@ -9,12 +9,11 @@
  * this terminal until the person leaves it.
  *
  * The same skill can be installed into Claude Code, Codex and Antigravity
- * (`treeyard skills install`), so a plain `claude` in any folder knows how
- * to plant a tree too.
+ * (`treeyard skills install`, see `skills.ts`), so a plain `claude` in any
+ * folder knows how to plant a tree too.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -159,40 +158,4 @@ export async function plantWithAgent(dir: string, brain: BrainId, size?: PaneSiz
       height: size?.height ?? 30,
     },
   };
-}
-
-export interface SkillHome {
-  brain: BrainId;
-  /** Where the CLI looks for skills: `<dir>/<name>/SKILL.md`. */
-  dir: string;
-  /** The CLI is set up on this machine (its home exists). */
-  present: boolean;
-}
-
-/** Where each CLI reads personal skills from. */
-export function skillHomes(env: NodeJS.ProcessEnv = process.env): SkillHome[] {
-  const home = env.HOME?.trim() || homedir();
-  const claude = env.CLAUDE_CONFIG_DIR?.trim() || join(home, '.claude');
-  const codex = env.CODEX_HOME?.trim() || join(home, '.codex');
-  // Antigravity: the global customization root is ~/.gemini/config.
-  const agy = join(home, '.gemini', 'config');
-  return [
-    { brain: 'claude', dir: join(claude, 'skills'), present: existsSync(claude) },
-    { brain: 'codex', dir: join(codex, 'skills'), present: existsSync(codex) },
-    { brain: 'antigravity', dir: join(agy, 'skills'), present: existsSync(join(home, '.gemini')) },
-  ];
-}
-
-/** Puts the skill where the installed CLIs find it; returns the files written. */
-export function installSkill(env: NodeJS.ProcessEnv = process.env): string[] {
-  const text = skillText();
-  const written: string[] = [];
-  for (const home of skillHomes(env)) {
-    if (!home.present) continue;
-    const target = join(home.dir, SKILL, 'SKILL.md');
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, text);
-    written.push(target);
-  }
-  return written;
 }

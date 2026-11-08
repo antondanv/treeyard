@@ -22,16 +22,32 @@ import { ROOT, type Status, type Tree, type TreeNode } from './model/types.js';
 /** Runs `gh` with these arguments and gives back its stdout. */
 export type Gh = (args: string[]) => Promise<string>;
 
-export const gh: Gh = (args) =>
-  new Promise((resolve, reject) => {
-    execFile('gh', args, { maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
+function ghCall(args: string[], timeout: number, onTimeout?: () => void): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile('gh', args, { maxBuffer: 64 * 1024 * 1024, timeout }, (error, stdout, stderr) => {
       if (!error) return resolve(stdout);
+      if ((error as { killed?: boolean }).killed) onTimeout?.();
       const failure = new Error(stderr.trim() || error.message) as Error & { code?: unknown };
       // ENOENT: there is no gh at all, not a failed call.
       failure.code = (error as { code?: unknown }).code;
       reject(failure);
     });
   });
+}
+
+export const gh: Gh = (args) => ghCall(args, 0);
+
+/** `gh` that gives up after `ms`, so a hung network does not hold a quick report; `late()` — it gave up. */
+export function ghWithin(ms: number): { run: Gh; late: () => boolean } {
+  let late = false;
+  return {
+    run: (args) =>
+      ghCall(args, ms, () => {
+        late = true;
+      }),
+    late: () => late,
+  };
+}
 
 export interface Board {
   owner: string;

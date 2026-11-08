@@ -7,15 +7,8 @@ import { render } from 'ink';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { addDecisions } from '../src/agents/importer.js';
-import {
-  folderFacts,
-  installSkill,
-  plantingPrompt,
-  SKILL,
-  skillBody,
-  skillPath,
-  skillText,
-} from '../src/agents/planting.js';
+import { folderFacts, plantingPrompt, SKILL, skillBody, skillPath, skillText } from '../src/agents/planting.js';
+import { installSkills } from '../src/agents/skills.js';
 import { loadTree } from '../src/model/store.js';
 import { DEFAULTS, resetSettings } from '../src/settings.js';
 import { pointerTargets } from '../src/templates/pointer.js';
@@ -52,9 +45,19 @@ describe('the planting skill', () => {
     const codex = join(home, '.codex');
     mkdirSync(claude);
     mkdirSync(codex);
-    const written = installSkill({ ...process.env, HOME: home, CLAUDE_CONFIG_DIR: claude, CODEX_HOME: codex });
-    expect(written).toEqual([join(claude, 'skills', SKILL, 'SKILL.md'), join(codex, 'skills', SKILL, 'SKILL.md')]);
-    expect(readFileSync(written[0]!, 'utf8')).toBe(skillText());
+    const written = installSkills(undefined, {
+      ...process.env,
+      HOME: home,
+      CLAUDE_CONFIG_DIR: claude,
+      CODEX_HOME: codex,
+    });
+    expect(written.map((item) => item.path)).toEqual([
+      join(claude, 'skills', 'treeyard'),
+      join(claude, 'skills', SKILL),
+      join(codex, 'skills', 'treeyard'),
+      join(codex, 'skills', SKILL),
+    ]);
+    expect(readFileSync(join(claude, 'skills', SKILL, 'SKILL.md'), 'utf8')).toBe(skillText());
   });
 });
 

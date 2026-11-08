@@ -88,6 +88,7 @@ import {
   type Who,
 } from '../model/types.js';
 import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
+import { locate, projectStatus } from '../status.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
@@ -104,6 +105,7 @@ import {
   treeJson,
   treeText,
 } from './print.js';
+import { skillLines, statusText } from './status-text.js';
 
 const require = createRequire(import.meta.url);
 const VERSION = (require('../../package.json') as { version: string }).version;
@@ -119,8 +121,12 @@ function commandLines(): string {
   treeyard init --agent [--brain codex]    агент изучит папку, задаст вопросы и посадит дерево
   treeyard import [--brain claude]         агент молча читает план проекта и строит дерево
   treeyard import --from-json <файл|->     посадить дерево из JSON (так сажает агент)
+  treeyard status [--json] [--project <папка>]   сводка: версии, папка и дерево, узлы по статусам и брошенные,
+                                           скиллы, указатель, git-хук, живые сессии и панели, GitHub;
+                                           у каждой проблемы — команда, которая её исправит
   treeyard pointer                         дописать блок о дереве в AGENTS.md / CLAUDE.md
-  treeyard skills [install]                скилл посадки: где он, поставить в Claude Code, Codex, Antigravity
+  treeyard skills [install]                скиллы treeyard и treeyard-init: где стоят, поставить в Claude Code, Codex,
+                                           Antigravity (папки в проекте — обновить)
   treeyard templates                       шаблоны: этапы, направления, микадо…
   treeyard show [id…] [--json] [--open]    дерево или узлы текстом (--open — без готового; вне терминала готовое
                                            свёрнуто в «✓ готово: N», --all — всё)
@@ -174,8 +180,12 @@ function commandLines(): string {
   treeyard init --agent [--brain codex]    an agent studies the folder, asks questions, plants the tree
   treeyard import [--brain claude]         an agent silently reads the project's plan and builds the tree
   treeyard import --from-json <file|->     plant a tree from JSON (how the agent plants it)
+  treeyard status [--json] [--project <dir>]   a summary: versions, the folder and its tree, nodes by status and
+                                           abandoned ones, skills, the pointer, the git hook, live sessions and panes,
+                                           GitHub; every problem with the command that fixes it
   treeyard pointer                         add the block about the tree to AGENTS.md / CLAUDE.md
-  treeyard skills [install]                the planting skill: where it is, install into Claude Code, Codex, Antigravity
+  treeyard skills [install]                the treeyard and treeyard-init skills: where they are, install into Claude Code,
+                                           Codex, Antigravity (copies in the project — refresh)
   treeyard templates                       templates: stages, directions, mikado…
   treeyard show [id…] [--json] [--open]    the tree or nodes as text (--open hides finished work; off a terminal
                                            finished work folds into «✓ done: N», --all shows everything)
@@ -304,6 +314,8 @@ async function main(argv: string[]): Promise<number> {
       return initCommand(rest);
     case 'import':
       return importCommand(rest);
+    case 'status':
+      return statusCommand(rest);
     case 'pointer':
       return pointerCommand();
     case 'skills':
@@ -603,9 +615,24 @@ async function plantCommand(dir: string, brain: BrainId, confirmed: boolean): Pr
   return 0;
 }
 
+/**
+ * The project's setup in one look: versions, the folder and its tree (the main one from a git
+ * worktree), nodes, skills, the pointer, the hook, live sessions and panes, GitHub — and for every
+ * problem the command that fixes it. It reads and asks, never writes.
+ */
+async function statusCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, { json: { type: 'boolean' }, project: { type: 'string' } });
+  if (positionals.length) throw new UsageError(t('treeyard status [--json] [--project <папка>]'));
+  const start = values.project ? folderArg(values.project) : process.cwd();
+  const status = await projectStatus(locate(start));
+  process.stdout.write(values.json ? `${JSON.stringify(status, null, 2)}\n` : `${statusText(status, out)}\n`);
+  return 0;
+}
+
 /** Adds (or refreshes) the block about the tree in AGENTS.md, CLAUDE.md and GEMINI.md. */
 async function pointerCommand(): Promise<number> {
-  const dir = findProject() ?? process.cwd();
+  // The folder `treeyard status` checks: in a git worktree, the worktree's own files.
+  const dir = locate(process.cwd()).folder;
   const { addPointer, pointerTargets } = await import('../templates/pointer.js');
   const targets = pointerTargets(dir);
   if (targets.length === 0) {
@@ -621,17 +648,24 @@ async function pointerCommand(): Promise<number> {
   return 0;
 }
 
-/** The planting skill: where it is, and installing it into the CLIs. */
+/** The skills treeyard ships: where they are, and installing them into the CLIs. */
 async function skillsCommand(args: string[]): Promise<number> {
-  const { installSkill, SKILL, skillHomes, skillPath } = await import('../agents/planting.js');
+  const { installSkills, skillStates, skillsRoot } = await import('../agents/skills.js');
+  const { SKILL, skillPath } = await import('../agents/planting.js');
   const action = args[0] ?? 'list';
+  const folder = locate(process.cwd()).folder;
   if (action === 'install') {
-    const written = installSkill();
-    if (written.length === 0) {
+    const done = installSkills(folder);
+    if (done.length === 0) {
       process.stderr.write(`${t('не нашёл ни Claude Code, ни Codex, ни Antigravity')}\n`);
       return 1;
     }
-    for (const file of written) process.stdout.write(`${out.c('#7ee2a8', '✓')} ${file}\n`);
+    for (const item of done)
+      process.stdout.write(
+        item.action === 'written'
+          ? `${out.c('#7ee2a8', '✓')} ${homeShort(item.path)}\n`
+          : `${out.dim(`· ${homeShort(item.path)} — ${t('уже стоит')}`)}\n`,
+      );
     process.stdout.write(
       `${t('теперь в любой папке: «посади дерево этого проекта» или /{skill} в Claude Code', {
         skill: SKILL,
@@ -643,19 +677,9 @@ async function skillsCommand(args: string[]): Promise<number> {
     process.stdout.write(`${skillPath()}\n`);
     return 0;
   }
-  process.stdout.write(`${out.bold(SKILL)}  ${out.dim(skillPath())}\n`);
-  for (const home of skillHomes()) {
-    const installed = (await import('node:fs')).existsSync(resolve(home.dir, SKILL, 'SKILL.md'));
-    process.stdout.write(
-      `  ${BRAIN_LABEL[home.brain].padEnd(12)} ${
-        installed
-          ? out.c('#7ee2a8', t('установлен'))
-          : home.present
-            ? out.dim(t('не установлен'))
-            : out.dim(t('нет CLI'))
-      }  ${out.dim(home.dir)}\n`,
-    );
-  }
+  if (action !== 'list') throw new UsageError(t('treeyard skills [install]'));
+  process.stdout.write(`${out.bold(t('скиллы treeyard'))}  ${out.dim(homeShort(skillsRoot()))}\n`);
+  for (const line of skillLines(skillStates(folder), out)) process.stdout.write(`  ${line}\n`);
   process.stdout.write(`${out.dim(t('treeyard skills install — поставить во все найденные CLI'))}\n`);
   return 0;
 }
