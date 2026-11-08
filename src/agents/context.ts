@@ -194,6 +194,7 @@ const TEXT = {
     review:
       'критерий выполнен: итог, статус и коммит одной командой, а не цепочкой diff, log и set (--commit HEAD — только после своего коммита); покажи доказательства',
     reviewText: 'итог и доказательства',
+    fix: 'исправить свою последнюю запись; описание узла — `set <id> note="…"`; файлы `.tree/` руками не правь',
     wait: 'waiting="что мешает" until="когда вернуться"',
     waitWhat: 'упёрся во внешнее',
     note: 'что мешает',
@@ -253,6 +254,7 @@ const TEXT = {
     review:
       'the criterion is met: the summary, the status and the commit in one command, not a chain of diff, log and set (--commit HEAD — only after your own commit); show the evidence',
     reviewText: 'summary and evidence',
+    fix: 'correct your last entry; the node description — `set <id> note="…"`; never edit `.tree/` files by hand',
     wait: 'waiting="what blocks it" until="when to come back"',
     waitWhat: 'blocked by something outside',
     note: 'what gets in the way',
@@ -355,6 +357,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} log ${node.id} "${L.log}"\` — ${L.logWhat}`);
   lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea\` — ${L.addWhat}`);
   lines.push(`- \`${self} log ${node.id} "${L.reviewText}" --status review --commit HEAD\` — ${L.review}`);
+  lines.push(`- \`${self} log ${node.id} --fix "…"\` — ${L.fix}`);
   lines.push(`- \`${self} set ${node.id} status=waiting ${L.wait}\` — ${L.waitWhat}`);
   lines.push(`- \`${self} add "${L.other}" --project ../X --for ${node.id}\` — ${L.otherWhat}`);
   lines.push(`- \`${self} set <id> status=done --project ../X\` — ${L.closeOther}`);
@@ -464,7 +467,7 @@ const ROOT_TEXT = {
     command: 'Команда',
     show: 'открытое дерево (`--all` — всё); `show <id…> --brief` — шапки и последние записи узлов',
     add: 'новый узел (родитель — по смыслу; `--status idea` для идеи)',
-    set: 'поменять узел или несколько сразу (то же всем, after= ставит их подряд): status, title, parent, done_when, who, check, waiting, until',
+    set: 'поменять узел или несколько сразу (то же всем, after= ставит их подряд): status, title, parent, done_when, who, check, note (описание), waiting, until',
     keyValue: 'ключ=значение',
     log: 'запись в журнал узла; с `--status` и `--commit` — заодно статус и коммиты',
     sessions: 'сессии папки и чьи они',
@@ -504,7 +507,7 @@ const ROOT_TEXT = {
     command: 'The command is',
     show: 'the open tree (`--all` — everything); `show <id…> --brief` — headers and latest entries of nodes',
     add: 'a new node (pick the parent by meaning; `--status idea` for an idea)',
-    set: 'change a node or several at once (the same to each, after= puts them one after another): status, title, parent, done_when, who, check, waiting, until',
+    set: 'change a node or several at once (the same to each, after= puts them one after another): status, title, parent, done_when, who, check, note (description), waiting, until',
     keyValue: 'key=value',
     log: 'a line in the node journal; with `--status` and `--commit` — the status and commits too',
     sessions: 'the sessions of the folder and whose they are',

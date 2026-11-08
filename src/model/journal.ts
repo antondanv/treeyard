@@ -38,6 +38,25 @@ export function journalEntries(body: string): string[] {
     .map((line) => line.slice(2));
 }
 
+/** Replaces the `index`-th journal entry (as `journalEntries` counts them) with `line`. */
+export function replaceEntry(body: string, index: number, line: string): string {
+  const match = HEADING.exec(body);
+  if (!match) return body;
+  const start = match.index + match[0].length;
+  const next = /^#{1,2}\s/m.exec(body.slice(start));
+  const end = next ? start + next.index : body.length;
+  let seen = -1;
+  const section = body
+    .slice(start, end)
+    .split('\n')
+    .map((raw) => {
+      if (!raw.trim().startsWith('- ') || ++seen !== index) return raw;
+      return `${raw.slice(0, raw.indexOf('- '))}- ${line.replace(/\s*\n\s*/g, ' ').trim()}`;
+    })
+    .join('\n');
+  return `${body.slice(0, start)}${section}${body.slice(end)}`;
+}
+
 /** The body without its journal: the description a person wrote. */
 export function description(body: string): string {
   const match = HEADING.exec(body);

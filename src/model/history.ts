@@ -57,3 +57,13 @@ const BARE = new RegExp(`^(?:${LABELS})(?:$|\\. )`);
 export function isOwnLine(text: string): boolean {
   return isStatusChange(text) || BARE.test(text) || OWN_LINES.some((line) => line.test(text));
 }
+
+/** The last entry `source` wrote by hand — the one `log --fix` corrects — and its place in the journal. */
+export function lastOwnEntry(body: string, source: string): { index: number; entry: Entry } | undefined {
+  const lines = journalEntries(body);
+  for (let index = lines.length - 1; index >= 0; index--) {
+    const entry = parseEntry(lines[index]!);
+    if (entry.source === source && !isOwnLine(entry.text)) return { index, entry };
+  }
+  return undefined;
+}

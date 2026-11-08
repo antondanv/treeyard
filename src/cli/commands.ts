@@ -43,7 +43,9 @@ import {
 import { pick, plural, t } from '../i18n/i18n.js';
 import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
 import { type FindField, findNodes } from '../model/find.js';
+import { lastOwnEntry } from '../model/history.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
+import { replaceEntry } from '../model/journal.js';
 import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
 import { addNote, homeShort, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import {
@@ -129,13 +131,14 @@ function commandLines(): string {
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
-  treeyard set <id> [<id>…] ключ=значение…  status, title, who, done_when, check, waiting, until, parent,
+  treeyard set <id> [<id>…] ключ=значение…  status, title, who, done_when, check, note (описание), waiting, until, parent,
                                            after=<id брата>|first|last (место среди братьев),
                                            needs=<id>|../X#id (ждёт узла этого дерева или другого проекта); --project ../X — узел там
                                            несколько id — то же всем (after= ставит их подряд); ошибка — не меняется ни один
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
                 [--status s] [--commit <ref>…]   заодно статус и коммиты (HEAD, ветка, SHA) — закрыть узел одной
                                            командой: log <id> "итог" --status review --commit HEAD
+  treeyard log <id> --fix "<текст>"        исправить свою последнюю запись (время остаётся; статусы и коммиты не трогает)
                 [--project <папка>]        писать в дерево другой папки, например основного worktree
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
   treeyard image <id> [файл…|--paste] [--note "…"]   картинки узла: список, приложить файл или из буфера
@@ -175,13 +178,14 @@ function commandLines(): string {
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
-  treeyard set <id> [<id>…] key=value…     status, title, who, done_when, check, waiting, until, parent,
+  treeyard set <id> [<id>…] key=value…     status, title, who, done_when, check, note (description), waiting, until, parent,
                                            after=<sibling id>|first|last (the place among siblings),
                                            needs=<id>|../X#id (waits for a node of this tree or of another project); --project ../X — a node there
                                            several ids — the same to each (after= puts them one after another); an error changes none
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
                 [--status s] [--commit <ref>…]   the status and commits (HEAD, a branch, a SHA) too — close a node
                                            in one command: log <id> "summary" --status review --commit HEAD
+  treeyard log <id> --fix "<text>"         correct your last entry (its time stays; status changes and commits are left alone)
                 [--project <dir>]          write to the tree of another folder, e.g. the main worktree
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
   treeyard image <id> [file…|--paste] [--note "…"]   a node's pictures: the list, attach a file or the clipboard
@@ -1009,6 +1013,7 @@ const SET_FIELDS = new Set([
   'who',
   'done_when',
   'check',
+  'note',
   'waiting',
   'until',
   'parent',
@@ -1067,6 +1072,8 @@ async function setCommand(args: string[]): Promise<number> {
   const status = fields.status !== undefined ? statusArg(fields.status) : undefined;
   const refs = fields.needs !== undefined ? needsArg(tree, fields.needs) : undefined;
   if (refs && ids.some((id) => refs.includes(`.#${id}`))) throw new UsageError(t('узел не может ждать сам себя'));
+  if (fields.note !== undefined && /^##\s+(?:Журнал|Journal)\s*$/m.test(fields.note))
+    throw new UsageError(t('Раздел «Журнал» заполняется отдельно — убери его из описания'));
   const moves = fields.parent !== undefined || fields.after !== undefined ? planMoves(tree, ids, fields) : [];
 
   for (const id of ids) {
@@ -1074,13 +1081,15 @@ async function setCommand(args: string[]): Promise<number> {
       who !== undefined ||
       fields.title !== undefined ||
       fields.done_when !== undefined ||
-      fields.check !== undefined
+      fields.check !== undefined ||
+      fields.note !== undefined
     ) {
       updateNode(tree, id, {
         ...(fields.title !== undefined ? { title: fields.title } : {}),
         ...(who !== undefined ? { who } : {}),
         ...(fields.done_when !== undefined ? { doneWhen: fields.done_when } : {}),
         ...(fields.check !== undefined ? { check: fields.check } : {}),
+        ...(fields.note !== undefined ? { description: fields.note } : {}),
       });
     }
     if (refs) {
@@ -1293,12 +1302,14 @@ async function logCommand(args: string[]): Promise<number> {
     commit: { type: 'string', multiple: true },
     waiting: { type: 'string' },
     until: { type: 'string' },
+    fix: { type: 'boolean' },
   });
   const dir = projectDir(values.project);
   let tree = project(values.project);
   const id = nodeArg(tree, positionals[0]);
   const text = positionals.slice(1).join(' ').trim();
   if (!text) throw new UsageError(t('treeyard log <id> "что сделано; что осталось"'));
+  if (values.fix) return fixEntry(tree, id, text, values);
   const status = values.status !== undefined ? statusArg(values.status) : undefined;
   if ((values.waiting !== undefined || values.until !== undefined) && status !== 'waiting')
     throw new UsageError(t('--waiting и --until — вместе с --status waiting'));
@@ -1329,6 +1340,30 @@ async function logCommand(args: string[]): Promise<number> {
     if (next.demoted) said.push(demotedNote(values.as));
   }
   process.stdout.write(`${said.join(' · ')}\n`);
+  return 0;
+}
+
+/** `log <id> --fix "…"`: a new text for the last entry this author wrote by hand; its time stays. */
+function fixEntry(
+  tree: Tree,
+  id: string,
+  text: string,
+  values: { as?: string; status?: string; commit?: string[]; waiting?: string; until?: string },
+): number {
+  if (
+    values.status !== undefined ||
+    values.commit?.length ||
+    values.waiting !== undefined ||
+    values.until !== undefined
+  )
+    throw new UsageError(t('--fix исправляет только текст записи — без --status и --commit'));
+  const source = sourceOf(values.as);
+  const node = tree.nodes.get(id)!;
+  const found = lastOwnEntry(node.body, source);
+  if (!found) throw new UsageError(t('у узла {id} нет записей «{source}», которые можно исправить', { id, source }));
+  const { when } = found.entry;
+  updateNode(tree, id, { body: replaceEntry(node.body, found.index, `${when} · ${source} · ${text}`) });
+  process.stdout.write(`${id} · ${t('запись от {when} исправлена', { when })}\n`);
   return 0;
 }
 

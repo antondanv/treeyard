@@ -347,6 +347,8 @@ treeyard set <id> status=waiting waiting="нет сервера" until="появ
 treeyard set <id> status=review                 # агент отправляет на проверку; «готово» ставит человек
 treeyard log <id> "что сделано; что осталось"
 treeyard log <id> "итог, доказательства" --status review --commit HEAD   # закрыть узел одной командой: запись, статус и коммиты (--commit a b, --commit a,b)
+treeyard log <id> --fix "исправленный текст"    # заменить свою последнюю запись (время остаётся; смены статуса и коммиты не трогает)
+treeyard set <id> note="…"                      # описание узла; журнал остаётся как есть
 treeyard log <id> "…" --project ../main         # из git worktree: писать в основное дерево (show тоже принимает)
 treeyard note "справка не помещается в экран"   # замечание о самом treeyard — в «Замечания»
 treeyard image <id> shot.png --note "…"         # приложить к узлу картинку (скриншот, доказательство)

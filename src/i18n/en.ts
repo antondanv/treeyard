@@ -207,6 +207,10 @@ export const EN: Record<string, string> = {
   '--waiting и --until — вместе с --status waiting': '--waiting and --until go with --status waiting',
   'не готово: «{as}» — не человек, готово ставит человек': 'not done: «{as}» is not a person, done is set by a person',
   'не готово: готово ставит человек': 'not done: done is set by a person',
+  '--fix исправляет только текст записи — без --status и --commit':
+    '--fix corrects only the text of an entry — without --status and --commit',
+  'у узла {id} нет записей «{source}», которые можно исправить': 'node {id} has no entries by «{source}» to correct',
+  'запись от {when} исправлена': 'the entry of {when} is corrected',
   'история статусов:': 'status history:',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
   'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',
