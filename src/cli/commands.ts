@@ -134,6 +134,8 @@ function commandLines(): string {
                                            needs=<id>|../X#id (ждёт узла этого дерева или другого проекта); --project ../X — узел там
                                            несколько id — то же всем (after= ставит их подряд); ошибка — не меняется ни один
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
+                [--status s] [--commit <ref>…]   заодно статус и коммиты (HEAD, ветка, SHA) — закрыть узел одной
+                                           командой: log <id> "итог" --status review --commit HEAD
                 [--project <папка>]        писать в дерево другой папки, например основного worktree
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
   treeyard image <id> [файл…|--paste] [--note "…"]   картинки узла: список, приложить файл или из буфера
@@ -178,6 +180,8 @@ function commandLines(): string {
                                            needs=<id>|../X#id (waits for a node of this tree or of another project); --project ../X — a node there
                                            several ids — the same to each (after= puts them one after another); an error changes none
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
+                [--status s] [--commit <ref>…]   the status and commits (HEAD, a branch, a SHA) too — close a node
+                                           in one command: log <id> "summary" --status review --commit HEAD
                 [--project <dir>]          write to the tree of another folder, e.g. the main worktree
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
   treeyard image <id> [file…|--paste] [--note "…"]   a node's pictures: the list, attach a file or the clipboard
@@ -1096,13 +1100,8 @@ async function setCommand(args: string[]): Promise<number> {
   if (status !== undefined || fields.waiting !== undefined || fields.until !== undefined) {
     let warned = false;
     for (const id of ids) {
-      const node = tree.nodes.get(id)!;
-      const next = status ?? node.status;
-      // A shared node (made from another project) is closed by the agent that did the work:
-      // nobody comes to this tree to close it by hand.
-      // A node of this same tree waiting for it does not make it shared.
-      const shared = Boolean(node.neededBy?.some((ref) => !isSameTree(tree.project.dir, ref)));
-      const agentDone = next === 'done' && !shared && !byPerson(values.as);
+      const next = closingStatus(tree, id, status ?? tree.nodes.get(id)!.status, values.as);
+      const agentDone = next.demoted;
       if (agentDone && !warned) {
         warned = true;
         process.stderr.write(
@@ -1111,7 +1110,7 @@ async function setCommand(args: string[]): Promise<number> {
           }),
         );
       }
-      setStatus(tree, id, agentDone ? 'review' : next, {
+      setStatus(tree, id, next.status, {
         ...(fields.waiting !== undefined ? { waiting: fields.waiting } : {}),
         ...(fields.until !== undefined ? { until: fields.until } : {}),
         source,
@@ -1281,19 +1280,101 @@ function printBoard(board: Board, tree: Tree): void {
   );
 }
 
-function logCommand(args: string[]): number {
-  const { values, positionals } = parse(args, { as: { type: 'string' }, project: { type: 'string' } });
-  const tree = project(values.project);
+/**
+ * A journal entry; with `--status` and `--commit` also the status and the commits — closing a
+ * node is one command, not a chain of diff, log and set. The commits are resolved before
+ * anything is written; done from an agent becomes review, as with `set`.
+ */
+async function logCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(spreadRefs(args, '--commit'), {
+    as: { type: 'string' },
+    project: { type: 'string' },
+    status: { type: 'string', short: 's' },
+    commit: { type: 'string', multiple: true },
+    waiting: { type: 'string' },
+    until: { type: 'string' },
+  });
+  const dir = projectDir(values.project);
+  let tree = project(values.project);
   const id = nodeArg(tree, positionals[0]);
   const text = positionals.slice(1).join(' ').trim();
   if (!text) throw new UsageError(t('treeyard log <id> "что сделано; что осталось"'));
-  logToNode(tree, id, text, sourceOf(values.as));
-  process.stdout.write(
-    t('{id} · записано\n', {
-      id,
-    }),
-  );
+  const status = values.status !== undefined ? statusArg(values.status) : undefined;
+  if ((values.waiting !== undefined || values.until !== undefined) && status !== 'waiting')
+    throw new UsageError(t('--waiting и --until — вместе с --status waiting'));
+  const refs = (values.commit ?? []).flatMap((ref) => ref.split(',')).filter((ref) => ref.trim());
+  let commits: string[] = [];
+  if (refs.length) {
+    const repo = await gitRepository(dir);
+    commits = (await Promise.all(refs.map((ref) => repo.commit(ref.trim())))).map((commit) => commit.sha);
+    // Git reads are asynchronous; keep any journal entries written in the meantime.
+    tree = loadTree(dir);
+  }
+  const source = sourceOf(values.as);
+  for (const sha of commits) attachCommit(tree, id, sha, source);
+  logToNode(tree, id, text, source);
+  const said = [id, t('записано')];
+  if (commits.length) said.push(t('привязано коммитов: {n}', { n: commits.length }));
+  if (status) {
+    const before = tree.nodes.get(id)!.status;
+    const next = closingStatus(tree, id, status, values.as);
+    setStatus(tree, id, next.status, {
+      ...(values.waiting !== undefined ? { waiting: values.waiting } : {}),
+      ...(values.until !== undefined ? { until: values.until } : {}),
+      source,
+    });
+    said.push(
+      before === next.status ? STATUS_LABEL[next.status] : `${STATUS_LABEL[before]} → ${STATUS_LABEL[next.status]}`,
+    );
+    if (next.demoted) said.push(demotedNote(values.as));
+  }
+  process.stdout.write(`${said.join(' · ')}\n`);
   return 0;
+}
+
+/**
+ * `--commit a b c` → `--commit a --commit b --commit c`: refs follow the flag until the next
+ * option or a word that cannot be a ref (a journal text has spaces).
+ */
+function spreadRefs(args: string[], flag: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    out.push(arg);
+    if (arg === '--') {
+      out.push(...args.slice(i + 1));
+      break;
+    }
+    if (arg !== flag) continue;
+    if (i + 1 < args.length) out.push(args[++i]!);
+    while (i + 1 < args.length && /^[\w./~^@{}:,-]+$/.test(args[i + 1]!) && !args[i + 1]!.startsWith('-'))
+      out.push(flag, args[++i]!);
+  }
+  return out;
+}
+
+/**
+ * Done from an agent becomes review: the person sets done. A shared node (made from another
+ * project) is closed by the agent that did the work — nobody comes to that tree to close it;
+ * a node of this same tree waiting for it does not make it shared.
+ */
+function closingStatus(
+  tree: Tree,
+  id: string,
+  wanted: Status,
+  as: string | undefined,
+): { status: Status; demoted: boolean } {
+  const shared = Boolean(tree.nodes.get(id)?.neededBy?.some((ref) => !isSameTree(tree.project.dir, ref)));
+  const demoted = wanted === 'done' && !shared && !byPerson(as);
+  return { status: demoted ? 'review' : wanted, demoted };
+}
+
+/** Said on stdout too: a warning on stderr gets lost behind `2>/dev/null`. A typo in `--as` shows here. */
+function demotedNote(as: string | undefined): string {
+  const given = as?.trim();
+  return given
+    ? t('не готово: «{as}» — не человек, готово ставит человек', { as: given })
+    : t('не готово: готово ставит человек');
 }
 
 /** A node's explicit commit links and the project's separate working changes. */

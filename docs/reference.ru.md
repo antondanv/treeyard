@@ -346,6 +346,7 @@ treeyard set <a> <b> <c> status=todo            # несколько узлов:
 treeyard set <id> status=waiting waiting="нет сервера" until="появится VPS"
 treeyard set <id> status=review                 # агент отправляет на проверку; «готово» ставит человек
 treeyard log <id> "что сделано; что осталось"
+treeyard log <id> "итог, доказательства" --status review --commit HEAD   # закрыть узел одной командой: запись, статус и коммиты (--commit a b, --commit a,b)
 treeyard log <id> "…" --project ../main         # из git worktree: писать в основное дерево (show тоже принимает)
 treeyard note "справка не помещается в экран"   # замечание о самом treeyard — в «Замечания»
 treeyard image <id> shot.png --note "…"         # приложить к узлу картинку (скриншот, доказательство)

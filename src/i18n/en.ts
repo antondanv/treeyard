@@ -203,6 +203,10 @@ export const EN: Record<string, string> = {
     'title= — each node has its own title: change them one by one',
   'after= для нескольких узлов — им нужен один родитель: добавь parent=<id>':
     'after= for several nodes — they need one parent: add parent=<id>',
+  записано: 'written',
+  '--waiting и --until — вместе с --status waiting': '--waiting and --until go with --status waiting',
+  'не готово: «{as}» — не человек, готово ставит человек': 'not done: «{as}» is not a person, done is set by a person',
+  'не готово: готово ставит человек': 'not done: done is set by a person',
   'история статусов:': 'status history:',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
   'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',
@@ -229,7 +233,6 @@ export const EN: Record<string, string> = {
     'after=«{id}»: not a node under the same parent — use a sibling, first or last',
   '{p1} готово ставит человек — ставлю «на проверке»\n': '{p1} done is set by a person — setting review\n',
   'treeyard log <id> "что сделано; что осталось"': 'treeyard log <id> "what is done; what is left"',
-  '{id} · записано\n': '{id} · written\n',
   '{p1}\n\n# Первое сообщение ({start})\n\n{p3}\n': '{p1}\n\n# First message ({start})\n\n{p3}\n',
   Узел: 'Node',
   Кто: 'Who',

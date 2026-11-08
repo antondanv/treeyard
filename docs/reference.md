@@ -320,6 +320,7 @@ treeyard set <a> <b> <c> status=todo            # several nodes: the same change
 treeyard set <id> status=waiting waiting="no server" until="a VPS is up"
 treeyard set <id> status=review                 # the agent; “done” is set by a person
 treeyard log <id> "what is done; what is left"
+treeyard log <id> "summary, evidence" --status review --commit HEAD   # closing in one command: the entry, the status and the commits (--commit a b, --commit a,b)
 treeyard log <id> "…" --project ../main         # from a git worktree: write to the main tree (show takes it too)
 treeyard note "the help doesn't fit the screen" # a note about treeyard itself — into “Notes”
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)

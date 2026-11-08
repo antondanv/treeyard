@@ -191,7 +191,9 @@ const TEXT = {
     logWhat: 'итог в журнал узла',
     add: 'Заголовок',
     addWhat: 'всплывшая задача или идея (родителя выбирай по смыслу)',
-    review: 'критерий выполнен; покажи доказательства',
+    review:
+      'критерий выполнен: итог, статус и коммит одной командой, а не цепочкой diff, log и set (--commit HEAD — только после своего коммита); покажи доказательства',
+    reviewText: 'итог и доказательства',
     wait: 'waiting="что мешает" until="когда вернуться"',
     waitWhat: 'упёрся во внешнее',
     note: 'что мешает',
@@ -248,7 +250,9 @@ const TEXT = {
     logWhat: 'a summary in the node journal',
     add: 'Title',
     addWhat: 'a task or an idea that came up (pick the parent by meaning)',
-    review: 'the criterion is met; show the evidence',
+    review:
+      'the criterion is met: the summary, the status and the commit in one command, not a chain of diff, log and set (--commit HEAD — only after your own commit); show the evidence',
+    reviewText: 'summary and evidence',
     wait: 'waiting="what blocks it" until="when to come back"',
     waitWhat: 'blocked by something outside',
     note: 'what gets in the way',
@@ -350,7 +354,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} find "${L.findWhat}"\` — ${L.find}`);
   lines.push(`- \`${self} log ${node.id} "${L.log}"\` — ${L.logWhat}`);
   lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea\` — ${L.addWhat}`);
-  lines.push(`- \`${self} set ${node.id} status=review\` — ${L.review}`);
+  lines.push(`- \`${self} log ${node.id} "${L.reviewText}" --status review --commit HEAD\` — ${L.review}`);
   lines.push(`- \`${self} set ${node.id} status=waiting ${L.wait}\` — ${L.waitWhat}`);
   lines.push(`- \`${self} add "${L.other}" --project ../X --for ${node.id}\` — ${L.otherWhat}`);
   lines.push(`- \`${self} set <id> status=done --project ../X\` — ${L.closeOther}`);
@@ -462,7 +466,7 @@ const ROOT_TEXT = {
     add: 'новый узел (родитель — по смыслу; `--status idea` для идеи)',
     set: 'поменять узел или несколько сразу (то же всем, after= ставит их подряд): status, title, parent, done_when, who, check, waiting, until',
     keyValue: 'ключ=значение',
-    log: 'запись в журнал узла',
+    log: 'запись в журнал узла; с `--status` и `--commit` — заодно статус и коммиты',
     sessions: 'сессии папки и чьи они',
     open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
     doneWhen: 'готово, когда',
@@ -502,7 +506,7 @@ const ROOT_TEXT = {
     add: 'a new node (pick the parent by meaning; `--status idea` for an idea)',
     set: 'change a node or several at once (the same to each, after= puts them one after another): status, title, parent, done_when, who, check, waiting, until',
     keyValue: 'key=value',
-    log: 'a line in the node journal',
+    log: 'a line in the node journal; with `--status` and `--commit` — the status and commits too',
     sessions: 'the sessions of the folder and whose they are',
     open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
     doneWhen: 'done when',
@@ -605,7 +609,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} find "${T.findWhat}"\` — ${T.find}`);
   lines.push(`- \`${self} add "${T.add}" --parent <id> --done-when "…"\` — ${L.add}`);
   lines.push(`- \`${self} set <id> [<id>…] ${L.keyValue}…\` — ${L.set}`);
-  lines.push(`- \`${self} log <id> "…"\` — ${L.log}`);
+  lines.push(`- \`${self} log <id> "…" [--status s] [--commit <ref>…]\` — ${L.log}`);
   lines.push(`- \`${self} sessions\` — ${L.sessions}`);
   lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
   if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);

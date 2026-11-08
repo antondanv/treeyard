@@ -100,7 +100,7 @@ describe('what an agent gets', () => {
     expect(text).toContain('Медиа-цех');
     expect(text).toContain('Картинки и ролики.');
     expect(text).toContain('Соседи: ✓ Обложки');
-    expect(text).toMatch(/set .* status=review/);
+    expect(text).toMatch(/log .* --status review --commit HEAD/);
   });
 
   it('tells about treeyard note once notes have a tree to go to', () => {
