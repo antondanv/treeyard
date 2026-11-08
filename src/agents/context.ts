@@ -190,7 +190,8 @@ const TEXT = {
     log: 'что сделано; что осталось',
     logWhat: 'итог в журнал узла',
     add: 'Заголовок',
-    addWhat: 'всплывшая задача или идея (родителя выбирай по смыслу)',
+    addWhat:
+      'всплывшая задача или идея (родителя выбирай по смыслу); несколько узлов разом — `add --parent <id> --from-json -`',
     review:
       'критерий выполнен: итог, статус и коммит одной командой, а не цепочкой diff, log и set (--commit HEAD — только после своего коммита); покажи доказательства',
     reviewText: 'итог и доказательства',
@@ -250,7 +251,8 @@ const TEXT = {
     log: 'what is done; what is left',
     logWhat: 'a summary in the node journal',
     add: 'Title',
-    addWhat: 'a task or an idea that came up (pick the parent by meaning)',
+    addWhat:
+      'a task or an idea that came up (pick the parent by meaning); several nodes at once — `add --parent <id> --from-json -`',
     review:
       'the criterion is met: the summary, the status and the commit in one command, not a chain of diff, log and set (--commit HEAD — only after your own commit); show the evidence',
     reviewText: 'summary and evidence',
@@ -466,7 +468,7 @@ const ROOT_TEXT = {
     commands: '## Команды дерева',
     command: 'Команда',
     show: 'открытое дерево (`--all` — всё); `show <id…> --brief` — шапки и последние записи узлов',
-    add: 'новый узел (родитель — по смыслу; `--status idea` для идеи)',
+    add: 'новый узел (родитель — по смыслу; `--status idea` для идеи); несколько разом, с детьми и needs — `add --parent <id> --from-json -`',
     set: 'поменять узел или несколько сразу (то же всем, after= ставит их подряд): status, title, parent, done_when, who, check, note (описание), waiting, until',
     keyValue: 'ключ=значение',
     log: 'запись в журнал узла; с `--status` и `--commit` — заодно статус и коммиты',
@@ -508,7 +510,7 @@ const ROOT_TEXT = {
     commands: '## Tree commands',
     command: 'The command is',
     show: 'the open tree (`--all` — everything); `show <id…> --brief` — headers and latest entries of nodes',
-    add: 'a new node (pick the parent by meaning; `--status idea` for an idea)',
+    add: 'a new node (pick the parent by meaning; `--status idea` for an idea); several at once, with children and needs — `add --parent <id> --from-json -`',
     set: 'change a node or several at once (the same to each, after= puts them one after another): status, title, parent, done_when, who, check, note (description), waiting, until',
     keyValue: 'key=value',
     log: 'a line in the node journal; with `--status` and `--commit` — the status and commits too',

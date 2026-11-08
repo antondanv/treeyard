@@ -224,6 +224,24 @@ export const EN: Record<string, string> = {
   'решений пока нет — treeyard decide "что решили и почему"':
     'no decisions yet — treeyard decide "what was decided and why"',
   'в «Решения» .tree/tree.md: {line}': 'into «Decisions» of .tree/tree.md: {line}',
+  'не JSON: {error}': 'not JSON: {error}',
+  'нужен массив узлов: [{"title": "…", "done_when": "…"}]':
+    'an array of nodes is needed: [{"title": "…", "done_when": "…"}]',
+  '{where}: узел — это объект с title': '{where}: a node is an object with a title',
+  '{where}: не знаю поле «{name}»; поля: {keys}': '{where}: unknown field «{name}»; the fields: {keys}',
+  '{where}: {name} — строка': '{where}: {name} is a string',
+  '{where}: нет title': '{where}: no title',
+  '{where}: «{status}» — не статус': '{where}: «{status}» is not a status',
+  '{where}: who бывает: agent, human, any': '{where}: who can be: agent, human, any',
+  '{where}: key «{key}» уже занят': '{where}: key «{key}» is taken already',
+  '{where}: needs — строка или массив строк': '{where}: needs is a string or an array of strings',
+  '{where}: children — массив узлов': '{where}: children is an array of nodes',
+  '«{title}»: узел не может ждать сам себя': '«{title}»: a node cannot wait for itself',
+  '«{title}»: needs «{ref}» — нет такого key в JSON и узла в дереве':
+    '«{title}»: needs «{ref}» — no such key in the JSON and no such node in the tree',
+  '--from-json: названия — в JSON, без названия в команде':
+    '--from-json: titles go in the JSON, not on the command line',
+  '--from-json: --{name} задаётся в JSON у каждого узла': '--from-json: --{name} is given in the JSON for each node',
   'история статусов:': 'status history:',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
   'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',

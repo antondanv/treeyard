@@ -41,6 +41,7 @@ import {
   syncIssues,
 } from '../github.js';
 import { pick, plural, t } from '../i18n/i18n.js';
+import { BatchError, type BatchNode, parseBatch, plantBatch, resolveBatchRefs } from '../model/batch.js';
 import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
 import { type FindField, findNodes } from '../model/find.js';
 import { isCreationLine, lastOwnEntry, parseEntry } from '../model/history.js';
@@ -133,6 +134,8 @@ function commandLines(): string {
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
+  treeyard add --parent <id> --from-json <файл|->   несколько узлов разом: [{"title", "done_when", "note", "who", "status",
+                                           "needs", "key", "children"}]; печатает их id; ошибка — не заводится ни один
   treeyard set <id> [<id>…] ключ=значение…  status, title, who, done_when, check, note (описание), waiting, until, parent,
                                            after=<id брата>|first|last (место среди братьев),
                                            needs=<id>|../X#id (ждёт узла этого дерева или другого проекта); --project ../X — узел там
@@ -183,6 +186,8 @@ function commandLines(): string {
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
+  treeyard add --parent <id> --from-json <file|->   several nodes at once: [{"title", "done_when", "note", "who", "status",
+                                           "needs", "key", "children"}]; prints their ids; an error adds none
   treeyard set <id> [<id>…] key=value…     status, title, who, done_when, check, note (description), waiting, until, parent,
                                            after=<sibling id>|first|last (the place among siblings),
                                            needs=<id>|../X#id (waits for a node of this tree or of another project); --project ../X — a node there
@@ -961,6 +966,7 @@ function journalOption(raw: string | undefined): { journal?: number } {
 
 function addCommand(args: string[]): number {
   const { values, positionals } = parse(args, {
+    'from-json': { type: 'string' },
     parent: { type: 'string', short: 'p' },
     status: { type: 'string', short: 's' },
     who: { type: 'string' },
@@ -975,6 +981,7 @@ function addCommand(args: string[]): number {
     as: { type: 'string' },
   });
   const title = positionals.join(' ').trim();
+  if (values['from-json'] !== undefined) return addBatch(title, values);
   if (!title) throw new UsageError(t('treeyard add "<название>" [--parent id]'));
   if (values.for && !values.project)
     throw new UsageError(t('--for связывает с узлом другого проекта: добавь --project ../Проект'));
@@ -1007,6 +1014,35 @@ function addCommand(args: string[]): number {
   }
   const node = addNode(tree, input, sourceOf(values.as));
   process.stdout.write(`${node.id}\n`);
+  return 0;
+}
+
+/**
+ * `add --parent <id> --from-json <file|->`: several nodes, children and `needs` between them,
+ * checked as a whole first; prints each new id with its title, children indented.
+ */
+function addBatch(title: string, values: Record<string, string | boolean | undefined>): number {
+  if (title) throw new UsageError(t('--from-json: названия — в JSON, без названия в команде'));
+  const alone = ['project', 'for', 'after', 'done-when', 'check', 'note', 'waiting', 'until'].find(
+    (name) => values[name] !== undefined,
+  );
+  if (alone) throw new UsageError(t('--from-json: --{name} задаётся в JSON у каждого узла', { name: alone }));
+  const tree = project();
+  const parent = values.parent ? nodeArg(tree, String(values.parent)) : ROOT;
+  const from = String(values['from-json']);
+  let batch: BatchNode[];
+  try {
+    batch = parseBatch(readFileSync(from === '-' ? 0 : resolve(from), 'utf8'));
+    resolveBatchRefs(tree, batch);
+  } catch (error) {
+    if (error instanceof BatchError) throw new UsageError(error.message);
+    throw error;
+  }
+  const planted = plantBatch(tree, parent, batch, sourceOf(values.as as string | undefined), {
+    ...(values.status ? { status: statusArg(String(values.status)) } : {}),
+    ...(values.who ? { who: whoArg(String(values.who)) } : {}),
+  });
+  for (const { node, depth } of planted) process.stdout.write(`${'  '.repeat(depth)}${node.id}  ${node.title}\n`);
   return 0;
 }
 

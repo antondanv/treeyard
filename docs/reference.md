@@ -315,6 +315,7 @@ treeyard show --under <id>                      # the branch as a tree (--open, 
 treeyard find "rounding|cents"                  # search every node, done ones too: id, status word, path and the matching piece (--status, --under, --json, --limit)
 treeyard add "Show the product to a person" --who human --parent <id>
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
+treeyard add --parent <id> --from-json - < nodes.json      # several nodes at once (an error adds none); prints their ids
 treeyard set <id> after=<sibling id>|first|last # the place among siblings; with parent=<id> — in a new parent
 treeyard set <a> <b> <c> status=todo            # several nodes: the same change to each (after=<id> puts them one after another); an error changes none
 treeyard set <id> status=waiting waiting="no server" until="a VPS is up"
@@ -348,6 +349,13 @@ Statuses in commands are the key (`review`), the word in either language (`in re
 `на проверке`) or a short alias (`check`, `wip`, `проверка`); a glyph copied from the output
 works too. Off a terminal every line of the tree carries its status as a word after the id —
 an agent never has to read or type `◐ ◎ ○`.
+
+`treeyard add --parent <id> --from-json <file|->` takes an array of nodes:
+`[{"title": "…", "done_when": "…", "note": "…", "who": "agent", "status": "todo", "check": "…",
+"key": "api", "needs": ["api", "k3f9", "../api#y79a"], "children": […]}]`. Only `title` is
+required; `key` names a node inside the batch for the `needs` of the others; `--status` and
+`--who` on the command line fill in what a node doesn't say. The whole batch is checked first:
+an unknown field, status or ref adds no node at all.
 
 Flags of `treeyard open`: `--task "…"` adds your assignment to the end of the first
 message, after the standard one, under “Task for this node:” (in a `chat` start it
