@@ -246,9 +246,9 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint, options: NodeText
   return lines.join('\n');
 }
 
-/** For scripts and agents: the tree as nested JSON. */
-export function treeJson(tree: Tree, stale?: StaleFn): unknown {
-  const nodeJson = (node: TreeNode): Record<string, unknown> => ({
+/** One node's fields for `--json`; `children` nests its subtree. */
+function nodeFields(node: TreeNode, stale?: StaleFn): Record<string, unknown> {
+  return {
     id: node.id,
     title: node.title,
     status: node.status,
@@ -262,14 +262,50 @@ export function treeJson(tree: Tree, stale?: StaleFn): unknown {
     ...(node.sessions.length ? { sessions: node.sessions } : {}),
     ...staleJson(stale?.(node)),
     ...(node.commits?.length ? { commits: node.commits } : {}),
+  };
+}
+
+/** For scripts and agents: the tree as nested JSON — or one branch of it, `under` a node. */
+export function treeJson(tree: Tree, stale?: StaleFn, under?: string): unknown {
+  const nodeJson = (node: TreeNode): Record<string, unknown> => ({
+    ...nodeFields(node, stale),
     children: childrenOf(tree, node.id).map(nodeJson),
   });
+  const branch = under && under !== ROOT ? tree.nodes.get(under) : undefined;
+  if (branch) return nodeJson(branch);
   return {
     title: tree.project.title,
     ...(tree.project.goal ? { goal: tree.project.goal } : {}),
     summary: summarize(tree),
     nodes: childrenOf(tree, ROOT).map(nodeJson),
   };
+}
+
+/** The titles between `under` and the node, both left out: where a found node sits. */
+export function pathBetween(tree: Tree, under: string, id: string): string[] {
+  const path = pathTo(tree, id).slice(0, -1);
+  const from = path.findIndex((step) => step.id === under);
+  return path.slice(from + 1).map((step) => step.title);
+}
+
+/** Nodes found by status (or by text): one line each, the status as a word and where the node sits. */
+export function nodeLine(tree: Tree, node: TreeNode, p: Paint, under: string = ROOT): string {
+  const hex = HEX[node.status];
+  const glyph = hex ? p.c(hex, GLYPH[node.status]) : GLYPH[node.status];
+  const path = pathBetween(tree, under, node.id);
+  return `${glyph} ${node.title}  ${p.dim(node.id)}  ${p.dim(STATUS_LABEL[node.status])}${
+    path.length ? p.dim(`  (${clipStart(path.join(' › '), 90)})`) : ''
+  }`;
+}
+
+/** Long paths keep their end: the parent says more than the top of the tree. */
+function clipStart(text: string, limit: number): string {
+  return text.length > limit ? `…${text.slice(text.length - limit + 1)}` : text;
+}
+
+/** A found node for `--json`: its fields, its parent and the titles on the way to it. */
+export function foundJson(tree: Tree, node: TreeNode, under: string = ROOT): Record<string, unknown> {
+  return { ...nodeFields(node), parent: node.parent, path: pathBetween(tree, under, node.id) };
 }
 
 /** The `stale` field of `--json`: whole hours without a live session or a record. */

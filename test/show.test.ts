@@ -105,6 +105,43 @@ describe('treeyard show for agents', () => {
     expect(all.stdout).not.toContain('✓ готово:');
     expect((await sh('--json')).stdout).toContain('Сделанное два');
   }, 40_000);
+
+  it('--status lists the nodes of those statuses, a line each with the status as a word and the path', async () => {
+    const res = await sh('--status', 'active,waiting');
+    expect(res.code).toBe(0);
+    expect(res.stdout).toContain('в работе, ждёт · 2 узла');
+    expect(res.stdout).toMatch(new RegExp(`◐ Первый {2}${ids.a} {2}в работе`));
+    expect(res.stdout).toMatch(new RegExp(`Второй {2}${ids.b} {2}ждёт`));
+    expect(res.stdout).not.toContain('Вложенный');
+    // Words and aliases, never glyphs; done work is found too.
+    const done = await sh('--status', 'готово');
+    expect(done.stdout).toContain('Сделанное раз');
+    const nested = await sh('--status', 'to do');
+    expect(nested.stdout).toMatch(/○ Вложенный {2}\w+ {2}к работе {2}\(Первый\)/);
+  }, 40_000);
+
+  it('--under narrows to a branch: a list with --status, the branch as a tree without it', async () => {
+    const list = await sh('--status', 'todo', '--under', ids.a);
+    expect(list.stdout).toContain('к работе · 1 узел · в ветке «Первый»');
+    expect(list.stdout).toMatch(/○ Вложенный {2}\w+ {2}к работе\n/);
+    expect((await sh('--status', 'review', '--under', ids.a)).stdout).toContain('на проверке: таких узлов нет');
+    const branch = await sh('--under', ids.a);
+    expect(branch.stdout.split('\n')[0]).toMatch(new RegExp(`◐ Первый {2}${ids.a} {2}в работе`));
+    expect(branch.stdout).toMatch(/└─ ○ Вложенный/);
+    expect(branch.stdout).not.toContain('Второй');
+    const json = JSON.parse((await sh('--status', 'todo', '--under', ids.a, '--json')).stdout);
+    expect(json).toEqual([expect.objectContaining({ title: 'Вложенный', status: 'todo', parent: ids.a, path: [] })]);
+    expect(JSON.parse((await sh('--under', ids.a, '--json')).stdout).children[0].title).toBe('Вложенный');
+  }, 40_000);
+
+  it('a word that is not a status and ids next to --status fail with the right form', async () => {
+    const bad = await sh('--status', 'soon');
+    expect(bad.code).toBe(2);
+    expect(bad.stdout).toContain('«soon» — не статус');
+    const mixed = await sh(ids.a, '--status', 'todo');
+    expect(mixed.code).toBe(2);
+    expect(mixed.stdout).toContain('treeyard show --status review --under <id>');
+  }, 40_000);
 });
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));

@@ -183,6 +183,8 @@ const TEXT = {
     command: 'Команда',
     show: 'шапка и последние записи (без --brief — целиком; можно несколько id)',
     showAll: 'открытое дерево (`--all` — всё)',
+    showStatus:
+      'узлы этих статусов в ветке, по строке на узел; статус — словом на любом языке или алиасом (review, на проверке, проверка), значки набирать не нужно',
     log: 'что сделано; что осталось',
     logWhat: 'итог в журнал узла',
     add: 'Заголовок',
@@ -235,6 +237,8 @@ const TEXT = {
     command: 'The command is',
     show: 'header and latest entries (without --brief — in full; several ids work)',
     showAll: 'the open tree (`--all` — everything)',
+    showStatus:
+      'nodes of these statuses in a branch, a line each; a status is a word in either language or an alias (review, in review, check), no glyphs to type',
     log: 'what is done; what is left',
     logWhat: 'a summary in the node journal',
     add: 'Title',
@@ -336,6 +340,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(L.commands, '');
   lines.push(`${L.command} \`${self}\`.`);
   lines.push(`- \`${self} show ${node.id} --brief\` — ${L.show}; \`${self} show\` — ${L.showAll}`);
+  lines.push(`- \`${self} show --status review,idea --under <id>\` — ${L.showStatus}`);
   lines.push(`- \`${self} log ${node.id} "${L.log}"\` — ${L.logWhat}`);
   lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea\` — ${L.addWhat}`);
   lines.push(`- \`${self} set ${node.id} status=review\` — ${L.review}`);
@@ -588,6 +593,7 @@ export function projectContext(tree: Tree): string {
   lines.push(L.commands, '');
   lines.push(`${L.command} \`${self}\`.`);
   lines.push(`- \`${self} show\` — ${L.show}`);
+  lines.push(`- \`${self} show --status review,idea [--under <id>]\` — ${T.showStatus}`);
   lines.push(`- \`${self} add "${T.add}" --parent <id> --done-when "…"\` — ${L.add}`);
   lines.push(`- \`${self} set <id> ${L.keyValue}…\` — ${L.set}`);
   lines.push(`- \`${self} log <id> "…"\` — ${L.log}`);

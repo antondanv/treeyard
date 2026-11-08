@@ -182,6 +182,11 @@ export const EN: Record<string, string> = {
   '  … ещё {n} (--journal all)': '  … {n} more (--journal all)',
   '--journal: число записей или all': '--journal: a number of entries or all',
   'статус бывает: {p1}': 'status can be: {p1}',
+  '«{word}» — не статус; статус бывает: {p1}': '«{word}» is not a status; status can be: {p1}',
+  '--status и --under — для дерева, без id узлов: treeyard show --status review --under <id>':
+    '--status and --under are for the tree, without node ids: treeyard show --status review --under <id>',
+  ' · в ветке «{title}»': ' · in the branch «{title}»',
+  '{statuses}: таких узлов нет': '{statuses}: no such nodes',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
   'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',
   'старт бывает: {p1}': 'start can be: {p1}',

@@ -309,6 +309,8 @@ treeyard show                                   # the tree; off a terminal finis
 treeyard show <id>                              # a node; several at once: treeyard show a b c (--json — an array)
 treeyard show <id> --brief                      # header, criterion, check/waiting and the last 3 journal entries
 treeyard show <id> --journal 5                  # only the last 5 entries (--journal all — every one)
+treeyard show --status review,idea --under <id> # nodes of these statuses in a branch, a line each with the path (--json — an array)
+treeyard show --under <id>                      # the branch as a tree (--open, --all, --json as for the whole tree)
 treeyard add "Show the product to a person" --who human --parent <id>
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
 treeyard set <id> after=<sibling id>|first|last # the place among siblings; with parent=<id> — in a new parent

@@ -335,6 +335,8 @@ treeyard show                                   # дерево; вне терм�
 treeyard show <id>                              # один узел; несколько сразу: treeyard show a b c (--json — массив)
 treeyard show <id> --brief                      # шапка, критерий, проверка/ждёт и 3 последние записи журнала
 treeyard show <id> --journal 5                  # только 5 последних записей (--journal all — все)
+treeyard show --status review,idea --under <id> # узлы этих статусов в ветке, по строке с путём (--json — массив)
+treeyard show --under <id>                      # ветка узла деревом (--open, --all, --json — как у всего дерева)
 treeyard add "Показать продукт человеку" --who human --parent <id>
 treeyard add "Поправить справку" --parent <id> --after <id>   # сразу после соседа с тем же статусом (без --after — последним)
 treeyard set <id> after=<id соседа>|first|last  # место среди соседей; вместе с parent=<id> — в новом родителе

@@ -40,7 +40,7 @@ import {
   syncBoard,
   syncIssues,
 } from '../github.js';
-import { pick, t } from '../i18n/i18n.js';
+import { pick, plural, t } from '../i18n/i18n.js';
 import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
 import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
@@ -56,10 +56,11 @@ import {
   updateNode,
 } from '../model/ops.js';
 import { staleOf } from '../model/stale.js';
-import { parseStatus } from '../model/status-words.js';
+import { parseStatus, parseStatuses, UnknownStatus } from '../model/status-words.js';
 import { findProject, loadTree, writeProject } from '../model/store.js';
 import { ago } from '../model/time.js';
 import {
+  descendants,
   holderOf,
   isStatusOrder,
   offTree,
@@ -83,7 +84,7 @@ import {
 import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
-import { nodeText, paint, type StaleFn, staleJson, treeJson, treeText } from './print.js';
+import { foundJson, nodeLine, nodeText, paint, type StaleFn, staleJson, treeJson, treeText } from './print.js';
 
 const require = createRequire(import.meta.url);
 const VERSION = (require('../../package.json') as { version: string }).version;
@@ -106,6 +107,8 @@ function commandLines(): string {
                                            свёрнуто в «✓ готово: N», --all — всё)
                 [--brief] [--journal N|all]  --brief — шапка, критерий и 3 последние записи; --journal — сколько записей
                 [--project <папка>]        дерево другой папки, например основного worktree
+  treeyard show --status review,idea [--under id]   узлы этих статусов в ветке, по строке: id, статус словом, путь
+  treeyard show --under <id>               ветка узла деревом (с --open, --all, --json, как всё дерево)
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
@@ -143,6 +146,8 @@ function commandLines(): string {
                                            finished work folds into «✓ done: N», --all shows everything)
                 [--brief] [--journal N|all]  --brief — header, criterion and the last 3 entries; --journal — how many entries
                 [--project <dir>]          the tree of another folder, e.g. the main worktree
+  treeyard show --status review,idea [--under id]   nodes of these statuses in a branch, a line each: id, status word, path
+  treeyard show --under <id>               a node's branch as a tree (--open, --all, --json work as for the whole tree)
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
@@ -375,6 +380,16 @@ function statusArg(value: string): Status {
   const status = parseStatus(value);
   if (status) return status;
   throw new UsageError(t('статус бывает: {p1}', { p1: statusChoices() }));
+}
+
+/** `--status review,idea`: one or several statuses, in any of the forms `statusArg` takes. */
+function statusesArg(value: string): Status[] {
+  try {
+    return parseStatuses(value);
+  } catch (error) {
+    if (!(error instanceof UnknownStatus)) throw error;
+    throw new UsageError(t('«{word}» — не статус; статус бывает: {p1}', { word: error.word, p1: statusChoices() }));
+  }
 }
 
 /** An absolute folder; `~` too, which a quoted path brings unexpanded. */
@@ -694,10 +709,18 @@ function showCommand(args: string[]): number {
     all: { type: 'boolean' },
     brief: { type: 'boolean' },
     journal: { type: 'string' },
+    status: { type: 'string', short: 's' },
+    under: { type: 'string' },
     project: { type: 'string' },
   });
   const tree = project(values.project);
+  // Off a terminal (agents, pipes) statuses are words too: an agent filters by a word, never by a glyph.
+  const piped = !process.stdout.isTTY;
   if (positionals.length > 0) {
+    if (values.status !== undefined || values.under !== undefined)
+      throw new UsageError(
+        t('--status и --under — для дерева, без id узлов: treeyard show --status review --under <id>'),
+      );
     // Resolve every id first: an unknown one fails the call without partial output.
     const nodes = positionals.map((arg) => {
       const id = nodeArg(tree, arg);
@@ -719,7 +742,7 @@ function showCommand(args: string[]): number {
     const options = {
       brief: values.brief === true,
       ...journalOption(values.journal),
-      ...(process.stdout.isTTY ? {} : { words: true }),
+      ...(piped ? { words: true } : {}),
     };
     const text = nodes.map((node) => {
       const stale = staleOfNode(node);
@@ -728,17 +751,51 @@ function showCommand(args: string[]): number {
     process.stdout.write(`${text.join('\n\n')}\n`);
     return 0;
   }
-  if (values.json) process.stdout.write(`${JSON.stringify(treeJson(tree, staleFn(tree)), null, 2)}\n`);
+  const under = values.under !== undefined ? nodeArg(tree, values.under) : ROOT;
+  if (values.status !== undefined) return statusList(tree, statusesArg(values.status), under, values.json === true);
+  if (values.json) process.stdout.write(`${JSON.stringify(treeJson(tree, staleFn(tree), under), null, 2)}\n`);
   else {
-    // Off a terminal (agents, pipes) finished work folds into a counter, as in the TUI; --all brings it back.
-    // There statuses are words too: an agent filters by a word, never by a glyph.
-    const piped = !process.stdout.isTTY;
+    // Off a terminal finished work folds into a counter, as in the TUI; --all brings it back.
     const fold = piped && !values.all && !values.open;
+    const branch = tree.nodes.get(under);
+    if (branch) process.stdout.write(`${nodeLine(tree, branch, out)}\n`);
     process.stdout.write(
-      `${treeText(tree, out, { closed: !values.open, foldDone: fold, stale: staleFn(tree), words: piped })}\n`,
+      `${treeText(tree, out, {
+        closed: !values.open,
+        foldDone: fold,
+        stale: staleFn(tree),
+        words: piped,
+        ...(branch ? { under: branch.id } : {}),
+      })}\n`,
     );
   }
   for (const problem of tree.problems) process.stderr.write(`${err.c('#ff7b72', '!')} ${problem}\n`);
+  return 0;
+}
+
+/** `show --status review,idea [--under id]`: the nodes of those statuses in the branch, a line each. */
+function statusList(tree: Tree, statuses: Status[], under: string, json: boolean): number {
+  const found = descendants(tree, under).filter((node) => statuses.includes(node.status));
+  if (json) {
+    process.stdout.write(
+      `${JSON.stringify(
+        found.map((node) => foundJson(tree, node, under)),
+        null,
+        2,
+      )}\n`,
+    );
+    return 0;
+  }
+  const words = statuses.map((status) => STATUS_LABEL[status]).join(', ');
+  const branch = tree.nodes.get(under);
+  const where = branch ? t(' · в ветке «{title}»', { title: branch.title }) : '';
+  if (!found.length) {
+    process.stdout.write(`${t('{statuses}: таких узлов нет', { statuses: words })}${where}\n`);
+    return 0;
+  }
+  const count = `${found.length} ${plural(found.length, ['узел', 'узла', 'узлов'], ['node', 'nodes'])}`;
+  process.stdout.write(`${out.dim(`${words} · ${count}${where}`)}\n`);
+  for (const node of found) process.stdout.write(`${nodeLine(tree, node, out, under)}\n`);
   return 0;
 }
 
