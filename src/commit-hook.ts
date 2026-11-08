@@ -152,6 +152,11 @@ export function bindHeadCommit(env: NodeJS.ProcessEnv, cwd: string): string | un
   if (!here || !there || real(here) !== real(there)) return undefined;
   const sha = gitOut(cwd, ['rev-parse', 'HEAD']);
   if (!sha) return undefined;
+  // A commit of the tree's own files (`treeyard commit`) is not work on the node; binding it would
+  // write the node file again and leave the tree changed right after its commit.
+  const files = gitOut(cwd, ['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', '-z', 'HEAD']);
+  const paths = files?.split('\0').filter(Boolean) ?? [];
+  if (paths.length && paths.every((path) => /(^|\/)\.tree\//.test(path))) return undefined;
   attachCommit(tree, id, sha, env.TREEYARD_AS?.trim() || t('агент'));
   return sha;
 }

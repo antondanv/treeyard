@@ -5,7 +5,7 @@
  * With a command: small, scriptable steps — the same ones agents use to read
  * the tree and write back to it.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
@@ -48,7 +48,7 @@ import { isCreationLine, lastOwnEntry, parseEntry } from '../model/history.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
 import { journalEntries, replaceEntry } from '../model/journal.js';
 import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
-import { addNote, homeShort, noteOrigin, notesFolder, originText } from '../model/notes.js';
+import { addNote, homeShort, NODE_VAR, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import {
   addNode,
   attachCommit,
@@ -62,7 +62,7 @@ import {
 } from '../model/ops.js';
 import { staleOf } from '../model/stale.js';
 import { parseStatus, parseStatuses, UnknownStatus } from '../model/status-words.js';
-import { findProject, loadTree, writeProject } from '../model/store.js';
+import { findProject, loadTree, nodePath, writeProject } from '../model/store.js';
 import { ago, today } from '../model/time.js';
 import {
   childrenOf,
@@ -89,6 +89,7 @@ import {
 } from '../model/types.js';
 import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
+import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
 import {
   foundJson,
@@ -149,6 +150,8 @@ function commandLines(): string {
   treeyard rm <id> [<id>…]                 удалить узел, заведённый по ошибке (без журнала, детей, сессий, коммитов);
                                            узел с историей не удаляется — его закрывают: set <id> status=dropped
   treeyard decide ["<решение>"]            дописать решение в «Решения» .tree/tree.md (с датой); без текста — список
+  treeyard commit [<id>…] [-m "…"]         закоммитить файлы дерева этих узлов, README и tree.md (chore(tree): …);
+                                           код, другие узлы и чужой индекс не берёт; без id — узел этой сессии
   treeyard image <id> [файл…|--paste] [--note "…"]   картинки узла: список, приложить файл или из буфера
   treeyard image <id> 001.png --note "…" | --rm 001.png   подпись к картинке · удалить её
   treeyard diff <id> [--commit <ref>] [--file <путь>] [--stat|--json]   дифы коммитов узла
@@ -201,6 +204,8 @@ function commandLines(): string {
   treeyard rm <id> [<id>…]                 delete a node added by mistake (no journal, children, sessions, commits);
                                            a node with a history is not deleted but closed: set <id> status=dropped
   treeyard decide ["<decision>"]           add a decision to «Decisions» in .tree/tree.md (dated); without text — the list
+  treeyard commit [<id>…] [-m "…"]         commit the tree files of these nodes, README and tree.md (chore(tree): …);
+                                           never the code, other nodes or what others staged; no ids — this session's node
   treeyard image <id> [file…|--paste] [--note "…"]   a node's pictures: the list, attach a file or the clipboard
   treeyard image <id> 001.png --note "…" | --rm 001.png   caption a picture · remove it
   treeyard diff <id> [--commit <ref>] [--file <path>] [--stat|--json]   patches of the node's commits
@@ -321,6 +326,8 @@ async function main(argv: string[]): Promise<number> {
       return rmCommand(rest);
     case 'decide':
       return decideCommand(rest);
+    case 'commit':
+      return commitCommand(rest);
     case 'image':
     case 'images':
       return imageCommand(rest);
@@ -1729,6 +1736,37 @@ function decisionsOf(body: string): string[] {
     .slice(from, next < 0 ? body.length : from + next)
     .split('\n')
     .filter((line) => line.trim().startsWith('- '));
+}
+
+/**
+ * `treeyard commit [<id>…]`: the files of these nodes, the overview and tree.md — not the code,
+ * not other nodes, not what others staged. Without ids, the node of this session.
+ */
+function commitCommand(args: string[]): number {
+  const { values, positionals } = parse(args, { message: { type: 'string', short: 'm' } });
+  const tree = project();
+  const own = process.env[NODE_VAR]?.trim();
+  const given = positionals.length ? positionals : own && tree.nodes.has(own) ? [own] : [];
+  if (!given.length) throw new UsageError(t('укажи узлы, чьи файлы коммитить: treeyard commit <id>…'));
+  // A node deleted with `rm` is gone from the tree, but its file's deletion is still to commit.
+  const gone = (arg: string) => /^[2-9a-z]{4,6}$/.test(arg) && !existsSync(nodePath(tree.project.dir, arg));
+  const ids = [...new Set(given.map((arg) => (!tree.nodes.has(arg) && gone(arg) ? arg : nodeArg(tree, arg))))];
+  if (ids.includes(ROOT)) throw new UsageError(t('корень — это .tree/tree.md, он входит в коммит сам: укажи узлы'));
+  let files: string[];
+  try {
+    files = treeChanges(tree, ids);
+  } catch (error) {
+    throw new UsageError((error as Error).message);
+  }
+  if (!files.length) {
+    process.stdout.write(`${t('в дереве нечего коммитить: {ids}', { ids: ids.join(' ') })}\n`);
+    return 0;
+  }
+  const message = values.message?.trim() || treeMessage(tree, ids);
+  const done = commitTree(tree, files, message);
+  process.stdout.write(`${done.sha.slice(0, 7)} ${done.message}\n`);
+  for (const file of done.files) process.stdout.write(`  ${file}\n`);
+  return 0;
 }
 
 /** One line about what gets in the way, from any folder into «Замечания» of the `notes` tree. */

@@ -242,6 +242,11 @@ export const EN: Record<string, string> = {
   '--from-json: названия — в JSON, без названия в команде':
     '--from-json: titles go in the JSON, not on the command line',
   '--from-json: --{name} задаётся в JSON у каждого узла': '--from-json: --{name} is given in the JSON for each node',
+  'укажи узлы, чьи файлы коммитить: treeyard commit <id>…':
+    'name the nodes whose files to commit: treeyard commit <id>…',
+  'корень — это .tree/tree.md, он входит в коммит сам: укажи узлы':
+    'the root is .tree/tree.md, it goes into the commit by itself: name the nodes',
+  'в дереве нечего коммитить: {ids}': 'nothing to commit in the tree: {ids}',
   'история статусов:': 'status history:',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
   'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',

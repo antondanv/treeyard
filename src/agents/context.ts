@@ -196,6 +196,8 @@ const TEXT = {
       'критерий выполнен: итог, статус и коммит одной командой, а не цепочкой diff, log и set (--commit HEAD — только после своего коммита); покажи доказательства',
     reviewText: 'итог и доказательства',
     fix: 'исправить свою последнюю запись; описание узла — `set <id> note="…"`; файлы `.tree/` руками не правь',
+    commit:
+      'закоммитить файлы дерева этого узла (и заведённых тобой узлов) с README — вместо `git add .tree/…` руками; чужие узлы и код не берёт',
     wait: 'waiting="что мешает" until="когда вернуться"',
     waitWhat: 'упёрся во внешнее',
     note: 'что мешает',
@@ -257,6 +259,8 @@ const TEXT = {
       'the criterion is met: the summary, the status and the commit in one command, not a chain of diff, log and set (--commit HEAD — only after your own commit); show the evidence',
     reviewText: 'summary and evidence',
     fix: 'correct your last entry; the node description — `set <id> note="…"`; never edit `.tree/` files by hand',
+    commit:
+      'commit the tree files of this node (and of nodes you added) with README — instead of `git add .tree/…` by hand; never other nodes or code',
     wait: 'waiting="what blocks it" until="when to come back"',
     waitWhat: 'blocked by something outside',
     note: 'what gets in the way',
@@ -360,6 +364,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea\` — ${L.addWhat}`);
   lines.push(`- \`${self} log ${node.id} "${L.reviewText}" --status review --commit HEAD\` — ${L.review}`);
   lines.push(`- \`${self} log ${node.id} --fix "…"\` — ${L.fix}`);
+  lines.push(`- \`${self} commit ${node.id} [<id>…]\` — ${L.commit}`);
   lines.push(`- \`${self} set ${node.id} status=waiting ${L.wait}\` — ${L.waitWhat}`);
   lines.push(`- \`${self} add "${L.other}" --project ../X --for ${node.id}\` — ${L.otherWhat}`);
   lines.push(`- \`${self} set <id> status=done --project ../X\` — ${L.closeOther}`);
@@ -475,6 +480,7 @@ const ROOT_TEXT = {
     sessions: 'сессии папки и чьи они',
     rm: 'удалить узел, заведённый по ошибке; узел с историей не удаляют, а закрывают — `set <id> status=dropped`',
     decide: 'решение в «Решения» `.tree/tree.md` (с датой) — только когда человек так решил',
+    commit: 'закоммитить файлы дерева этих узлов, README и tree.md (chore(tree): …) — вместо `git add .tree/…` руками',
     open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
     doneWhen: 'готово, когда',
     more: 'ещё',
@@ -517,6 +523,8 @@ const ROOT_TEXT = {
     sessions: 'the sessions of the folder and whose they are',
     rm: 'delete a node added by mistake; a node with a history is closed instead — `set <id> status=dropped`',
     decide: 'a decision in «Decisions» of `.tree/tree.md` (dated) — only when the person decided so',
+    commit:
+      'commit the tree files of these nodes, README and tree.md (chore(tree): …) — instead of `git add .tree/…` by hand',
     open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
     doneWhen: 'done when',
     more: 'more',
@@ -621,6 +629,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} log <id> "…" [--status s] [--commit <ref>…]\` — ${L.log}`);
   lines.push(`- \`${self} rm <id>\` — ${L.rm}`);
   lines.push(`- \`${self} decide "…"\` — ${L.decide}`);
+  lines.push(`- \`${self} commit <id>…\` — ${L.commit}`);
   lines.push(`- \`${self} sessions\` — ${L.sessions}`);
   lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
   if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);

@@ -35,7 +35,7 @@ const cli = fileURLToPath(new URL('../src/cli/main.ts', import.meta.url));
 const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
 
 /** `treeyard <args>` from source, run in `cwd` with a throwaway home; never throws, returns the exit code. */
-export function treeyardIn(cwd: string) {
+export function treeyardIn(cwd: string, extra: NodeJS.ProcessEnv = {}) {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     TREEYARD_HOME: tempDir('treeyard-home-'),
@@ -43,6 +43,7 @@ export function treeyardIn(cwd: string) {
     NO_COLOR: '1',
   };
   delete env[NODE_VAR];
+  Object.assign(env, extra);
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.FORCE_COLOR;
   return (...args: string[]) =>

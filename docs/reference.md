@@ -330,6 +330,7 @@ treeyard rm <id>                                # delete a node added by mistake
 treeyard decide "SQLite, not Postgres: one user" # a dated line in «Decisions» of .tree/tree.md; without text — the list
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
 treeyard diff <id> --add HEAD                   # attach your commit to the node for review
+treeyard commit <id> [<id>…]                    # commit the tree files of these nodes, README and tree.md (chore(tree): …); never code, other nodes or the index of others
 treeyard add "Codex: turn status" --project ../api --for <id>   # a change needed in another project
 treeyard set <id> needs=<other id>              # waits for a node of this tree (needs=../api#<id> — of another)
 treeyard open root --start plan --pane          # a review of the tree in a pane
@@ -437,7 +438,8 @@ treeyard diff <id> --project ../X --add HEAD    # attach to the tree of another 
 
 `treeyard hook install` puts a `post-commit` hook into the repository of the current
 folder, so a commit made in a session started from a node attaches to that node by itself
-(the journal gets “commit attached …”, the message of the commit is untouched). The
+(the journal gets “commit attached …”, the message of the commit is untouched). A commit of
+tree files only (`treeyard commit`) is not work on the node and is not attached. The
 commands:
 
 ```sh
