@@ -192,6 +192,13 @@ export const EN: Record<string, string> = {
   '--only: «{part}» — нет такой части; части: {parts}': '--only: «{part}» is not a part; parts: {parts}',
   '--only: части через запятую: {parts}': '--only: parts separated by commas: {parts}',
   'описание:': 'description:',
+  'treeyard find "текст" [--status s] [--under id] — что искать?':
+    'treeyard find "text" [--status s] [--under id] — what to look for?',
+  'в ветке «{title}»': 'in the branch «{title}»',
+  'по «{query}» ничего не нашлось': 'nothing found for «{query}»',
+  '… ещё {n} — уточни запрос, добавь --status или --under, или --limit all':
+    '… {n} more — narrow the query, add --status or --under, or --limit all',
+  '--limit: число узлов или all': '--limit: a number of nodes or all',
   'история статусов:': 'status history:',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
   'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',

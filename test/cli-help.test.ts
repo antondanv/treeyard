@@ -24,6 +24,7 @@ const COMMANDS = [
   'skills',
   'templates',
   'show',
+  'find',
   'add',
   'set',
   'log',

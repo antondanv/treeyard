@@ -312,6 +312,7 @@ treeyard show <id> --journal 5                  # only the last 5 entries (--jou
 treeyard show <id> --only journal,sessions      # only these parts: header, criterion, commits, children, sessions, note, journal, history
 treeyard show --status review,idea --under <id> # nodes of these statuses in a branch, a line each with the path (--json — an array)
 treeyard show --under <id>                      # the branch as a tree (--open, --all, --json as for the whole tree)
+treeyard find "rounding|cents"                  # search every node, done ones too: id, status word, path and the matching piece (--status, --under, --json, --limit)
 treeyard add "Show the product to a person" --who human --parent <id>
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
 treeyard set <id> after=<sibling id>|first|last # the place among siblings; with parent=<id> — in a new parent

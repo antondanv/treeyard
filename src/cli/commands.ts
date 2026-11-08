@@ -42,6 +42,7 @@ import {
 } from '../github.js';
 import { pick, plural, t } from '../i18n/i18n.js';
 import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
+import { type FindField, findNodes } from '../model/find.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
 import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
 import { addNote, homeShort, noteOrigin, notesFolder, originText } from '../model/notes.js';
@@ -123,6 +124,8 @@ function commandLines(): string {
                 [--project <папка>]        дерево другой папки, например основного worktree
   treeyard show --status review,idea [--under id]   узлы этих статусов в ветке, по строке: id, статус словом, путь
   treeyard show --under <id>               ветка узла деревом (с --open, --all, --json, как всё дерево)
+  treeyard find "<текст>" [--status s] [--under id]   поиск по названиям, критериям, описаниям и журналам всех узлов,
+                                           готовых тоже: id, статус, путь и кусок совпадения (a|b — любое; --json, --limit N)
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
@@ -164,6 +167,8 @@ function commandLines(): string {
                 [--project <dir>]          the tree of another folder, e.g. the main worktree
   treeyard show --status review,idea [--under id]   nodes of these statuses in a branch, a line each: id, status word, path
   treeyard show --under <id>               a node's branch as a tree (--open, --all, --json work as for the whole tree)
+  treeyard find "<text>" [--status s] [--under id]   search titles, criteria, descriptions and journals of every node,
+                                           done ones too: id, status, path and the matching piece (a|b — either; --json, --limit N)
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
@@ -279,6 +284,8 @@ async function main(argv: string[]): Promise<number> {
     case 'show':
     case 'tree':
       return showCommand(rest);
+    case 'find':
+      return findCommand(rest);
     case 'add':
       return addCommand(rest);
     case 'set':
@@ -850,6 +857,76 @@ function onlyArg(value: string): Set<NodePart> {
   }
   if (!parts.size) throw new UsageError(t('--only: части через запятую: {parts}', { parts: NODE_PARTS.join(', ') }));
   return parts;
+}
+
+/** `treeyard find "текст"`: nodes that mention it anywhere, finished ones too, with the piece that matched. */
+function findCommand(args: string[]): number {
+  const { values, positionals } = parse(args, {
+    status: { type: 'string', short: 's' },
+    under: { type: 'string' },
+    limit: { type: 'string' },
+    json: { type: 'boolean' },
+    project: { type: 'string' },
+  });
+  const query = positionals.join(' ').trim();
+  if (!query) throw new UsageError(t('treeyard find "текст" [--status s] [--under id] — что искать?'));
+  const tree = project(values.project);
+  const under = values.under !== undefined ? nodeArg(tree, values.under) : ROOT;
+  const statuses = values.status !== undefined ? statusesArg(values.status) : undefined;
+  const limit = limitArg(values.limit);
+  const found = findNodes(tree, query, { under, ...(statuses ? { statuses } : {}) });
+  if (values.json) {
+    const rows = found.slice(0, limit).map(({ node, hits }) => ({
+      ...foundJson(tree, node, under),
+      hits: hits.map(({ field, snippet, when }) => ({ field, text: snippet, ...(when ? { when } : {}) })),
+    }));
+    process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+    return 0;
+  }
+  const branch = tree.nodes.get(under);
+  const where = [
+    statuses ? statuses.map((status) => STATUS_LABEL[status]).join(', ') : '',
+    branch ? t('в ветке «{title}»', { title: branch.title }) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  if (!found.length) {
+    process.stdout.write(`${t('по «{query}» ничего не нашлось', { query })}${where ? ` · ${where}` : ''}\n`);
+    return 0;
+  }
+  const count = `${found.length} ${plural(found.length, ['узел', 'узла', 'узлов'], ['node', 'nodes'])}`;
+  process.stdout.write(`${out.dim(`«${query}» · ${count}${where ? ` · ${where}` : ''}`)}\n`);
+  const label: Record<FindField, string> = {
+    title: '',
+    id: '',
+    done_when: t('готово, когда:'),
+    check: t('проверка:'),
+    waiting: t('ждёт:'),
+    note: t('описание:'),
+    journal: t('журнал:'),
+  };
+  for (const { node, hits } of found.slice(0, limit)) {
+    process.stdout.write(`${nodeLine(tree, node, out, under)}\n`);
+    for (const hit of hits) {
+      if (hit.field === 'title' || hit.field === 'id') continue;
+      const text = `${hit.snippet.slice(0, hit.at)}${out.bold(hit.snippet.slice(hit.at, hit.at + hit.length))}${hit.snippet.slice(hit.at + hit.length)}`;
+      process.stdout.write(`    ${out.dim(hit.when ? `${label[hit.field]} ${hit.when}` : label[hit.field])} ${text}\n`);
+    }
+  }
+  if (found.length > limit)
+    process.stdout.write(
+      `${out.dim(t('… ещё {n} — уточни запрос, добавь --status или --under, или --limit all', { n: found.length - limit }))}\n`,
+    );
+  return 0;
+}
+
+/** `--limit N|all`: how many found nodes to print; 30 by default. */
+function limitArg(raw: string | undefined): number {
+  if (raw === undefined) return 30;
+  if (raw === 'all') return Number.POSITIVE_INFINITY;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new UsageError(t('--limit: число узлов или all'));
+  return n;
 }
 
 function journalOption(raw: string | undefined): { journal?: number } {

@@ -185,6 +185,8 @@ const TEXT = {
     showAll: 'открытое дерево (`--all` — всё)',
     showStatus:
       'узлы этих статусов в ветке, по строке на узел; статус — словом на любом языке или алиасом (review, на проверке, проверка), значки набирать не нужно',
+    find: 'поиск по названиям, критериям, описаниям и журналам всех узлов, готовых тоже — вместо grep по `.tree/` и выводу show',
+    findWhat: 'текст',
     log: 'что сделано; что осталось',
     logWhat: 'итог в журнал узла',
     add: 'Заголовок',
@@ -239,6 +241,8 @@ const TEXT = {
     showAll: 'the open tree (`--all` — everything)',
     showStatus:
       'nodes of these statuses in a branch, a line each; a status is a word in either language or an alias (review, in review, check), no glyphs to type',
+    find: 'search titles, criteria, descriptions and journals of every node, done ones too — instead of grep over `.tree/` and show',
+    findWhat: 'text',
     log: 'what is done; what is left',
     logWhat: 'a summary in the node journal',
     add: 'Title',
@@ -341,6 +345,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`${L.command} \`${self}\`.`);
   lines.push(`- \`${self} show ${node.id} --brief\` — ${L.show}; \`${self} show\` — ${L.showAll}`);
   lines.push(`- \`${self} show --status review,idea --under <id>\` — ${L.showStatus}`);
+  lines.push(`- \`${self} find "${L.findWhat}"\` — ${L.find}`);
   lines.push(`- \`${self} log ${node.id} "${L.log}"\` — ${L.logWhat}`);
   lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea\` — ${L.addWhat}`);
   lines.push(`- \`${self} set ${node.id} status=review\` — ${L.review}`);
@@ -594,6 +599,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`${L.command} \`${self}\`.`);
   lines.push(`- \`${self} show\` — ${L.show}`);
   lines.push(`- \`${self} show --status review,idea [--under <id>]\` — ${T.showStatus}`);
+  lines.push(`- \`${self} find "${T.findWhat}"\` — ${T.find}`);
   lines.push(`- \`${self} add "${T.add}" --parent <id> --done-when "…"\` — ${L.add}`);
   lines.push(`- \`${self} set <id> ${L.keyValue}…\` — ${L.set}`);
   lines.push(`- \`${self} log <id> "…"\` — ${L.log}`);
