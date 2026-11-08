@@ -1,6 +1,6 @@
 ---
 name: treeyard
-description: How to work in a project run with a treeyard goal tree (a .tree/ folder and the treeyard command) — find the task's node and stick to it, write the summary and status back, add ideas as nodes with short titles, show evidence for review, commit, handle nodes in other projects and worktrees, keep the tree in order. Use at the start of any task in a folder that has .tree/ or whose AGENTS.md / CLAUDE.md mention treeyard, whenever the person speaks of a node, the tree or treeyard, and before finishing, committing or reporting work in such a project.
+description: Load this before the first command of any task in a folder that has a .tree/ directory or whose AGENTS.md / CLAUDE.md mention treeyard — even a small task — and whenever the person speaks of a node, the tree or treeyard. The rules of a treeyard goal tree — find the task's node and stick to it, read `treeyard show` without cutting it, never edit .tree/ by hand, write the summary and status back, show evidence and commit before review, set done only when the person asks, add ideas as nodes with short titles, name nodes to the person by title, handle nodes in other projects and worktrees, keep the tree in order.
 ---
 
 # Work with a treeyard tree
@@ -19,20 +19,41 @@ Statuses: `idea` · `todo` · `active` · `waiting` · `review` · `done` (set b
 CLAUDE.md, the rules in `.tree/tree.md`) come first; this skill is how to work with the
 tree.
 
+## The rules in brief
+
+Each is explained below; these are the ones agents break most.
+
+1. Before work, find the task's node in `treeyard show` and tell the person which it is.
+2. Read `treeyard show` whole: never pipe it into `head`, `tail`, `grep` or `sed`, not even
+   after `2>&1`. Too long — `--brief` or `--journal N`; several nodes — one call.
+3. `.tree/` is written only by `treeyard` commands, never by hand.
+4. Finish in this order: checks → commit → `treeyard set <id> status=review` →
+   `treeyard log <id> "…"`. `done` only when the person asks to close: `--as ты`.
+5. A side idea — `treeyard add "2–6 words" --parent <id> --status idea --note "…"`, then
+   back to the task.
+6. A change needed in another project (`../X`) — first `treeyard add "…" --project ../X
+   --for <id>`; never edit that project silently.
+7. To the person, nodes by title only — no ids, not even in brackets or backticks next to
+   the title.
+
 ## Find your node and stick to it
 
 1. **Opened from a node.** The first message or the system context says so ("You are
    working on a node…", «Ты работаешь над узлом…») with the path and the criterion, and
    `$TREEYARD_NODE` holds the id. That is your node.
 2. **Otherwise** read `treeyard show` (the open tree) and find the node by meaning;
-   compare candidates in one call: `treeyard show <a> <b> --brief`.
+   compare candidates in one call: `treeyard show <a> <b> --brief`. A node fits when its
+   "done when" covers the task; a node that is merely nearby does not. A `who: human`
+   node (marked «ты» / «you») is the person's own step: never log your work into it and
+   never change its status.
    - One fits — tell the person which, by title: "This is «Quiet exit on EPIPE» — I'm
      taking it."
    - Several fit — ask which, naming them by title.
-   - None fits and the task will change files — propose a node in your plan (a short
-     title, the parent, "done when") and add it once the person agrees:
-     `treeyard add "Title" --parent <id> --done-when "…"`.
-   - A question, an explanation or a one-line fix needs no node.
+   - None fits and the task is real work (a feature, a fix, a change across files) —
+     propose a node in your plan (a short title, the parent, "done when") and add it once
+     the person agrees: `treeyard add "Title" --parent <id> --done-when "…"`.
+   - None fits and the task is small (a question, a typo, a line in a README) — do it
+     without a node and tell the person it stays outside the tree.
 3. **Before starting** look at the node: is it or its branch `waiting`? Is somebody on it
    already (`active`, a live session in `show`)? Is the criterion clear and checkable?
    If not, say so first. Then `treeyard set <id> status=active` — a session opened from
@@ -93,7 +114,9 @@ Not a diary of every step.
 
 When you leave, the status tells the truth:
 
-- the criterion is met and proven — `treeyard set <id> status=review`;
+- the criterion is met, proven and the work is committed — `treeyard set <id>
+  status=review`. The commit failed or is not allowed — say so in the log and to the
+  person; review then means "proven, waiting for a commit";
 - blocked by something outside — `treeyard set <id> status=waiting waiting="what blocks
   it" until="when to come back"`, and tell the person what is needed from them. No
   workaround that hides the block;
@@ -165,13 +188,14 @@ Then back to your node. Don't do it "while at it".
 
 ## Talk to the person in titles, not ids
 
-The person finds nodes by title; a four-letter id tells them nothing. Wherever you write
+Answer in the person's language. The person finds nodes by title; a four-letter id
+tells them nothing. Wherever you write
 for the person — replies, plans, summaries — name nodes by title in quotes, exactly as it
 stands in the tree: «Node order from the CLI». A long title may be cut with «…» but not
 retold in your own words, and a link to the node's file is no substitute for the title.
 If titles repeat, add the parent: «Tests» under «Billing». Not "moving on to k3w4" but
-"moving on to «Node order from the CLI»". Ids belong in commands only. That is what
-short titles are for.
+"moving on to «Node order from the CLI»", and not «Node order from the CLI» (`k3w4`)
+either. Ids belong in commands only. That is what short titles are for.
 
 ## Commits
 
@@ -181,7 +205,8 @@ short titles are for.
   not `git add -A` or `git add .`.
 - Commit before `review`: work in review is a commit the person can look at.
 - Attach commits with this node's work to it: `treeyard diff <id> --add HEAD` (several:
-  `--add <ref> --add <ref>`). In a session opened from a node with the hook installed
+  `--add <ref> --add <ref>`) — only after the commit succeeded, or HEAD is someone
+  else's commit. In a session opened from a node with the hook installed
   (`treeyard hook status`) the session's commits attach themselves.
 - `.tree/` is in git too but shared by every session: commit it the way the project does
   (`git log --oneline -- .tree`). With no clear habit, leave the tree files to the person
@@ -196,8 +221,9 @@ short titles are for.
   that it waits for it. A node that already exists there — `treeyard set <your id>
   needs=../X#<id>`.
 - The person asks you to do it yourself — work in X by X's rules (its AGENTS.md, its
-  tests, commits in its repository), then close that node: `treeyard set <id>
-  status=done --project ../X`.
+  tests, commits in its repository), then close that node yourself: `treeyard set <id>
+  status=done --project ../X`. Done, not review: nobody comes to X's tree to accept it;
+  the person reviews your own node here.
 - Reading and writing another tree: `treeyard show --project ../X`, `treeyard log <id>
   "…" --project ../X`, `treeyard diff <id> --project ../X --add HEAD`.
 - In a git worktree, `.tree/` is the branch's copy. Read and write the main tree:
