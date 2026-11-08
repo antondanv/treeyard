@@ -3,11 +3,13 @@ id: gs8b
 title: show по статусу и ветке
 parent: s3sb
 order: 40
-status: todo
+status: review
 who: agent
 done_when: treeyard show --status review,idea --under <id> выводит узлы этих статусов в ветке; статусы — словами и алиасами; help, docs RU/EN; тесты
+commits:
+  - 9d0ae14defce633ef5ce505cc065a1904c935716
 created: 2026-11-08
-updated: 2026-11-08T12:19:28+03:00
+updated: 2026-11-08T14:18:05+03:00
 ---
 
 Разбор 08.11: show | grep -E "◐|◎|○", разбор show --json скриптом; 08.11 координатор искал идеи под вехой скриптом по файлам.
@@ -15,3 +17,6 @@ updated: 2026-11-08T12:19:28+03:00
 ## Журнал
 
 - 2026-11-08 12:19 · агент · завёл узел
+- 2026-11-08 14:18 · агент · привязан коммит 9d0ae14defce633ef5ce505cc065a1904c935716
+- 2026-11-08 14:18 · агент · Сделано: show --status review,idea [--under id] — список строкой (id, статус словом, путь), --json массивом; show --under id — ветка деревом. help, docs RU/EN, «Команды дерева» (узел и корень). Тесты: test/show.test.ts.
+- 2026-11-08 14:18 · агент · к работе → на проверке
