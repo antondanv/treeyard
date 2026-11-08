@@ -572,6 +572,20 @@ The tree is plain md files in `.tree/` (`tree.md` and `nodes/*.md`): edit them w
 anything and commit them along with the code. The view, the selected node and the open
 branches are remembered in `.tree/.local/` — that folder doesn't go into git. `ui.json` is
 saved when the view or the selection changes; animation frames don't write it.
+The tree is read at startup and reloaded when its files change. Animation frames
+reuse it; ordering work and ideas builds the tree order once per list.
+
+When the terminal reports a loss of focus, Treeyard pauses animations and screen capture
+of the visible session, and keeps the last tree frame. Agents, status discovery and
+automatic sleep keep working. Returning to the window immediately refreshes the tree,
+statuses and session screen; typing or clicking also resumes the interface if a focus
+report was lost. A running title schedules a frame only when its visible text moves.
+
+Focus tracking uses the [terminal's focus reports](https://www.invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-FocusIn_FocusOut)
+and needs no operating-system polling. Terminals that do not send them keep the normal
+foreground behaviour. Inside tmux, focus forwarding requires `focus-events on` in the
+outer tmux server; Treeyard does not change that server setting. Focus reporting is
+disabled when Treeyard hands the terminal to another CLI or exits.
 
 How to run a project as a tree — [practice.md](practice.md). Templates: Stages,
 Directions, Mikado, Finding improvements, Client work (`treeyard templates`).
