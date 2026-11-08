@@ -84,7 +84,19 @@ import {
 import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
-import { foundJson, nodeLine, nodeText, paint, type StaleFn, staleJson, treeJson, treeText } from './print.js';
+import {
+  foundJson,
+  NODE_PARTS,
+  type NodePart,
+  nodeLine,
+  nodeText,
+  paint,
+  partsJson,
+  type StaleFn,
+  staleJson,
+  treeJson,
+  treeText,
+} from './print.js';
 
 const require = createRequire(import.meta.url);
 const VERSION = (require('../../package.json') as { version: string }).version;
@@ -106,6 +118,8 @@ function commandLines(): string {
   treeyard show [id…] [--json] [--open]    дерево или узлы текстом (--open — без готового; вне терминала готовое
                                            свёрнуто в «✓ готово: N», --all — всё)
                 [--brief] [--journal N|all]  --brief — шапка, критерий и 3 последние записи; --journal — сколько записей
+                [--only журнал,сессии…]    только эти части: header, criterion, commits, children, sessions, note,
+                                           journal, history (смены статуса); можно по-русски
                 [--project <папка>]        дерево другой папки, например основного worktree
   treeyard show --status review,idea [--under id]   узлы этих статусов в ветке, по строке: id, статус словом, путь
   treeyard show --under <id>               ветка узла деревом (с --open, --all, --json, как всё дерево)
@@ -145,6 +159,8 @@ function commandLines(): string {
   treeyard show [id…] [--json] [--open]    the tree or nodes as text (--open hides finished work; off a terminal
                                            finished work folds into «✓ done: N», --all shows everything)
                 [--brief] [--journal N|all]  --brief — header, criterion and the last 3 entries; --journal — how many entries
+                [--only journal,sessions…]  only these parts: header, criterion, commits, children, sessions, note,
+                                           journal, history (status changes)
                 [--project <dir>]          the tree of another folder, e.g. the main worktree
   treeyard show --status review,idea [--under id]   nodes of these statuses in a branch, a line each: id, status word, path
   treeyard show --under <id>               a node's branch as a tree (--open, --all, --json work as for the whole tree)
@@ -709,11 +725,15 @@ function showCommand(args: string[]): number {
     all: { type: 'boolean' },
     brief: { type: 'boolean' },
     journal: { type: 'string' },
+    only: { type: 'string' },
     status: { type: 'string', short: 's' },
     under: { type: 'string' },
     project: { type: 'string' },
   });
   const tree = project(values.project);
+  const only = values.only !== undefined ? onlyArg(values.only) : undefined;
+  if (only && positionals.length === 0)
+    throw new UsageError(t('--only — части узла: treeyard show <id> --only journal,sessions'));
   // Off a terminal (agents, pipes) statuses are words too: an agent filters by a word, never by a glyph.
   const piped = !process.stdout.isTTY;
   if (positionals.length > 0) {
@@ -735,7 +755,10 @@ function showCommand(args: string[]): number {
     });
     const staleOfNode = staleFn(tree);
     if (values.json) {
-      const rows = nodes.map((node) => ({ ...node, ...staleJson(staleOfNode(node)) }));
+      const keep = journalOption(values.journal).journal;
+      const rows = nodes.map((node) =>
+        only ? partsJson(tree, node, only, keep) : { ...node, ...staleJson(staleOfNode(node)) },
+      );
       process.stdout.write(`${JSON.stringify(rows.length === 1 ? rows[0] : rows, null, 2)}\n`);
       return 0;
     }
@@ -743,6 +766,7 @@ function showCommand(args: string[]): number {
       brief: values.brief === true,
       ...journalOption(values.journal),
       ...(piped ? { words: true } : {}),
+      ...(only ? { only } : {}),
     };
     const text = nodes.map((node) => {
       const stale = staleOfNode(node);
@@ -797,6 +821,35 @@ function statusList(tree: Tree, statuses: Status[], under: string, json: boolean
   process.stdout.write(`${out.dim(`${words} · ${count}${where}`)}\n`);
   for (const node of found) process.stdout.write(`${nodeLine(tree, node, out, under)}\n`);
   return 0;
+}
+
+/** What `--only` takes for each part: the English name, a few synonyms and the Russian word. */
+const PART_WORDS: Record<NodePart, readonly string[]> = {
+  header: ['header', 'head', 'status', 'шапка', 'статус'],
+  criterion: ['criterion', 'done_when', 'done-when', 'критерий', 'готово'],
+  commits: ['commits', 'commit', 'коммиты', 'коммит'],
+  children: ['children', 'kids', 'внутри', 'дети', 'подузлы'],
+  sessions: ['sessions', 'session', 'сессии', 'сессия'],
+  note: ['note', 'description', 'about', 'описание'],
+  journal: ['journal', 'log', 'журнал'],
+  history: ['history', 'история'],
+};
+
+/** `--only journal,sessions`: the parts of a node card to print. */
+function onlyArg(value: string): Set<NodePart> {
+  const parts = new Set<NodePart>();
+  for (const raw of value.split(',')) {
+    const word = raw.trim().toLowerCase();
+    if (!word) continue;
+    const part = NODE_PARTS.find((name) => PART_WORDS[name].includes(word));
+    if (!part)
+      throw new UsageError(
+        t('--only: «{part}» — нет такой части; части: {parts}', { part: raw.trim(), parts: NODE_PARTS.join(', ') }),
+      );
+    parts.add(part);
+  }
+  if (!parts.size) throw new UsageError(t('--only: части через запятую: {parts}', { parts: NODE_PARTS.join(', ') }));
+  return parts;
 }
 
 function journalOption(raw: string | undefined): { journal?: number } {

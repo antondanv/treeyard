@@ -187,6 +187,12 @@ export const EN: Record<string, string> = {
     '--status and --under are for the tree, without node ids: treeyard show --status review --under <id>',
   ' · в ветке «{title}»': ' · in the branch «{title}»',
   '{statuses}: таких узлов нет': '{statuses}: no such nodes',
+  '--only — части узла: treeyard show <id> --only journal,sessions':
+    '--only picks parts of a node: treeyard show <id> --only journal,sessions',
+  '--only: «{part}» — нет такой части; части: {parts}': '--only: «{part}» is not a part; parts: {parts}',
+  '--only: части через запятую: {parts}': '--only: parts separated by commas: {parts}',
+  'описание:': 'description:',
+  'история статусов:': 'status history:',
   'who бывает: agent, human, any': 'who can be: agent, human, any',
   'мозг бывает: claude, codex, antigravity, opencode': 'brain can be: claude, codex, antigravity, opencode',
   'старт бывает: {p1}': 'start can be: {p1}',

@@ -38,6 +38,13 @@ function normal(word: string): string {
     .replace(/[\s_-]+/g, ' ');
 }
 
+/** Every status label in both languages: journals keep whichever language wrote them. */
+export const ALL_LABELS: readonly string[] = STATUSES.flatMap((status) => {
+  const label = LABEL_RU[status];
+  const en = EN[label];
+  return en && en !== label ? [label, en] : [label];
+});
+
 const WORDS = new Map<string, Status>();
 for (const status of STATUSES) {
   const label = LABEL_RU[status];

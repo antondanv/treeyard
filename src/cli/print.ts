@@ -4,6 +4,7 @@
  */
 
 import { t } from '../i18n/i18n.js';
+import { statusHistory } from '../model/history.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
@@ -143,6 +144,19 @@ export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): s
   return lines.join('\n');
 }
 
+/** The parts of a node card, in the order the card shows them; `show <id> --only` picks some. */
+export const NODE_PARTS = [
+  'header',
+  'criterion',
+  'commits',
+  'children',
+  'sessions',
+  'note',
+  'journal',
+  'history',
+] as const;
+export type NodePart = (typeof NODE_PARTS)[number];
+
 export interface NodeTextOptions {
   /** Header, criterion and the last journal entries only: for agents that skim. */
   brief?: boolean;
@@ -152,57 +166,97 @@ export interface NodeTextOptions {
   stale?: Stale;
   /** Status words in the lines of the children, as in `treeText`. */
   words?: boolean;
+  /** Only these parts, after the title line; an empty part says so instead of vanishing. */
+  only?: ReadonlySet<NodePart>;
 }
 
 export function nodeText(tree: Tree, node: TreeNode, p: Paint, options: NodeTextOptions = {}): string {
+  if (options.only) return partsText(tree, node, p, options.only, options);
   const brief = options.brief === true;
-  const keep = options.journal ?? (brief ? 3 : 12);
-  const stale = options.stale;
-  const lines: string[] = [];
-  const path = pathTo(tree, node.id);
-  lines.push(`${GLYPH[node.status]} ${p.bold(node.title)}  ${p.dim(node.id)}`);
-  lines.push(
+  const lines: string[] = [titleLine(node, p), ...headerLines(tree, node, p, options.stale, !brief), ''];
+  lines.push(...criterionLines(tree, node, p));
+  if (!brief && node.commits?.length) lines.push('', ...commitLines(node, p));
+  const kids = childrenOf(tree, node.id);
+  if (kids.length > 0 && brief) {
+    const { done, total } = progress(tree, node.id);
+    lines.push(p.dim(t('внутри: {total}, готово {done}', { total, done })));
+  } else if (kids.length > 0) lines.push('', ...childrenLines(tree, node, p, options.words === true));
+  if (!brief && node.sessions.length > 0) lines.push('', ...sessionLines(node, p));
+  const about = brief ? undefined : description(node.body);
+  if (about) lines.push('', about);
+  const journal = journalLines(node, p, options.journal ?? (brief ? 3 : 12), brief || options.journal !== undefined);
+  if (journal.length) lines.push('', ...journal);
+  return lines.join('\n');
+}
+
+/** `show <id> --only journal,sessions`: the title line, then the asked parts in the card's order. */
+function partsText(
+  tree: Tree,
+  node: TreeNode,
+  p: Paint,
+  only: ReadonlySet<NodePart>,
+  options: NodeTextOptions,
+): string {
+  const none = p.dim('—');
+  const titled = (label: string, body: string[]) =>
+    body.length ? [p.dim(label), ...body] : [`${p.dim(label)} ${none}`];
+  const sections: Record<NodePart, () => string[]> = {
+    header: () => headerLines(tree, node, p, options.stale, true),
+    criterion: () => criterionLines(tree, node, p),
+    commits: () => (node.commits?.length ? commitLines(node, p) : titled(t('коммиты:'), [])),
+    children: () =>
+      childrenOf(tree, node.id).length
+        ? childrenLines(tree, node, p, options.words === true)
+        : titled(t('внутри:'), []),
+    sessions: () => (node.sessions.length ? sessionLines(node, p) : titled(t('сессии:'), [])),
+    note: () => titled(t('описание:'), description(node.body) ? [description(node.body)] : []),
+    journal: () => {
+      const lines = journalLines(node, p, options.journal ?? 12, true);
+      return lines.length ? lines : titled(t('журнал:'), []);
+    },
+    history: () =>
+      titled(
+        t('история статусов:'),
+        statusHistory(node.body).map((entry) => `  - ${entry}`),
+      ),
+  };
+  const blocks = NODE_PARTS.filter((part) => only.has(part)).map((part) => sections[part]().join('\n'));
+  return [titleLine(node, p), ...blocks].join('\n');
+}
+
+function titleLine(node: TreeNode, p: Paint): string {
+  return `${GLYPH[node.status]} ${p.bold(node.title)}  ${p.dim(node.id)}`;
+}
+
+/** The status line, the path (left out of the brief card) and the note of an abandoned «in progress». */
+function headerLines(tree: Tree, node: TreeNode, p: Paint, stale: Stale | undefined, withPath: boolean): string[] {
+  const lines = [
     p.dim(
       [
         STATUS_LABEL[node.status],
         stale ? staleLabel(stale) : undefined,
-        node.who
-          ? t('делает: {p1}', {
-              p1: WHO_LABEL[node.who],
-            })
-          : undefined,
-        node.updated
-          ? t('обновлён {p1}', {
-              p1: ago(node.updated),
-            })
-          : undefined,
+        node.who ? t('делает: {p1}', { p1: WHO_LABEL[node.who] }) : undefined,
+        node.updated ? t('обновлён {p1}', { p1: ago(node.updated) }) : undefined,
       ]
         .filter(Boolean)
         .join(' · '),
     ),
-  );
-  if (!brief && path.length > 1)
-    lines.push(
-      p.dim(
-        t('путь: {p1}', {
-          p1: [tree.project.title, ...path.map((step) => step.title)].join(' › '),
-        }),
-      ),
-    );
+  ];
+  const path = pathTo(tree, node.id);
+  if (withPath && path.length > 1)
+    lines.push(p.dim(t('путь: {p1}', { p1: [tree.project.title, ...path.map((step) => step.title)].join(' › ') })));
   if (stale) lines.push(p.dim(staleNote(stale)));
-  lines.push('');
-  lines.push(`${p.dim(t('готово, когда:'))} ${node.doneWhen ?? p.dim(t('не задано'))}`);
+  return lines;
+}
+
+/** «Готово, когда», the check, what it waits for and the links both ways. */
+function criterionLines(tree: Tree, node: TreeNode, p: Paint): string[] {
+  const lines = [`${p.dim(t('готово, когда:'))} ${node.doneWhen ?? p.dim(t('не задано'))}`];
   if (node.check) lines.push(`${p.dim(t('проверка:'))} ${node.check}`);
   if (node.status === 'waiting') {
     lines.push(
       `${p.dim(t('ждёт:'))} ${node.waiting ?? '—'}${
-        node.until
-          ? p.dim(
-              t(' · вернуться, когда: {until}', {
-                until: node.until,
-              }),
-            )
-          : ''
+        node.until ? p.dim(t(' · вернуться, когда: {until}', { until: node.until })) : ''
       }`,
     );
   }
@@ -213,37 +267,66 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint, options: NodeText
       : p.dim(linkLabel(link));
   for (const link of links.needs) lines.push(`${p.dim(t('ждёт:'))} ${linkLine(link)}`);
   for (const link of links.neededBy) lines.push(`${p.dim(t('нужен для:'))} ${linkLine(link)}`);
-  if (!brief && node.commits?.length) {
-    lines.push('', p.dim(t('коммиты:')));
-    for (const sha of node.commits) lines.push(`  ${sha}`);
-  }
-  const kids = childrenOf(tree, node.id);
-  if (kids.length > 0 && brief) {
-    const { done, total } = progress(tree, node.id);
-    lines.push(p.dim(t('внутри: {total}, готово {done}', { total, done })));
-  } else if (kids.length > 0) {
-    lines.push('', p.dim(t('внутри:')));
-    lines.push(treeText(tree, p, { under: node.id, ...(options.words ? { words: true } : {}) }));
-  }
-  if (!brief && node.sessions.length > 0) {
-    lines.push('', p.dim(t('сессии:')));
-    for (const ref of node.sessions) {
-      lines.push(
-        `  ${ref.brain.padEnd(11)} ${ref.id}  ${p.dim(ref.name ?? '')} ${p.dim(ago(ref.opened ?? ref.started))}`,
-      );
-    }
-  }
-  const about = brief ? undefined : description(node.body);
-  if (about) lines.push('', about);
+  return lines;
+}
+
+function commitLines(node: TreeNode, p: Paint): string[] {
+  return [p.dim(t('коммиты:')), ...(node.commits ?? []).map((sha) => `  ${sha}`)];
+}
+
+function childrenLines(tree: Tree, node: TreeNode, p: Paint, words: boolean): string[] {
+  return [p.dim(t('внутри:')), treeText(tree, p, { under: node.id, ...(words ? { words: true } : {}) })];
+}
+
+function sessionLines(node: TreeNode, p: Paint): string[] {
+  return [
+    p.dim(t('сессии:')),
+    ...node.sessions.map(
+      (ref) => `  ${ref.brain.padEnd(11)} ${ref.id}  ${p.dim(ref.name ?? '')} ${p.dim(ago(ref.opened ?? ref.started))}`,
+    ),
+  ];
+}
+
+/** The last `keep` entries; `notice` says how many are hidden. Nothing when the journal is empty. */
+function journalLines(node: TreeNode, p: Paint, keep: number, notice: boolean): string[] {
   const journal = journalEntries(node.body);
-  if (journal.length > 0) {
-    lines.push('', p.dim(t('журнал:')));
-    const hidden = Math.max(0, journal.length - keep);
-    if (hidden > 0 && (brief || options.journal !== undefined))
-      lines.push(p.dim(t('  … ещё {n} (--journal all)', { n: hidden })));
-    for (const entry of journal.slice(journal.length - Math.min(keep, journal.length))) lines.push(`  - ${entry}`);
+  if (!journal.length) return [];
+  const lines = [p.dim(t('журнал:'))];
+  const hidden = Math.max(0, journal.length - keep);
+  if (hidden > 0 && notice) lines.push(p.dim(t('  … ещё {n} (--journal all)', { n: hidden })));
+  for (const entry of journal.slice(journal.length - Math.min(keep, journal.length))) lines.push(`  - ${entry}`);
+  return lines;
+}
+
+/** `show <id> --only … --json`: the id and the title, and the fields of the asked parts. */
+export function partsJson(
+  tree: Tree,
+  node: TreeNode,
+  only: ReadonlySet<NodePart>,
+  journal = 12,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { id: node.id, title: node.title };
+  const fields = nodeFields(node);
+  const take = (...keys: string[]) => {
+    for (const key of keys) if (fields[key] !== undefined) out[key] = fields[key];
+  };
+  if (only.has('header')) {
+    take('status', 'who');
+    if (node.updated) out.updated = node.updated;
+    out.parent = node.parent;
+    out.path = pathBetween(tree, ROOT, node.id);
   }
-  return lines.join('\n');
+  if (only.has('criterion')) take('done_when', 'check', 'waiting', 'until', 'needs', 'for');
+  if (only.has('commits')) out.commits = node.commits ?? [];
+  if (only.has('children')) out.children = (treeJson(tree, undefined, node.id) as { children: unknown[] }).children;
+  if (only.has('sessions')) out.sessions = node.sessions;
+  if (only.has('note')) out.note = description(node.body);
+  if (only.has('journal')) {
+    const entries = journalEntries(node.body);
+    out.journal = entries.slice(entries.length - Math.min(journal, entries.length));
+  }
+  if (only.has('history')) out.history = statusHistory(node.body);
+  return out;
 }
 
 /** One node's fields for `--json`; `children` nests its subtree. */

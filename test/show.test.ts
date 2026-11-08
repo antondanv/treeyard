@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { NODE_VAR } from '../src/model/notes.js';
-import { addNode, logToNode } from '../src/model/ops.js';
+import { addNode, logToNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { createTree, getTemplate } from '../src/templates/templates.js';
 import { tempDir } from './helpers.js';
@@ -19,7 +19,7 @@ const cli = fileURLToPath(new URL('../src/cli/main.ts', import.meta.url));
 const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
 
 let dir = '';
-let ids: { a: string; b: string };
+let ids: { a: string; b: string; story: string };
 
 function sh(...args: string[]) {
   const env: NodeJS.ProcessEnv = {
@@ -50,7 +50,11 @@ beforeAll(() => {
   addNode(tree, { title: 'Сделанное раз', status: 'done' });
   addNode(tree, { title: 'Сделанное два', status: 'done' });
   for (let i = 1; i <= 6; i++) logToNode(tree, a.id, `запись ${i}`, 'тест');
-  ids = { a: a.id, b: b.id };
+  const story = addNode(tree, { title: 'История' });
+  setStatus(tree, story.id, 'active', { source: 'тест' });
+  logToNode(tree, story.id, 'сделал половину', 'тест');
+  setStatus(tree, story.id, 'review', { source: 'тест' });
+  ids = { a: a.id, b: b.id, story: story.id };
 }, 30_000);
 
 describe('treeyard show for agents', () => {
@@ -132,6 +136,35 @@ describe('treeyard show for agents', () => {
     const json = JSON.parse((await sh('--status', 'todo', '--under', ids.a, '--json')).stdout);
     expect(json).toEqual([expect.objectContaining({ title: 'Вложенный', status: 'todo', parent: ids.a, path: [] })]);
     expect(JSON.parse((await sh('--under', ids.a, '--json')).stdout).children[0].title).toBe('Вложенный');
+  }, 40_000);
+
+  it('--only prints the title line and just the asked parts, in the order of the card', async () => {
+    const journal = await sh(ids.a, '--only', 'journal', '--journal', '2');
+    expect(journal.stdout.split('\n')[0]).toContain('Первый');
+    expect(journal.stdout).toContain('запись 6');
+    expect(journal.stdout).not.toContain('запись 4');
+    expect(journal.stdout).toContain('--journal all');
+    expect(journal.stdout).not.toContain('готово, когда');
+    // Empty parts say so; several nodes keep their title lines apart.
+    const two = await sh(ids.a, ids.b, '--only', 'сессии,commits');
+    expect(two.stdout).toContain('Второй');
+    expect(two.stdout.match(/сессии: —/g)).toHaveLength(2);
+    expect(two.stdout.indexOf('коммиты: —')).toBeLessThan(two.stdout.indexOf('сессии: —'));
+    const history = await sh(ids.story, '--only', 'history,header');
+    expect(history.stdout).toContain('на проверке');
+    expect(history.stdout).toContain('к работе → в работе');
+    expect(history.stdout).toContain('в работе → на проверке');
+    expect(history.stdout).not.toContain('сделал половину');
+    const json = JSON.parse((await sh(ids.story, '--only', 'history,note', '--json')).stdout);
+    expect(Object.keys(json)).toEqual(['id', 'title', 'note', 'history']);
+    expect(json.history).toHaveLength(2);
+  }, 40_000);
+
+  it('--only names the parts when a word is not one, and wants an id', async () => {
+    const bad = await sh(ids.a, '--only', 'foo');
+    expect(bad.code).toBe(2);
+    expect(bad.stdout).toContain('header, criterion, commits, children, sessions, note, journal, history');
+    expect((await sh('--only', 'journal')).code).toBe(2);
   }, 40_000);
 
   it('a word that is not a status and ids next to --status fail with the right form', async () => {

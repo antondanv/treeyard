@@ -181,7 +181,7 @@ const TEXT = {
     rules: '## Как ведётся проект',
     commands: '## Команды дерева',
     command: 'Команда',
-    show: 'шапка и последние записи (без --brief — целиком; можно несколько id)',
+    show: 'шапка и последние записи (без --brief — целиком; можно несколько id; `--only journal,sessions,history` — только эти части)',
     showAll: 'открытое дерево (`--all` — всё)',
     showStatus:
       'узлы этих статусов в ветке, по строке на узел; статус — словом на любом языке или алиасом (review, на проверке, проверка), значки набирать не нужно',
@@ -235,7 +235,7 @@ const TEXT = {
     rules: '## How the project is run',
     commands: '## Tree commands',
     command: 'The command is',
-    show: 'header and latest entries (without --brief — in full; several ids work)',
+    show: 'header and latest entries (without --brief — in full; several ids work; `--only journal,sessions,history` — just these parts)',
     showAll: 'the open tree (`--all` — everything)',
     showStatus:
       'nodes of these statuses in a branch, a line each; a status is a word in either language or an alias (review, in review, check), no glyphs to type',
