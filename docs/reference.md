@@ -347,7 +347,7 @@ treeyard set <id> note="…"                      # the node's description; the 
 treeyard log <id> "…" --project ../main         # from a git worktree: write to the main tree (show takes it too)
 treeyard note "the help doesn't fit the screen" # a note about treeyard itself — into “Notes”
 treeyard rm <id>                                # delete a node added by mistake; one with a journal, children, sessions or commits is closed instead: status=dropped
-treeyard decide "SQLite, not Postgres: one user" # a dated line in «Decisions» of .tree/tree.md; without text — the list
+treeyard decide "SQLite, not Postgres: one user" # a dated line in «Decisions» of .tree/tree.md; without text — the list (--json)
 treeyard goal "Ten strangers order from us"     # the tree's goal in .tree/tree.md, only that line changes; without text — print it (--json)
 treeyard rules --from - < rules.md              # the rules (tree.md without «Decisions»); the header and «Decisions» stay; without --from — print them (--json)
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
@@ -530,9 +530,12 @@ tree is kept, rules for agents; `treeyard rules --from <file|->` writes new ones
 added with `treeyard decide`. Each command changes only its own piece: the other header keys
 with their quotes, comments and sessions, and «Decisions», stay byte for byte (a section that
 stood after «Decisions» is part of the rules, and «Decisions» then ends the file). Rules with
-their own «Decisions» heading, empty rules and an empty goal are refused. `--json` gives
-`{"goal": "…"}` (`null` when there is none) and `{"rules": "…"}`, after a write too;
-`--project <dir>` — the tree of another folder.
+their own «Decisions» heading, empty rules and an empty goal are refused. `treeyard decide`
+prints «Decisions» line by line, `treeyard decide "…"` adds one with today's date (a line that
+already has a date keeps it). `--json` gives `{"goal": "…"}` (`null` when there is none),
+`{"rules": "…"}` and `{"decisions": [{"text": "…", "date": "2026-10-07"}]}`, after a write too:
+`text` is the line as written without its `- `, `date` the last `YYYY-MM-DD` in it (`null` when
+there is none); `--project <dir>` — the tree of another folder.
 
 ### Node diffs
 

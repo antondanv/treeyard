@@ -90,6 +90,22 @@ export function decisionsOf(body: string): string[] {
     .filter((line) => line.trim().startsWith('- '));
 }
 
+/** A decision as a program reads it: the line as written without its «- », and its date. */
+export interface Decision {
+  text: string;
+  /** `YYYY-MM-DD` from the line — the last one, as `decide` puts it at the end; null without one. */
+  date: string | null;
+}
+
+/** «Решения» as data, so a program never parses the section itself. */
+export function decisionList(body: string): Decision[] {
+  return decisionsOf(body).map((line) => {
+    const text = line.trim().slice(2).trim();
+    const dates = text.match(/\b\d{4}-\d\d-\d\d\b/g);
+    return { text, date: dates?.at(-1) ?? null };
+  });
+}
+
 /** The rules: the body of `tree.md` without «Решения» — the method, how the tree is kept, rules for agents. */
 export function rulesOf(body: string): string {
   const range = decisionsRange(body);

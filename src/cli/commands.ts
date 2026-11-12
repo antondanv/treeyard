@@ -61,7 +61,15 @@ import {
   setStatus,
   updateNode,
 } from '../model/ops.js';
-import { cleanGoal, decisionsOf, hasDecisions, rulesOf, writeGoal, writeRules } from '../model/root-doc.js';
+import {
+  cleanGoal,
+  decisionList,
+  decisionsOf,
+  hasDecisions,
+  rulesOf,
+  writeGoal,
+  writeRules,
+} from '../model/root-doc.js';
 import { staleOf } from '../model/stale.js';
 import { parseStatus, parseStatuses, UnknownStatus } from '../model/status-words.js';
 import { findProject, loadTree, nodePath, writeProject } from '../model/store.js';
@@ -172,7 +180,8 @@ function commandLines(): string {
   treeyard note "<текст>" [--node id]      замечание о treeyard из любой папки — в «Замечания» дерева notes
   treeyard rm <id> [<id>…]                 удалить узел, заведённый по ошибке (без журнала, детей, сессий, коммитов);
                                            узел с историей не удаляется — его закрывают: set <id> status=dropped
-  treeyard decide ["<решение>"]            дописать решение в «Решения» .tree/tree.md (с датой); без текста — список
+  treeyard decide ["<решение>"] [--json] [--project <папка>]   дописать решение в «Решения» .tree/tree.md (с датой);
+                                           без текста — список; --json — {"decisions": [{"text", "date"}]}
   treeyard goal ["<цель>"] [--json] [--project <папка>]   цель дерева (goal в .tree/tree.md): без текста — посмотреть,
                                            с текстом — записать новую; остальное в файле не меняется
   treeyard rules [--from <файл|->] [--json] [--project <папка>]   правила дерева: .tree/tree.md без «Решения» — метод,
@@ -250,7 +259,8 @@ function commandLines(): string {
   treeyard note "<text>" [--node id]       a note about treeyard from any folder — into «Notes» of the notes tree
   treeyard rm <id> [<id>…]                 delete a node added by mistake (no journal, children, sessions, commits);
                                            a node with a history is not deleted but closed: set <id> status=dropped
-  treeyard decide ["<decision>"]           add a decision to «Decisions» in .tree/tree.md (dated); without text — the list
+  treeyard decide ["<decision>"] [--json] [--project <dir>]   add a decision to «Decisions» in .tree/tree.md (dated);
+                                           without text — the list; --json — {"decisions": [{"text", "date"}]}
   treeyard goal ["<goal>"] [--json] [--project <dir>]   the tree's goal (goal in .tree/tree.md): without text — read it,
                                            with text — write a new one; nothing else in the file changes
   treeyard rules [--from <file|->] [--json] [--project <dir>]   the tree's rules: .tree/tree.md without «Decisions» —
@@ -1896,22 +1906,29 @@ function keepReasons(tree: Tree, node: TreeNode): string[] {
   return why;
 }
 
-/** `treeyard decide "…"`: a line in «Решения» of `.tree/tree.md`, dated; without text, the list. */
+/**
+ * `treeyard decide "…"`: a line in «Решения» of `.tree/tree.md`, dated; without text, the list.
+ * `--json` gives the list as `{"decisions": [{"text", "date"}]}`, after a write too.
+ */
 function decideCommand(args: string[]): number {
-  const { positionals } = parse(args, {});
-  const tree = project();
+  const { values, positionals } = parse(args, { json: { type: 'boolean' }, project: { type: 'string' } });
+  const tree = project(values.project);
   const text = positionals.join(' ').replace(/\s+/g, ' ').trim();
-  if (!text) {
+  const line = !text || /\b\d{4}-\d\d-\d\d\b/.test(text) ? text : `${text} (${today()})`;
+  if (line) {
+    tree.project.body = addDecisions(tree.project.body, [line]);
+    writeProject(tree.project);
+  }
+  if (values.json) {
+    const decisions = decisionList(loadTree(tree.project.dir).project.body);
+    process.stdout.write(`${JSON.stringify({ decisions }, null, 2)}\n`);
+  } else if (line) process.stdout.write(`${t('в «Решения» .tree/tree.md: {line}', { line })}\n`);
+  else {
     const lines = decisionsOf(tree.project.body);
     process.stdout.write(
       lines.length ? `${lines.join('\n')}\n` : `${t('решений пока нет — treeyard decide "что решили и почему"')}\n`,
     );
-    return 0;
   }
-  const line = /\b\d{4}-\d\d-\d\d\b/.test(text) ? text : `${text} (${today()})`;
-  tree.project.body = addDecisions(tree.project.body, [line]);
-  writeProject(tree.project);
-  process.stdout.write(`${t('в «Решения» .tree/tree.md: {line}', { line })}\n`);
   return 0;
 }
 

@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { NODE_VAR } from '../src/model/notes.js';
-import { cleanGoal, decisionsOf, rulesOf, withGoal, withRules } from '../src/model/root-doc.js';
+import { cleanGoal, decisionList, decisionsOf, rulesOf, withGoal, withRules } from '../src/model/root-doc.js';
 import { loadTree, projectFromText } from '../src/model/store.js';
 import { emptyTree, tempDir, treeyardIn } from './helpers.js';
 
@@ -120,6 +120,32 @@ describe('rulesOf and withRules', () => {
 
   it('a tree without «Решения» gets just the rules', () => {
     expect(withRules('---\ntitle: Т\n---\n\nстарое\n', 'новое')).toBe('---\ntitle: Т\n---\n\nновое\n');
+  });
+});
+
+describe('decisionList', () => {
+  it('each line as written without «- », and its date: the last one, null without one', () => {
+    const body = [
+      '## Решения',
+      '',
+      'Здесь — решения, которые дорого менять.',
+      '',
+      '- SQLite, а не Postgres (2026-10-07)',
+      '- Публичные узлы — в git (2026-10-07, веха 3)',
+      '- Релиз 2026-12-01, а не раньше (2026-11-12)',
+      '- Стек — TypeScript',
+      '',
+      '## После',
+      '',
+      '- не решение',
+    ].join('\n');
+    expect(decisionList(body)).toEqual([
+      { text: 'SQLite, а не Postgres (2026-10-07)', date: '2026-10-07' },
+      { text: 'Публичные узлы — в git (2026-10-07, веха 3)', date: '2026-10-07' },
+      { text: 'Релиз 2026-12-01, а не раньше (2026-11-12)', date: '2026-11-12' },
+      { text: 'Стек — TypeScript', date: null },
+    ]);
+    expect(decisionList('## Метод\n\n- правило\n')).toEqual([]);
   });
 });
 
@@ -266,5 +292,47 @@ describe('treeyard rules', () => {
     expect(loose.code).toBe(2);
     expect(loose.stderr).toContain('--from');
     expect(readFileSync(treeFile(dir), 'utf8')).toBe(before);
+  }, 40_000);
+});
+
+describe('treeyard decide --json', () => {
+  it('gives «Решения» as {text, date}, after a write too; the text output stays', async () => {
+    const tree = emptyTree();
+    const { dir } = tree.project;
+    writeFileSync(treeFile(dir), HAND_MADE);
+    const sh = treeyardIn(dir);
+    const shown = await sh('decide', '--json');
+    expect(shown.code).toBe(0);
+    expect(JSON.parse(shown.stdout)).toEqual({
+      decisions: [{ text: 'SQLite, а не Postgres (2026-10-07)', date: '2026-10-07' }],
+    });
+
+    const res = await sh('decide', 'Оплата — только картой', '--json');
+    expect(res.code).toBe(0);
+    const { decisions } = JSON.parse(res.stdout) as { decisions: { text: string; date: string | null }[] };
+    expect(decisions).toHaveLength(2);
+    const added = decisions[1]!;
+    expect(added.date).toMatch(/^\d{4}-\d\d-\d\d$/);
+    expect(added.text).toBe(`Оплата — только картой (${added.date})`);
+    // JSON is what the file now says, and the text form reads the same lines.
+    expect((await sh('decide')).stdout).toBe(
+      `- SQLite, а не Postgres (2026-10-07)\n- Оплата — только картой (${added.date})\n`,
+    );
+    const dated = await sh('decide', 'Ролики — в Motionlab (2026-10-07, веха 3)', '--json');
+    expect(JSON.parse(dated.stdout).decisions[2]).toEqual({
+      text: 'Ролики — в Motionlab (2026-10-07, веха 3)',
+      date: '2026-10-07',
+    });
+  }, 40_000);
+
+  it('a tree without «Решения» gives an empty list; --project reaches another folder', async () => {
+    const tree = emptyTree();
+    const { dir } = tree.project;
+    writeFileSync(treeFile(dir), '---\ntitle: Тест\n---\n\n## Метод\n');
+    const sh = treeyardIn(tempDir());
+    expect(JSON.parse((await sh('decide', '--json', '--project', dir)).stdout)).toEqual({ decisions: [] });
+    const res = await sh('decide', 'Без сервера (2026-11-12)', '--json', '--project', dir);
+    expect(JSON.parse(res.stdout)).toEqual({ decisions: [{ text: 'Без сервера (2026-11-12)', date: '2026-11-12' }] });
+    expect(decisionsOf(loadTree(dir).project.body)).toEqual(['- Без сервера (2026-11-12)']);
   }, 40_000);
 });
