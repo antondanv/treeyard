@@ -125,6 +125,8 @@ export const EN: Record<string, string> = {
   '{n} МБ': '{n} MB',
   '{n} ГБ': '{n} GB',
   'выбери одно: --pane или --bg': 'choose one: --pane or --bg',
+  '--json — только с --pane: treeyard open <id> --pane --json':
+    '--json only with --pane: treeyard open <id> --pane --json',
   '--task без текста': '--task without text',
   'в панели': 'in a pane',
   'сессия запущена в панели {pane} · открой treeyard, чтобы увидеть её\n':

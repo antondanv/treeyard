@@ -206,6 +206,22 @@ export function paneFor(ref: SessionRef, panes: readonly Pane[]): Pane | undefin
   );
 }
 
+/**
+ * The live pane of each session, by session id: what a program attaches a terminal to
+ * (`tmux -L brainyard attach -t <pane>`). A pane knows its session, except a Codex,
+ * Antigravity or OpenCode pane of this folder whose id nobody has settled yet: that one is
+ * looked up in the CLI's store. Only reads; `settlePending` writes the ids down.
+ */
+export async function sessionPanes(dir: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const pane of await listPanes()) {
+    if (!pane.brain) continue;
+    const id = pane.sessionId ?? (paneInProject(pane, dir) ? (await findPaneSession(pane))?.id : undefined);
+    if (id) out.set(id, pane.pane);
+  }
+  return out;
+}
+
 /** The node's live pane, the newest first. */
 export function nodePane(
   node: TreeNode | undefined,

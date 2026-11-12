@@ -134,4 +134,40 @@ describe.skipIf(!panesAvailable())('OpenCode in a pane', () => {
       await closePane(pane!);
     }
   }, 30_000);
+
+  it('treeyard open --pane --json: the id comes later, sessions --json finds it by the pane and its node', async () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Доставка' });
+    const env = {
+      ...process.env,
+      BRAINYARD_TMUX_SOCKET: socket,
+      BRAINYARD_OPENCODE_BIN: bin,
+      BRAINYARD_CLAUDE_BIN: 'treeyard-test-no-claude',
+      CODEX_HOME: join(data, 'codex'),
+      XDG_DATA_HOME: data,
+      TREEYARD_LANG: 'ru',
+      NO_COLOR: '1',
+    };
+    const cli = (...args: string[]) =>
+      spawnSync(tsx, [main, ...args], { cwd: tree.project.dir, env, encoding: 'utf8' });
+    const got = cli('open', node.id, '--brain', 'opencode', '--start', 'do', '--pane', '--json', '--yes');
+    expect(got.status, got.stderr).toBe(0);
+    const started = JSON.parse(got.stdout) as { id: string | null; pane: string };
+    try {
+      // OpenCode names its session only once it has started.
+      expect(started).toMatchObject({ node: node.id, brain: 'opencode', id: null, warnings: [] });
+      expect(started.pane).toMatch(/^opencode-/);
+      await until(() => ready(started.pane), 'the pane shows OpenCode');
+      // Nobody has settled the pane yet: the node still holds `pane:…`, the pane knows no session.
+      expect(loadTree(tree.project.dir).nodes.get(node.id)!.sessions[0]!.id).toBe(`pane:${started.pane}`);
+      const list = JSON.parse(cli('sessions', '--json').stdout) as { id: string; pane: string | null }[];
+      const session = list.find((s) => s.pane === started.pane);
+      expect(session).toMatchObject({ brain: 'opencode', node: node.id, offTree: false });
+      expect(session!.id).toMatch(/^ses_/);
+      // Reading never writes: the tree learns the id when the TUI settles it.
+      expect(loadTree(tree.project.dir).nodes.get(node.id)!.sessions[0]!.id).toBe(`pane:${started.pane}`);
+    } finally {
+      await closePane(started.pane);
+    }
+  }, 30_000);
 });

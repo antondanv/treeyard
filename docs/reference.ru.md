@@ -328,6 +328,16 @@ Treeyard читает экран только той сессии, котора�
 Для панелей нужен tmux. У treeyard свой сервер tmux (`tmux -L brainyard`), поэтому твой
 собственный tmux и его настройки он не трогает.
 
+Программа, которая сама показывает терминал сессии (Treeyard Web), узнаёт у treeyard, к какой
+панели подключаться. `treeyard open <id> --pane --json` запускает сессию и печатает
+`{"node", "brain", "id", "pane", "startedAt", "warnings"}`: `id` — id сессии, `pane` — имя её
+сессии tmux на этом сервере (`tmux -L brainyard attach -t <pane>`). Codex, Antigravity и
+OpenCode называют сессию только после запуска, поэтому у них `id` сначала `null`.
+`treeyard sessions --json` даёт каждой сессии поле `pane` — её живую панель или `null`, если
+сессия не в панели, — и сессию свежей панели находит в хранилище самого CLI; обычный
+`treeyard sessions` помечает такую сессию `▣ <панель>`. Найденный id ни одна из этих команд в
+дерево не пишет: это сделает TUI, когда заглянет в панели.
+
 ## Агенты и дерево
 
 Сессия, открытая из узла, получает короткий контекст: путь от корня (то есть зачем этот
@@ -371,9 +381,10 @@ treeyard open root --start chat --brain codex   # разговор о проек
 treeyard open <id> --brain codex                # сессия по узлу прямо из shell
 treeyard open <id> --brain codex --pane         # открыть панель и вернуться в shell
 treeyard open <id> --brain opencode --pane      # то же с OpenCode
+treeyard open <id> --pane --json                # для программы: id сессии и имя панели tmux в JSON
 treeyard open <id> --bg --task "без платных вызовов" --model sonnet --effort high   # координатор отдаёт узел отдельной сессии
 treeyard open <id> --bg --task - < task.txt     # длинное задание с кавычками — из stdin
-treeyard sessions                               # сессии папки во всех CLI; «без узла» — открытые мимо дерева
+treeyard sessions                               # сессии папки во всех CLI; «без узла» — открытые мимо дерева, ▣ — живая панель (--json: pane)
 treeyard status                                 # сводка: версии, дерево, узлы, скиллы, указатель, хук, сессии, GitHub; у проблем — команда (--json)
 treeyard context <id>                           # ровно то, что получит агент
 treeyard pointer                                # добавить блок о дереве в AGENTS.md / CLAUDE.md

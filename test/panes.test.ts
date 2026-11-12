@@ -9,6 +9,7 @@ const backend = vi.hoisted(() => ({
   sessions: vi.fn(),
   setPaneSession: vi.fn(),
   closePane: vi.fn(),
+  findPaneSession: vi.fn(),
 }));
 vi.mock('@antondanv/brainyard', async (original) => ({
   ...(await original<typeof import('@antondanv/brainyard')>()),
@@ -23,6 +24,7 @@ import {
   type Pane,
   paneFor,
   panesToSleep,
+  sessionPanes,
   settlePending,
   sleepingRef,
   wakeInPane,
@@ -155,6 +157,27 @@ describe('pane lifecycle', () => {
     const pending = { brain: 'codex' as const, id: 'pane:missing', mode: 'pane' as const };
     expect(isPending(pending)).toBe(true);
     await expect(wakeInPane(tree, node.id, pending, { width: 60, height: 12 })).rejects.toThrow(/не сохранил/);
+  });
+});
+
+describe('the pane of each session', () => {
+  it('reads the pane, and the store only for an unsettled pane of this folder', async () => {
+    backend.listPanes.mockResolvedValue([
+      pane('claude-one', 0, { sessionId: 'claude-conversation' }),
+      pane('codex-new', 0, { brain: 'codex', sessionId: undefined }),
+      pane('codex-elsewhere', 0, { brain: 'codex', sessionId: undefined, cwd: '/other' }),
+      pane('shell', 0, { brain: undefined, sessionId: undefined }),
+    ]);
+    backend.findPaneSession.mockImplementation(async (info: Pane) =>
+      info.pane === 'codex-new' ? { brain: 'codex', id: 'codex-thread', interactive: true } : undefined,
+    );
+    const panes = await sessionPanes('/project');
+    expect([...panes]).toEqual([
+      ['claude-conversation', 'claude-one'],
+      ['codex-thread', 'codex-new'],
+    ]);
+    // Another folder's panes and panes without a CLI are not looked up.
+    expect(backend.findPaneSession).toHaveBeenCalledTimes(1);
   });
 });
 

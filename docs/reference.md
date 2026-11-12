@@ -303,6 +303,16 @@ session to a node — `l`.
 It needs tmux. Treeyard has its own tmux server (`tmux -L brainyard`) and doesn't touch
 your own tmux or its settings.
 
+A program that shows a session's terminal itself (Treeyard Web) learns which pane to attach
+to from treeyard. `treeyard open <id> --pane --json` starts the session and prints
+`{"node", "brain", "id", "pane", "startedAt", "warnings"}`: `id` is the session's id, `pane` is
+the name of its tmux session on that server (`tmux -L brainyard attach -t <pane>`). Codex,
+Antigravity and OpenCode name a session only once it has started, so their `id` is `null` at
+first. `treeyard sessions --json` gives every session a `pane` — its live pane, or `null` when
+it runs in no pane — and finds a fresh pane's session in the CLI's own store; the plain
+`treeyard sessions` marks it `▣ <pane>`. Neither command writes the found id into the tree:
+the TUI does that when it next looks.
+
 ## Agents and the tree
 
 A session from a node gets a short context: the path from the root (why this), the
@@ -346,9 +356,10 @@ treeyard open root --start chat --brain codex   # a conversation about the proje
 treeyard open <id> --brain codex                # a session for the node right from the shell
 treeyard open <id> --brain codex --pane         # start a pane and return to the shell
 treeyard open <id> --brain opencode --pane      # the same with OpenCode
+treeyard open <id> --pane --json                # for a program: the session id and the tmux pane name as JSON
 treeyard open <id> --bg --task "no paid calls" --model sonnet --effort high   # a coordinator hands the node to its own session
 treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes — from stdin
-treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree
+treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
 treeyard status                                 # a summary: versions, tree, nodes, skills, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
 treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md

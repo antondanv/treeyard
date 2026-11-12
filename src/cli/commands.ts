@@ -23,7 +23,7 @@ import {
 } from '../agents/context.js';
 import { addDecisions, countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
-import { launchInPane } from '../agents/panes.js';
+import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, removeHook } from '../commit-hook.js';
 import { parsePatch } from '../diff.js';
 import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, gitRepository } from '../git.js';
@@ -179,7 +179,8 @@ function commandLines(): string {
                 [--task "…"|-]             задание сверх контекста узла: в конец первого сообщения (- — из stdin)
                 [--model <модель>] [--effort <уровень>]   только на этот запуск
                 [--worktree]               только Claude Code: в новом git worktree (остальные CLI предупредят)
-  treeyard sessions [--json]               сессии папки во всех CLI и чьи они
+                [--pane --json]            для программ: JSON с id сессии и именем панели tmux (tmux -L brainyard)
+  treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
                                            репозитория (открытые — узлы, закрытие — в обе стороны)
@@ -244,7 +245,9 @@ function commandLines(): string {
                 [--task "…"|-]             an assignment on top of the node's context: added to the first message (- reads stdin)
                 [--model <model>] [--effort <level>]   for this launch only
                 [--worktree]               Claude Code only: in a new git worktree (other CLIs warn)
-  treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are
+                [--pane --json]            for programs: JSON with the session id and the tmux pane name (tmux -L brainyard)
+  treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are; ▣ — a live pane
+                                           (pane in JSON)
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            a GitHub Project board (cards are nodes, columns are statuses) or a
                                            repository's issues (open ones are nodes, closing goes both ways)
@@ -1974,11 +1977,15 @@ async function openCommand(args: string[]): Promise<number> {
     worktree: { type: 'boolean' },
     task: { type: 'string' },
     yes: { type: 'boolean', short: 'y' },
+    json: { type: 'boolean' },
   });
   const tree = project();
   const id = nodeArg(tree, positionals[0]);
   const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
   if (values.pane && values.bg) throw new UsageError(t('выбери одно: --pane или --bg'));
+  // In this terminal the CLI owns stdout; only a pane returns at once with something to print.
+  if (values.json && !values.pane)
+    throw new UsageError(t('--json — только с --pane: treeyard open <id> --pane --json'));
   const task = taskArg(values.task);
   const options = {
     brain,
@@ -2005,10 +2012,17 @@ async function openCommand(args: string[]): Promise<number> {
     }
   }
   if (options.pane) {
-    const { pane, warnings } = await launchInPane(tree, id, options, {
+    const { pane, ref, warnings } = await launchInPane(tree, id, options, {
       width: process.stdout.columns || 100,
       height: Math.max(5, (process.stdout.rows || 30) - 6),
     });
+    if (values.json) {
+      // Codex, Antigravity and OpenCode name the session once it has started: `id` is null until
+      // then, and `treeyard sessions --json` finds it by this pane.
+      const started = { node: id, brain, id: isPending(ref) ? null : ref.id, pane, startedAt: ref.started, warnings };
+      process.stdout.write(`${JSON.stringify(started, null, 2)}\n`);
+      return 0;
+    }
     for (const warning of warnings) process.stderr.write(`! ${warning}\n`);
     process.stdout.write(t('сессия запущена в панели {pane} · открой treeyard, чтобы увидеть её\n', { pane }));
     return 0;
@@ -2035,10 +2049,16 @@ async function sessionsCommand(args: string[]): Promise<number> {
   const tree = project();
   const list = await projectSessions(tree);
   const owners = sessionOwners(tree);
+  const panes = await sessionPanes(tree.project.dir);
+  // A pane the tree started belongs to its node before the node learns the session's id.
+  for (const [session, pane] of panes) {
+    const node = owners.get(`pane:${pane}`);
+    if (node && !owners.has(session)) owners.set(session, node);
+  }
   if (values.json) {
     process.stdout.write(
       `${JSON.stringify(
-        list.map((s) => ({ ...s, node: owners.get(s.id), offTree: offTree(s, owners) })),
+        list.map((s) => ({ ...s, node: owners.get(s.id), offTree: offTree(s, owners), pane: panes.get(s.id) ?? null })),
         null,
         2,
       )}\n`,
@@ -2047,7 +2067,10 @@ async function sessionsCommand(args: string[]): Promise<number> {
   }
   for (const session of list) {
     const owner = owners.get(session.id);
-    const live = session.live ? out.c('#c6a0ff', ` ● ${session.live.status}`) : '';
+    const pane = panes.get(session.id);
+    const live =
+      (session.live ? out.c('#c6a0ff', ` ● ${session.live.status}`) : '') +
+      (pane ? out.c('#c6a0ff', ` ▣ ${pane}`) : '');
     const where = owner
       ? out.dim(`  → ${owner === ROOT ? `◆ ${tree.project.title}` : tree.nodes.get(owner)?.title}`)
       : offTree(session, owners)
