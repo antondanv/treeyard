@@ -2,7 +2,15 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { cleanGoal, decisionList, decisionsOf, rulesOf, withGoal, withRules } from '../src/model/root-doc.js';
+import {
+  cleanGoal,
+  decisionList,
+  decisionsOf,
+  rulesOf,
+  withDecisions,
+  withGoal,
+  withRules,
+} from '../src/model/root-doc.js';
 import { loadTree, projectFromText } from '../src/model/store.js';
 import { emptyTree, tempDir, treeyardIn, withStdin } from './helpers.js';
 
@@ -84,6 +92,46 @@ describe('withGoal', () => {
 
   it('a header that is not YAML is not edited', () => {
     expect(() => withGoal('---\ntitle: [oops\n---\n', 'цель')).toThrow();
+  });
+});
+
+describe('withDecisions', () => {
+  it('adds only the line at the end of «Решения»: the hand-made header and the rest stay byte for byte', () => {
+    expect(withDecisions(HAND_MADE, ['Оплата — картой (2026-11-12)'])).toBe(
+      `${HAND_MADE}- Оплата — картой (2026-11-12)\n`,
+    );
+  });
+
+  it('a section after «Решения» and the blank lines before it stay where they were', () => {
+    const text = '---\ntitle: Т # имя\n---\n\n## Decisions\n\n- одно\n\n\n## Ещё\n\nБ.\n';
+    expect(withDecisions(text, ['два', 'три'])).toBe(
+      '---\ntitle: Т # имя\n---\n\n## Decisions\n\n- одно\n- два\n- три\n\n\n## Ещё\n\nБ.\n',
+    );
+  });
+
+  it('after a paragraph or the bare heading, a blank line first; a continued item goes on as a list', () => {
+    expect(withDecisions('---\nt: 1\n---\n\n## Решения\n\nЗдесь — решения.\n', ['А'])).toBe(
+      '---\nt: 1\n---\n\n## Решения\n\nЗдесь — решения.\n\n- А\n',
+    );
+    expect(withDecisions('---\nt: 1\n---\n\n## Решения\n', ['А'])).toBe('---\nt: 1\n---\n\n## Решения\n\n- А\n');
+    expect(withDecisions('## Решения\n\n- длинное\n  продолжение\n', ['А'])).toBe(
+      '## Решения\n\n- длинное\n  продолжение\n- А\n',
+    );
+    // A file that ended without a line end gets one after the new line.
+    expect(withDecisions('## Решения\n\n- одно', ['А'])).toBe('## Решения\n\n- одно\n- А\n');
+  });
+
+  it('a «## Решения» comment in the header is not the section; without one the section ends the file', () => {
+    const text = '---\ntitle: Т\n## Решения\n---\n\n## Метод\n\nА.\n\n';
+    expect(withDecisions(text, ['Б'])).toBe('---\ntitle: Т\n## Решения\n---\n\n## Метод\n\nА.\n\n## Решения\n\n- Б\n');
+    expect(withDecisions('---\ntitle: Т\n---', ['Б'])).toBe('---\ntitle: Т\n---\n\n## Решения\n\n- Б\n');
+  });
+
+  it('a CRLF file stays CRLF', () => {
+    const crlf = HAND_MADE.replace(/\n/g, '\r\n');
+    expect(withDecisions(crlf, ['Оплата (2026-11-12)'])).toBe(`${crlf}- Оплата (2026-11-12)\r\n`);
+    expect(withDecisions('---\r\nt: 1\r\n---\r\n', ['А'])).toBe('---\r\nt: 1\r\n---\r\n\r\n## Решения\r\n\r\n- А\r\n');
+    expect(decisionsOf(projectFromText(crlf, '/x').body)).toEqual(['- SQLite, а не Postgres (2026-10-07)']);
   });
 });
 
@@ -285,6 +333,15 @@ describe('treeyard decide --json', () => {
       text: 'Ролики — в Motionlab (2026-10-07, веха 3)',
       date: '2026-10-07',
     });
+  }, 40_000);
+
+  it('writes only the decision line: a hand-made header keeps its comments and folded goal', async () => {
+    const tree = emptyTree();
+    const { dir } = tree.project;
+    writeFileSync(treeFile(dir), HAND_MADE);
+    const res = await treeyardIn(dir)('decide', 'Оплата — только картой (2026-11-12)');
+    expect(res.code).toBe(0);
+    expect(readFileSync(treeFile(dir), 'utf8')).toBe(`${HAND_MADE}- Оплата — только картой (2026-11-12)\n`);
   }, 40_000);
 
   it('a tree without «Решения» gives an empty list; --project reaches another folder', async () => {

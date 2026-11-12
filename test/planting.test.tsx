@@ -5,10 +5,9 @@ import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { render } from 'ink';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { addDecisions } from '../src/agents/importer.js';
 import { folderFacts, plantingPrompt, SKILL, skillBody, skillPath, skillText } from '../src/agents/planting.js';
 import { installSkills } from '../src/agents/skills.js';
+import { addDecisions } from '../src/model/root-doc.js';
 import { loadTree } from '../src/model/store.js';
 import { DEFAULTS, resetSettings } from '../src/settings.js';
 import { pointerTargets } from '../src/templates/pointer.js';

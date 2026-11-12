@@ -1,5 +1,5 @@
 /**
- * Point edits of `tree.md`: the goal in its front matter, the rules in its body. Each edit
+ * Point edits of `tree.md`: the goal in its front matter, the rules and the decisions in its body. Each edit
  * rewrites only its own piece of the text, so the rest — other keys with their quotes, order
  * and comments, the sessions, «Решения» — stays byte for byte, however it was written.
  * `writeProject` would serialize the whole header again; these edits never do.
@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse, stringify } from 'yaml';
 
+import { pick } from '../i18n/i18n.js';
 import { atomicWrite, TREE_DIR } from './store.js';
 
 /** The heading of the decisions section, in either language. */
@@ -80,13 +81,41 @@ function decisionsRange(body: string): [number, number] | undefined {
   return [match.index, next < 0 ? body.length : from + next];
 }
 
+function eolOf(text: string): string {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+/**
+ * A body with decisions added at the end of «Решения»: only their lines go in, everything
+ * around stays as written, line ends too. Without the section, it ends the text.
+ */
+export function addDecisions(body: string, decisions: readonly string[], eol = eolOf(body)): string {
+  const lines = decisions.map((line) => `- ${line}`).join(eol);
+  const range = decisionsRange(body);
+  if (!range) {
+    const kept = body.trimEnd();
+    const heading = pick({ ru: '## Решения', en: '## Decisions' });
+    return `${kept}${kept ? eol + eol : ''}${heading}${eol}${eol}${lines}${eol}`;
+  }
+  // Right after the last written line of the section; its trailing blank lines stay after.
+  const at = range[0] + body.slice(...range).trimEnd().length;
+  // A list goes on as a list (an item may continue on indented lines); after a paragraph or
+  // the heading itself, a blank line first.
+  const written = body.slice(range[0], at).split(/\r?\n/);
+  let last = written.length - 1;
+  while (last > 0 && /^[ \t]+\S/.test(written[last]!)) last -= 1;
+  const gap = written[last]!.startsWith('- ') ? eol : eol + eol;
+  const tail = body.slice(at);
+  return `${body.slice(0, at)}${gap}${lines}${tail || eol}`;
+}
+
 /** The lines of «Решения» (or «Decisions»), as written. */
 export function decisionsOf(body: string): string[] {
   const range = decisionsRange(body);
   if (!range) return [];
   return body
     .slice(...range)
-    .split('\n')
+    .split(/\r?\n/)
     .filter((line) => line.trim().startsWith('- '));
 }
 
@@ -135,6 +164,18 @@ export function withRules(text: string, rules: string): string {
   return `${head}${gap}${rules.trim()}${decisions}\n`;
 }
 
+/** `tree.md` with decisions added to «Решения»; the header is not even parsed, so it stays byte for byte. */
+export function withDecisions(text: string, decisions: readonly string[]): string {
+  const fence = FENCE.exec(text);
+  if (!fence) return addDecisions(text, decisions);
+  const head = fence[0];
+  const body = text.slice(head.length);
+  const eol = eolOf(text);
+  // A header that ends the file without its line end gets one, and the blank line treeyard puts after it.
+  if (!body.trim()) return `${head}${/\n$/.test(head) ? '' : eol}${eol}${addDecisions('', decisions, eol)}`;
+  return `${head}${addDecisions(body, decisions, eol)}`;
+}
+
 export function readTreeText(dir: string): string {
   return readFileSync(treeFile(dir), 'utf8');
 }
@@ -146,6 +187,11 @@ export function writeGoal(dir: string, goal: string): boolean {
   if (next === text) return false;
   atomicWrite(treeFile(dir), next);
   return true;
+}
+
+/** Adds decisions to «Решения» of `tree.md`: the file gains their lines and nothing else changes. */
+export function writeDecisions(dir: string, decisions: readonly string[]): void {
+  atomicWrite(treeFile(dir), withDecisions(readTreeText(dir), decisions));
 }
 
 /** Writes the rules into `tree.md`; false when they already were these, and nothing was written. */

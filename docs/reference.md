@@ -531,8 +531,8 @@ added with `treeyard decide`. Each command changes only its own piece: the other
 with their quotes, comments and sessions, and «Decisions», stay byte for byte (a section that
 stood after «Decisions» is part of the rules, and «Decisions» then ends the file). Rules with
 their own «Decisions» heading, empty rules and an empty goal are refused. `treeyard decide`
-prints «Decisions» line by line, `treeyard decide "…"` adds one with today's date (a line that
-already has a date keeps it). `--json` gives `{"goal": "…"}` (`null` when there is none),
+prints «Decisions» line by line, `treeyard decide "…"` adds one with today's date at the end of
+«Decisions» (a line that already has a date keeps it) — the file gains that line and nothing else. `--json` gives `{"goal": "…"}` (`null` when there is none),
 `{"rules": "…"}` and `{"decisions": [{"text": "…", "date": "2026-10-07"}]}`, after a write too:
 `text` is the line as written without its `- `, `date` the last `YYYY-MM-DD` in it (`null` when
 there is none); `--project <dir>` — the tree of another folder.

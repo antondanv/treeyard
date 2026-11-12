@@ -10,7 +10,7 @@ import { type AgentEvent, run } from '@antondanv/brainyard';
 import { pick, t } from '../i18n/i18n.js';
 import { addNode } from '../model/ops.js';
 import { writeOverview } from '../model/overview.js';
-import { DECISIONS } from '../model/root-doc.js';
+import { addDecisions } from '../model/root-doc.js';
 import { writeProject } from '../model/store.js';
 import { type BrainId, STATUSES, type Status, type Tree, WHO, type Who } from '../model/types.js';
 
@@ -207,21 +207,6 @@ function toNode(value: unknown, depth: number): ImportedNode | undefined {
 
 export function countNodes(nodes: ImportedNode[]): number {
   return nodes.reduce((sum, node) => sum + 1 + countNodes(node.children), 0);
-}
-
-/** Decisions go under the tree's «Решения» heading, one line each; the heading is added when missing. */
-export function addDecisions(body: string, decisions: readonly string[]): string {
-  const lines = decisions.map((line) => `- ${line}`).join('\n');
-  const match = DECISIONS.exec(body);
-  if (!match) return `${body.trimEnd()}\n\n${pick({ ru: '## Решения', en: '## Decisions' })}\n\n${lines}\n`;
-  // After the heading's own paragraph, before the next heading.
-  const from = match.index + match[0].length;
-  const next = body.slice(from).search(/^##\s/m);
-  const end = next < 0 ? body.length : from + next;
-  const section = body.slice(from, end).trimEnd();
-  // A list goes on as a list; after the heading's paragraph, a blank line first.
-  const gap = /\n- [^\n]*$/.test(section) ? '\n' : '\n\n';
-  return `${body.slice(0, from)}${section}${gap}${lines}\n${next < 0 ? '' : `\n${body.slice(end)}`}`;
 }
 
 /** Plants a proposal under the root (or `parent`); returns how many nodes were added. */

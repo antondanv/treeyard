@@ -21,7 +21,7 @@ import {
   START_LABEL,
   sessionPlan,
 } from '../agents/context.js';
-import { addDecisions, countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
+import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, removeHook } from '../commit-hook.js';
@@ -67,6 +67,7 @@ import {
   decisionsOf,
   hasDecisions,
   rulesOf,
+  writeDecisions,
   writeGoal,
   writeRules,
 } from '../model/root-doc.js';
@@ -1911,19 +1912,16 @@ function keepReasons(tree: Tree, node: TreeNode): string[] {
  */
 function decideCommand(args: string[]): number {
   const { values, positionals } = parse(args, { json: { type: 'boolean' }, project: { type: 'string' } });
-  const tree = project(values.project);
+  const dir = projectDir(values.project);
   const text = positionals.join(' ').replace(/\s+/g, ' ').trim();
   const line = !text || /\b\d{4}-\d\d-\d\d\b/.test(text) ? text : `${text} (${today()})`;
-  if (line) {
-    tree.project.body = addDecisions(tree.project.body, [line]);
-    writeProject(tree.project);
-  }
-  if (values.json) {
-    const decisions = decisionList(loadTree(tree.project.dir).project.body);
-    process.stdout.write(`${JSON.stringify({ decisions }, null, 2)}\n`);
-  } else if (line) process.stdout.write(`${t('в «Решения» .tree/tree.md: {line}', { line })}\n`);
+  // Only the line goes into the file: the header, the rules and earlier decisions stay as written.
+  if (line) writeDecisions(dir, [line]);
+  const { body } = loadTree(dir).project;
+  if (values.json) process.stdout.write(`${JSON.stringify({ decisions: decisionList(body) }, null, 2)}\n`);
+  else if (line) process.stdout.write(`${t('в «Решения» .tree/tree.md: {line}', { line })}\n`);
   else {
-    const lines = decisionsOf(tree.project.body);
+    const lines = decisionsOf(body);
     process.stdout.write(
       lines.length ? `${lines.join('\n')}\n` : `${t('решений пока нет — treeyard decide "что решили и почему"')}\n`,
     );
