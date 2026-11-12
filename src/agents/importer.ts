@@ -10,6 +10,7 @@ import { type AgentEvent, run } from '@antondanv/brainyard';
 import { pick, t } from '../i18n/i18n.js';
 import { addNode } from '../model/ops.js';
 import { writeOverview } from '../model/overview.js';
+import { DECISIONS } from '../model/root-doc.js';
 import { writeProject } from '../model/store.js';
 import { type BrainId, STATUSES, type Status, type Tree, WHO, type Who } from '../model/types.js';
 
@@ -207,8 +208,6 @@ function toNode(value: unknown, depth: number): ImportedNode | undefined {
 export function countNodes(nodes: ImportedNode[]): number {
   return nodes.reduce((sum, node) => sum + 1 + countNodes(node.children), 0);
 }
-
-const DECISIONS = /^##\s+(?:Решения|Decisions)\s*$/m;
 
 /** Decisions go under the tree's «Решения» heading, one line each; the heading is added when missing. */
 export function addDecisions(body: string, decisions: readonly string[]): string {

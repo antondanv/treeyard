@@ -26,7 +26,7 @@ import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/l
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, removeHook } from '../commit-hook.js';
 import { parsePatch } from '../diff.js';
-import { linesLabel, projectDocs } from '../docs.js';
+import { lineCount, linesLabel, projectDocs } from '../docs.js';
 import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, gitRepository } from '../git.js';
 import {
   type Board,
@@ -61,6 +61,7 @@ import {
   setStatus,
   updateNode,
 } from '../model/ops.js';
+import { cleanGoal, decisionsOf, hasDecisions, rulesOf, writeGoal, writeRules } from '../model/root-doc.js';
 import { staleOf } from '../model/stale.js';
 import { parseStatus, parseStatuses, UnknownStatus } from '../model/status-words.js';
 import { findProject, loadTree, nodePath, writeProject } from '../model/store.js';
@@ -168,6 +169,11 @@ function commandLines(): string {
   treeyard rm <id> [<id>…]                 удалить узел, заведённый по ошибке (без журнала, детей, сессий, коммитов);
                                            узел с историей не удаляется — его закрывают: set <id> status=dropped
   treeyard decide ["<решение>"]            дописать решение в «Решения» .tree/tree.md (с датой); без текста — список
+  treeyard goal ["<цель>"] [--json] [--project <папка>]   цель дерева (goal в .tree/tree.md): без текста — посмотреть,
+                                           с текстом — записать новую; остальное в файле не меняется
+  treeyard rules [--from <файл|->] [--json] [--project <папка>]   правила дерева: .tree/tree.md без «Решения» — метод,
+                                           как держим дерево, правила для агентов; --from — записать новые (шапка и
+                                           «Решения» не меняются; решения — treeyard decide)
   treeyard commit [<id>…] [-m "…"]         закоммитить файлы дерева этих узлов, README и tree.md (chore(tree): …);
                                            код, другие узлы и чужой индекс не берёт; без id — узел этой сессии
   treeyard image <id> [файл…|--paste] [--note "…"]…   картинки узла: список, приложить файлы или из буфера;
@@ -238,6 +244,11 @@ function commandLines(): string {
   treeyard rm <id> [<id>…]                 delete a node added by mistake (no journal, children, sessions, commits);
                                            a node with a history is not deleted but closed: set <id> status=dropped
   treeyard decide ["<decision>"]           add a decision to «Decisions» in .tree/tree.md (dated); without text — the list
+  treeyard goal ["<goal>"] [--json] [--project <dir>]   the tree's goal (goal in .tree/tree.md): without text — read it,
+                                           with text — write a new one; nothing else in the file changes
+  treeyard rules [--from <file|->] [--json] [--project <dir>]   the tree's rules: .tree/tree.md without «Decisions» —
+                                           the method, how the tree is kept, rules for agents; --from — write new ones
+                                           (the header and «Decisions» stay; decisions — treeyard decide)
   treeyard commit [<id>…] [-m "…"]         commit the tree files of these nodes, README and tree.md (chore(tree): …);
                                            never the code, other nodes or what others staged; no ids — this session's node
   treeyard image <id> [file…|--paste] [--note "…"]…   a node's pictures: the list, attach files or the clipboard;
@@ -369,6 +380,10 @@ async function main(argv: string[]): Promise<number> {
       return rmCommand(rest);
     case 'decide':
       return decideCommand(rest);
+    case 'goal':
+      return goalCommand(rest);
+    case 'rules':
+      return rulesCommand(rest);
     case 'commit':
       return commitCommand(rest);
     case 'image':
@@ -1863,16 +1878,70 @@ function decideCommand(args: string[]): number {
   return 0;
 }
 
-/** The lines of «Решения» (or «Decisions»), as written. */
-function decisionsOf(body: string): string[] {
-  const match = /^##\s+(?:Решения|Decisions)\s*$/m.exec(body);
-  if (!match) return [];
-  const from = match.index + match[0].length;
-  const next = body.slice(from).search(/^##\s/m);
-  return body
-    .slice(from, next < 0 ? body.length : from + next)
-    .split('\n')
-    .filter((line) => line.trim().startsWith('- '));
+/**
+ * `treeyard goal ["…"]`: the goal of the tree (`goal:` in the header of `.tree/tree.md`);
+ * with text, a new one — only that line of the file changes.
+ */
+function goalCommand(args: string[]): number {
+  const { values, positionals } = parse(args, { json: { type: 'boolean' }, project: { type: 'string' } });
+  const dir = projectDir(values.project);
+  if (positionals.length) {
+    const goal = cleanGoal(positionals.join(' '));
+    if (!goal) throw new UsageError(t('цель пустая — treeyard goal "чего проект добивается в жизни"'));
+    rootEdit(() => writeGoal(dir, goal));
+  }
+  const goal = loadTree(dir).project.goal;
+  if (values.json) process.stdout.write(`${JSON.stringify({ goal: goal ?? null }, null, 2)}\n`);
+  else if (positionals.length) process.stdout.write(`${t('цель в .tree/tree.md: {goal}', { goal: goal ?? '' })}\n`);
+  else process.stdout.write(`${goal ?? t('цели пока нет — treeyard goal "чего проект добивается в жизни"')}\n`);
+  return 0;
+}
+
+/**
+ * `treeyard rules [--from <file|->]`: the rules of the tree — the body of `.tree/tree.md`
+ * without «Решения» (those are `decide`'s); with `--from`, new ones — the header and «Решения» stay.
+ */
+async function rulesCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, {
+    json: { type: 'boolean' },
+    from: { type: 'string' },
+    project: { type: 'string' },
+  });
+  if (positionals.length) throw new UsageError(t('правила — из файла или stdin: treeyard rules --from <файл|->'));
+  const dir = projectDir(values.project);
+  if (values.from !== undefined) {
+    const rules = (await textFrom(values.from)).trim();
+    if (!rules) throw new UsageError(t('правила пустые — нечего записать'));
+    if (hasDecisions(rules))
+      throw new UsageError(t('«Решения» в правила не входят — убери раздел; решения дописывает treeyard decide'));
+    rootEdit(() => writeRules(dir, rules));
+  }
+  const rules = rulesOf(loadTree(dir).project.body);
+  if (values.json) process.stdout.write(`${JSON.stringify({ rules }, null, 2)}\n`);
+  else if (values.from !== undefined)
+    process.stdout.write(`${t('правила в .tree/tree.md: {lines}', { lines: linesLabel(lineCount(rules)) })}\n`);
+  else process.stdout.write(`${rules || t('правил пока нет — treeyard rules --from <файл|->')}\n`);
+  return 0;
+}
+
+/**
+ * A file, or stdin for `-`, read as a stream: `readFileSync(0)` throws EAGAIN on a pipe whose
+ * writer has not written yet, and a program hands its text over exactly that way.
+ */
+async function textFrom(from: string): Promise<string> {
+  if (from !== '-') return readFileSync(resolve(from), 'utf8');
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk as Buffer));
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+/** A point edit of tree.md; a header it cannot edit in place (broken YAML) is the user's to fix. */
+function rootEdit(edit: () => unknown): void {
+  try {
+    edit();
+  } catch (error) {
+    throw new UsageError((error as Error).message);
+  }
 }
 
 /**

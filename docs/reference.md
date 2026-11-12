@@ -347,6 +347,8 @@ treeyard log <id> "…" --project ../main         # from a git worktree: write t
 treeyard note "the help doesn't fit the screen" # a note about treeyard itself — into “Notes”
 treeyard rm <id>                                # delete a node added by mistake; one with a journal, children, sessions or commits is closed instead: status=dropped
 treeyard decide "SQLite, not Postgres: one user" # a dated line in «Decisions» of .tree/tree.md; without text — the list
+treeyard goal "Ten strangers order from us"     # the tree's goal in .tree/tree.md, only that line changes; without text — print it (--json)
+treeyard rules --from - < rules.md              # the rules (tree.md without «Decisions»); the header and «Decisions» stay; without --from — print them (--json)
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
 treeyard diff <id> --add HEAD                   # attach your commit to the node for review
 treeyard commit <id> [<id>…]                    # commit the tree files of these nodes, README and tree.md (chore(tree): …); never code, other nodes or the index of others
@@ -507,6 +509,18 @@ is an array of `{"path", "title", "lines", "modified"}`: `path` from the project
 (`# …`, a line over `===` or `<h1>`; code blocks don't count), else the file name without
 `.md`; `.tree/tree.md` is “Goal, rules and decisions” in the language of treeyard; `lines` —
 as the window counts them; `modified` — ISO time of the file's last change.
+
+The root's own document, `.tree/tree.md`, is read and changed in parts, so a program never
+parses it and a change never rewrites the whole file. `treeyard goal` prints the goal (`goal`
+in the header), `treeyard goal "…"` writes a new one — the goal is one line, line breaks become
+spaces. `treeyard rules` prints the rules — the body without «Decisions»: the method, how the
+tree is kept, rules for agents; `treeyard rules --from <file|->` writes new ones; decisions are
+added with `treeyard decide`. Each command changes only its own piece: the other header keys
+with their quotes, comments and sessions, and «Decisions», stay byte for byte (a section that
+stood after «Decisions» is part of the rules, and «Decisions» then ends the file). Rules with
+their own «Decisions» heading, empty rules and an empty goal are refused. `--json` gives
+`{"goal": "…"}` (`null` when there is none) and `{"rules": "…"}`, after a write too;
+`--project <dir>` — the tree of another folder.
 
 ### Node diffs
 

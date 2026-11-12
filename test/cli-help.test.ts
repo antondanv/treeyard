@@ -34,6 +34,8 @@ const COMMANDS = [
   'note',
   'rm',
   'decide',
+  'goal',
+  'rules',
   'commit',
   'image',
   'diff',

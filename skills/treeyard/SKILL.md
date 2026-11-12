@@ -180,8 +180,8 @@ overview; a hand edit skips them. Reading the files is fine.
   `treeyard set <id> note="…"`; a node you added by mistake → `treeyard rm <id>` (one with a
   history → `status=dropped`); the order → `set <id> after=…`.
 - No command for what you need? Tell the person and `treeyard note` the gap.
-- `.tree/tree.md` (goal, rules, «Decisions») changes only when the person asks; a decision
-  then goes in with `treeyard decide "what and why"`.
+- `.tree/tree.md` (goal, rules, «Decisions») changes only when the person asks, and then by
+  command: `treeyard goal "…"`, `treeyard rules --from -`, `treeyard decide "what and why"`.
 - `.tree/.local/` — never touch, never commit.
 
 ## Commits

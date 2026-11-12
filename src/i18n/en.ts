@@ -226,6 +226,18 @@ export const EN: Record<string, string> = {
   'решений пока нет — treeyard decide "что решили и почему"':
     'no decisions yet — treeyard decide "what was decided and why"',
   'в «Решения» .tree/tree.md: {line}': 'into «Decisions» of .tree/tree.md: {line}',
+  'цель пустая — treeyard goal "чего проект добивается в жизни"':
+    'the goal is empty — treeyard goal "what the project achieves in life"',
+  'цель в .tree/tree.md: {goal}': 'the goal in .tree/tree.md: {goal}',
+  'цели пока нет — treeyard goal "чего проект добивается в жизни"':
+    'no goal yet — treeyard goal "what the project achieves in life"',
+  'правила — из файла или stdin: treeyard rules --from <файл|->':
+    'the rules come from a file or stdin: treeyard rules --from <file|->',
+  'правила пустые — нечего записать': 'the rules are empty — nothing to write',
+  '«Решения» в правила не входят — убери раздел; решения дописывает treeyard decide':
+    '«Decisions» are not part of the rules — remove the section; treeyard decide adds decisions',
+  'правила в .tree/tree.md: {lines}': 'the rules in .tree/tree.md: {lines}',
+  'правил пока нет — treeyard rules --from <файл|->': 'no rules yet — treeyard rules --from <file|->',
   'не JSON: {error}': 'not JSON: {error}',
   'нужен массив узлов: [{"title": "…", "done_when": "…"}]':
     'an array of nodes is needed: [{"title": "…", "done_when": "…"}]',
