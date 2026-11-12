@@ -355,3 +355,37 @@ describe('treeyard decide --json', () => {
     expect(decisionsOf(loadTree(dir).project.body)).toEqual(['- Без сервера (2026-11-12)']);
   }, 40_000);
 });
+
+describe('treeyard import --from-json into an existing tree', () => {
+  const FOLDED = 'goal: >-\n  десять незнакомых людей\n  заказывают у нас\n';
+  const plan = (goal: string) =>
+    JSON.stringify({
+      goal,
+      decisions: ['Оплата — только картой (2026-11-12)', 'Без своего сервера'],
+      nodes: [{ title: 'Касса', status: 'todo', children: [{ title: 'Чек на почту', status: 'idea' }] }],
+    });
+
+  it('a goal already there stays as written; only the decision lines are added', async () => {
+    const tree = emptyTree();
+    const { dir } = tree.project;
+    writeFileSync(treeFile(dir), HAND_MADE);
+    const res = await withStdin(dir, plan('совсем другая цель'), 'import', '--from-json', '-');
+    expect(res.code, res.stderr).toBe(0);
+    expect(readFileSync(treeFile(dir), 'utf8')).toBe(
+      `${HAND_MADE}- Оплата — только картой (2026-11-12)\n- Без своего сервера\n`,
+    );
+    expect([...loadTree(dir).nodes.values()].map((node) => node.title).sort()).toEqual(['Касса', 'Чек на почту']);
+  }, 40_000);
+
+  it('a tree without a goal gains only its line under the title, besides the decisions', async () => {
+    const tree = emptyTree();
+    const { dir } = tree.project;
+    const noGoal = HAND_MADE.replace(FOLDED, '');
+    writeFileSync(treeFile(dir), noGoal);
+    const res = await withStdin(dir, plan('двадцать заказов\n  в неделю'), 'import', '--from-json', '-');
+    expect(res.code, res.stderr).toBe(0);
+    expect(readFileSync(treeFile(dir), 'utf8')).toBe(
+      `${noGoal.replace('# the name on the board\n', '# the name on the board\ngoal: двадцать заказов в неделю\n')}- Оплата — только картой (2026-11-12)\n- Без своего сервера\n`,
+    );
+  }, 40_000);
+});

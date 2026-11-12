@@ -10,8 +10,7 @@ import { type AgentEvent, run } from '@antondanv/brainyard';
 import { pick, t } from '../i18n/i18n.js';
 import { addNode } from '../model/ops.js';
 import { writeOverview } from '../model/overview.js';
-import { addDecisions } from '../model/root-doc.js';
-import { writeProject } from '../model/store.js';
+import { addDecisions, cleanGoal, writeDecisions, writeGoal } from '../model/root-doc.js';
 import { type BrainId, STATUSES, type Status, type Tree, WHO, type Who } from '../model/types.js';
 
 export interface ImportedNode {
@@ -211,16 +210,17 @@ export function countNodes(nodes: ImportedNode[]): number {
 
 /** Plants a proposal under the root (or `parent`); returns how many nodes were added. */
 export function plant(tree: Tree, proposal: Proposal, parent = 'root'): number {
-  let projectChanged = false;
-  if (proposal.goal && !tree.project.goal) {
-    tree.project.goal = proposal.goal;
-    projectChanged = true;
+  // Point edits of tree.md, never `writeProject`: a hand-made header keeps its comments,
+  // quotes and folded goal; the tree in memory follows what went to the file.
+  const goal = proposal.goal ? cleanGoal(proposal.goal) : '';
+  if (goal && !tree.project.goal) {
+    writeGoal(tree.project.dir, goal);
+    tree.project.goal = goal;
   }
   if (proposal.decisions?.length) {
+    writeDecisions(tree.project.dir, proposal.decisions);
     tree.project.body = addDecisions(tree.project.body, proposal.decisions);
-    projectChanged = true;
   }
-  if (projectChanged) writeProject(tree.project);
   let added = 0;
   const walk = (list: ImportedNode[], under: string) => {
     for (const item of list) {
