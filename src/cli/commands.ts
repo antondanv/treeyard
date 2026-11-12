@@ -144,7 +144,8 @@ function commandLines(): string {
                                            Antigravity (папки в проекте — обновить)
   treeyard templates                       шаблоны: этапы, направления, микадо…
   treeyard show [id…] [--json] [--open]    дерево или узлы текстом (--open — без готового; вне терминала готовое
-                                           свёрнуто в «✓ готово: N», --all — всё)
+                                           свёрнуто в «✓ готово: N», --all — всё; открытое под готовым видно,
+                                           родитель — свёрнутой строкой)
                 [--brief] [--journal N|all]  --brief — шапка, критерий и 3 последние записи; --journal — сколько записей
                 [--only журнал,сессии…]    только эти части: header, criterion, commits, children, sessions, note,
                                            journal, history (смены статуса); можно по-русски
@@ -221,7 +222,8 @@ function commandLines(): string {
                                            Codex, Antigravity (copies in the project — refresh)
   treeyard templates                       templates: stages, directions, mikado…
   treeyard show [id…] [--json] [--open]    the tree or nodes as text (--open hides finished work; off a terminal
-                                           finished work folds into «✓ done: N», --all shows everything)
+                                           finished work folds into «✓ done: N», --all shows everything; open work
+                                           under a finished parent stays, the parent folded into one line)
                 [--brief] [--journal N|all]  --brief — header, criterion and the last 3 entries; --journal — how many entries
                 [--only journal,sessions…]  only these parts: header, criterion, commits, children, sessions, note,
                                            journal, history (status changes)

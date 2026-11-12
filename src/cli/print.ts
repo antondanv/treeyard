@@ -12,7 +12,16 @@ import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { type Stale, staleLabel, staleNote } from '../model/stale.js';
 import { ago } from '../model/time.js';
-import { childrenByOrder, childrenOf, pathTo, progress, STATUS_ORDERS, summarize } from '../model/tree.js';
+import {
+  CLOSED,
+  childrenByOrder,
+  childrenOf,
+  descendants,
+  pathTo,
+  progress,
+  STATUS_ORDERS,
+  summarize,
+} from '../model/tree.js';
 import { ROOT, type Status, type Tree, type TreeNode } from '../model/types.js';
 import type { TreeEvent } from '../watch.js';
 
@@ -97,22 +106,55 @@ export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): s
     const hex = HEX[node.status];
     return hex ? p.c(hex, GLYPH[node.status]) : GLYPH[node.status];
   };
-  const walk = (parent: string, prefix: string) => {
-    const all = childrenOf(tree, parent).filter(
-      (kid) => options.closed !== false || (kid.status !== 'done' && kid.status !== 'dropped'),
-    );
-    // Like the TUI's «Готовые» group: finished children collapse into one counter at the first one's place.
-    const doneCount = options.foldDone ? all.filter((kid) => kid.status === 'done').length : 0;
-    const kids: (TreeNode | number)[] = [];
-    for (const kid of all) {
-      if (doneCount && kid.status === 'done') {
-        if (!kids.some((item) => typeof item === 'number')) kids.push(doneCount);
-      } else kids.push(kid);
+  // Open work under a node, however deep: a hidden or folded closed parent must not hide it.
+  const openInside = new Map<string, number>();
+  const countOpen = (id: string): number => {
+    let count = openInside.get(id);
+    if (count === undefined) {
+      count = 0;
+      for (const kid of childrenOf(tree, id)) count += (CLOSED.has(kid.status) ? 0 : 1) + countOpen(kid.id);
+      openInside.set(id, count);
     }
-    kids.forEach((node, index) => {
-      const last = index === kids.length - 1;
-      if (typeof node === 'number') {
-        lines.push(`${prefix}${p.dim(`${last ? '└─ ' : '├─ '}✓ ${t('готово: {n}', { n: node })}`)}`);
+    return count;
+  };
+  // Inside a folded closed node only the way to open work is shown.
+  const walk = (parent: string, prefix: string, folded = false) => {
+    const kids: { node: TreeNode; fold: boolean }[] = [];
+    let doneCount = 0;
+    let counterAt = -1;
+    for (const kid of childrenOf(tree, parent)) {
+      const closed = CLOSED.has(kid.status);
+      const hide = closed && (folded || options.closed === false);
+      // Like the TUI's «Готовые» group: finished children collapse into one counter at the first one's place.
+      const count = !hide && options.foldDone === true && kid.status === 'done';
+      if (!hide && !count) kids.push({ node: kid, fold: false });
+      else if (countOpen(kid.id) > 0) kids.push({ node: kid, fold: true });
+      else if (count) {
+        if (counterAt < 0) counterAt = kids.length;
+        doneCount += 1;
+      }
+    }
+    const items: ({ node: TreeNode; fold: boolean } | number)[] = [...kids];
+    if (doneCount) items.splice(counterAt, 0, doneCount);
+    items.forEach((item, index) => {
+      const last = index === items.length - 1;
+      if (typeof item === 'number') {
+        lines.push(`${prefix}${p.dim(`${last ? '└─ ' : '├─ '}✓ ${t('готово: {n}', { n: item })}`)}`);
+        return;
+      }
+      const { node, fold } = item;
+      const next = `${prefix}${last ? '   ' : p.dim('│  ')}`;
+      if (fold) {
+        // A closed parent of open work: one dim line, with how much of it stays hidden.
+        const hidden = descendants(tree, node.id).filter(
+          (down) => CLOSED.has(down.status) && countOpen(down.id) === 0,
+        ).length;
+        const status = options.words ? `  ${STATUS_LABEL[node.status]}` : '';
+        const rest = hidden > 0 ? t('  · свёрнуто, скрыто {n}', { n: hidden }) : '';
+        lines.push(
+          `${prefix}${p.dim(last ? '└─ ' : '├─ ')}${glyph(node)} ${p.dim(`${node.title}  ${node.id}${status}${rest}`)}`,
+        );
+        walk(node.id, next, true);
         return;
       }
       let line = `${prefix}${p.dim(last ? '└─ ' : '├─ ')}${glyph(node)} ${node.status === 'done' ? p.dim(node.title) : node.title}`;
@@ -139,7 +181,7 @@ export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): s
       const stale = options.stale?.(node);
       if (stale) line += p.dim(`  ${staleLabel(stale)}`);
       lines.push(line);
-      walk(node.id, `${prefix}${last ? '   ' : p.dim('│  ')}`);
+      walk(node.id, next);
     });
   };
   walk(options.under ?? ROOT, '');

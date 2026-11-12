@@ -180,6 +180,7 @@ export const EN: Record<string, string> = {
   'id «{id}» подходит к нескольким узлам': 'id «{id}» matches several nodes',
   'нет узла «{id}»': 'no node «{id}»',
   'готово: {n}': 'done: {n}',
+  '  · свёрнуто, скрыто {n}': '  · folded, {n} hidden',
   'внутри: {total}, готово {done}': 'inside: {total}, done {done}',
   '  … ещё {n} (--journal all)': '  … {n} more (--journal all)',
   '--journal: число записей или all': '--journal: a number of entries or all',

@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { PNG } from 'pngjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { type Paint, treeText } from '../src/cli/print.js';
 import { addImage } from '../src/model/images.js';
 import { NODE_VAR } from '../src/model/notes.js';
 import { addNode, logToNode, setStatus } from '../src/model/ops.js';
@@ -24,6 +25,10 @@ let dir = '';
 let ids: { a: string; b: string; story: string };
 
 function sh(...args: string[]) {
+  return showIn(dir, ...args);
+}
+
+function showIn(cwd: string, ...args: string[]) {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     TREEYARD_HOME: tempDir('treeyard-home-'),
@@ -32,7 +37,7 @@ function sh(...args: string[]) {
   };
   delete env[NODE_VAR];
   delete env.FORCE_COLOR;
-  return run(process.execPath, ['--import', tsx, cli, 'show', ...args], { cwd: dir, env, timeout: 30_000 }).then(
+  return run(process.execPath, ['--import', tsx, cli, 'show', ...args], { cwd, env, timeout: 30_000 }).then(
     ({ stdout }) => ({ code: 0, stdout }),
     (error: { code: number; stdout: string; stderr: string }) => ({
       code: error.code,
@@ -242,6 +247,85 @@ describe('treeyard show for agents', () => {
     expect(mixed.code).toBe(2);
     expect(mixed.stdout).toContain('treeyard show --status review --under <id>');
   }, 40_000);
+});
+
+describe('open work under closed parents', () => {
+  let nested = '';
+  let id: Record<string, string> = {};
+
+  beforeAll(() => {
+    nested = mkdtempSync(join(tmpdir(), 'treeyard-show-nested-'));
+    createTree(nested, getTemplate('directions')!, { title: 'Проект', answers: {}, skeleton: false });
+    const tree = loadTree(nested);
+    const live = addNode(tree, { title: 'Живое', status: 'active' });
+    const given = addNode(tree, { title: 'Сданное', status: 'done' });
+    const inner = addNode(tree, { title: 'Готовое внутри', status: 'done', parent: given.id });
+    const idea = addNode(tree, { title: 'Забытая идея', status: 'idea', parent: given.id });
+    const deeper = addNode(tree, { title: 'Глубже', status: 'done', parent: given.id });
+    const tail = addNode(tree, { title: 'Хвост', parent: deeper.id });
+    const plain = addNode(tree, { title: 'Готовое без хвостов', status: 'done' });
+    addNode(tree, { title: 'Тоже готовое', status: 'done', parent: plain.id });
+    const dropped = addNode(tree, { title: 'Отменённое', status: 'dropped' });
+    const wait = addNode(tree, { title: 'Ждущее', status: 'waiting', waiting: 'сервер', parent: dropped.id });
+    id = { live: live.id, given: given.id, inner: inner.id, idea: idea.id, deeper: deeper.id, tail: tail.id };
+    Object.assign(id, { plain: plain.id, dropped: dropped.id, wait: wait.id });
+  }, 30_000);
+
+  const body = (stdout: string) => stdout.split('\n').slice(2).join('\n');
+
+  it('off a terminal: the closed parent is one folded line, its open work under it, the rest in the counter', async () => {
+    const res = await showIn(nested);
+    expect(body(res.stdout)).toBe(
+      [
+        `├─ ◐ Живое  ${id.live}  в работе`,
+        `├─ ✓ Сданное  ${id.given}  готово  · свёрнуто, скрыто 1`,
+        `│  ├─ ◇ Забытая идея  ${id.idea}  идея`,
+        `│  └─ ✓ Глубже  ${id.deeper}  готово`,
+        `│     └─ ○ Хвост  ${id.tail}  к работе`,
+        '├─ ✓ готово: 1',
+        `└─ ✗ Отменённое  ${id.dropped}  отказ`,
+        `   └─ ‖ Ждущее  ${id.wait}  ждёт: сервер`,
+        '',
+      ].join('\n'),
+    );
+  }, 40_000);
+
+  it('--open: closed work is gone, except as folded lines above open work', async () => {
+    const res = await showIn(nested, '--open');
+    expect(body(res.stdout)).toBe(
+      [
+        `├─ ◐ Живое  ${id.live}  в работе`,
+        `├─ ✓ Сданное  ${id.given}  готово  · свёрнуто, скрыто 1`,
+        `│  ├─ ◇ Забытая идея  ${id.idea}  идея`,
+        `│  └─ ✓ Глубже  ${id.deeper}  готово`,
+        `│     └─ ○ Хвост  ${id.tail}  к работе`,
+        `└─ ✗ Отменённое  ${id.dropped}  отказ`,
+        `   └─ ‖ Ждущее  ${id.wait}  ждёт: сервер`,
+        '',
+      ].join('\n'),
+    );
+    // A branch narrowed to a closed node keeps its open work too.
+    const branch = await showIn(nested, '--open', '--under', id.given!);
+    expect(branch.stdout).toContain(`├─ ◇ Забытая идея  ${id.idea}  идея`);
+    expect(branch.stdout).toContain(`   └─ ○ Хвост  ${id.tail}  к работе`);
+    expect(branch.stdout).not.toContain('Готовое внутри');
+  }, 40_000);
+
+  it('in a terminal --open shows the same tree, without status words', () => {
+    const plainPaint: Paint = { on: false, c: (_hex, text) => text, dim: (text) => text, bold: (text) => text };
+    const text = treeText(loadTree(nested), plainPaint, { closed: false });
+    expect(text.split('\n').slice(2)).toEqual([
+      `├─ ◐ Живое  ${id.live}`,
+      `├─ ✓ Сданное  ${id.given}  · свёрнуто, скрыто 1`,
+      `│  ├─ ◇ Забытая идея  ${id.idea}`,
+      `│  └─ ✓ Глубже  ${id.deeper}`,
+      `│     └─ ○ Хвост  ${id.tail}`,
+      `└─ ✗ Отменённое  ${id.dropped}`,
+      `   └─ ‖ Ждущее  ${id.wait}  ждёт: сервер`,
+    ]);
+  });
+
+  afterAll(() => rmSync(nested, { recursive: true, force: true }));
 });
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));

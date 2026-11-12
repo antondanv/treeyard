@@ -321,6 +321,7 @@ with the same commands a person uses:
 
 ```sh
 treeyard show                                   # the tree; off a terminal finished work folds into «✓ done: N» (--all — everything, --open — without finished)
+                                                # open work under a finished or dropped parent stays in sight: the parent is one folded line («· folded, N hidden»)
 treeyard show <id>                              # a node; several at once: treeyard show a b c (--json — an array)
 treeyard show <id> --brief                      # header, criterion, check/waiting and the last 3 journal entries
 treeyard show <id> --journal 5                  # only the last 5 entries (--journal all — every one)
