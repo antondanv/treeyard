@@ -1,13 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { PNG } from 'pngjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { listImages } from '../src/model/images.js';
 import { addNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
-import { emptyTree, tempDir, treeyardIn } from './helpers.js';
+import { emptyTree, tempDir, treeyardIn, tsx } from './helpers.js';
 
 const saved = { global: process.env.GIT_CONFIG_GLOBAL, system: process.env.GIT_CONFIG_SYSTEM };
 beforeAll(() => {
@@ -83,4 +84,22 @@ describe('small CLI forms', () => {
     const person = await sh('set', node.id, 'status=done', '--as', 'ты');
     expect(person.stdout).toBe(`${node.id} · готово · Узел\n`);
   }, 40_000);
+});
+
+describe('the commands module', () => {
+  it('runs nothing when imported: only src/cli/main.ts starts the CLI', () => {
+    const commands = pathToFileURL(join(import.meta.dirname, '../src/cli/commands.ts')).href;
+    const out = execFileSync(
+      process.execPath,
+      ['--import', tsx, '--input-type=module', '-e', `await import(${JSON.stringify(commands)});`],
+      {
+        cwd: emptyTree().project.dir,
+        env: { ...process.env, TREEYARD_HOME: tempDir('treeyard-home-'), NO_COLOR: '1' },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    // Before the fix the import ran `treeyard` with no arguments and printed the tree here.
+    expect(out).toBe('');
+  }, 30_000);
 });

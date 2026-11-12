@@ -2383,18 +2383,24 @@ function configCommand(args: string[]): number {
   throw new UsageError(t('нет такой настройки «{key}» — treeyard config', { key }));
 }
 
-main(process.argv.slice(2)).then(
-  (code) => {
-    process.exitCode = code;
-  },
-  (error: unknown) => {
-    if (error instanceof UsageError) {
-      process.stderr.write(`${err.c('#ff7b72', '✗')} ${error.message}\n`);
-      process.exitCode = 2;
-      return;
-    }
-    process.stderr.write(`${err.c('#ff7b72', '✗')} ${(error as Error).message ?? String(error)}\n`);
-    if (process.env.TREEYARD_DEBUG) process.stderr.write(`${(error as Error).stack}\n`);
-    process.exitCode = 1;
-  },
-);
+/**
+ * The CLI: runs the command and sets the exit code, never throws. Called by `main.ts` only, so
+ * importing this module (a test does) runs nothing.
+ */
+export function run(argv: string[]): void {
+  main(argv).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (error: unknown) => {
+      if (error instanceof UsageError) {
+        process.stderr.write(`${err.c('#ff7b72', '✗')} ${error.message}\n`);
+        process.exitCode = 2;
+        return;
+      }
+      process.stderr.write(`${err.c('#ff7b72', '✗')} ${(error as Error).message ?? String(error)}\n`);
+      if (process.env.TREEYARD_DEBUG) process.stderr.write(`${(error as Error).stack}\n`);
+      process.exitCode = 1;
+    },
+  );
+}

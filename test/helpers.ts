@@ -32,7 +32,8 @@ export function emptyTree(): Tree {
 
 const run = promisify(execFile);
 const cli = fileURLToPath(new URL('../src/cli/main.ts', import.meta.url));
-const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
+/** The loader that runs TypeScript sources: `node --import <tsx>`. */
+export const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
 
 /** The environment of a CLI run from source: a throwaway home, Russian, no colors, no outer session. */
 function cliEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
