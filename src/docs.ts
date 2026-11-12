@@ -6,7 +6,7 @@
  */
 import { execFile } from 'node:child_process';
 import { type Dirent, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 import { plural, t } from './i18n/i18n.js';
@@ -25,6 +25,8 @@ const MAX_DEPTH = 8;
 export interface DocFile {
   /** From the project folder, with `/`. */
   path: string;
+  /** What to call the document in a list: see `docTitle`. */
+  title: string;
   lines: number;
   /** Milliseconds, as `statSync` gives them. */
   mtime: number;
@@ -97,12 +99,15 @@ export function sortDocs<T extends { path: string }>(docs: T[]): T[] {
   });
 }
 
+/** The window «Документы» and `treeyard docs` list the same files in the same order, from here. */
 export async function projectDocs(dir: string): Promise<DocFile[]> {
   const found = (await gitPaths(dir)) ?? walkPaths(dir);
   const paths = new Set(found.filter((path) => !inTree(path)));
   if (existsSync(join(dir, TREE_DOC))) paths.add(TREE_DOC);
+  // Sorted before the cut, so a big project keeps tree.md and README.
+  const kept = sortDocs([...paths].map((path) => ({ path }))).slice(0, MAX_FILES);
   const docs: DocFile[] = [];
-  for (const path of [...paths].slice(0, MAX_FILES)) {
+  for (const { path } of kept) {
     try {
       const full = join(dir, path);
       const stat = statSync(full);
@@ -110,6 +115,7 @@ export async function projectDocs(dir: string): Promise<DocFile[]> {
       const text = readFileSync(full, 'utf8');
       docs.push({
         path,
+        title: docTitle(path, text),
         lines: lineCount(text),
         mtime: stat.mtimeMs,
       });
@@ -117,7 +123,58 @@ export async function projectDocs(dir: string): Promise<DocFile[]> {
       // Deleted but still in the index, or unreadable: not a document to open.
     }
   }
-  return sortDocs(docs);
+  return docs;
+}
+
+/**
+ * A document's name for a list: `title` of its front matter, else its first top-level heading
+ * (`# …`, `…` over `===`, `<h1>…</h1>`; code blocks don't count), else the file name.
+ * tree.md is named as the root's menu names it: its `title` is the project's.
+ */
+export function docTitle(path: string, text: string): string {
+  if (path === TREE_DOC) return t('Цель, правила и решения');
+  let body = text.replace(/\r\n/g, '\n');
+  try {
+    const { data, body: rest } = parseDocument(body);
+    if (typeof data.title === 'string' && plainText(data.title)) return plainText(data.title);
+    body = rest;
+  } catch {
+    // Broken front matter: the heading may still be there.
+  }
+  const lines = body.split('\n');
+  let fence: string | undefined;
+  for (const [index, line] of lines.entries()) {
+    const mark = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence) {
+      // Closed by the same character, at least as many times, with nothing after it.
+      if (mark && mark[0] === fence[0] && mark.length >= fence.length && !line.trim().slice(mark.length).trim())
+        fence = undefined;
+      continue;
+    }
+    if (mark) {
+      fence = mark;
+      continue;
+    }
+    const heading =
+      /^ {0,3}#[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/.exec(line)?.[1] ??
+      /<h1\b[^>]*>(.*?)<\/h1>/i.exec(line)?.[1] ??
+      (/^ {0,3}=+[ \t]*$/.test(lines[index + 1] ?? '') && /^ {0,3}\S/.test(line) && !/^ {0,3}[#>|-]/.test(line)
+        ? line
+        : undefined);
+    const title = heading === undefined ? '' : plainText(heading);
+    if (title) return title;
+  }
+  return basename(path).replace(/\.(md|markdown)$/i, '');
+}
+
+/** A heading without its Markdown and HTML: links and pictures keep their text. */
+function plainText(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__|\*|`)(.+?)\1/g, '$2')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** `12 стр.` · `1 line`, `12 lines`. */

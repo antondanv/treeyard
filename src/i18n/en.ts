@@ -1246,6 +1246,8 @@ export const EN: Record<string, string> = {
   '{key}: часы целым числом, 0 — выключено': '{key}: hours as a whole number, 0 — off',
   'treeyard status [--json] [--project <папка>]': 'treeyard status [--json] [--project <dir>]',
   'treeyard watch [--json] [--project <папка>]': 'treeyard watch [--json] [--project <dir>]',
+  'treeyard docs [--json] [--project <папка>]': 'treeyard docs [--json] [--project <dir>]',
+  'Цель, правила и решения': 'Goal, rules and decisions',
   'слежу за деревом в {dir} — Ctrl+C, чтобы выйти': 'watching the tree in {dir} — Ctrl+C to stop',
   добавлен: 'added',
   'записей: {n}, последняя: {entry}': 'entries: {n}, the last: {entry}',

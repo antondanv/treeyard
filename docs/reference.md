@@ -329,6 +329,7 @@ treeyard show --status review,idea --under <id> # nodes of these statuses in a b
 treeyard show --under <id>                      # the branch as a tree (--open, --all, --json as for the whole tree)
 treeyard show --json --all                      # everything about every node for a program: description, journal, status changes, pictures, dates, place (--under <id> — a branch)
 treeyard watch --json                           # watch the tree: a JSON line per change — a node added, removed, its status changed, a new entry, an edit (without --json — a line for a person)
+treeyard docs --json                            # the project's documents as the «Documents» window lists them: path, title, lines, time (without --json — a line each)
 treeyard find "rounding|cents"                  # search every node, done ones too: id, status word, path and the matching piece (--status, --under, --json, --limit)
 treeyard add "Show the product to a person" --who human --parent <id>
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
@@ -498,6 +499,14 @@ If the file changes on disk while it is open (an agent, another editor), `⌃S` 
 silently overwrite someone else's edit: `o` — overwrite, `r` — reload from disk. A
 `tree.md` whose YAML header doesn't parse is not saved; its edit is undone by `u` in the
 tree, like any edit of the tree.
+
+`treeyard docs` prints the same list in the same order, so a program (Treeyard Web) never
+picks the files itself; `--project <dir>` — the tree of another folder. `treeyard docs --json`
+is an array of `{"path", "title", "lines", "modified"}`: `path` from the project folder with
+`/`; `title` — `title` from the document's front matter, else its first top-level heading
+(`# …`, a line over `===` or `<h1>`; code blocks don't count), else the file name without
+`.md`; `.tree/tree.md` is “Goal, rules and decisions” in the language of treeyard; `lines` —
+as the window counts them; `modified` — ISO time of the file's last change.
 
 ### Node diffs
 

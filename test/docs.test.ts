@@ -5,10 +5,11 @@ import type { Key } from 'ink';
 import stringWidth from 'string-width';
 import { describe, expect, it } from 'vitest';
 
-import { docPath, projectDocs, readDoc, sortDocs, TREE_DOC, writeDoc } from '../src/docs.js';
+import { docPath, docTitle, projectDocs, readDoc, sortDocs, TREE_DOC, writeDoc } from '../src/docs.js';
+import { setLang } from '../src/i18n/i18n.js';
 import { editKey, editorRows, insert } from '../src/tui/doc-editor.js';
 import { inline, layoutMarkdown, type MdRow } from '../src/tui/markdown.js';
-import { emptyTree, tempDir } from './helpers.js';
+import { emptyTree, tempDir, treeyardIn } from './helpers.js';
 
 const git = (dir: string, ...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
 const write = (dir: string, path: string, text: string) => {
@@ -45,6 +46,24 @@ describe('project documents', () => {
     expect(docs.map((doc) => doc.path)).toEqual([TREE_DOC, 'README.md', 'guide/how.md']);
   });
 
+  it('names each document by its front matter, its first top-level heading or its file', () => {
+    expect(docTitle('a.md', '# Видение\n\n## Раздел\n')).toBe('Видение');
+    expect(docTitle('a.md', '---\ntitle: Из шапки\n---\n# Заголовок\n')).toBe('Из шапки');
+    expect(docTitle('a.md', '---\nname: skill\n---\n\n# Скилл  #\n')).toBe('Скилл');
+    expect(docTitle('a.md', 'Подчёркнутый\n===\n')).toBe('Подчёркнутый');
+    expect(docTitle('a.md', '<div>\n<h1 align="center">Проект</h1>\n</div>\n')).toBe('Проект');
+    expect(docTitle('a.md', '# [Ссылка](x.md) и **жирный** `код`\n')).toBe('Ссылка и жирный код');
+    // A heading inside a code block is code; ## is a section, not the title.
+    expect(docTitle('docs/guide.md', '```sh\n# комментарий\n```\n## Раздел\n')).toBe('guide');
+    expect(docTitle('notes/Список дел.markdown', 'текст\n')).toBe('Список дел');
+    expect(docTitle('a.md', '---\ntitle: [не закрыто\n---\n# Всё равно\n')).toBe('Всё равно');
+    expect(docTitle('a.md', '#\n#тег\n')).toBe('a');
+    expect(docTitle(TREE_DOC, '---\ntitle: Тест\n---\n')).toBe('Цель, правила и решения');
+    setLang('en');
+    expect(docTitle(TREE_DOC, '---\ntitle: Тест\n---\n')).toBe('Goal, rules and decisions');
+    setLang('ru');
+  });
+
   it('sorts README, AGENTS and CLAUDE first among the top files, folders after', () => {
     const sorted = sortDocs(
       ['docs/a.md', 'z.md', 'CLAUDE.md', 'a.md', 'README.md', TREE_DOC].map((path) => ({ path })),
@@ -67,6 +86,67 @@ describe('project documents', () => {
     expect(() => docPath(dir, '../outside.md')).toThrow();
     expect(() => writeDoc(dir, '../outside.md', 'x')).toThrow();
   });
+});
+
+describe('treeyard docs', () => {
+  it("--json gives the window's list from Git: path, title, lines and time", async () => {
+    const dir = emptyTree().project.dir;
+    git(dir, 'init', '-q');
+    write(dir, 'docs/vision.md', '# Видение\n\nкуда идём\n');
+    write(dir, 'README.md', '<h1>Проект</h1>\n');
+    write(dir, 'CLAUDE.md', '@AGENTS.md\n');
+    write(dir, 'AGENTS.md', '# Правила для агентов\n');
+    write(dir, 'notes/секрет.md', '# Не для дерева\n');
+    write(dir, '.gitignore', 'notes/\n');
+    git(dir, 'add', 'README.md', 'docs', '.gitignore');
+    write(dir, 'draft.md', 'черновик\n');
+    const result = await treeyardIn(dir)('docs', '--json');
+    expect(result.code).toBe(0);
+    const docs = JSON.parse(result.stdout) as { path: string; title: string; lines: number; modified: string }[];
+    expect(docs.map(({ path, title }) => [path, title])).toEqual([
+      [TREE_DOC, 'Цель, правила и решения'],
+      ['README.md', 'Проект'],
+      ['AGENTS.md', 'Правила для агентов'],
+      ['CLAUDE.md', 'CLAUDE'],
+      ['draft.md', 'draft'],
+      ['docs/vision.md', 'Видение'],
+    ]);
+    // The same list as the window's, field for field.
+    const window = await projectDocs(dir);
+    expect(docs.map((doc) => doc.path)).toEqual(window.map((doc) => doc.path));
+    expect(docs[5]!.lines).toBe(3);
+    expect(docs[5]!.modified).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$/);
+    expect(Date.parse(docs[5]!.modified)).toBe(Math.floor(window[5]!.mtime / 1000) * 1000);
+    expect(Object.keys(docs[0]!)).toEqual(['path', 'title', 'lines', 'modified']);
+  }, 40_000);
+
+  it('without Git lists the folder; in text — a line per document; --project from elsewhere', async () => {
+    const dir = emptyTree().project.dir;
+    write(dir, 'README.md', '# Проект\n');
+    write(dir, 'guide/how.md', 'как\n');
+    write(dir, 'node_modules/pkg/README.md', 'x\n');
+    const run = treeyardIn(dir);
+    const json = JSON.parse((await run('docs', '--json')).stdout) as { path: string; title: string }[];
+    expect(json.map(({ path, title }) => [path, title])).toEqual([
+      [TREE_DOC, 'Цель, правила и решения'],
+      ['README.md', 'Проект'],
+      ['guide/how.md', 'how'],
+    ]);
+    const text = await run('docs');
+    expect(text.code).toBe(0);
+    const lines = text.stdout.trimEnd().split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/^\.tree\/tree\.md +Цель, правила и решения · \d+ стр\. · только что$/);
+    expect(lines[1]).toMatch(/^README\.md +Проект · 1 стр\./);
+    // The file name is not repeated as the title.
+    expect(lines[2]).toMatch(/^guide\/how\.md +· 1 стр\./);
+
+    const elsewhere = await treeyardIn(tempDir())('docs', '--json', '--project', dir);
+    expect(JSON.parse(elsewhere.stdout)).toEqual(json);
+    const stray = await run('docs', 'лишнее');
+    expect(stray.code).toBe(2);
+    expect(stray.stderr).toContain('treeyard docs [--json] [--project <папка>]');
+  }, 40_000);
 });
 
 describe('Markdown in the terminal', () => {

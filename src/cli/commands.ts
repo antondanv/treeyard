@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { parseArgs } from 'node:util';
@@ -26,6 +26,7 @@ import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/l
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, removeHook } from '../commit-hook.js';
 import { parsePatch } from '../diff.js';
+import { linesLabel, projectDocs } from '../docs.js';
 import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, gitRepository } from '../git.js';
 import {
   type Board,
@@ -146,6 +147,9 @@ function commandLines(): string {
                                            пачка правок — по событию на узел; --json — строка JSON на событие, для программ
   treeyard find "<текст>" [--status s] [--under id]   поиск по названиям, критериям, описаниям и журналам всех узлов,
                                            готовых тоже: id, статус, путь и кусок совпадения (a|b — любое; --json, --limit N)
+  treeyard docs [--json] [--project <папка>]   документы проекта, как в окне «Документы»: .md из Git (отслеживаемые и
+                                           новые, без игнорируемых и узлов дерева; без Git — файлы папки), первым
+                                           .tree/tree.md, затем README, AGENTS, CLAUDE; --json — путь, заголовок, строки, время
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
@@ -212,6 +216,10 @@ function commandLines(): string {
                                            edits gives one event per node; --json — a JSON line per event, for programs
   treeyard find "<text>" [--status s] [--under id]   search titles, criteria, descriptions and journals of every node,
                                            done ones too: id, status, path and the matching piece (a|b — either; --json, --limit N)
+  treeyard docs [--json] [--project <dir>]   the project's documents, as in the «Documents» window: .md from Git
+                                           (tracked and new, without ignored files and tree nodes; without Git — the
+                                           folder's files), .tree/tree.md first, then README, AGENTS, CLAUDE;
+                                           --json — path, title, lines, time
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
@@ -347,6 +355,8 @@ async function main(argv: string[]): Promise<number> {
       return findCommand(rest);
     case 'watch':
       return watchCommand(rest);
+    case 'docs':
+      return docsCommand(rest);
     case 'add':
       return addCommand(rest);
     case 'set':
@@ -1031,6 +1041,39 @@ function watchCommand(args: string[]): Promise<number> {
         `${err.dim(t('слежу за деревом в {dir} — Ctrl+C, чтобы выйти', { dir: homeShort(dir) }))}\n`,
       );
   });
+}
+
+/**
+ * `treeyard docs`: the project's documents in the order of the «Документы» window, so a program
+ * (Treeyard Web) never picks the files itself. `--json` — `[{path, title, lines, modified}]`.
+ */
+async function docsCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, { json: { type: 'boolean' }, project: { type: 'string' } });
+  if (positionals.length) throw new UsageError(t('treeyard docs [--json] [--project <папка>]'));
+  const docs = await projectDocs(projectDir(values.project));
+  if (values.json) {
+    const list = docs.map((doc) => ({
+      path: doc.path,
+      title: doc.title,
+      lines: doc.lines,
+      modified: nowIso(new Date(doc.mtime)),
+    }));
+    process.stdout.write(`${JSON.stringify(list, null, 2)}\n`);
+    return 0;
+  }
+  if (!docs.length) {
+    process.stdout.write(`${out.dim(t('В проекте нет .md файлов'))}\n`);
+    return 0;
+  }
+  const width = Math.min(Math.max(...docs.map((doc) => doc.path.length)), 40);
+  for (const doc of docs) {
+    // The file's own name says nothing new: README → README.
+    const named = doc.title !== basename(doc.path).replace(/\.(md|markdown)$/i, '');
+    process.stdout.write(
+      `${doc.path.padEnd(width)}  ${named ? `${doc.title} ` : ''}${out.dim(`· ${linesLabel(doc.lines)} · ${ago(doc.mtime)}`)}\n`,
+    );
+  }
+  return 0;
 }
 
 /** `--limit N|all`: how many found nodes to print; 30 by default. */
