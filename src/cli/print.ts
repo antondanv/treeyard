@@ -14,6 +14,7 @@ import { type Stale, staleLabel, staleNote } from '../model/stale.js';
 import { ago } from '../model/time.js';
 import { childrenByOrder, childrenOf, pathTo, progress, STATUS_ORDERS, summarize } from '../model/tree.js';
 import { ROOT, type Status, type Tree, type TreeNode } from '../model/types.js';
+import type { TreeEvent } from '../watch.js';
 
 export interface Paint {
   on: boolean;
@@ -448,4 +449,41 @@ export function foundJson(tree: Tree, node: TreeNode, under: string = ROOT): Rec
 /** The `stale` field of `--json`: whole hours without a live session or a record. */
 export function staleJson(stale: Stale | undefined): { stale?: { hours: number } } {
   return stale ? { stale: { hours: stale.hours } } : {};
+}
+
+/** `treeyard watch` without `--json`: an event as one line — the time, the node and what happened. */
+export function watchLine(event: TreeEvent, p: Paint): string {
+  const time = Number.isFinite(Date.parse(event.at)) ? new Date(event.at) : new Date();
+  const clock = [time.getHours(), time.getMinutes(), time.getSeconds()]
+    .map((n) => String(n).padStart(2, '0'))
+    .join(':');
+  const status = event.status;
+  const hex = status ? HEX[status] : '#7ee2a8';
+  const mark = status ? GLYPH[status] : '◆';
+  const head = `${p.dim(clock)}  ${hex ? p.c(hex, mark) : mark} ${event.title}  ${p.dim(event.id)}  `;
+  const last = event.journal?.at(-1);
+  const entry = last ? clip([last.who, last.text].filter(Boolean).join(' · '), 100) : '';
+  switch (event.type) {
+    case 'added':
+      return head + t('добавлен');
+    case 'removed':
+      return head + p.dim(t('удалён'));
+    case 'status': {
+      const move = `${STATUS_LABEL[event.from!]} → ${STATUS_LABEL[event.to!]}`;
+      return head + (hex ? p.c(hex, move) : move) + (event.who ? p.dim(` · ${event.who}`) : '');
+    }
+    case 'journal':
+      return (
+        head +
+        (event.journal!.length > 1
+          ? t('записей: {n}, последняя: {entry}', { n: event.journal!.length, entry })
+          : t('запись: {entry}', { entry }))
+      );
+    default:
+      return head + p.dim(t('изменено: {fields}', { fields: (event.fields ?? []).join(', ') }));
+  }
+}
+
+function clip(text: string, limit: number): string {
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
 }

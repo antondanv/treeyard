@@ -116,11 +116,21 @@ export function loadTree(dir: string): Tree {
 }
 
 function readProject(dir: string, problems: string[]): Project {
-  const path = join(dir, TREE_DIR, 'tree.md');
+  let text = '';
+  try {
+    text = readFileSync(join(dir, TREE_DIR, 'tree.md'), 'utf8');
+  } catch (error) {
+    problems.push(`tree.md: ${(error as Error).message}`);
+  }
+  return projectFromText(text, dir, problems);
+}
+
+/** The root from the text of `tree.md`; what cannot be read becomes a problem and the defaults. */
+export function projectFromText(text: string, dir: string, problems: string[] = []): Project {
   let data: Record<string, unknown> = {};
   let body = '';
   try {
-    const doc = parseDocument(readFileSync(path, 'utf8'));
+    const doc = parseDocument(text);
     data = doc.data;
     body = doc.body;
   } catch (error) {

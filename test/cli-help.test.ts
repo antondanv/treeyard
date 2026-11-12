@@ -26,6 +26,7 @@ const COMMANDS = [
   'templates',
   'show',
   'find',
+  'watch',
   'add',
   'set',
   'log',

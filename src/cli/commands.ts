@@ -63,7 +63,7 @@ import {
 import { staleOf } from '../model/stale.js';
 import { parseStatus, parseStatuses, UnknownStatus } from '../model/status-words.js';
 import { findProject, loadTree, nodePath, writeProject } from '../model/store.js';
-import { ago, today } from '../model/time.js';
+import { ago, nowIso, today } from '../model/time.js';
 import {
   childrenOf,
   descendants,
@@ -92,6 +92,7 @@ import { locate, projectStatus } from '../status.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
+import { WATCH_VERSION, watchTree } from '../watch.js';
 import {
   foundJson,
   fullTreeJson,
@@ -105,6 +106,7 @@ import {
   staleJson,
   treeJson,
   treeText,
+  watchLine,
 } from './print.js';
 import { skillLines, statusText } from './status-text.js';
 
@@ -139,6 +141,9 @@ function commandLines(): string {
   treeyard show --under <id>               ветка узла деревом (с --open, --all, --json, как всё дерево)
   treeyard show --json --all [--under id]  всё о каждом узле для программ: описание, журнал, смены статуса (кто, когда,
                                            откуда, куда), картинки, даты, место среди соседей; version — формат JSON
+  treeyard watch [--json] [--project <папка>]   следить за деревом, пока не прервёшь: строка на каждое изменение —
+                                           узел добавлен, удалён, сменил статус, новая запись журнала, другая правка;
+                                           пачка правок — по событию на узел; --json — строка JSON на событие, для программ
   treeyard find "<текст>" [--status s] [--under id]   поиск по названиям, критериям, описаниям и журналам всех узлов,
                                            готовых тоже: id, статус, путь и кусок совпадения (a|b — любое; --json, --limit N)
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
@@ -201,6 +206,9 @@ function commandLines(): string {
   treeyard show --json --all [--under id]  everything about every node for programs: description, journal, status
                                            changes (who, when, from, to), pictures, dates, place among siblings;
                                            version — the JSON format
+  treeyard watch [--json] [--project <dir>]   watch the tree until interrupted: a line per change — a node added,
+                                           removed, its status changed, a new journal entry, another edit; a burst of
+                                           edits gives one event per node; --json — a JSON line per event, for programs
   treeyard find "<text>" [--status s] [--under id]   search titles, criteria, descriptions and journals of every node,
                                            done ones too: id, status, path and the matching piece (a|b — either; --json, --limit N)
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
@@ -334,6 +342,8 @@ async function main(argv: string[]): Promise<number> {
       return showCommand(rest);
     case 'find':
       return findCommand(rest);
+    case 'watch':
+      return watchCommand(rest);
     case 'add':
       return addCommand(rest);
     case 'set':
@@ -987,6 +997,37 @@ function findCommand(args: string[]): number {
       `${out.dim(t('… ещё {n} — уточни запрос, добавь --status или --under, или --limit all', { n: found.length - limit }))}\n`,
     );
   return 0;
+}
+
+/**
+ * `treeyard watch`: a line per change of the tree until Ctrl+C, a closed pipe or SIGTERM. With
+ * `--json` the first line says the watch has begun — a program loads the whole tree after it and
+ * misses nothing in between.
+ */
+function watchCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, { json: { type: 'boolean' }, project: { type: 'string' } });
+  if (positionals.length) throw new UsageError(t('treeyard watch [--json] [--project <папка>]'));
+  const dir = projectDir(values.project);
+  const json = values.json === true;
+  return new Promise((done) => {
+    const watcher = watchTree(dir, (events) => {
+      const lines = events.map((event) => (json ? JSON.stringify(event) : watchLine(event, out)));
+      process.stdout.write(`${lines.join('\n')}\n`);
+    });
+    const stop = () => {
+      watcher.stop();
+      done(0);
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+    // `treeyard watch | head` ends quietly when the reader goes away.
+    process.stdout.on('error', stop);
+    if (json) process.stdout.write(`${JSON.stringify({ type: 'ready', version: WATCH_VERSION, dir, at: nowIso() })}\n`);
+    else
+      process.stderr.write(
+        `${err.dim(t('слежу за деревом в {dir} — Ctrl+C, чтобы выйти', { dir: homeShort(dir) }))}\n`,
+      );
+  });
 }
 
 /** `--limit N|all`: how many found nodes to print; 30 by default. */

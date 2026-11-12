@@ -318,6 +318,7 @@ treeyard show <id> --only journal,sessions      # only these parts: header, crit
 treeyard show --status review,idea --under <id> # nodes of these statuses in a branch, a line each with the path (--json — an array)
 treeyard show --under <id>                      # the branch as a tree (--open, --all, --json as for the whole tree)
 treeyard show --json --all                      # everything about every node for a program: description, journal, status changes, pictures, dates, place (--under <id> — a branch)
+treeyard watch --json                           # watch the tree: a JSON line per change — a node added, removed, its status changed, a new entry, an edit (without --json — a line for a person)
 treeyard find "rounding|cents"                  # search every node, done ones too: id, status word, path and the matching piece (--status, --under, --json, --limit)
 treeyard add "Show the product to a person" --who human --parent <id>
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
@@ -387,6 +388,30 @@ children. The full form:
   - `images` — `{file, path, note, added}`: `path` is absolute, `added` — ISO time;
   - `children` — by status in the default order (in progress first), whatever your own setting is;
     within a status — by `position`.
+
+`treeyard watch --json` gives the changes of the tree as people, agents and git make them: a JSON
+line per event until the command is stopped (Ctrl+C, SIGTERM or a closed pipe — exit code 0).
+The first line is `{"type": "ready", "version": 1, "dir", "at"}`: the watch has begun, so now
+read the whole tree (`show --json --all`) and miss nothing. `version` is the format of the events,
+by the same rules as in `show --json --all`. Then a line per node:
+
+- every line has `type`, `id`, `at` (ISO time: the node's new `updated` when treeyard wrote the
+  change, otherwise when it was noticed), `title` and `status` (the last one for a removed node, none for the root);
+- `type` is the biggest thing that happened to the node: `added` (it appeared; also `parent` and
+  `journal` — its entries), `removed` (it is gone; `parent` — where it stood), `status` (its status
+  changed: `from`, `to` as keys and `who` when the journal says who), `journal` (new entries at
+  the end of the journal), `changed` (another edit);
+- `fields` — what changed, as the keys of `show --json --all`: `status`, `title`, `done_when`,
+  `note`, `journal`, `sessions`, `updated`…; `journal` — the new entries `{at, who, text}`;
+  `history` — the status changes among them `{at, who, from, to, comment}`: several when the node
+  went through more than one status;
+- a corrected entry (`log --fix`) is `changed` with `journal` in `fields`, not a new entry;
+- the root (`tree.md`) — `{"type": "changed", "id": "root", "fields": ["goal", "body", …]}`.
+
+The command waits until the files go quiet (150 ms) and only then compares them with the last
+look: a command that writes a node three times, or a `git checkout` that rewrites fifty files,
+gives one event per node. A file that can't be read (a hand edit half done) stays as it was
+instead of leaving the tree.
 
 Flags of `treeyard open`: `--task "…"` adds your assignment to the end of the first
 message, after the standard one, under “Task for this node:” (in a `chat` start it
