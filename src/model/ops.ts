@@ -10,7 +10,7 @@ import { closeNeeds, forgetLinked } from './links.js';
 import { writeOverview } from './overview.js';
 import { removeNode, writeNode, writeProject } from './store.js';
 import { nowIso, stamp, today } from './time.js';
-import { childrenOf, descendants, rootNode } from './tree.js';
+import { childrenByOrder, childrenOf, descendants, rootNode } from './tree.js';
 import { ROOT, type SessionRef, type Status, type Tree, type TreeNode, type Who } from './types.js';
 
 // No 0/o, 1/l/i: ids get read aloud and typed into prompts.
@@ -51,13 +51,15 @@ export interface NewNode {
   waiting?: string;
   until?: string;
   body?: string;
-  /** Put it right after this sibling instead of at the end. */
+  /** Put it right after this sibling, of any status, instead of at the end. */
   after?: string;
 }
 
 export function addNode(tree: Tree, input: NewNode, source = 'treeyard'): TreeNode {
   const parent = input.parent && (input.parent === ROOT || tree.nodes.has(input.parent)) ? input.parent : ROOT;
-  const siblings = childrenOf(tree, parent).filter((node) => node.status === (input.status ?? 'todo'));
+  // One `order` for all siblings, whatever their status, as in `set after=` and the overview:
+  // counted per status, a new node got the order of a sibling of another status.
+  const siblings = childrenByOrder(tree, parent);
   let order = (siblings.at(-1)?.order ?? 0) + 10;
   if (input.after) {
     const index = siblings.findIndex((node) => node.id === input.after);
@@ -67,7 +69,7 @@ export function addNode(tree: Tree, input: NewNode, source = 'treeyard'): TreeNo
       if (next === undefined) order = before + 10;
       else if (next - before > 1) order = Math.floor((before + next) / 2);
       else {
-        // No room: renumber the siblings and slot in.
+        // No room, or an old duplicate order: renumber the siblings and slot in.
         renumber(tree, parent);
         return addNode(tree, input, source);
       }
@@ -315,8 +317,9 @@ export function deleteNode(tree: Tree, id: string, withChildren = false): void {
   writeOverview(tree);
 }
 
+/** Orders 10, 20, … in the order they had: room to slot a node in, and old duplicates gone. */
 function renumber(tree: Tree, parent: string): void {
-  childrenOf(tree, parent).forEach((kid, index) => {
+  childrenByOrder(tree, parent).forEach((kid, index) => {
     kid.order = (index + 1) * 10;
     writeNode(tree.project.dir, kid, false);
   });

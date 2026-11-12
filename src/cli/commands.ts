@@ -166,7 +166,8 @@ function commandLines(): string {
                                            название, путь, когда видел; удалённые папки и git worktree не попадают;
                                            --json — path, title, goal, seen (для программ)
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
-                [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
+                [--done-when "…"] [--check "команда"] [--note "…"]   --after — сразу после брата (любого статуса,
+                                           как set after=; без --parent — под его родителем)
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
   treeyard add --parent <id> --from-json <файл|->   несколько узлов разом: [{"title", "done_when", "note", "who", "status",
                                            "needs", "key", "children"}]; печатает их id; ошибка — не заводится ни один
@@ -246,7 +247,8 @@ function commandLines(): string {
                                            first: title, path, when seen; removed folders and git worktrees are left
                                            out; --json — path, title, goal, seen (for programs)
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
-                [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
+                [--done-when "…"] [--check "command"] [--note "…"]   --after — right after a sibling (of any status,
+                                           like set after=; without --parent — under its parent)
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
   treeyard add --parent <id> --from-json <file|->   several nodes at once: [{"title", "done_when", "note", "who", "status",
                                            "needs", "key", "children"}]; prints their ids; an error adds none
@@ -1183,18 +1185,44 @@ async function addCommand(args: string[]): Promise<number> {
   const here = project();
   // The node goes into the other tree; `--for` names the node here that waits for it.
   const tree = values.project ? otherProject(here, values.project) : here;
-  const parent = values.parent ? nodeArg(tree, values.parent) : values.project ? undefined : ROOT;
+  const afterId = values.after ? nodeArg(tree, values.after) : undefined;
+  const after = afterId ? tree.nodes.get(afterId) : undefined;
+  // The root has no siblings to stand after.
+  if (afterId && !after) throw new UsageError(t('нет узла «{id}»', { id: afterId }));
+  // `--after` alone says where the node goes: under the same parent as that sibling.
+  const parent = values.parent ? nodeArg(tree, values.parent) : (after?.parent ?? (values.project ? undefined : ROOT));
+  if (after && after.parent !== parent)
+    throw new UsageError(
+      t('--after {id}: это узел другого родителя, не {parent} — укажи брата или убери --parent', {
+        id: after.id,
+        parent: parent ?? ROOT,
+      }),
+    );
+  const status = values.status ? statusArg(values.status) : ('todo' as Status);
+  // Siblings show grouped by status: after one of another status the node lands in its own group, so say so.
+  const regrouped =
+    after && after.status !== status
+      ? t(
+          '{p1} --after {id}: у брата статус «{sibling}», у нового узла — «{status}»; он встал на ближайшее место в группе «{status}»\n',
+          {
+            p1: err.c('#ffcf70', '!'),
+            id: after.id,
+            sibling: STATUS_LABEL[after.status],
+            status: STATUS_LABEL[status],
+          },
+        )
+      : '';
   const input = {
     title,
     ...(parent ? { parent } : {}),
-    status: values.status ? statusArg(values.status) : ('todo' as Status),
+    status,
     ...(values.who ? { who: whoArg(values.who) } : {}),
     ...(values['done-when'] ? { doneWhen: values['done-when'] } : {}),
     ...(values.check ? { check: values.check } : {}),
     ...(values.note ? { body: values.note } : {}),
     ...(values.waiting ? { waiting: values.waiting } : {}),
     ...(values.until ? { until: values.until } : {}),
-    ...(values.after ? { after: nodeArg(tree, values.after) } : {}),
+    ...(after ? { after: after.id } : {}),
   };
   if (values.project && values.for) {
     const waiter = nodeArg(here, values.for);
@@ -1203,10 +1231,12 @@ async function addCommand(args: string[]): Promise<number> {
     process.stdout.write(
       `${node.id} · ${tree.project.title}${branch ? ` › ${branch}` : ''} ← ${here.project.title} › ${waiter}\n`,
     );
+    if (regrouped) process.stderr.write(regrouped);
     return 0;
   }
   const node = addNode(tree, input, sourceOf(values.as));
   process.stdout.write(`${node.id}\n`);
+  if (regrouped) process.stderr.write(regrouped);
   return 0;
 }
 

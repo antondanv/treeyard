@@ -939,6 +939,10 @@ export const EN: Record<string, string> = {
     '--for links to a node of another project: add --project ../Project',
   '--project нужен вместе с --for <id> — узлом, который ждёт эту работу':
     '--project goes with --for <id> — the node that waits for this work',
+  '--after {id}: это узел другого родителя, не {parent} — укажи брата или убери --parent':
+    '--after {id}: that node has another parent, not {parent} — give a sibling or drop --parent',
+  '{p1} --after {id}: у брата статус «{sibling}», у нового узла — «{status}»; он встал на ближайшее место в группе «{status}»\n':
+    '{p1} --after {id}: the sibling is «{sibling}», the new node «{status}»; it took the nearest place in the «{status}» group\n',
   'в {dir} нет дерева (.tree/tree.md) — сначала treeyard init там':
     'no tree in {dir} (.tree/tree.md) — run treeyard init there first',
   '--project указывает на этот же проект': '--project points at this same project',

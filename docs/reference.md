@@ -152,7 +152,8 @@ is kept in the nodes' `order`, shows in the CLI, and `u` undoes a move. (The gen
 `.tree/README.md` lists siblings by `order` alone, whatever their status and your status
 order: it is committed, so it must not depend on whose settings wrote it.) From the CLI:
 `treeyard set <id> after=<sibling id>|first|last` (a sibling of another status works too:
-the node takes the nearest place in its own group). Changing a status moves the node to
+the node takes the nearest place in its own group); a new node — `treeyard add … --after <sibling id>`,
+and when the sibling's status differs, `add` says which group the node went to. Changing a status moves the node to
 its part. The order of statuses is a setting —
 “Status order” in `,` or `treeyard config status_order`:
 
@@ -334,7 +335,7 @@ treeyard docs --json                            # the project's documents as the
 treeyard projects --json                        # folders with trees treeyard has seen, the most recent first: path, title, goal, when seen (without --json — a line each)
 treeyard find "rounding|cents"                  # search every node, done ones too: id, status word, path and the matching piece (--status, --under, --json, --limit)
 treeyard add "Show the product to a person" --who human --parent <id>
-treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
+treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling, like set after= (no --parent — under its parent; default — last)
 treeyard add --parent <id> --from-json - < nodes.json      # several nodes at once (an error adds none); prints their ids
 treeyard set <id> after=<sibling id>|first|last # the place among siblings; with parent=<id> — in a new parent
 treeyard set <a> <b> <c> status=todo            # several nodes: the same change to each (after=<id> puts them one after another); an error changes none
