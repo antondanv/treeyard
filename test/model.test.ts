@@ -201,6 +201,36 @@ describe('questions about the tree', () => {
     expect(found.filter((row) => row.match).map((row) => row.node.title)).toEqual(['Дельта']);
   });
 
+  it('without closed work keeps a closed parent of open work, holding only the way to it', () => {
+    const tree = emptyTree();
+    const given = addNode(tree, { title: 'Сданное', status: 'done' });
+    addNode(tree, { title: 'Готовое внутри', parent: given.id, status: 'done' });
+    addNode(tree, { title: 'Забытая идея', parent: given.id, status: 'idea' });
+    const deeper = addNode(tree, { title: 'Глубже', parent: given.id, status: 'done' });
+    addNode(tree, { title: 'Хвост', parent: deeper.id });
+    const plain = addNode(tree, { title: 'Готовое без хвостов', status: 'done' });
+    addNode(tree, { title: 'Тоже готовое', parent: plain.id, status: 'done' });
+    const dropped = addNode(tree, { title: 'Отменённое', status: 'dropped' });
+    addNode(tree, { title: 'Ждущее', parent: dropped.id, status: 'waiting' });
+
+    const expanded = new Set([given.id, deeper.id, plain.id, dropped.id]);
+    const rows = flatten(tree, { expanded, showClosed: false });
+    expect(rows.map((row) => `${row.depth}${row.node.title}`)).toEqual([
+      '0Сданное',
+      '1Забытая идея',
+      '1Глубже',
+      '2Хвост',
+      '0Отменённое',
+      '1Ждущее',
+    ]);
+    // Folded until opened, like any parent.
+    const folded = flatten(tree, { expanded: new Set(), showClosed: false });
+    expect(folded.map((row) => [row.node.title, row.hasChildren, row.expanded])).toEqual([
+      ['Сданное', true, false],
+      ['Отменённое', true, false],
+    ]);
+  });
+
   it('builds a readable overview', () => {
     const tree = emptyTree();
     const a = addNode(tree, { title: 'Запуск [prod]', who: 'human' });

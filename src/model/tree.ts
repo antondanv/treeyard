@@ -60,6 +60,20 @@ export function childrenOf(tree: Tree, id: string): TreeNode[] {
   return out.sort(bySiblingOrder);
 }
 
+/** Whether open work lies anywhere under a node; one memo per call, for a whole walk of the tree. */
+export function openWorkUnder(tree: Tree): (id: string) => boolean {
+  const memo = new Map<string, boolean>();
+  const has = (id: string): boolean => {
+    let found = memo.get(id);
+    if (found === undefined) {
+      found = childrenOf(tree, id).some((kid) => !CLOSED.has(kid.status) || has(kid.id));
+      memo.set(id, found);
+    }
+    return found;
+  };
+  return has;
+}
+
 export function bySiblingOrder(a: TreeNode, b: TreeNode): number {
   return statusRank[a.status] - statusRank[b.status] || byExecutionOrder(a, b);
 }
@@ -251,7 +265,7 @@ export interface Row {
 
 export interface FlattenOptions {
   expanded: ReadonlySet<string>;
-  /** Show done and dropped nodes. */
+  /** Show done and dropped nodes; without it only those with open work under them stay. */
   showClosed: boolean;
   /** Text to search titles for; ancestors of matches are shown and opened. */
   filter?: string;
@@ -269,9 +283,11 @@ export function flatten(tree: Tree, options: FlattenOptions): Row[] {
       }
     }
   }
+  const openInside = openWorkUnder(tree);
   const visible = (node: TreeNode) => {
     if (query) return keep.has(node.id);
-    if (!options.showClosed && CLOSED.has(node.status)) return false;
+    // A closed parent of open work stays in sight, holding only the way to that work.
+    if (!options.showClosed && CLOSED.has(node.status)) return openInside(node.id);
     return true;
   };
   const rows: Row[] = [];

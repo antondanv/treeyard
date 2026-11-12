@@ -26,6 +26,25 @@ function sample() {
 const shot = (dir: string, keys: string[] = [], rows = 26) => snapshot(dir, { columns: 110, rows, keys });
 
 describe('TUI', () => {
+  it('with closed work hidden, a closed parent of open work stays as a row over that work', async () => {
+    const tree = emptyTree();
+    addNode(tree, { title: 'Живое', status: 'active' });
+    const given = addNode(tree, { title: 'Сданное', status: 'done' });
+    addNode(tree, { title: 'Готовое внутри', parent: given.id, status: 'done' });
+    addNode(tree, { title: 'Забытая идея', parent: given.id, status: 'idea' });
+    const deeper = addNode(tree, { title: 'Глубже', parent: given.id, status: 'done' });
+    addNode(tree, { title: 'Хвост', parent: deeper.id });
+    const plain = addNode(tree, { title: 'Готовое без хвостов', status: 'done' });
+    addNode(tree, { title: 'Тоже готовое', parent: plain.id, status: 'done' });
+    for (const treeMode of ['list', 'graph'] as const) {
+      const ui = { showClosed: false, expanded: [given.id, deeper.id, plain.id], treeMode };
+      const frame = await snapshot(tree.project.dir, { columns: 110, rows: 26, ui });
+      for (const title of ['Живое', 'Сданное', 'Забытая идея', 'Глубже', 'Хвост']) expect(frame).toContain(title);
+      for (const title of ['Готовое внутри', 'Готовое без хвостов', 'Тоже готовое', 'Готовые ·'])
+        expect(frame).not.toContain(title);
+    }
+  });
+
   it('draws the mark, the goal, progress, tabs and the tree as a graph', async () => {
     const { tree } = sample();
     const frame = await shot(tree.project.dir);

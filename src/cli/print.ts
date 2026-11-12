@@ -17,6 +17,7 @@ import {
   childrenByOrder,
   childrenOf,
   descendants,
+  openWorkUnder,
   pathTo,
   progress,
   STATUS_ORDERS,
@@ -106,17 +107,8 @@ export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): s
     const hex = HEX[node.status];
     return hex ? p.c(hex, GLYPH[node.status]) : GLYPH[node.status];
   };
-  // Open work under a node, however deep: a hidden or folded closed parent must not hide it.
-  const openInside = new Map<string, number>();
-  const countOpen = (id: string): number => {
-    let count = openInside.get(id);
-    if (count === undefined) {
-      count = 0;
-      for (const kid of childrenOf(tree, id)) count += (CLOSED.has(kid.status) ? 0 : 1) + countOpen(kid.id);
-      openInside.set(id, count);
-    }
-    return count;
-  };
+  // A hidden or folded closed parent must not hide the open work under it.
+  const openInside = openWorkUnder(tree);
   // Inside a folded closed node only the way to open work is shown.
   const walk = (parent: string, prefix: string, folded = false) => {
     const kids: { node: TreeNode; fold: boolean }[] = [];
@@ -128,7 +120,7 @@ export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): s
       // Like the TUI's «Готовые» group: finished children collapse into one counter at the first one's place.
       const count = !hide && options.foldDone === true && kid.status === 'done';
       if (!hide && !count) kids.push({ node: kid, fold: false });
-      else if (countOpen(kid.id) > 0) kids.push({ node: kid, fold: true });
+      else if (openInside(kid.id)) kids.push({ node: kid, fold: true });
       else if (count) {
         if (counterAt < 0) counterAt = kids.length;
         doneCount += 1;
@@ -147,7 +139,7 @@ export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): s
       if (fold) {
         // A closed parent of open work: one dim line, with how much of it stays hidden.
         const hidden = descendants(tree, node.id).filter(
-          (down) => CLOSED.has(down.status) && countOpen(down.id) === 0,
+          (down) => CLOSED.has(down.status) && !openInside(down.id),
         ).length;
         const status = options.words ? `  ${STATUS_LABEL[node.status]}` : '';
         const rest = hidden > 0 ? t('  · свёрнуто, скрыто {n}', { n: hidden }) : '';

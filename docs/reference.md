@@ -134,7 +134,7 @@ meaning. Russian text in search, forms and agent panes is typed as usual.
 | `tab` `⇧tab` | nest · lift a level up |
 | `K` `J` or `⇧↑` `⇧↓` | raise · lower the priority among siblings of the same status (also in the `⏎` menu and the `:` palette) |
 | `⌥` + arrows | move the graph · `f` — back to the selected node |
-| `v` `z` `i` `.` | list ↔ graph · lines ↔ cards · details panel · done nodes |
+| `v` `z` `i` `.` | list ↔ graph · lines ↔ cards · details panel · done nodes (a finished node with open ones under it stays as a row over them) |
 | `,` `⌃R` | settings · reread the tree from disk |
 | `?` `q` | all keys (if they don't fit, `↑↓` `PgUp` `PgDn` scroll) · quit |
 

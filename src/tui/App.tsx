@@ -108,6 +108,7 @@ import { loadTree, treeStamp, writeProject } from '../model/store.js';
 import { ago, duration } from '../model/time.js';
 import {
   actionable,
+  CLOSED,
   childrenOf,
   descendants,
   holderOf,
@@ -115,6 +116,7 @@ import {
   offTree,
   offTreeLine,
   offTreeTally,
+  openWorkUnder,
   parents,
   pathTo,
   progress,
@@ -919,7 +921,8 @@ export function App(props: AppProps) {
           ...doneGroupsOnPath(pathTo(tree, id)),
         ]),
     );
-    if (!showClosed && (node.status === 'done' || node.status === 'dropped')) setShowClosed(true);
+    // A closed node with open work under it is in sight anyway.
+    if (!showClosed && CLOSED.has(node.status) && !openWorkUnder(tree)(id)) setShowClosed(true);
     setFilter('');
     setView('tree');
     setSelected(id);
