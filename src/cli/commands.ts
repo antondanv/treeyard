@@ -94,6 +94,7 @@ import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
 import {
   foundJson,
+  fullTreeJson,
   NODE_PARTS,
   type NodePart,
   nodeLine,
@@ -136,6 +137,8 @@ function commandLines(): string {
                 [--project <папка>]        дерево другой папки, например основного worktree
   treeyard show --status review,idea [--under id]   узлы этих статусов в ветке, по строке: id, статус словом, путь
   treeyard show --under <id>               ветка узла деревом (с --open, --all, --json, как всё дерево)
+  treeyard show --json --all [--under id]  всё о каждом узле для программ: описание, журнал, смены статуса (кто, когда,
+                                           откуда, куда), картинки, даты, место среди соседей; version — формат JSON
   treeyard find "<текст>" [--status s] [--under id]   поиск по названиям, критериям, описаниям и журналам всех узлов,
                                            готовых тоже: id, статус, путь и кусок совпадения (a|b — любое; --json, --limit N)
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
@@ -195,6 +198,9 @@ function commandLines(): string {
                 [--project <dir>]          the tree of another folder, e.g. the main worktree
   treeyard show --status review,idea [--under id]   nodes of these statuses in a branch, a line each: id, status word, path
   treeyard show --under <id>               a node's branch as a tree (--open, --all, --json work as for the whole tree)
+  treeyard show --json --all [--under id]  everything about every node for programs: description, journal, status
+                                           changes (who, when, from, to), pictures, dates, place among siblings;
+                                           version — the JSON format
   treeyard find "<text>" [--status s] [--under id]   search titles, criteria, descriptions and journals of every node,
                                            done ones too: id, status, path and the matching piece (a|b — either; --json, --limit N)
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
@@ -844,8 +850,11 @@ function showCommand(args: string[]): number {
   }
   const under = values.under !== undefined ? nodeArg(tree, values.under) : ROOT;
   if (values.status !== undefined) return statusList(tree, statusesArg(values.status), under, values.json === true);
-  if (values.json) process.stdout.write(`${JSON.stringify(treeJson(tree, staleFn(tree), under), null, 2)}\n`);
-  else {
+  if (values.json) {
+    // --all is the whole export for a program; without it — the short tree scripts already read.
+    const json = values.all ? fullTreeJson(tree, staleFn(tree), under) : treeJson(tree, staleFn(tree), under);
+    process.stdout.write(`${JSON.stringify(json, null, 2)}\n`);
+  } else {
     // Off a terminal finished work folds into a counter, as in the TUI; --all brings it back.
     const fold = piped && !values.all && !values.open;
     const branch = tree.nodes.get(under);

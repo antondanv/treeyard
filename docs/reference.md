@@ -317,6 +317,7 @@ treeyard show <id> --journal 5                  # only the last 5 entries (--jou
 treeyard show <id> --only journal,sessions      # only these parts: header, criterion, commits, children, sessions, note, journal, history
 treeyard show --status review,idea --under <id> # nodes of these statuses in a branch, a line each with the path (--json — an array)
 treeyard show --under <id>                      # the branch as a tree (--open, --all, --json as for the whole tree)
+treeyard show --json --all                      # everything about every node for a program: description, journal, status changes, pictures, dates, place (--under <id> — a branch)
 treeyard find "rounding|cents"                  # search every node, done ones too: id, status word, path and the matching piece (--status, --under, --json, --limit)
 treeyard add "Show the product to a person" --who human --parent <id>
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
@@ -364,6 +365,28 @@ an agent never has to read or type `◐ ◎ ○`.
 required; `key` names a node inside the batch for the `needs` of the others; `--status` and
 `--who` on the command line fill in what a node doesn't say. The whole batch is checked first:
 an unknown field, status or ref adds no node at all.
+
+`treeyard show --json --all` is the whole tree for a program (Treeyard Web): nothing left to
+parse in the markdown of `.tree/`. Without `--all`, `--json` stays short: a node's fields and its
+children. The full form:
+
+- at the top — `version` (the JSON format, now `1`; a new field does not change it, a renamed or
+  removed one does — skip keys you don't know), `title`, `goal`, `created`, `summary` and `nodes`;
+  with `--under <id>` — the branch's node itself with `version` added;
+- every node — the fields of the short form (`id`, `title`, `status`, `who`, `done_when`, `check`,
+  `waiting`, `until`, `needs`, `for`, `sessions`, `stale`, `commits`) and also:
+  - `parent`, `position` — the place among siblings of the same status (0 — first; the tree groups
+    siblings by status, and `order` in the files means something only inside a group);
+  - `created` and `closed` (`YYYY-MM-DD`, `closed` only for done and dropped), `updated` (ISO time);
+  - `note` — the description, `""` when there is none;
+  - `journal` — every entry, oldest first: `{at, who, text}` (`at` — `2026-11-12 09:42`, local time
+    as the journal has it; a line without a stamp has only `text`);
+  - `history` — the status changes: `{at, who, from, to, comment}`, statuses as keys (`todo`,
+    `review`) whichever language wrote the line; `comment` — what follows the change, e.g. why it
+    waits;
+  - `images` — `{file, path, note, added}`: `path` is absolute, `added` — ISO time;
+  - `children` — by status in the default order (in progress first), whatever your own setting is;
+    within a status — by `position`.
 
 Flags of `treeyard open`: `--task "…"` adds your assignment to the end of the first
 message, after the standard one, under “Task for this node:” (in a `chat` start it

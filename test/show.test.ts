@@ -1,13 +1,15 @@
 import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
+import { PNG } from 'pngjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { addImage } from '../src/model/images.js';
 import { NODE_VAR } from '../src/model/notes.js';
 import { addNode, logToNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
@@ -50,6 +52,7 @@ beforeAll(() => {
   addNode(tree, { title: 'Сделанное раз', status: 'done' });
   addNode(tree, { title: 'Сделанное два', status: 'done' });
   for (let i = 1; i <= 6; i++) logToNode(tree, a.id, `запись ${i}`, 'тест');
+  addImage(dir, a.id, PNG.sync.write(new PNG({ width: 1, height: 1 })), 'экран');
   const story = addNode(tree, { title: 'История' });
   setStatus(tree, story.id, 'active', { source: 'тест' });
   logToNode(tree, story.id, 'сделал половину', 'тест');
@@ -108,6 +111,70 @@ describe('treeyard show for agents', () => {
     expect(all.stdout).toContain('Сделанное раз');
     expect(all.stdout).not.toContain('✓ готово:');
     expect((await sh('--json')).stdout).toContain('Сделанное два');
+  }, 40_000);
+
+  it('--json --all: the version, and everything about every node — nothing left to parse in markdown', async () => {
+    type Node = Record<string, unknown> & { id: string; title: string; children: Node[] };
+    const json = JSON.parse((await sh('--json', '--all')).stdout) as { version: number; title: string; nodes: Node[] };
+    expect(json.version).toBe(1);
+    expect(json.title).toBe('Проект');
+    const all: Node[] = [];
+    // The place among siblings of the same status: that is how the tree orders them.
+    const walk = (nodes: Node[], parent: string) =>
+      nodes.forEach((node, index) => {
+        all.push(node);
+        const before = nodes.slice(0, index).filter((kid) => kid.status === node.status);
+        expect(node).toMatchObject({ parent, position: before.length });
+        walk(node.children, node.id);
+      });
+    walk(json.nodes, 'root');
+    const DAY = /^\d{4}-\d\d-\d\d$/;
+    for (const node of all)
+      expect(node).toMatchObject({
+        note: expect.any(String),
+        journal: expect.any(Array),
+        history: expect.any(Array),
+        images: expect.any(Array),
+        created: expect.stringMatching(DAY),
+        updated: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$/),
+      });
+    // By status in the default order, then the siblings' own order.
+    expect(json.nodes.map((node) => [node.title, node.position])).toEqual([
+      ['Первый', 0],
+      ['История', 0],
+      ['Второй', 0],
+      ['Сделанное раз', 0],
+      ['Сделанное два', 1],
+    ]);
+    const byId = (id: string) => all.find((node) => node.id === id)!;
+    const first = byId(ids.a);
+    expect(first.note).toBe('Описание первого');
+    expect(first.journal).toHaveLength(6);
+    expect((first.journal as unknown[])[0]).toEqual({
+      at: expect.stringMatching(/^\d{4}-\d\d-\d\d \d\d:\d\d$/),
+      who: 'тест',
+      text: 'запись 1',
+    });
+    const [image] = first.images as { file: string; path: string; note: string; added: string }[];
+    expect(image).toMatchObject({ file: '001.png', note: 'экран', added: expect.any(String) });
+    expect(image!.path.endsWith(join('.tree', '.local', 'images', ids.a, '001.png'))).toBe(true);
+    expect(existsSync(image!.path)).toBe(true);
+    expect(byId(ids.story).history).toEqual([
+      { at: expect.any(String), who: 'тест', from: 'todo', to: 'active' },
+      { at: expect.any(String), who: 'тест', from: 'active', to: 'review' },
+    ]);
+    expect(json.nodes.find((node) => node.title === 'Сделанное раз')!.closed).toMatch(DAY);
+    expect(first.closed).toBeUndefined();
+  }, 40_000);
+
+  it('--json --all --under: the branch with the version on top; the short --json stays as it was', async () => {
+    const branch = JSON.parse((await sh('--under', ids.a, '--json', '--all')).stdout);
+    expect(branch).toMatchObject({ version: 1, id: ids.a, parent: 'root', position: 0, note: 'Описание первого' });
+    expect(branch.children).toEqual([expect.objectContaining({ title: 'Вложенный', parent: ids.a, position: 0 })]);
+    const short = JSON.parse((await sh('--json')).stdout);
+    expect(short.version).toBeUndefined();
+    expect(short.nodes[0].journal).toBeUndefined();
+    expect(short.nodes[0].note).toBeUndefined();
   }, 40_000);
 
   it('--status lists the nodes of those statuses, a line each with the status as a word and the path', async () => {

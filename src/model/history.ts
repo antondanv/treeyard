@@ -5,7 +5,8 @@
  */
 import { EN } from '../i18n/en.js';
 import { journalEntries } from './journal.js';
-import { ALL_LABELS } from './status-words.js';
+import { ALL_LABELS, parseStatus } from './status-words.js';
+import type { Status } from './types.js';
 
 export interface Entry {
   /** `2026-11-08 12:19`. */
@@ -34,6 +35,41 @@ export function isStatusChange(text: string): boolean {
 /** The status changes of a node, oldest first, as journal lines. */
 export function statusHistory(body: string): string[] {
   return journalEntries(body).filter((line) => isStatusChange(parseEntry(line).text));
+}
+
+/** One status change taken apart: the statuses as keys, whichever language wrote the line. */
+export interface StatusStep {
+  /** `2026-11-08 12:19`, local time as the journal has it; none for a line without a stamp. */
+  at?: string;
+  /** `ты`, `агент`, `claude`…; none for a line without a stamp. */
+  who?: string;
+  from: Status;
+  to: Status;
+  /** What follows the change: why it waits (`ждёт: сервер`) or a sentence (`готово. проверка прошла`). */
+  comment?: string;
+}
+
+const PARTS = new RegExp(`^(${LABELS}) → (${LABELS})(?:$|: |\\. )`);
+
+/** The status changes of a node, oldest first, for scripts: who, when, from which status to which. */
+export function statusSteps(body: string): StatusStep[] {
+  const steps: StatusStep[] = [];
+  for (const line of journalEntries(body)) {
+    const entry = parseEntry(line);
+    const match = PARTS.exec(entry.text);
+    const from = match && parseStatus(match[1]!);
+    const to = match && parseStatus(match[2]!);
+    if (!match || !from || !to) continue;
+    const comment = entry.text.slice(match[0].length).trim();
+    steps.push({
+      ...(entry.when ? { at: entry.when } : {}),
+      ...(entry.source ? { who: entry.source } : {}),
+      from,
+      to,
+      ...(comment ? { comment } : {}),
+    });
+  }
+  return steps;
 }
 
 /** The first line of a node added by a person or an agent, in either language. */

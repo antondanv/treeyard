@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { isOwnLine, isStatusChange, lastOwnEntry, parseEntry, statusHistory } from '../src/model/history.js';
+import {
+  isOwnLine,
+  isStatusChange,
+  lastOwnEntry,
+  parseEntry,
+  statusHistory,
+  statusSteps,
+} from '../src/model/history.js';
 import { appendJournal, description, journalEntries, replaceEntry } from '../src/model/journal.js';
 import { addNode, attachCommit, logToNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
@@ -28,6 +35,26 @@ describe('what the journal says about itself', () => {
       source: 'агент',
       text: 'итог · с точкой',
     });
+  });
+
+  it('takes status changes apart for scripts: who, when, keys of both statuses, the rest as a comment', () => {
+    const body = [
+      '## Журнал',
+      '',
+      '- 2026-11-08 12:19 · агент · завёл узел',
+      '- 2026-11-08 12:20 · агент · к работе → ждёт: сервер. до пятницы',
+      '- 2026-11-09 09:00 · you · waiting → in review',
+      '- 2026-11-09 10:00 · ты · готово. проверка прошла',
+      '- 2026-11-09 10:05 · ты · на проверке → готово. проверка прошла',
+      '- в работе → отказ',
+    ].join('\n');
+    expect(statusSteps(body)).toEqual([
+      { at: '2026-11-08 12:20', who: 'агент', from: 'todo', to: 'waiting', comment: 'сервер. до пятницы' },
+      { at: '2026-11-09 09:00', who: 'you', from: 'waiting', to: 'review' },
+      { at: '2026-11-09 10:05', who: 'ты', from: 'review', to: 'done', comment: 'проверка прошла' },
+      { from: 'active', to: 'dropped' },
+    ]);
+    expect(statusSteps(body)).toHaveLength(statusHistory(body).length);
   });
 
   it('the history is the status changes only; the last own entry skips what treeyard wrote', () => {

@@ -4,14 +4,15 @@
  */
 
 import { t } from '../i18n/i18n.js';
-import { statusHistory } from '../model/history.js';
+import { parseEntry, statusHistory, statusSteps } from '../model/history.js';
+import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { type Stale, staleLabel, staleNote } from '../model/stale.js';
 import { ago } from '../model/time.js';
-import { childrenOf, pathTo, progress, summarize } from '../model/tree.js';
+import { childrenByOrder, childrenOf, pathTo, progress, STATUS_ORDERS, summarize } from '../model/tree.js';
 import { ROOT, type Status, type Tree, type TreeNode } from '../model/types.js';
 
 export interface Paint {
@@ -361,6 +362,59 @@ export function treeJson(tree: Tree, stale?: StaleFn, under?: string): unknown {
     ...(tree.project.goal ? { goal: tree.project.goal } : {}),
     summary: summarize(tree),
     nodes: childrenOf(tree, ROOT).map(nodeJson),
+  };
+}
+
+/**
+ * The format of `show --json --all`. Grows when a field changes its meaning or goes away;
+ * a new field does not change it, so a reader skips keys it does not know.
+ */
+export const JSON_VERSION = 1;
+
+/**
+ * `show --json --all`: everything about every node, so a program (Treeyard Web) never parses
+ * the markdown — the description, the journal and the status changes taken apart, the pictures,
+ * the dates and the place among siblings. `order` in the files means something only among
+ * siblings of one status, so `position` is the place in that group (0 — first); children go
+ * by status in the default order, not the personal one: the export must not depend on whose
+ * settings printed it. `under` — one branch.
+ */
+export function fullTreeJson(tree: Tree, stale?: StaleFn, under?: string): unknown {
+  const { dir } = tree.project;
+  const rank = STATUS_ORDERS['active-first'];
+  // A stable sort: within one status the siblings keep their own order.
+  const kidsOf = (id: string) =>
+    childrenByOrder(tree, id).sort((a, b) => rank.indexOf(a.status) - rank.indexOf(b.status));
+  const nodeJson = (node: TreeNode, _index: number, siblings: TreeNode[]): Record<string, unknown> => ({
+    ...nodeFields(node, stale),
+    parent: node.parent,
+    position: siblings.filter((kid) => kid.status === node.status).indexOf(node),
+    ...(node.created ? { created: node.created } : {}),
+    ...(node.updated ? { updated: node.updated } : {}),
+    ...(node.closed ? { closed: node.closed } : {}),
+    note: description(node.body),
+    journal: journalEntries(node.body).map((line) => {
+      const { when, source, text } = parseEntry(line);
+      return { ...(when ? { at: when } : {}), ...(source ? { who: source } : {}), text };
+    }),
+    history: statusSteps(node.body),
+    images: listImages(dir, node.id).map((image) => ({
+      file: image.file,
+      path: imagePath(dir, node.id, image.file),
+      ...(image.note ? { note: image.note } : {}),
+      added: image.added,
+    })),
+    children: kidsOf(node.id).map(nodeJson),
+  });
+  const branch = under && under !== ROOT ? tree.nodes.get(under) : undefined;
+  if (branch) return { version: JSON_VERSION, ...nodeJson(branch, 0, kidsOf(branch.parent)) };
+  return {
+    version: JSON_VERSION,
+    title: tree.project.title,
+    ...(tree.project.goal ? { goal: tree.project.goal } : {}),
+    ...(tree.project.created ? { created: tree.project.created } : {}),
+    summary: summarize(tree),
+    nodes: kidsOf(ROOT).map(nodeJson),
   };
 }
 

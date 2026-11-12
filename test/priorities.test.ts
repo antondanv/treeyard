@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { paint, treeJson, treeText } from '../src/cli/print.js';
+import { fullTreeJson, paint, treeJson, treeText } from '../src/cli/print.js';
 import { addNode, attachSession, setStatus, shift } from '../src/model/ops.js';
 import { GLYPH, overviewText } from '../src/model/overview.js';
 import { loadTree, nodePath, TREE_DIR, writeNode } from '../src/model/store.js';
@@ -249,6 +249,7 @@ describe('status order setting', () => {
     // Built under the default order; the preset comes after, so only the view can change.
     const tree = loadTree(everyStatus().project.dir);
     const overview = overviewText(tree);
+    const full = JSON.stringify(fullTreeJson(tree));
     resetSettings({
       ...DEFAULTS,
       statusOrder: row.statusOrder as typeof DEFAULTS.statusOrder,
@@ -261,8 +262,9 @@ describe('status order setting', () => {
       treeText(tree, paint(process.stdout)),
       childrenOf(tree, ROOT).map((node) => `${GLYPH[node.status]} ${node.title}`),
     );
-    // The overview is committed: the personal order does not reach it.
+    // The overview is committed: the personal order does not reach it. Nor the full export.
     expect(overviewText(tree)).toBe(overview);
+    expect(JSON.stringify(fullTreeJson(tree))).toBe(full);
   });
 
   it('the overview lists siblings by order, whatever their status or the personal status order', () => {
