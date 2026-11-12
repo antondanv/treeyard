@@ -1,14 +1,10 @@
-import { execFile } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { NODE_VAR } from '../src/model/notes.js';
 import { cleanGoal, decisionList, decisionsOf, rulesOf, withGoal, withRules } from '../src/model/root-doc.js';
 import { loadTree, projectFromText } from '../src/model/store.js';
-import { emptyTree, tempDir, treeyardIn } from './helpers.js';
+import { emptyTree, tempDir, treeyardIn, withStdin } from './helpers.js';
 
 /** A header the way people and other tools leave it: quotes, comments, a folded goal, sessions, extra keys. */
 const HAND_MADE = `---
@@ -148,40 +144,6 @@ describe('decisionList', () => {
     expect(decisionList('## Метод\n\n- правило\n')).toEqual([]);
   });
 });
-
-const cli = fileURLToPath(new URL('../src/cli/main.ts', import.meta.url));
-const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
-
-/**
- * `treeyard <args>` with `input` on stdin — the way a program hands over a long text; `late` — the
- * text comes only after the command has started reading, as from a slow pipe.
- */
-function withStdin(
-  cwd: string,
-  input: string | { late: string },
-  ...args: string[]
-): Promise<{ code: number; stdout: string; stderr: string }> {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    TREEYARD_HOME: tempDir('treeyard-home-'),
-    TREEYARD_LANG: 'ru',
-    NO_COLOR: '1',
-  };
-  delete env[NODE_VAR];
-  delete env.CLAUDE_CODE_SESSION_ID;
-  delete env.FORCE_COLOR;
-  return new Promise((done) => {
-    const child = execFile(
-      process.execPath,
-      ['--import', tsx, cli, ...args],
-      { cwd, env, timeout: 30_000 },
-      (error, stdout, stderr) =>
-        done({ code: error ? Number((error as { code?: number }).code ?? 1) : 0, stdout, stderr }),
-    );
-    if (typeof input === 'string') child.stdin?.end(input);
-    else setTimeout(() => child.stdin?.end(input.late), 1500);
-  });
-}
 
 describe('treeyard goal', () => {
   it('prints the goal, as JSON too, and writes a new one changing only its line', async () => {

@@ -7,7 +7,7 @@ import { journalEntries } from '../src/model/journal.js';
 import { addNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { childrenOf } from '../src/model/tree.js';
-import { emptyTree, tempDir, treeyardIn } from './helpers.js';
+import { emptyTree, tempDir, treeyardIn, withStdin } from './helpers.js';
 
 describe('add --from-json', () => {
   it('reads an array or {nodes}, with words for statuses and hyphens in field names', () => {
@@ -83,5 +83,23 @@ describe('add --from-json', () => {
     }
     expect((await sh('add', 'Название', '--from-json', '-')).code).toBe(2);
     expect((await sh('add', '--from-json', '-', '--done-when', 'x')).stderr).toContain('задаётся в JSON');
+  }, 40_000);
+
+  it('waits for a slow pipe on stdin instead of failing with EAGAIN', async () => {
+    const tree = emptyTree();
+    const parent = addNode(tree, { title: 'Ветка' });
+    const res = await withStdin(
+      tree.project.dir,
+      { late: '[{"title": "Проба", "children": [{"title": "Внутри"}]}]' },
+      'add',
+      '--from-json',
+      '-',
+      '--parent',
+      parent.id,
+    );
+    expect(res.stderr).toBe('');
+    expect(res.code).toBe(0);
+    expect(res.stdout.replace(/\w{4} {2}/g, 'id  ')).toBe('id  Проба\n  id  Внутри\n');
+    expect(childrenOf(loadTree(tree.project.dir), parent.id).map((node) => node.title)).toEqual(['Проба']);
   }, 40_000);
 });

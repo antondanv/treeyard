@@ -766,8 +766,7 @@ async function importCommand(args: string[]): Promise<number> {
   let proposal: Proposal;
   if (values['from-json']) {
     // `-`: the agent that planted it with a person passes it in one command, no file left behind.
-    const source = values['from-json'] === '-' ? 0 : resolve(values['from-json']);
-    proposal = parseProposal(readFileSync(source, 'utf8'));
+    proposal = parseProposal(await textFrom(values['from-json']));
   } else {
     process.stderr.write(
       t('{p1} {p2} {p3} читает план проекта {p4}\n', {
@@ -1155,7 +1154,7 @@ function journalOption(raw: string | undefined): { journal?: number } {
   return { journal: n };
 }
 
-function addCommand(args: string[]): number {
+async function addCommand(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, {
     'from-json': { type: 'string' },
     parent: { type: 'string', short: 'p' },
@@ -1212,7 +1211,7 @@ function addCommand(args: string[]): number {
  * `add --parent <id> --from-json <file|->`: several nodes, children and `needs` between them,
  * checked as a whole first; prints each new id with its title, children indented.
  */
-function addBatch(title: string, values: Record<string, string | boolean | undefined>): number {
+async function addBatch(title: string, values: Record<string, string | boolean | undefined>): Promise<number> {
   if (title) throw new UsageError(t('--from-json: названия — в JSON, без названия в команде'));
   const alone = ['project', 'for', 'after', 'done-when', 'check', 'note', 'waiting', 'until'].find(
     (name) => values[name] !== undefined,
@@ -1223,7 +1222,7 @@ function addBatch(title: string, values: Record<string, string | boolean | undef
   const from = String(values['from-json']);
   let batch: BatchNode[];
   try {
-    batch = parseBatch(readFileSync(from === '-' ? 0 : resolve(from), 'utf8'));
+    batch = parseBatch(await textFrom(from));
     resolveBatchRefs(tree, batch);
   } catch (error) {
     if (error instanceof BatchError) throw new UsageError(error.message);
@@ -2055,12 +2054,12 @@ function noteCommand(args: string[]): number {
 }
 
 /** The coordinator's assignment: the text itself, or stdin for `-` (long text with quotes). */
-export function taskArg(
+export async function taskArg(
   value: string | undefined,
-  stdin: () => string = () => readFileSync(0, 'utf8'),
-): string | undefined {
+  stdin: () => Promise<string> = () => textFrom('-'),
+): Promise<string | undefined> {
   if (value === undefined) return undefined;
-  const text = (value === '-' ? stdin() : value).trim();
+  const text = (value === '-' ? await stdin() : value).trim();
   if (!text) throw new UsageError(t('--task без текста'));
   return text;
 }
@@ -2112,7 +2111,7 @@ function hookCommand(args: string[]): number {
   return 0;
 }
 
-function contextCommand(args: string[]): number {
+async function contextCommand(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, {
     start: { type: 'string' },
     brain: { type: 'string' },
@@ -2121,7 +2120,8 @@ function contextCommand(args: string[]): number {
   const tree = project();
   const id = nodeArg(tree, positionals[0]);
   const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
-  const plan = sessionPlan(tree, id, startArg(values.start, tree.project.start ?? 'plan'), brain, taskArg(values.task));
+  const task = await taskArg(values.task);
+  const plan = sessionPlan(tree, id, startArg(values.start, tree.project.start ?? 'plan'), brain, task);
   process.stdout.write(
     t('{p1}\n\n# Первое сообщение ({start})\n\n{p3}\n', {
       p1: contextText(tree, id),
@@ -2152,7 +2152,7 @@ async function openCommand(args: string[]): Promise<number> {
   // In this terminal the CLI owns stdout; only a pane returns at once with something to print.
   if (values.json && !values.pane)
     throw new UsageError(t('--json — только с --pane: treeyard open <id> --pane --json'));
-  const task = taskArg(values.task);
+  const task = await taskArg(values.task);
   const options = {
     brain,
     start: startArg(values.start, tree.project.start ?? 'plan'),

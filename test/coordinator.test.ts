@@ -5,7 +5,7 @@ import { taskArg } from '../src/cli/commands.js';
 import { setLang } from '../src/i18n/i18n.js';
 import { addNode } from '../src/model/ops.js';
 import { ROOT } from '../src/model/types.js';
-import { emptyTree } from './helpers.js';
+import { emptyTree, withStdin } from './helpers.js';
 
 const TASK = 'без платных вызовов; "завод" не перезапускать';
 
@@ -53,13 +53,22 @@ describe('a coordinator task in the first message', () => {
 });
 
 describe('--task parsing', () => {
-  it('takes the text, reads stdin for "-", rejects an empty one', () => {
-    expect(taskArg(undefined)).toBeUndefined();
-    expect(taskArg('  one ')).toBe('one');
-    expect(taskArg('-', () => 'long "quoted"\n')).toBe('long "quoted"');
-    expect(() => taskArg('-', () => '\n')).toThrow();
-    expect(() => taskArg('')).toThrow();
+  it('takes the text, reads stdin for "-", rejects an empty one', async () => {
+    expect(await taskArg(undefined)).toBeUndefined();
+    expect(await taskArg('  one ')).toBe('one');
+    expect(await taskArg('-', async () => 'long "quoted"\n')).toBe('long "quoted"');
+    await expect(taskArg('-', async () => '\n')).rejects.toThrow();
+    await expect(taskArg('')).rejects.toThrow();
   });
+
+  it('waits for a slow pipe on stdin instead of failing with EAGAIN', async () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Бот', doneWhen: 'бот отвечает' });
+    const res = await withStdin(tree.project.dir, { late: `${TASK}\n` }, 'context', node.id, '--task', '-');
+    expect(res.stderr).toBe('');
+    expect(res.code).toBe(0);
+    expect(res.stdout).toContain(`Задание к узлу:\n${TASK}\n`);
+  }, 40_000);
 });
 
 describe('the coordinator line in the tree commands', () => {

@@ -34,8 +34,8 @@ const run = promisify(execFile);
 const cli = fileURLToPath(new URL('../src/cli/main.ts', import.meta.url));
 const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
 
-/** `treeyard <args>` from source, run in `cwd` with a throwaway home; never throws, returns the exit code. */
-export function treeyardIn(cwd: string, extra: NodeJS.ProcessEnv = {}) {
+/** The environment of a CLI run from source: a throwaway home, Russian, no colors, no outer session. */
+function cliEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     TREEYARD_HOME: tempDir('treeyard-home-'),
@@ -46,9 +46,37 @@ export function treeyardIn(cwd: string, extra: NodeJS.ProcessEnv = {}) {
   Object.assign(env, extra);
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.FORCE_COLOR;
+  return env;
+}
+
+/** `treeyard <args>` from source, run in `cwd` with a throwaway home; never throws, returns the exit code. */
+export function treeyardIn(cwd: string, extra: NodeJS.ProcessEnv = {}) {
+  const env = cliEnv(extra);
   return (...args: string[]) =>
     run(process.execPath, ['--import', tsx, cli, ...args], { cwd, env, timeout: 30_000 }).then(
       ({ stdout, stderr }) => ({ code: 0, stdout, stderr }),
       (error: { code: number; stdout: string; stderr: string }) => error,
     );
+}
+
+/**
+ * `treeyard <args>` with `input` on stdin — the way a program hands over a long text; `late` — the
+ * text comes only after the command has started reading, as from a slow pipe.
+ */
+export function withStdin(
+  cwd: string,
+  input: string | { late: string },
+  ...args: string[]
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((done) => {
+    const child = execFile(
+      process.execPath,
+      ['--import', tsx, cli, ...args],
+      { cwd, env: cliEnv(), timeout: 30_000 },
+      (error, stdout, stderr) =>
+        done({ code: error ? Number((error as { code?: number }).code ?? 1) : 0, stdout, stderr }),
+    );
+    if (typeof input === 'string') child.stdin?.end(input);
+    else setTimeout(() => child.stdin?.end(input.late), 1500);
+  });
 }
