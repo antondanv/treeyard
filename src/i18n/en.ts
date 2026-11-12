@@ -1198,6 +1198,8 @@ export const EN: Record<string, string> = {
   ДОКУМЕНТЫ: 'DOCUMENTS',
   'ищу .md проекта…': "looking for the project's .md files…",
   'В проекте нет .md файлов': 'The project has no .md files',
+  'treeyard ещё не видел ни одного дерева — запусти treeyard в папке проекта':
+    'treeyard has not seen a tree yet — run treeyard in a project folder',
   ' · корень дерева': ' · root of the tree',
   ' — читать и править · ⏎ — меню проекта': ' — read and edit · ⏎ — project menu',
   'КАК ВЕДЁТСЯ — .tree/tree.md': 'HOW IT IS RUN — .tree/tree.md',
@@ -1259,6 +1261,7 @@ export const EN: Record<string, string> = {
   'treeyard status [--json] [--project <папка>]': 'treeyard status [--json] [--project <dir>]',
   'treeyard watch [--json] [--project <папка>]': 'treeyard watch [--json] [--project <dir>]',
   'treeyard docs [--json] [--project <папка>]': 'treeyard docs [--json] [--project <dir>]',
+  'treeyard projects [--json]': 'treeyard projects [--json]',
   'Цель, правила и решения': 'Goal, rules and decisions',
   'слежу за деревом в {dir} — Ctrl+C, чтобы выйти': 'watching the tree in {dir} — Ctrl+C to stop',
   добавлен: 'added',

@@ -15,6 +15,7 @@ import { t } from '../i18n/i18n.js';
 import { purgeImages } from '../model/images.js';
 import { loadTree, nodePath } from '../model/store.js';
 import { holderOf } from '../model/tree.js';
+import { rememberProject } from '../projects.js';
 import { type Action, App, type Toast } from './App.js';
 import { captureFocus, captureMouse, TerminalInput, withoutAutowrap } from './input.js';
 import { inlineMark } from './logo.js';
@@ -25,6 +26,8 @@ import { loadUi, saveUi } from './ui-state.js';
 export async function runTui(dir: string, plantingPane?: Pane): Promise<void> {
   // A status changed here moves its card on the GitHub board; quitting waits for the moves.
   const unfollow = followStatuses();
+  // So `treeyard projects` lists it.
+  rememberProject(dir);
   // Pictures of nodes closed a week ago go now, not while someone looks at them.
   purgeImages(loadTree(dir));
   try {

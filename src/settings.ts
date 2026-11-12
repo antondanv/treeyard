@@ -69,8 +69,13 @@ export const DEFAULTS: Settings = {
   notes: '',
 };
 
+/** `~/.treeyard`, or `$TREEYARD_HOME`: what follows the person from project to project. */
+export function homeFolder(env: NodeJS.ProcessEnv = process.env): string {
+  return env.TREEYARD_HOME?.trim() || join(homedir(), '.treeyard');
+}
+
 export function settingsPath(env: NodeJS.ProcessEnv = process.env): string {
-  return join(env.TREEYARD_HOME?.trim() || join(homedir(), '.treeyard'), 'settings.json');
+  return join(homeFolder(env), 'settings.json');
 }
 
 export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {

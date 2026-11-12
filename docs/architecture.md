@@ -44,11 +44,14 @@
   игнорируемых и узлов дерева; без Git — обход папки) с заголовками, чтение и запись с
   сохранением CRLF; `tree.md` с битой YAML-шапкой не пишется. Один список для окна `P` и
   `treeyard docs`.
+- `../projects.ts` — папки с деревьями, которые видел treeyard, в `~/.treeyard/projects.json`:
+  `projectDir()` в CLI и `runTui` запоминают папку (не чаще раза в 10 минут, без связанных
+  git worktree), `treeyard projects` перечисляет те, где дерево ещё есть.
 
 ## Входы
 
 - `src/cli/` — `treeyard <команда>`: show, add, set, log, note, open, sessions, import,
-  status, pointer, skills, config, github, docs. Те же команды, что у человека, используют агенты.
+  status, pointer, skills, config, github, docs, projects. Те же команды, что у человека, используют агенты.
 - `src/status.ts` + `cli/status-text.ts` — `treeyard status`: папка и дерево (из git worktree —
   основное), узлы, скиллы, указатель, хук, живые сессии и панели, GitHub; у каждой проблемы —
   команда-исправление. Только читает; CLI, tmux и `gh` подставляются в тестах.

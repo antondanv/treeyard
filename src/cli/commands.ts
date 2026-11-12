@@ -89,6 +89,7 @@ import {
   WHO,
   type Who,
 } from '../model/types.js';
+import { rememberProject, seenProjects } from '../projects.js';
 import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
 import { locate, projectStatus } from '../status.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
@@ -151,6 +152,9 @@ function commandLines(): string {
   treeyard docs [--json] [--project <папка>]   документы проекта, как в окне «Документы»: .md из Git (отслеживаемые и
                                            новые, без игнорируемых и узлов дерева; без Git — файлы папки), первым
                                            .tree/tree.md, затем README, AGENTS, CLAUDE; --json — путь, заголовок, строки, время
+  treeyard projects [--json]               папки с деревьями, где запускались команды treeyard или дерево, свежие сверху:
+                                           название, путь, когда видел; удалённые папки и git worktree не попадают;
+                                           --json — path, title, goal, seen (для программ)
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]   --after — после брата того же статуса
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
@@ -226,6 +230,9 @@ function commandLines(): string {
                                            (tracked and new, without ignored files and tree nodes; without Git — the
                                            folder's files), .tree/tree.md first, then README, AGENTS, CLAUDE;
                                            --json — path, title, lines, time
+  treeyard projects [--json]               folders with trees where treeyard commands or the tree ran, the most recent
+                                           first: title, path, when seen; removed folders and git worktrees are left
+                                           out; --json — path, title, goal, seen (for programs)
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]   --after — after a sibling of the same status
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
@@ -368,6 +375,8 @@ async function main(argv: string[]): Promise<number> {
       return watchCommand(rest);
     case 'docs':
       return docsCommand(rest);
+    case 'projects':
+      return projectsCommand(rest);
     case 'add':
       return addCommand(rest);
     case 'set':
@@ -443,6 +452,8 @@ function parse<T extends NonNullable<Parameters<typeof parseArgs>[0]>['options']
 function projectDir(folder?: string): string {
   const dir = folder ? findProject(folderArg(folder)) : findProject();
   if (!dir) throw new UsageError(t('здесь нет дерева (.tree/) — treeyard init, чтобы посадить'));
+  // So `treeyard projects` lists it.
+  rememberProject(dir);
   return dir;
 }
 
@@ -594,6 +605,7 @@ async function initCommand(args: string[]): Promise<number> {
       // --bare: the method and the goal, without the template's example branches.
       ...(values.bare ? { skeleton: false } : {}),
     });
+    rememberProject(dir);
     process.stdout.write(`${treeText(tree, out)}\n`);
     return 0;
   }
@@ -1088,6 +1100,31 @@ async function docsCommand(args: string[]): Promise<number> {
       `${doc.path.padEnd(width)}  ${named ? `${doc.title} ` : ''}${out.dim(`· ${linesLabel(doc.lines)} · ${ago(doc.mtime)}`)}\n`,
     );
   }
+  return 0;
+}
+
+/** The folders with trees treeyard has seen, the most recent first; `--json` — for Treeyard Web. */
+function projectsCommand(args: string[]): number {
+  const { values, positionals } = parse(args, { json: { type: 'boolean' } });
+  if (positionals.length) throw new UsageError(t('treeyard projects [--json]'));
+  const projects = seenProjects();
+  if (values.json) {
+    const list = projects.map((p) => ({ path: p.path, title: p.title, goal: p.goal ?? null, seen: p.seen }));
+    process.stdout.write(`${JSON.stringify(list, null, 2)}\n`);
+    return 0;
+  }
+  if (!projects.length) {
+    process.stdout.write(
+      `${out.dim(t('treeyard ещё не видел ни одного дерева — запусти treeyard в папке проекта'))}\n`,
+    );
+    return 0;
+  }
+  const width = Math.min(Math.max(...projects.map((p) => p.title.length)), 32);
+  const paths = projects.map((p) => homeShort(p.path));
+  const pathWidth = Math.min(Math.max(...paths.map((path) => path.length)), 48);
+  projects.forEach((p, i) => {
+    process.stdout.write(`${p.title.padEnd(width)}  ${paths[i]!.padEnd(pathWidth)}  ${out.dim(ago(p.seen))}\n`);
+  });
   return 0;
 }
 

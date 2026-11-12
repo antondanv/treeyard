@@ -28,6 +28,7 @@ const COMMANDS = [
   'find',
   'watch',
   'docs',
+  'projects',
   'add',
   'set',
   'log',

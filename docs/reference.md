@@ -330,6 +330,7 @@ treeyard show --under <id>                      # the branch as a tree (--open, 
 treeyard show --json --all                      # everything about every node for a program: description, journal, status changes, pictures, dates, place (--under <id> — a branch)
 treeyard watch --json                           # watch the tree: a JSON line per change — a node added, removed, its status changed, a new entry, an edit (without --json — a line for a person)
 treeyard docs --json                            # the project's documents as the «Documents» window lists them: path, title, lines, time (without --json — a line each)
+treeyard projects --json                        # folders with trees treeyard has seen, the most recent first: path, title, goal, when seen (without --json — a line each)
 treeyard find "rounding|cents"                  # search every node, done ones too: id, status word, path and the matching piece (--status, --under, --json, --limit)
 treeyard add "Show the product to a person" --who human --parent <id>
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling of the same status (default — last)
@@ -426,6 +427,17 @@ The command waits until the files go quiet (150 ms) and only then compares them 
 look: a command that writes a node three times, or a `git checkout` that rewrites fifty files,
 gives one event per node. A file that can't be read (a hand edit half done) stays as it was
 instead of leaving the tree.
+
+`treeyard projects` lists the folders with trees treeyard has seen, so a program (Treeyard Web)
+finds the projects by itself instead of keeping a list. A folder is remembered when a command
+that reads or writes its tree runs there (`show`, `log`, `--project <dir>`…) or the tree opens
+in the TUI; the list lives in `~/.treeyard/projects.json` (`$TREEYARD_HOME`), the most recently
+seen first. A folder that is gone or no longer has `.tree/tree.md` is not listed but stays in the
+file, so a disk that isn't mounted comes back; neither is a linked git worktree: its `.tree/` is
+the branch's copy, the main checkout is the project. `treeyard projects --json` is an array of
+`{"path", "title", "goal", "seen"}`: `path` — the folder's absolute real path; `title` and `goal`
+from `.tree/tree.md` (`goal` is `null` when there is none); `seen` — ISO time treeyard last saw
+the tree, refreshed at most every ten minutes.
 
 Flags of `treeyard open`: `--task "…"` adds your assignment to the end of the first
 message, after the standard one, under “Task for this node:” (in a `chat` start it
