@@ -44,7 +44,7 @@
 - ○ [Релиз 0.2.0](nodes/9xem.md) — 0/11
   - ○ [Задержка ввода и прокрутки в панели агента](nodes/9feu.md)
   - ○ [README: быстрый старт наверху](nodes/cpkj.md) — 0/1
-    - ○ [README в npm: ссылки и картинки — в репозиторий (forNpm, как в Brainyard)](nodes/brvd.md)
+    - ○ [README в npm: ссылки и картинки](nodes/brvd.md)
   - ○ [Уведомления об обновлениях](nodes/6wje.md)
   - ○ [Скиллы ставятся сами](nodes/k5ts.md)
   - ○ [Удаление treeyard целиком](nodes/cs6g.md)
@@ -53,8 +53,8 @@
   - ○ [Падение без мусора в терминале](nodes/ecqh.md)
   - ○ [Права агентов видны и настраиваются](nodes/pgxk.md)
   - ○ [Проверка пакета перед публикацией](nodes/b9ke.md) — 0/2
-    - ○ [package.json exports указывает на dist/index.js, а src/index.ts нет — пакет не импортируется как библиотека](nodes/ay85.md)
-    - ○ [Нестабильный тест: mouse.test.tsx «presses the panel buttons without starting to type, and types after a click inside» упал в CI на Node 24 / macos-latest](nodes/ev5s.md)
+    - ○ [Сломанный exports в package.json](nodes/ay85.md)
+    - ○ [Нестабильный тест мыши](nodes/ev5s.md)
 - ✓ [Веха 1: 2 недели веду свои проекты только через treeyard](nodes/8gtc.md) — 1/1 · *ты*
   - ✓ [Зафиксировать работу в git: Treeyard и Brainyard](nodes/xtew.md)
   - ✓ [Устранить постоянную нагрузку CPU и нагрев от TUI](nodes/4pwz.md) — 1/1
