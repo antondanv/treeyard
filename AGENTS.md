@@ -21,6 +21,7 @@ npm run format                     # biome check --write
 npm link                           # команда treeyard из dist/
 FORCE_COLOR=2 npx tsx scripts/screenshot.ts <папка-с-деревом> shot.png 130x36   # PNG интерфейса
 npm run screenshots                # заново снять картинки README (docs/, EN и RU; нужен Chrome)
+node scripts/usage-audit.mjs       # раз в 2–3 недели: как агенты зовут treeyard — пайпы, циклы, ошибки, правки .tree/ руками (стенограммы Claude Code живут ~30 дней)
 ```
 
 ## Правила
