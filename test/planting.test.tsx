@@ -52,8 +52,10 @@ describe('the planting skill', () => {
     });
     expect(written.map((item) => item.path)).toEqual([
       join(claude, 'skills', 'treeyard'),
+      join(claude, 'skills', 'treeyard-coordinate'),
       join(claude, 'skills', SKILL),
       join(codex, 'skills', 'treeyard'),
+      join(codex, 'skills', 'treeyard-coordinate'),
       join(codex, 'skills', SKILL),
     ]);
     expect(readFileSync(join(claude, 'skills', SKILL, 'SKILL.md'), 'utf8')).toBe(skillText());

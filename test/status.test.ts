@@ -104,7 +104,9 @@ describe('treeyard status', () => {
     expect(text).toContain(`treeyard ${pkg.version} · Brainyard ${status.brainyard}`);
     expect(text).toContain('узлы       3: идея 1 · к работе 2');
     expect(text).toContain('брошены    0');
-    expect(text).toMatch(/скиллы {5}Claude Code {2}treeyard не стоит · treeyard-init не стоит +~?\S*\.claude\/skills/);
+    expect(text).toMatch(
+      /скиллы {5}Claude Code {2}treeyard не стоит · treeyard-coordinate не стоит · treeyard-init не стоит +~?\S*\.claude\/skills/,
+    );
     expect(text).toContain('Antigravity  нет CLI');
     expect(text).toContain('указатель  CLAUDE.md через AGENTS.md · AGENTS.md без блока · GEMINI.md нет файла');
     expect(text).toContain('git-хук    не стоит');
@@ -138,7 +140,7 @@ describe('treeyard status', () => {
     for (const fix of fixes) expect((await sh(...fix.split(' ').slice(1))).code).toBe(0);
     const after = await sh('status');
     expect(after.code).toBe(0);
-    expect(after.stdout).toContain('Claude Code  treeyard стоит · treeyard-init стоит');
+    expect(after.stdout).toContain('Claude Code  treeyard стоит · treeyard-coordinate стоит · treeyard-init стоит');
     expect(after.stdout).toContain('AGENTS.md есть');
     expect(after.stdout).toContain('git-хук    стоит');
     expect(after.stdout.trimEnd().endsWith('✓ всё на месте')).toBe(true);
@@ -325,23 +327,26 @@ describe('skills in each CLI', () => {
     const env = { HOME: homeDir };
     const project = tempDir();
     const skills = shippedSkills();
-    expect(skills).toEqual(['treeyard', 'treeyard-init']);
+    expect(skills).toEqual(['treeyard', 'treeyard-coordinate', 'treeyard-init']);
     const states = () => skillStates(project, env).map((s) => `${s.brain}:${s.skill}:${s.state}`);
     expect(states()).toEqual([
       'claude:treeyard:missing',
+      'claude:treeyard-coordinate:missing',
       'claude:treeyard-init:missing',
       'codex:treeyard:missing',
+      'codex:treeyard-coordinate:missing',
       'codex:treeyard-init:missing',
       'antigravity:treeyard:no-cli',
+      'antigravity:treeyard-coordinate:no-cli',
       'antigravity:treeyard-init:no-cli',
     ]);
 
     const first = installSkills(project, env);
-    expect(first.map((item) => item.action)).toEqual(['written', 'written', 'written', 'written']);
+    expect(first.map((item) => item.action)).toEqual(Array(6).fill('written'));
     expect(
       readFileSync(join(homeDir, '.claude', 'skills', 'treeyard', 'references', 'other-projects.md'), 'utf8'),
     ).toBe(readFileSync(join(skillsRoot(), 'treeyard', 'references', 'other-projects.md'), 'utf8'));
-    expect(states().filter((s) => s.endsWith(':installed'))).toHaveLength(4);
+    expect(states().filter((s) => s.endsWith(':installed'))).toHaveLength(6);
     // Nothing is made in the project: only copies already there are its business.
     expect(existsSync(join(project, '.claude'))).toBe(false);
 

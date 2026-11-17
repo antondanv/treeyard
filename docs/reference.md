@@ -56,7 +56,8 @@ after planting. Without tmux (or with `open=terminal`) the agent works full scre
 terminal: leave the session, and the tree opens.
 
 For plain `claude`, `codex` and `agy` to know treeyard's skills in any folder — `treeyard-init`
-(planting) and `treeyard` (working with a tree):
+(planting), `treeyard` (working with a tree) and `treeyard-coordinate` (handing several nodes
+out to sessions, accepting and merging their work):
 
 ```sh
 treeyard skills            # where the skills are in each CLI: installed, outdated, not installed
@@ -497,8 +498,8 @@ node, its edit stays.
   branch's copy, and a hint that tree commands go with `--project <main folder>`;
 - nodes by status and the abandoned ones — «in progress» with no live session and no pane for
   longer than `stale_after` hours; unlike `show`, live sessions and panes count here;
-- the `treeyard` and `treeyard-init` skills in Claude Code, Codex and Antigravity: installed,
-  outdated (some file differs from what came with this version), not installed, or no CLI; copies
+- the `treeyard`, `treeyard-init` and `treeyard-coordinate` skills in Claude Code, Codex and
+  Antigravity: installed, outdated (some file differs from what came with this version), not installed, or no CLI; copies
   in the project folder (`.claude/skills`, `.agents/skills`) count too;
 - the block about the tree in CLAUDE.md, AGENTS.md and GEMINI.md: in place, outdated, no block,
   via an import (`@AGENTS.md`), or no file;

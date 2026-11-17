@@ -83,7 +83,7 @@
 - `panes.ts`, `pane-idle.ts` — сессии в панелях tmux: запуск, сон и пробуждение,
   автосон только при положительном подтверждении простоя, лимит живых панелей;
   `sessionPanes` — панель каждой сессии для `sessions --json` (только чтение).
-- `skills.ts` — скиллы из `skills/` (`treeyard`, `treeyard-init`): где их ищет каждый CLI (свой
+- `skills.ts` — скиллы из `skills/` (`treeyard`, `treeyard-init`, `treeyard-coordinate`): где их ищет каждый CLI (свой
   дом и папка проекта), стоит ли свежая копия, установка папкой целиком.
 - `planting.ts` + `skills/treeyard-init` — посадка дерева с агентом; `importer.ts` —
   перенос старого плана и `import --from-json`.

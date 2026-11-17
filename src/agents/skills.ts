@@ -1,6 +1,7 @@
 /**
- * The skills that ship with treeyard — `treeyard` (working with a tree) and
- * `treeyard-init` (planting one) — and where each CLI finds them: a personal
+ * The skills that ship with treeyard — `treeyard` (working with a tree),
+ * `treeyard-init` (planting one) and `treeyard-coordinate` (handing nodes out to
+ * sessions) — and where each CLI finds them: a personal
  * folder in the CLI's home, or a folder inside the project.
  *
  * A skill is a folder (SKILL.md and its references/), so it is compared and
@@ -19,7 +20,7 @@ export function skillsRoot(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills');
 }
 
-/** The skills treeyard ships, by folder name: `treeyard`, `treeyard-init`. */
+/** The skills treeyard ships, by folder name: `treeyard`, `treeyard-coordinate`, `treeyard-init`. */
 export function shippedSkills(root = skillsRoot()): string[] {
   return readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && existsSync(join(root, entry.name, 'SKILL.md')))

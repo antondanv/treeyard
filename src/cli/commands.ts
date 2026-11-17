@@ -142,8 +142,8 @@ function commandLines(): string {
                                            скиллы, указатель, git-хук, живые сессии и панели, GitHub;
                                            у каждой проблемы — команда, которая её исправит
   treeyard pointer                         дописать блок о дереве в AGENTS.md / CLAUDE.md
-  treeyard skills [install]                скиллы treeyard и treeyard-init: где стоят, поставить в Claude Code, Codex,
-                                           Antigravity (папки в проекте — обновить)
+  treeyard skills [install]                скиллы treeyard, treeyard-init и treeyard-coordinate: где стоят, поставить
+                                           в Claude Code, Codex, Antigravity (папки в проекте — обновить)
   treeyard templates                       шаблоны: этапы, направления, микадо…
   treeyard show [id…] [--json] [--open]    дерево или узлы текстом (--open — без готового; вне терминала готовое
                                            свёрнуто в «✓ готово: N», --all — всё; открытое под готовым видно,
@@ -225,8 +225,8 @@ function commandLines(): string {
                                            abandoned ones, skills, the pointer, the git hook, live sessions and panes,
                                            GitHub; every problem with the command that fixes it
   treeyard pointer                         add the block about the tree to AGENTS.md / CLAUDE.md
-  treeyard skills [install]                the treeyard and treeyard-init skills: where they are, install into Claude Code,
-                                           Codex, Antigravity (copies in the project — refresh)
+  treeyard skills [install]                the treeyard, treeyard-init and treeyard-coordinate skills: where they are,
+                                           install into Claude Code, Codex, Antigravity (copies in the project — refresh)
   treeyard templates                       templates: stages, directions, mikado…
   treeyard show [id…] [--json] [--open]    the tree or nodes as text (--open hides finished work; off a terminal
                                            finished work folds into «✓ done: N», --all shows everything; open work
