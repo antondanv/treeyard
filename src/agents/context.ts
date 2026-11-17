@@ -15,7 +15,14 @@ import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
-import { finishedParents, isMilestone, longTitles, openUnderClosed, overdueNodes } from '../model/review.js';
+import {
+  finishedParents,
+  isMilestone,
+  longTitles,
+  openUnderClosed,
+  overdueNodes,
+  pastComeBack,
+} from '../model/review.js';
 import { staleNodes } from '../model/stale.js';
 import { TREE_DIR } from '../model/store.js';
 import { today } from '../model/time.js';
@@ -451,7 +458,7 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
         'под закрытыми ветками; «на проверке», а код не закоммичен; вехи с прошедшим сроком; дубли, идеи, которые пора поднять или ' +
         'закрыть, узлы не на своём месте; чего не хватает до ближайшей вехи и цели проекта. Часть этого treeyard уже нашёл сам — ' +
         'разделы контекста «Все дети готовы, а узел открыт», «Открытые узлы под закрытыми ветками», «На проверке, а код не закоммичен», ' +
-        '«Сроки прошли», «Длинные названия»: проверь каждую находку оттуда. Начни с короткой сводки: где проект сейчас и на чём остановились. ' +
+        '«Сроки прошли», «Ждёт, а дата возврата прошла», «Длинные названия»: проверь каждую находку оттуда. Начни с короткой сводки: где проект сейчас и на чём остановились. ' +
         'Потом находки по важности — у каждой команда treeyard, которая её исправит. Ничего не меняй, пока я не соглашусь; ' +
         'после согласия выполни команды и покажи, что вышло.',
       en:
@@ -465,7 +472,8 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
         'done while they are open; open nodes under closed branches; "in review" with the code not committed; milestones past their ' +
         'deadline; duplicates, ideas to take up or drop, nodes in the wrong place; what is missing for the nearest milestone and the ' +
         'goal. treeyard has found part of this itself — the context sections «All children done, the node still open», «Open nodes ' +
-        'under closed branches», «In review, but the code is not committed», «Deadlines passed», «Long titles»: check every finding ' +
+        'under closed branches», «In review, but the code is not committed», «Deadlines passed», «Waiting, but the date to come ' +
+        'back has passed», «Long titles»: check every finding ' +
         'there. Start with a short summary: where the project ' +
         'stands and where it stopped. Then the findings by importance — each with the treeyard command that fixes it. Change ' +
         'nothing until I agree; after that run the commands and show what came of them.',
@@ -535,6 +543,11 @@ const ROOT_TEXT = {
     overdueHint:
       'Срок в названии или критерии прошёл, а узел открыт. Предложи человеку: закрыть сделанное, перенести срок (`set <id> done_when="…"`) или признать, что к сроку не успели, и решить, что дальше.',
     overdueLine: (date: string, text: string, days: number) => `срок ${date} («${text}») прошёл ${days} дн назад`,
+    comeBack: '## Ждёт, а дата возврата прошла',
+    comeBackHint:
+      'Дата в «вернуться, когда» прошла, а узел всё ждёт. Проверь, наступило ли условие: да — верни узел к работе (`set <id> status=todo`); нет — перенеси дату (`set <id> until="…"`) или запиши в журнал, почему ждём дальше.',
+    comeBackLine: (date: string, days: number, until: string) =>
+      `дата возврата ${date} прошла ${days} дн назад · вернуться, когда: ${until}`,
     long: '## Длинные названия',
     longHint:
       'Длиннее 60 символов. Сократи до сути в 2–6 словах, подробности — в описание: `set <id> title="…" note="…"` (note заменяет описание целиком — сохрани старое).',
@@ -601,6 +614,11 @@ const ROOT_TEXT = {
     overdueHint:
       'The deadline in the title or the criterion has passed while the node is open. Offer the person to close what is done, move the deadline (`set <id> done_when="…"`) or admit it was missed and decide what next.',
     overdueLine: (date: string, text: string, days: number) => `deadline ${date} («${text}») passed ${days} d ago`,
+    comeBack: '## Waiting, but the date to come back has passed',
+    comeBackHint:
+      'The date in "come back when" has passed while the node still waits. Check whether the condition has come: yes — put the node back to work (`set <id> status=todo`); no — move the date (`set <id> until="…"`) or write in the journal why it waits on.',
+    comeBackLine: (date: string, days: number, until: string) =>
+      `the date to come back ${date} passed ${days} d ago · come back when: ${until}`,
     long: '## Long titles',
     longHint:
       'Over 60 characters. Cut to the gist in 2–6 words, details into the description: `set <id> title="…" note="…"` (note replaces the whole description — keep the old text).',
@@ -719,6 +737,13 @@ export function projectContext(tree: Tree): string {
     overdueNodes(tree, today()),
     ({ node, deadline, days }) =>
       `${brief(node)} — ${milestone(node)}${L.overdueLine(deadline.date, deadline.text, days)}`,
+  );
+  section(
+    L.comeBack,
+    L.comeBackHint,
+    pastComeBack(tree, today()),
+    ({ node, deadline, days }) =>
+      `${brief(node)} — ${L.comeBackLine(deadline.date, days, clip(node.until ?? '', 160))}`,
   );
   section(
     L.long,

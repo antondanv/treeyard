@@ -105,7 +105,9 @@ open; open nodes under closed branches; nodes in review while the folder has unc
 (files in `.tree/` do not count); titles over 60 characters; nodes past their deadline (a date
 after «by», «until», «before», «deadline», «до», «к» in the title or the criterion; a bare date
 such as «28.08 Review» is not a deadline; a milestone is a node whose title starts with
-«Milestone» or «Веха»). A review gives
+«Milestone» or «Веха»); waiting nodes whose date in «come back when» has passed (there a date
+counts without a word before it; a date without a year falls after the day the node went to
+waiting). A review gives
 its findings and `treeyard` commands first, and changes only after you agree. In a
 conversation the first message is yours: ask about the status, open or close nodes. The
 project's sessions are kept in `.tree/tree.md`, shown in the root's menu and in the

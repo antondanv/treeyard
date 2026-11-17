@@ -4,8 +4,9 @@
  * by hand — finished branches still open, ideas left under closed ones, paragraph titles,
  * milestones past their date. The review gets them as lists and checks each one.
  */
+import { statusSteps } from './history.js';
 import { isLongTitle } from './titles.js';
-import { CLOSED, childrenOf } from './tree.js';
+import { CLOSED, childrenOf, waitingNodes } from './tree.js';
 import type { Tree, TreeNode } from './types.js';
 
 /** «Веха 3: …», «Milestone 2 — …»: how trees name their milestones. */
@@ -86,7 +87,9 @@ const RU_MONTHS = [
   'декабря',
 ];
 const EN_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-const EN_MONTH = String.raw`(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?`;
+// Whole month names only: «decide 3» or «maybe 5» is no date. The lookahead captures the
+// three letters the month is known by.
+const EN_MONTH = String.raw`(?=(${EN_MONTHS.join('|')}))(?:january|february|march|april|may|june|july|august|september|october|november|december|sept|${EN_MONTHS.join('|')})\.?`;
 
 /**
  * A date only counts after a word that makes it a deadline: «28.08 Сквозная проверка» is when
@@ -101,7 +104,13 @@ const DATES = [
   String.raw`(\d{1,2})\s+${EN_MONTH}(?:\s+(\d{4}))?(?![\p{L}\p{N}])`,
   String.raw`${EN_MONTH}\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?(?![\p{L}\p{N}])`,
 ];
-const DEADLINE = new RegExp(`${BY}(?:${DATES.map((date) => `(?:${date})`).join('|')})`, 'giu');
+const DATE = `(?:${DATES.map((date) => `(?:${date})`).join('|')})`;
+const DEADLINE = new RegExp(`${BY}${DATE}`, 'giu');
+/**
+ * «Come back when» is about time already, so a date needs no word before it; only not in the
+ * middle of a word or a number: «v1.10», «0.3.12».
+ */
+const COME_BACK = new RegExp(`(?<![\\p{L}\\p{N}.,])${DATE}`, 'giu');
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -113,10 +122,10 @@ function dateOf(year: number | undefined, month: number, day: number, base: stri
   return year === undefined && date < base ? dateOf(fullYear + 1, month, day, base) : date;
 }
 
-/** The latest deadline written in the text; `base` (YYYY-MM-DD) places dates without a year. */
-export function deadlineIn(text: string, base: string): Deadline | undefined {
+/** The latest date `pattern` finds in the text; `base` (YYYY-MM-DD) places dates without a year. */
+function latestDate(text: string, pattern: RegExp, base: string): Deadline | undefined {
   let best: Deadline | undefined;
-  for (const m of text.matchAll(DEADLINE)) {
+  for (const m of text.matchAll(pattern)) {
     const n = (at: number) => (m[at] === undefined ? undefined : Number(m[at]));
     let date: string | undefined;
     if (m[1]) date = dateOf(n(1), n(2)!, n(3)!, base);
@@ -127,6 +136,16 @@ export function deadlineIn(text: string, base: string): Deadline | undefined {
     if (date && (!best || date > best.date)) best = { date, text: m[0].trim() };
   }
   return best;
+}
+
+/** The latest deadline written in the text; `base` (YYYY-MM-DD) places dates without a year. */
+export function deadlineIn(text: string, base: string): Deadline | undefined {
+  return latestDate(text, DEADLINE, base);
+}
+
+/** The latest date in a «come back when»: «2026-12-01», «после 20.11», «ответят к 1 декабря». */
+export function comeBackIn(text: string, base: string): Deadline | undefined {
+  return latestDate(text, COME_BACK, base);
 }
 
 /** The node's deadline: from its title and criterion. */
@@ -141,6 +160,9 @@ export interface Overdue {
   days: number;
 }
 
+const daysSince = (date: string, today: string) =>
+  Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 86_400_000);
+
 /** Open nodes past their deadline, the longest overdue first; a node in review waits for the person. */
 export function overdueNodes(tree: Tree, today: string): Overdue[] {
   const out: Overdue[] = [];
@@ -148,8 +170,29 @@ export function overdueNodes(tree: Tree, today: string): Overdue[] {
     if (CLOSED.has(node.status) || node.status === 'review') continue;
     const deadline = deadlineOf(node, today);
     if (!deadline || deadline.date >= today) continue;
-    const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${deadline.date}T00:00:00Z`)) / 86_400_000);
-    out.push({ node, deadline, days });
+    out.push({ node, deadline, days: daysSince(deadline.date, today) });
+  }
+  return out.sort((a, b) => b.days - a.days);
+}
+
+/** YYYY-MM-DD the node last went to waiting, by its journal. */
+export function waitingSince(node: TreeNode): string | undefined {
+  const step = statusSteps(node.body).findLast((item) => item.to === 'waiting' && item.at);
+  return step?.at?.slice(0, 10);
+}
+
+/**
+ * Waiting nodes whose date to come back has passed, the longest past first. A date without a
+ * year falls on or after the day the node went to waiting: «20.11» written in December means
+ * the next one.
+ */
+export function pastComeBack(tree: Tree, today: string): Overdue[] {
+  const out: Overdue[] = [];
+  for (const node of waitingNodes(tree)) {
+    if (!node.until) continue;
+    const date = comeBackIn(node.until, waitingSince(node) ?? node.created ?? today);
+    if (!date || date.date >= today) continue;
+    out.push({ node, deadline: date, days: daysSince(date.date, today) });
   }
   return out.sort((a, b) => b.days - a.days);
 }

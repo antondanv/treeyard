@@ -8,12 +8,15 @@ import { uncommittedPaths } from '../src/git.js';
 import { setLang } from '../src/i18n/i18n.js';
 import { addNode } from '../src/model/ops.js';
 import {
+  comeBackIn,
   deadlineIn,
   finishedParents,
   isMilestone,
   longTitles,
   openUnderClosed,
   overdueNodes,
+  pastComeBack,
+  waitingSince,
 } from '../src/model/review.js';
 import { ROOT, type Status, type Tree } from '../src/model/types.js';
 import { emptyTree } from './helpers.js';
@@ -150,6 +153,70 @@ describe('deadlines', () => {
   });
 });
 
+describe('waiting past the date to come back', () => {
+  const base = '2026-11-08';
+  it('reads a date anywhere in «come back when», with or without a word before it', () => {
+    expect(comeBackIn('2026-11-01', base)).toEqual({ date: '2026-11-01', text: '2026-11-01' });
+    expect(comeBackIn('после 20.11, когда ответит хостинг', base)?.date).toBe('2026-11-20');
+    expect(comeBackIn('с 1 декабря', base)?.date).toBe('2026-12-01');
+    expect(comeBackIn('ответят к 15.01', base)?.date).toBe('2027-01-15');
+    expect(comeBackIn('the invoice is paid, Dec 3rd at the latest', base)?.date).toBe('2026-12-03');
+    expect(comeBackIn('after 5 September 2027', base)?.date).toBe('2027-09-05');
+    expect(comeBackIn('заказали 10.11.2026, ответ к 25.11.2026', base)?.date).toBe('2026-11-25');
+  });
+
+  it('ignores conditions without a date, versions and words that only start like a month', () => {
+    for (const text of [
+      'готовы genj, szwm и cxmh',
+      'выйдет @antondanv/brainyard 0.3.12',
+      'выйдет v1.10',
+      'появится VPS',
+      'we decide 3 options',
+      'maybe 5 people reply',
+      'marketing 10 posts are out',
+      '31.02',
+    ])
+      expect(comeBackIn(text, base), text).toBeUndefined();
+  });
+
+  it('knows from the journal when the node last went to waiting', () => {
+    const tree = emptyTree();
+    const waits = node(tree, 'Сервер', 'waiting');
+    waits.body =
+      '## Журнал\n\n- 2026-09-01 10:00 · агент · к работе → ждёт: VPS\n- 2026-09-05 11:00 · ты · ждёт → к работе\n- 2026-10-20 09:30 · агент · в работе → ждёт: ответ хостинга\n';
+    expect(waitingSince(waits)).toBe('2026-10-20');
+    waits.body = '## Journal\n\n- 2026-10-21 09:30 · agent · active → waiting: the host\n';
+    expect(waitingSince(waits)).toBe('2026-10-21');
+    waits.body = '';
+    expect(waitingSince(waits)).toBeUndefined();
+  });
+
+  it('lists waiting nodes whose date has passed, the longest past first', () => {
+    const tree = emptyTree();
+    const since = (day: string) => `## Журнал\n\n- ${day} 10:00 · агент · в работе → ждёт: ответ\n`;
+    const waits = (title: string, until: string, body: string, created = '2026-01-01') => {
+      const item = node(tree, title, 'waiting');
+      Object.assign(item, { until, body, created });
+      return item;
+    };
+    const iso = waits('Оплата сервера', '2026-11-01', since('2026-10-20'));
+    // Without a year the date falls after the day it went to waiting, not after the day it was created.
+    const yearLater = waits('Ответ партнёра', '15.11', since('2025-12-01'), '2025-03-01');
+    const noJournal = waits('Новый релиз', 'после 05.11', '', '2026-11-01');
+    waits('Хостинг', 'после 20.11, когда ответит хостинг', since('2026-11-10'));
+    waits('Сегодня', '2026-11-17', since('2026-11-10'));
+    waits('Без даты', 'выйдет @antondanv/brainyard 0.3.12', since('2026-10-01'));
+    const closed = node(tree, 'Закрыто', 'done');
+    closed.until = '2026-10-01';
+    const found = pastComeBack(tree, '2026-11-17');
+    expect(found.map((item) => [item.node.id, item.deadline.date, item.days])).toEqual([
+      [iso.id, '2026-11-01', 16],
+      [noJournal.id, '2026-11-05', 12],
+      [yearLater.id, '2026-11-15', 2],
+    ]);
+  });
+});
+
 describe('the root review context', () => {
   function crooked(): Tree {
     const tree = emptyTree();
@@ -160,6 +227,7 @@ describe('the root review context', () => {
     node(tree, 'Забытая идея', 'idea', closed.id);
     node(tree, LONG, 'idea');
     node(tree, 'Веха 2: npm', 'todo', ROOT, 'пакет в npm до 2020-01-15');
+    node(tree, 'Ответ хостинга', 'waiting').until = 'после 2020-02-01, когда ответят';
     return tree;
   }
 
@@ -173,6 +241,11 @@ describe('the root review context', () => {
     expect(text).toMatch(/- Забытая идея \(`\w+`, идея\) — под «Веха 1: две недели на дереве» \(готово\)/);
     expect(text).toContain('## Сроки прошли');
     expect(text).toMatch(/- Веха 2: npm \(`\w+`\) — веха · срок 2020-01-15 \(«до 2020-01-15»\) прошёл \d+ дн назад/);
+    expect(text).toContain('## Ждёт, а дата возврата прошла');
+    expect(text).toContain('верни узел к работе (`set <id> status=todo`); нет — перенеси дату (`set <id> until="…"`)');
+    expect(text).toMatch(
+      /- Ответ хостинга \(`\w+`\) — дата возврата 2020-02-01 прошла \d+ дн назад · вернуться, когда: после 2020-02-01, когда ответят/,
+    );
     expect(text).toContain('## Длинные названия');
     expect(text).toContain(`${LONG} (\``);
     expect(text).toContain('— 104 символа');
@@ -188,6 +261,8 @@ describe('the root review context', () => {
     expect(text).toContain('— under «Веха 1: две недели на дереве» (done)');
     expect(text).toContain('## Deadlines passed');
     expect(text).toMatch(/milestone · deadline 2020-01-15 \(«до 2020-01-15»\) passed \d+ d ago/);
+    expect(text).toContain('## Waiting, but the date to come back has passed');
+    expect(text).toMatch(/the date to come back 2020-02-01 passed \d+ d ago · come back when: после 2020-02-01/);
     expect(text).toContain('## Long titles');
     expect(text).toContain('— 104 characters');
     expect(text).not.toContain('готово детей');
@@ -198,8 +273,18 @@ describe('the root review context', () => {
     const going = node(tree, 'Идёт');
     node(tree, 'Готово', 'done', going.id);
     node(tree, 'Ещё нет', 'todo', going.id);
+    const later = node(tree, 'Ждёт ответа', 'waiting');
+    later.until = 'после 2099-01-01';
+    node(tree, 'Ждёт без даты', 'waiting').until = 'появится VPS';
     const text = projectContext(tree);
-    for (const heading of ['Все дети готовы', 'под закрытыми', 'не закоммичен', 'Сроки прошли', 'Длинные названия'])
+    for (const heading of [
+      'Все дети готовы',
+      'под закрытыми',
+      'не закоммичен',
+      'Сроки прошли',
+      'дата возврата прошла',
+      'Длинные названия',
+    ])
       expect(text).not.toContain(heading);
   });
 
@@ -211,6 +296,7 @@ describe('the root review context', () => {
     expect(ru).toContain('«на проверке», а код не закоммичен');
     expect(ru).toContain('вехи с прошедшим сроком');
     expect(ru).toContain('«Сроки прошли»');
+    expect(ru).toContain('«Ждёт, а дата возврата прошла»');
     setLang('en');
     const en = sessionPlan(tree, ROOT, 'plan', 'claude').prompt!;
     expect(en).toContain('parents and milestones whose children are all done');
@@ -218,6 +304,7 @@ describe('the root review context', () => {
     expect(en).toContain('"in review" with the code not committed');
     expect(en).toContain('milestones past their deadline');
     expect(en).toContain('«Deadlines passed»');
+    expect(en).toContain('«Waiting, but the date to come back has passed»');
   });
 });
 
