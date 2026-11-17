@@ -1,7 +1,7 @@
 // A background CLI with real processes and isolated state, for the session lifecycle test.
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -79,6 +79,13 @@ if (args[0] === 'worker') {
   });
   setInterval(() => undefined, 1000);
 } else if (args.includes('--bg')) {
+  // Every launch, for tests that check what each node's session was started with.
+  appendFileSync(join(home, 'launches.jsonl'), `${JSON.stringify({ args, node: process.env.TREEYARD_NODE })}\n`);
+  // Fails the way an untrusted folder does: a reason on stdout and exit code 0.
+  if (process.env.BACKGROUND_FAIL_NODE && process.env.BACKGROUND_FAIL_NODE === process.env.TREEYARD_NODE) {
+    console.log('this folder is not trusted');
+    process.exit(0);
+  }
   const id = randomUUID();
   const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'worker', id], {
     cwd: process.cwd(),

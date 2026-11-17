@@ -72,7 +72,7 @@ describe('--task parsing', () => {
 });
 
 describe('the coordinator line in the tree commands', () => {
-  const OPEN = 'open <id> --bg --task';
+  const OPEN = 'open <id> [<id>…] --bg --task';
 
   it('is in the root context and in a node with unfinished children, not in a leaf', () => {
     for (const lang of ['ru', 'en'] as const) {

@@ -374,7 +374,7 @@ export function contextText(tree: Tree, id: string): string {
   else lines.push(`- \`${self} diff ${node.id} --add HEAD\` — ${L.diffWhat}`);
   // Only where work is handed out: a leaf would pay for the line in every session.
   if (kids.some((kid) => kid.status !== 'done' && kid.status !== 'dropped')) {
-    lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.coordinator}`);
+    lines.push(`- \`${self} open <id> [<id>…] --bg --task "…" [--model …] [--effort …]\` — ${L.coordinator}`);
     lines.push(`- \`${self} set <id> <id>… status=todo\` — ${L.setMany}`);
   }
   // Read, not applied: the context must not switch the language or the theme of whoever asks.
@@ -631,7 +631,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} decide "…"\` — ${L.decide}`);
   lines.push(`- \`${self} commit <id>…\` — ${L.commit}`);
   lines.push(`- \`${self} sessions\` — ${L.sessions}`);
-  lines.push(`- \`${self} open <id> --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
+  lines.push(`- \`${self} open <id> [<id>…] --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
   if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);
   lines.push(`- ${L.doneRule(self)}`);
   return lines.join('\n');

@@ -22,7 +22,7 @@ import {
   sessionPlan,
 } from '../agents/context.js';
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
-import { BRAIN_LABEL, launch, projectSessions, sessionOwners } from '../agents/launch.js';
+import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, removeHook } from '../commit-hook.js';
 import { parsePatch } from '../diff.js';
@@ -206,6 +206,8 @@ function commandLines(): string {
                 [--model <модель>] [--effort <уровень>]   только на этот запуск
                 [--worktree]               только Claude Code: в новом git worktree (остальные CLI предупредят)
                 [--pane --json]            для программ: JSON с id сессии и именем панели tmux (tmux -L brainyard)
+  treeyard open <id> <id>… --bg [--task …]   несколько узлов — только с --bg: сессия в каждом по очереди,
+                                           строка на узел (✓ id название · сессия <id>); не встала — ✗ и код 1
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
@@ -287,6 +289,8 @@ function commandLines(): string {
                 [--model <model>] [--effort <level>]   for this launch only
                 [--worktree]               Claude Code only: in a new git worktree (other CLIs warn)
                 [--pane --json]            for programs: JSON with the session id and the tmux pane name (tmux -L brainyard)
+  treeyard open <id> <id>… --bg [--task …]   several nodes — only with --bg: a session in each, one after another,
+                                           a line per node (✓ id title · session <id>); one that fails — ✗ and exit 1
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are; ▣ — a live pane
                                            (pane in JSON)
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
@@ -2176,9 +2180,14 @@ async function openCommand(args: string[]): Promise<number> {
     json: { type: 'boolean' },
   });
   const tree = project();
-  const id = nodeArg(tree, positionals[0]);
+  // Every id is checked before the first launch: a typo must not leave half the nodes started.
+  const ids = positionals.length ? [...new Set(positionals.map((p) => nodeArg(tree, p)))] : [nodeArg(tree, undefined)];
+  const id = ids[0]!;
   const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
   if (values.pane && values.bg) throw new UsageError(t('выбери одно: --pane или --bg'));
+  // Sessions in this terminal hold it one after another, and several panes are not wired yet.
+  if (ids.length > 1 && !values.bg)
+    throw new UsageError(t('несколько узлов — только с --bg: treeyard open <id> <id>… --bg'));
   // In this terminal the CLI owns stdout; only a pane returns at once with something to print.
   if (values.json && !values.pane)
     throw new UsageError(t('--json — только с --pane: treeyard open <id> --pane --json'));
@@ -2194,15 +2203,26 @@ async function openCommand(args: string[]): Promise<number> {
     ...(task ? { task } : {}),
   };
   if (settings().confirm && !values.yes && process.stdin.isTTY) {
-    const node = holderOf(tree, id)!;
+    const titles = ids.map((each) => holderOf(tree, each)!.title);
     const plan = sessionPlan(tree, id, options.start, brain, task);
+    const labels = [ids.length > 1 ? t('Узлы') : t('Узел'), t('Кто'), t('Как начать')];
+    // Padded to the longest label, so the columns line up in either language.
+    const width = Math.max(...labels.map((label) => label.length)) + 2;
+    const row = (label: string, text: string) => `  ${err.dim(label)}${' '.repeat(width - label.length)}${text}\n`;
     process.stderr.write(
       `\n${inlineMark(err.c)}\n` +
-        `  ${err.dim(t('Узел'))}        ${node.title}\n` +
-        `  ${err.dim(t('Кто'))}         ${BRAIN_LABEL[brain]} · ${options.background ? t('в фоне, сам по себе') : options.pane ? t('в панели') : t('в этом терминале')}\n` +
-        `  ${err.dim(t('Как начать'))}  ${(id === ROOT ? ROOT_START_LABEL : START_LABEL)[plan.start]} — ${(id === ROOT ? ROOT_START_HINT : START_HINT)[plan.start]}\n\n`,
+        row(labels[0]!, titles.join(`\n  ${' '.repeat(width)}`)) +
+        row(
+          labels[1]!,
+          `${BRAIN_LABEL[brain]} · ${options.background ? t('в фоне, сам по себе') : options.pane ? t('в панели') : t('в этом терминале')}`,
+        ) +
+        row(
+          labels[2]!,
+          `${(id === ROOT ? ROOT_START_LABEL : START_LABEL)[plan.start]} — ${(id === ROOT ? ROOT_START_HINT : START_HINT)[plan.start]}`,
+        ) +
+        '\n',
     );
-    if (!(await askYes(t('Запустить сессию?')))) {
+    if (!(await askYes(ids.length > 1 ? t('Запустить сессии: {n}?', { n: ids.length }) : t('Запустить сессию?')))) {
       process.stderr.write(`${err.dim(t('не запускаю'))}\n`);
       return 0;
     }
@@ -2223,6 +2243,7 @@ async function openCommand(args: string[]): Promise<number> {
     process.stdout.write(t('сессия запущена в панели {pane} · открой treeyard, чтобы увидеть её\n', { pane }));
     return 0;
   }
+  if (options.background) return openInBackground(tree, ids, options);
   const { result, ref } = await launch(tree, id, options);
   for (const warning of result.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
   if (result.error) {
@@ -2238,6 +2259,31 @@ async function openCommand(args: string[]): Promise<number> {
       }),
     );
   return result.ok ? 0 : 1;
+}
+
+/**
+ * `open <id>… --bg`: a background session in each node, one after another, and a line on stdout
+ * as each starts — what a coordinator reads back. A session that did not start is a line on
+ * stderr and the rest go on; a throw is the setup itself (this CLI has no `--bg`), so it stops
+ * the run, and the lines already printed stay true.
+ */
+async function openInBackground(tree: Tree, ids: string[], options: LaunchOptions): Promise<number> {
+  let failed = 0;
+  for (const id of ids) {
+    const title = holderOf(tree, id)!.title;
+    const { result, ref } = await launch(tree, id, options);
+    for (const warning of result.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
+    if (result.error || !ref) {
+      failed++;
+      const why =
+        result.error?.message ??
+        t('сессия запущена ({short}), но её id не нашёлся — в узле не сохранена', { short: result.shortId ?? '?' });
+      process.stderr.write(`${err.c('#ff7b72', '✗')} ${id}  ${title} · ${why}\n`);
+      continue;
+    }
+    process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${title} · ${t('сессия {session}', { session: ref.id })}\n`);
+  }
+  return failed ? 1 : 0;
 }
 
 async function sessionsCommand(args: string[]): Promise<number> {

@@ -365,6 +365,7 @@ treeyard open <id> --brain opencode --pane      # the same with OpenCode
 treeyard open <id> --pane --json                # for a program: the session id and the tmux pane name as JSON
 treeyard open <id> --bg --task "no paid calls" --model sonnet --effort high   # a coordinator hands the node to its own session
 treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes — from stdin
+treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a session in each, a line per node
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
 treeyard status                                 # a summary: versions, tree, nodes, skills, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
@@ -449,6 +450,11 @@ shows the result; with `--start goal` it becomes part of the `/goal` condition).
 uses its own defaults. `--worktree` is passed to Claude Code, which starts the session in a new git
 worktree; Codex, Antigravity and OpenCode ignore it and print a warning. `--bg` (Claude Code)
 starts the session in the background and returns at once; the session is saved in the node.
+With `--bg` you can name several nodes: `treeyard open a b c --bg --task "…"` checks every id
+first (a wrong one — no session at all), starts the sessions one after another with the same
+flags and prints a line per node to stdout: `✓ <id> <title> · session <session id>`. A session
+that fails to start is a `✗` line on stderr; the rest still start, and the exit code is 1.
+Several nodes without `--bg` are an error: in this terminal sessions run one after another.
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
 node, its edit stays.

@@ -125,6 +125,8 @@ export const EN: Record<string, string> = {
   '{n} МБ': '{n} MB',
   '{n} ГБ': '{n} GB',
   'выбери одно: --pane или --bg': 'choose one: --pane or --bg',
+  'несколько узлов — только с --bg: treeyard open <id> <id>… --bg':
+    'several nodes only with --bg: treeyard open <id> <id>… --bg',
   '--json — только с --pane: treeyard open <id> --pane --json':
     '--json only with --pane: treeyard open <id> --pane --json',
   '--task без текста': '--task without text',
@@ -293,14 +295,19 @@ export const EN: Record<string, string> = {
   '{p1} готово ставит человек — ставлю «на проверке»\n': '{p1} done is set by a person — setting review\n',
   'treeyard log <id> "что сделано; что осталось"': 'treeyard log <id> "what is done; what is left"',
   '{p1}\n\n# Первое сообщение ({start})\n\n{p3}\n': '{p1}\n\n# First message ({start})\n\n{p3}\n',
+  Узлы: 'Nodes',
   Узел: 'Node',
   Кто: 'Who',
   'в фоне, сам по себе': 'in the background, on its own',
   'в этом терминале': 'in this terminal',
   'Как начать': 'How to start',
+  'Запустить сессии: {n}?': 'Start {n} sessions?',
   'Запустить сессию?': 'Start a session?',
   'не запускаю': 'not starting',
   '{p1} сессия {id} сохранена в узле {id2}\n': '{p1} session {id} saved on node {id2}\n',
+  'сессия запущена ({short}), но её id не нашёлся — в узле не сохранена':
+    'the session started ({short}) but its id was not found — not saved on the node',
+  'сессия {session}': 'session {session}',
   'без названия': 'untitled',
   'сессий в этой папке ещё не было': 'no sessions in this folder yet',
   'Для всех проектов': 'All projects',
