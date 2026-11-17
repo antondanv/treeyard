@@ -312,7 +312,9 @@ Antigravity and OpenCode name a session only once it has started, so their `id` 
 first. `treeyard sessions --json` gives every session a `pane` — its live pane, or `null` when
 it runs in no pane — and finds a fresh pane's session in the CLI's own store; the plain
 `treeyard sessions` marks it `▣ <pane>`. Neither command writes the found id into the tree:
-the TUI does that when it next looks.
+the TUI does that when it next looks. With several nodes — `treeyard open a b c --pane --json` — it
+prints an array of those objects, one per node, in the order given; a pane that did not start is an
+object with `error` and `null` for `id`, `pane` and `startedAt`.
 
 ## Agents and the tree
 
@@ -363,6 +365,7 @@ treeyard open <id> --brain codex                # a session for the node right f
 treeyard open <id> --brain codex --pane         # start a pane and return to the shell
 treeyard open <id> --brain opencode --pane      # the same with OpenCode
 treeyard open <id> --pane --json                # for a program: the session id and the tmux pane name as JSON
+treeyard open <id> <id> <id> --brain codex --pane   # three panes, one per node (--json: an array)
 treeyard open <id> --bg --task "no paid calls" --model sonnet --effort high   # a coordinator hands the node to its own session
 treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes — from stdin
 treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a session in each, a line per node
@@ -454,7 +457,12 @@ With `--bg` you can name several nodes: `treeyard open a b c --bg --task "…"` 
 first (a wrong one — no session at all), starts the sessions one after another with the same
 flags and prints a line per node to stdout: `✓ <id> <title> · session <session id>`. A session
 that fails to start is a `✗` line on stderr; the rest still start, and the exit code is 1.
-Several nodes without `--bg` are an error: in this terminal sessions run one after another.
+`--pane` takes several nodes the same way — `treeyard open a b c --brain codex --pane` — and it is
+what coordinators on Codex, Antigravity and OpenCode use, since `--bg` is Claude Code only: a
+pane in each node, a line per node `✓ <id> <title> · pane <name>`, a pane that fails to start is a
+`✗` line on stderr and the exit code is 1. With `--json`, one array on stdout (see “Sessions next to the tree”).
+Several nodes without `--bg` or `--pane` are an error: in this terminal sessions run one after
+another.
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
 node, its edit stays.

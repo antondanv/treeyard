@@ -125,8 +125,8 @@ export const EN: Record<string, string> = {
   '{n} МБ': '{n} MB',
   '{n} ГБ': '{n} GB',
   'выбери одно: --pane или --bg': 'choose one: --pane or --bg',
-  'несколько узлов — только с --bg: treeyard open <id> <id>… --bg':
-    'several nodes only with --bg: treeyard open <id> <id>… --bg',
+  'несколько узлов — только с --bg или --pane: treeyard open <id> <id>… --bg|--pane':
+    'several nodes only with --bg or --pane: treeyard open <id> <id>… --bg|--pane',
   '--json — только с --pane: treeyard open <id> --pane --json':
     '--json only with --pane: treeyard open <id> --pane --json',
   '--task без текста': '--task without text',
@@ -308,6 +308,7 @@ export const EN: Record<string, string> = {
   'сессия запущена ({short}), но её id не нашёлся — в узле не сохранена':
     'the session started ({short}) but its id was not found — not saved on the node',
   'сессия {session}': 'session {session}',
+  'панель {pane}': 'pane {pane}',
   'без названия': 'untitled',
   'сессий в этой папке ещё не было': 'no sessions in this folder yet',
   'Для всех проектов': 'All projects',

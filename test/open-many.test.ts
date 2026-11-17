@@ -101,14 +101,11 @@ describe('open <id> <id>… --bg', () => {
     for (const node of nodes) expect(saved(node).sessions).toEqual([]);
   });
 
-  it('refuses several nodes without --bg', async () => {
+  it('refuses several nodes without --bg or --pane', async () => {
     const { nodes, sh, launches } = setup(['Бот', 'Сайт']);
-    const ids = nodes.map((n) => n.id);
-    for (const how of [[], ['--pane']]) {
-      const res = await sh('open', ...ids, ...how, '--yes');
-      expect(res.code).toBe(2);
-      expect(res.stderr).toContain('несколько узлов — только с --bg');
-    }
+    const res = await sh('open', ...nodes.map((n) => n.id), '--yes');
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain('несколько узлов — только с --bg или --pane');
     expect(launches()).toEqual([]);
   });
 

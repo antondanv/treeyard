@@ -214,7 +214,7 @@ const TEXT = {
     image: 'файл.png',
     imageWhat: 'приложить к узлу картинку или скрин (например, доказательство для проверки); без файла — список',
     coordinator:
-      'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
+      'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом (--bg — только Claude Code; Codex, Antigravity и OpenCode — --brain <имя> --pane вместо --bg)',
     setMany: 'одно изменение нескольким узлам сразу (after= ставит их подряд), а не цикл',
     diffWhat:
       'после коммита привяжи его к узлу (HEAD, ветка или SHA), чтобы человек мог посмотреть диф; без --add — просмотр. Привязывай только коммиты с работой по этому узлу',
@@ -278,7 +278,7 @@ const TEXT = {
     image: 'file.png',
     imageWhat: 'attach a picture or a screenshot to the node (evidence for review, say); without a file — the list',
     coordinator:
-      'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
+      'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent (--bg is Claude Code only; for Codex, Antigravity and OpenCode use --brain <name> --pane instead of --bg)',
     setMany: 'the same change to several nodes at once (after= puts them one after another), not a loop',
     diffWhat:
       'after committing, attach it to the node (HEAD, a branch or a SHA) so the person can inspect the patch; without --add — view. Attach only commits with work on this node',
@@ -481,7 +481,7 @@ const ROOT_TEXT = {
     rm: 'удалить узел, заведённый по ошибке; узел с историей не удаляют, а закрывают — `set <id> status=dropped`',
     decide: 'решение в «Решения» `.tree/tree.md` (с датой) — только когда человек так решил',
     commit: 'закоммитить файлы дерева этих узлов, README и tree.md (chore(tree): …) — вместо `git add .tree/…` руками',
-    open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом',
+    open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом (--bg — только Claude Code; Codex, Antigravity и OpenCode — --brain <имя> --pane вместо --bg)',
     doneWhen: 'готово, когда',
     more: 'ещё',
     stale: '## В работе, но без живой сессии',
@@ -525,7 +525,7 @@ const ROOT_TEXT = {
     decide: 'a decision in «Decisions» of `.tree/tree.md` (dated) — only when the person decided so',
     commit:
       'commit the tree files of these nodes, README and tree.md (chore(tree): …) — instead of `git add .tree/…` by hand',
-    open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent',
+    open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent (--bg is Claude Code only; for Codex, Antigravity and OpenCode use --brain <name> --pane instead of --bg)',
     doneWhen: 'done when',
     more: 'more',
     stale: '## In progress, but no live session',

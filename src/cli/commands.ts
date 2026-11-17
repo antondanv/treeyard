@@ -89,6 +89,7 @@ import {
 import {
   type BrainId,
   ROOT,
+  type SessionRef,
   START_MODES,
   STATUSES,
   type StartMode,
@@ -206,8 +207,9 @@ function commandLines(): string {
                 [--model <модель>] [--effort <уровень>]   только на этот запуск
                 [--worktree]               только Claude Code: в новом git worktree (остальные CLI предупредят)
                 [--pane --json]            для программ: JSON с id сессии и именем панели tmux (tmux -L brainyard)
-  treeyard open <id> <id>… --bg [--task …]   несколько узлов — только с --bg: сессия в каждом по очереди,
-                                           строка на узел (✓ id название · сессия <id>); не встала — ✗ и код 1
+  treeyard open <id> <id>… --bg|--pane [--task …]   несколько узлов — только с --bg или --pane: сессия в каждом по
+                                           очереди, строка на узел (✓ id название · сессия <id> | панель <имя>);
+                                           не встала — ✗ и код 1; --pane --json — массив вместо объекта
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
@@ -289,8 +291,9 @@ function commandLines(): string {
                 [--model <model>] [--effort <level>]   for this launch only
                 [--worktree]               Claude Code only: in a new git worktree (other CLIs warn)
                 [--pane --json]            for programs: JSON with the session id and the tmux pane name (tmux -L brainyard)
-  treeyard open <id> <id>… --bg [--task …]   several nodes — only with --bg: a session in each, one after another,
-                                           a line per node (✓ id title · session <id>); one that fails — ✗ and exit 1
+  treeyard open <id> <id>… --bg|--pane [--task …]   several nodes — only with --bg or --pane: a session in each, one
+                                           after another, a line per node (✓ id title · session <id> | pane <name>);
+                                           one that fails — ✗ and exit 1; --pane --json — an array instead of an object
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are; ▣ — a live pane
                                            (pane in JSON)
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
@@ -2185,9 +2188,9 @@ async function openCommand(args: string[]): Promise<number> {
   const id = ids[0]!;
   const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
   if (values.pane && values.bg) throw new UsageError(t('выбери одно: --pane или --bg'));
-  // Sessions in this terminal hold it one after another, and several panes are not wired yet.
-  if (ids.length > 1 && !values.bg)
-    throw new UsageError(t('несколько узлов — только с --bg: treeyard open <id> <id>… --bg'));
+  // Sessions in this terminal hold it one after another; only a pane or the background returns at once.
+  if (ids.length > 1 && !values.bg && !values.pane)
+    throw new UsageError(t('несколько узлов — только с --bg или --pane: treeyard open <id> <id>… --bg|--pane'));
   // In this terminal the CLI owns stdout; only a pane returns at once with something to print.
   if (values.json && !values.pane)
     throw new UsageError(t('--json — только с --pane: treeyard open <id> --pane --json'));
@@ -2228,15 +2231,11 @@ async function openCommand(args: string[]): Promise<number> {
     }
   }
   if (options.pane) {
-    const { pane, ref, warnings } = await launchInPane(tree, id, options, {
-      width: process.stdout.columns || 100,
-      height: Math.max(5, (process.stdout.rows || 30) - 6),
-    });
+    // Named as typed, not as resolved: a program that passed a list gets a list back.
+    if (positionals.length > 1) return openInPanes(tree, ids, options, values.json === true);
+    const { pane, ref, warnings } = await launchInPane(tree, id, options, paneSize());
     if (values.json) {
-      // Codex, Antigravity and OpenCode name the session once it has started: `id` is null until
-      // then, and `treeyard sessions --json` finds it by this pane.
-      const started = { node: id, brain, id: isPending(ref) ? null : ref.id, pane, startedAt: ref.started, warnings };
-      process.stdout.write(`${JSON.stringify(started, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify(startedPane(id, brain, ref, pane, warnings), null, 2)}\n`);
       return 0;
     }
     for (const warning of warnings) process.stderr.write(`! ${warning}\n`);
@@ -2259,6 +2258,60 @@ async function openCommand(args: string[]): Promise<number> {
       }),
     );
   return result.ok ? 0 : 1;
+}
+
+const paneSize = () => ({
+  width: process.stdout.columns || 100,
+  height: Math.max(5, (process.stdout.rows || 30) - 6),
+});
+
+/**
+ * What `open --pane --json` says of a node: the pane to attach to. Codex, Antigravity and OpenCode
+ * name the session once it has started, so `id` is null until then and `treeyard sessions --json`
+ * finds it by this pane. A pane that did not start has `error` and nulls instead.
+ */
+function startedPane(
+  node: string,
+  brain: BrainId,
+  ref: SessionRef,
+  pane: string,
+  warnings: string[],
+): Record<string, unknown> {
+  return { node, brain, id: isPending(ref) ? null : ref.id, pane, startedAt: ref.started, warnings };
+}
+
+/**
+ * `open <id>… --pane`: a pane in each node, one after another. A pane that did not start is a line
+ * on stderr and the rest go on. With `--json` stdout is one array, a failed node in it too, so a
+ * program learns what did start whatever happened to the others.
+ */
+export async function openInPanes(
+  tree: Tree,
+  ids: string[],
+  options: LaunchOptions,
+  json: boolean,
+  launchPane: typeof launchInPane = launchInPane,
+): Promise<number> {
+  const rows: Record<string, unknown>[] = [];
+  const size = paneSize();
+  let failed = 0;
+  for (const id of ids) {
+    const title = holderOf(tree, id)!.title;
+    try {
+      const { pane, ref, warnings } = await launchPane(tree, id, options, size);
+      rows.push(startedPane(id, options.brain, ref, pane, warnings));
+      if (json) continue;
+      for (const warning of warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
+      process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${title} · ${t('панель {pane}', { pane })}\n`);
+    } catch (error) {
+      failed++;
+      const why = (error as Error).message ?? String(error);
+      rows.push({ node: id, brain: options.brain, id: null, pane: null, startedAt: null, warnings: [], error: why });
+      process.stderr.write(`${err.c('#ff7b72', '✗')} ${id}  ${title} · ${why}\n`);
+    }
+  }
+  if (json) process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+  return failed ? 1 : 0;
 }
 
 /**
