@@ -206,10 +206,10 @@ function commandLines(): string {
                 [--task "…"|-]             задание сверх контекста узла: в конец первого сообщения (- — из stdin)
                 [--model <модель>] [--effort <уровень>]   только на этот запуск
                 [--worktree]               только Claude Code: в новом git worktree (остальные CLI предупредят)
-                [--pane --json]            для программ: JSON с id сессии и именем панели tmux (tmux -L brainyard)
+                [--pane|--bg --json]       для программ: JSON с id сессии (у --pane и с именем панели tmux, tmux -L brainyard)
   treeyard open <id> <id>… --bg|--pane [--task …]   несколько узлов — только с --bg или --pane: сессия в каждом по
                                            очереди, строка на узел (✓ id название · сессия <id> | панель <имя>);
-                                           не встала — ✗ и код 1; --pane --json — массив вместо объекта
+                                           не встала — ✗ и код 1; --json — массив вместо объекта
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
@@ -290,10 +290,10 @@ function commandLines(): string {
                 [--task "…"|-]             an assignment on top of the node's context: added to the first message (- reads stdin)
                 [--model <model>] [--effort <level>]   for this launch only
                 [--worktree]               Claude Code only: in a new git worktree (other CLIs warn)
-                [--pane --json]            for programs: JSON with the session id and the tmux pane name (tmux -L brainyard)
+                [--pane|--bg --json]       for programs: JSON with the session id (with --pane, the tmux pane name too, tmux -L brainyard)
   treeyard open <id> <id>… --bg|--pane [--task …]   several nodes — only with --bg or --pane: a session in each, one
                                            after another, a line per node (✓ id title · session <id> | pane <name>);
-                                           one that fails — ✗ and exit 1; --pane --json — an array instead of an object
+                                           one that fails — ✗ and exit 1; --json — an array instead of an object
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are; ▣ — a live pane
                                            (pane in JSON)
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
@@ -2191,9 +2191,9 @@ async function openCommand(args: string[]): Promise<number> {
   // Sessions in this terminal hold it one after another; only a pane or the background returns at once.
   if (ids.length > 1 && !values.bg && !values.pane)
     throw new UsageError(t('несколько узлов — только с --bg или --pane: treeyard open <id> <id>… --bg|--pane'));
-  // In this terminal the CLI owns stdout; only a pane returns at once with something to print.
-  if (values.json && !values.pane)
-    throw new UsageError(t('--json — только с --pane: treeyard open <id> --pane --json'));
+  // In this terminal the CLI owns stdout; only a pane or the background returns at once with something to print.
+  if (values.json && !values.pane && !values.bg)
+    throw new UsageError(t('--json — только с --pane или --bg: treeyard open <id> --pane|--bg --json'));
   const task = await taskArg(values.task);
   const options = {
     brain,
@@ -2242,7 +2242,8 @@ async function openCommand(args: string[]): Promise<number> {
     process.stdout.write(t('сессия запущена в панели {pane} · открой treeyard, чтобы увидеть её\n', { pane }));
     return 0;
   }
-  if (options.background) return openInBackground(tree, ids, options);
+  // Named as typed, as with panes: one id gets an object, a list gets an array.
+  if (options.background) return openInBackground(tree, ids, options, values.json ? positionals.length > 1 : null);
   const { result, ref } = await launch(tree, id, options);
   for (const warning of result.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
   if (result.error) {
@@ -2315,27 +2316,49 @@ export async function openInPanes(
 }
 
 /**
+ * What `open --bg --json` says of a node: the session it started. A session that did not start has
+ * `error` and nulls instead (see `openInBackground`).
+ */
+function startedBackground(node: string, brain: BrainId, ref: SessionRef, warnings: string[]): Record<string, unknown> {
+  return { node, brain, id: ref.id, startedAt: ref.started, warnings };
+}
+
+/**
  * `open <id>… --bg`: a background session in each node, one after another, and a line on stdout
  * as each starts — what a coordinator reads back. A session that did not start is a line on
  * stderr and the rest go on; a throw is the setup itself (this CLI has no `--bg`), so it stops
- * the run, and the lines already printed stay true.
+ * the run, and the lines already printed stay true. `list` set means `--json`: stdout is then only
+ * the JSON (an array when `list`, else the one node's object), a failed node in it too.
  */
-async function openInBackground(tree: Tree, ids: string[], options: LaunchOptions): Promise<number> {
+async function openInBackground(
+  tree: Tree,
+  ids: string[],
+  options: LaunchOptions,
+  list: boolean | null = null,
+): Promise<number> {
+  const json = list !== null;
+  const rows: Record<string, unknown>[] = [];
   let failed = 0;
   for (const id of ids) {
     const title = holderOf(tree, id)!.title;
     const { result, ref } = await launch(tree, id, options);
-    for (const warning of result.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
+    if (!json) for (const warning of result.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
     if (result.error || !ref) {
       failed++;
       const why =
         result.error?.message ??
         t('сессия запущена ({short}), но её id не нашёлся — в узле не сохранена', { short: result.shortId ?? '?' });
+      rows.push({ node: id, brain: options.brain, id: null, startedAt: null, warnings: result.warnings, error: why });
       process.stderr.write(`${err.c('#ff7b72', '✗')} ${id}  ${title} · ${why}\n`);
       continue;
     }
-    process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${title} · ${t('сессия {session}', { session: ref.id })}\n`);
+    rows.push(startedBackground(id, options.brain, ref, result.warnings));
+    if (!json)
+      process.stdout.write(
+        `${out.c('#7ee2a8', '✓')} ${id}  ${title} · ${t('сессия {session}', { session: ref.id })}\n`,
+      );
   }
+  if (json) process.stdout.write(`${JSON.stringify(list ? rows : rows[0], null, 2)}\n`);
   return failed ? 1 : 0;
 }
 

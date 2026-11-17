@@ -127,8 +127,8 @@ export const EN: Record<string, string> = {
   'выбери одно: --pane или --bg': 'choose one: --pane or --bg',
   'несколько узлов — только с --bg или --pane: treeyard open <id> <id>… --bg|--pane':
     'several nodes only with --bg or --pane: treeyard open <id> <id>… --bg|--pane',
-  '--json — только с --pane: treeyard open <id> --pane --json':
-    '--json only with --pane: treeyard open <id> --pane --json',
+  '--json — только с --pane или --bg: treeyard open <id> --pane|--bg --json':
+    '--json only with --pane or --bg: treeyard open <id> --pane|--bg --json',
   '--task без текста': '--task without text',
   'в панели': 'in a pane',
   'сессия запущена в панели {pane} · открой treeyard, чтобы увидеть её\n':

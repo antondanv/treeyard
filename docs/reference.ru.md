@@ -341,6 +341,12 @@ OpenCode называют сессию только после запуска, �
 `treeyard open a b c --pane --json` — печатается массив таких объектов, по одному на узел, в
 заданном порядке; панель, которая не встала, — объект с `error` и `null` в `id`, `pane` и `startedAt`.
 
+`treeyard open <id> --bg --json` — то же для фоновой сессии, для координатора, который читает
+ответ программой: `{"node", "brain", "id", "startedAt", "warnings"}` — без `pane`; в stdout
+только JSON (строки `✓` и предупреждения не печатаются). С несколькими узлами —
+`treeyard open a b c --bg --json` — массив, по объекту на узел в заданном порядке; сессия, которая
+не встала, — объект с `error` и `null` в `id` и `startedAt`, код выхода 1, как без `--json`.
+
 ## Агенты и дерево
 
 Сессия, открытая из узла, получает короткий контекст: путь от корня (то есть зачем этот
@@ -391,6 +397,7 @@ treeyard open <id> --brain codex --pane         # открыть панель и
 treeyard open <id> --brain opencode --pane      # то же с OpenCode
 treeyard open <id> --pane --json                # для программы: id сессии и имя панели tmux в JSON
 treeyard open <id> <id> <id> --brain codex --pane   # три панели, по одной на узел (--json: массив)
+treeyard open <id> <id> --bg --json             # для программы: JSON-массив, по объекту на каждую запущенную сессию
 treeyard open <id> --bg --task "без платных вызовов" --model sonnet --effort high   # координатор отдаёт узел отдельной сессии
 treeyard open <id> --bg --task - < task.txt     # длинное задание с кавычками — из stdin
 treeyard open <id> <id> <id> --bg --task "…"   # три узла одной командой: сессия в каждом, строка на узел

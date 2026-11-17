@@ -316,6 +316,13 @@ the TUI does that when it next looks. With several nodes — `treeyard open a b 
 prints an array of those objects, one per node, in the order given; a pane that did not start is an
 object with `error` and `null` for `id`, `pane` and `startedAt`.
 
+`treeyard open <id> --bg --json` is the same for a background session, for a coordinator that
+reads the result with a program: `{"node", "brain", "id", "startedAt", "warnings"}` — no `pane`,
+and stdout holds only the JSON (the `✓` lines and warnings go quiet). Several nodes —
+`treeyard open a b c --bg --json` — give an array, one object per node in the order given; a
+session that did not start is an object with `error` and `null` for `id` and `startedAt`, and
+the exit code is 1 as without `--json`.
+
 ## Agents and the tree
 
 A session from a node gets a short context: the path from the root (why this), the
@@ -366,6 +373,7 @@ treeyard open <id> --brain codex --pane         # start a pane and return to the
 treeyard open <id> --brain opencode --pane      # the same with OpenCode
 treeyard open <id> --pane --json                # for a program: the session id and the tmux pane name as JSON
 treeyard open <id> <id> <id> --brain codex --pane   # three panes, one per node (--json: an array)
+treeyard open <id> <id> --bg --json             # for a program: a JSON array, an object per started session
 treeyard open <id> --bg --task "no paid calls" --model sonnet --effort high   # a coordinator hands the node to its own session
 treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes — from stdin
 treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a session in each, a line per node

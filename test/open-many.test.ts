@@ -109,6 +109,48 @@ describe('open <id> <id>… --bg', () => {
     expect(launches()).toEqual([]);
   });
 
+  it('--json prints one array of the started sessions and nothing else', async () => {
+    const { nodes, sh, saved } = setup(['Бот', 'Сайт', 'Почта']);
+    const res = await sh('open', ...nodes.map((n) => n.id), '--bg', '--json', '--yes');
+    expect(res.code, res.stderr).toBe(0);
+    const rows = JSON.parse(res.stdout) as Record<string, unknown>[];
+    expect(rows).toHaveLength(3);
+    rows.forEach((row, i) => {
+      const node = nodes[i]!;
+      expect(row).toEqual({
+        node: node.id,
+        brain: 'claude',
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        startedAt: expect.any(String),
+        warnings: [],
+      });
+      expect(saved(node).sessions).toMatchObject([{ id: row.id, mode: 'background' }]);
+    });
+  }, 60_000);
+
+  it('--json with one id is an object, as with --pane', async () => {
+    const { nodes, sh } = setup(['Бот']);
+    const res = await sh('open', nodes[0]!.id, '--bg', '--json', '--yes');
+    expect(res.code, res.stderr).toBe(0);
+    expect(JSON.parse(res.stdout)).toMatchObject({ node: nodes[0]!.id, brain: 'claude', warnings: [] });
+  }, 60_000);
+
+  it('--json keeps a session that did not start in the array, with error', async () => {
+    const { nodes, sh, launches } = setup(['Бот', 'Сайт', 'Почта'], (made) => ({
+      BACKGROUND_FAIL_NODE: made[1]!.id,
+    }));
+    const [a, b, c] = nodes as [TreeNode, TreeNode, TreeNode];
+    const res = await sh('open', a.id, b.id, c.id, '--bg', '--json', '--yes');
+    expect(res.code).toBe(1);
+    const rows = JSON.parse(res.stdout) as Record<string, unknown>[];
+    expect(rows.map((row) => row.node)).toEqual([a.id, b.id, c.id]);
+    expect(rows[1]).toMatchObject({ id: null, startedAt: null, error: expect.stringContaining('not trusted') });
+    expect(rows[0]!.error).toBeUndefined();
+    expect(rows[2]!.id).toEqual(expect.any(String));
+    expect(res.stderr).toContain(`✗ ${b.id}`);
+    expect(launches().map((l) => l.node)).toEqual([a.id, b.id, c.id]);
+  }, 60_000);
+
   it('reports a session that did not start and still starts the rest', async () => {
     // The stand-in fails the middle node's launch, as Claude Code does in an untrusted folder.
     const { nodes, sh, launches, saved } = setup(['Бот', 'Сайт', 'Почта'], (made) => ({
