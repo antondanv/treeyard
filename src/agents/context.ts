@@ -7,14 +7,18 @@
 import { realpathSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { hookInstalled } from '../commit-hook.js';
-import { labels, pick, t } from '../i18n/i18n.js';
+import { uncommittedPaths } from '../git.js';
+import { labels, pick, plural, t } from '../i18n/i18n.js';
 import { activity } from '../model/activity.js';
 import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
+import { finishedParents, isMilestone, longTitles, openUnderClosed, overdueNodes } from '../model/review.js';
 import { staleNodes } from '../model/stale.js';
+import { TREE_DIR } from '../model/store.js';
+import { today } from '../model/time.js';
 import { actionable, childrenOf, pathTo, progress, summarize, waitingNodes } from '../model/tree.js';
 import { type BrainId, ROOT, type StartMode, type Tree, type TreeNode } from '../model/types.js';
 import { loadSettings } from '../settings.js';
@@ -443,8 +447,11 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
         'сути) — сократи до 2–6 слов, подробности в описание: `set <id> title="…" note="…"` (note заменяет описание целиком — не потеряй старое); ' +
         '«в работе» и «на проверке» без движения больше недели, ' +
         '«на проверке» без доказательств в журнале; «ждёт», у которых условие возврата, похоже, наступило; работу, которая по коду и ' +
-        'коммитам сделана, а узел не закрыт, и наоборот; дубли, идеи, которые пора поднять или закрыть, узлы не на своём месте; ' +
-        'чего не хватает до ближайшей вехи и цели проекта. Начни с короткой сводки: где проект сейчас и на чём остановились. ' +
+        'коммитам сделана, а узел не закрыт, и наоборот; родителей и вехи, у которых все дети готовы, а сами открыты; открытые узлы ' +
+        'под закрытыми ветками; «на проверке», а код не закоммичен; вехи с прошедшим сроком; дубли, идеи, которые пора поднять или ' +
+        'закрыть, узлы не на своём месте; чего не хватает до ближайшей вехи и цели проекта. Часть этого treeyard уже нашёл сам — ' +
+        'разделы контекста «Все дети готовы, а узел открыт», «Открытые узлы под закрытыми ветками», «На проверке, а код не закоммичен», ' +
+        '«Сроки прошли», «Длинные названия»: проверь каждую находку оттуда. Начни с короткой сводки: где проект сейчас и на чём остановились. ' +
         'Потом находки по важности — у каждой команда treeyard, которая её исправит. Ничего не меняй, пока я не соглашусь; ' +
         'после согласия выполни команды и покажи, что вышло.',
       en:
@@ -454,8 +461,12 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
         'the gist) — cut to 2–6 words, details into the description: `set <id> title="…" note="…"` (note replaces the whole description — keep the old text); ' +
         '"in progress" and "in review" without movement for ' +
         'over a week, "in review" without evidence in the journal; "waiting" whose condition to come back seems to have come; work ' +
-        'done by the code and commits while its node is open, and the other way round; duplicates, ideas to take up or drop, nodes in ' +
-        'the wrong place; what is missing for the nearest milestone and the goal. Start with a short summary: where the project ' +
+        'done by the code and commits while its node is open, and the other way round; parents and milestones whose children are all ' +
+        'done while they are open; open nodes under closed branches; "in review" with the code not committed; milestones past their ' +
+        'deadline; duplicates, ideas to take up or drop, nodes in the wrong place; what is missing for the nearest milestone and the ' +
+        'goal. treeyard has found part of this itself — the context sections «All children done, the node still open», «Open nodes ' +
+        'under closed branches», «In review, but the code is not committed», «Deadlines passed», «Long titles»: check every finding ' +
+        'there. Start with a short summary: where the project ' +
         'stands and where it stopped. Then the findings by importance — each with the treeyard command that fixes it. Change ' +
         'nothing until I agree; after that run the commands and show what came of them.',
     });
@@ -507,6 +518,28 @@ const ROOT_TEXT = {
       'Над ними никто не работает: предложи человеку вернуть узел к работе (`set <id> status=todo`) или продолжить его.',
     staleLine: (h: number, last: string) =>
       `без сессии ${h >= 48 ? `${Math.floor(h / 24)} дн` : `${h} ч`}${last ? ` · последняя запись: ${last}` : ''}`,
+    milestone: 'веха',
+    finished: '## Все дети готовы, а узел открыт',
+    finishedHint:
+      'Проверь критерий узла: выполнен — предложи закрыть (на проверку, «готово» — по слову человека); нет — заведи то, чего не хватает. Идеи изнутри при закрытии перенеси в открытую ветку (`set <id> parent=<id>`). Постоянные корзины (идеи, замечания) не закрывают.',
+    finishedLine: (done: number, ideas: number) => `готово детей: ${done}${ideas ? ` · идей внутри: ${ideas}` : ''}`,
+    orphans: '## Открытые узлы под закрытыми ветками',
+    orphansHint:
+      'Ветка закрыта, а узел в ней открыт — в дереве его не видно. Перенеси в открытую ветку (`set <id> parent=<id>`, идею — в ветку идей) или закрой (`set <id> status=dropped`).',
+    orphanLine: (title: string, status: string) => `под «${title}» (${status})`,
+    dirty: '## На проверке, а код не закоммичен',
+    dirtyHint: (count: number, files: string) =>
+      `В рабочей папке не закоммичено файлов: ${count} (${files}). На проверку узел ставят после коммита. Выясни по \`git diff\` и журналам, чья это работа: правки узла на проверке — закоммитить и привязать (\`diff <id> --add <sha>\`); работа не кончена — вернуть узел в работу (\`set <id> status=active\`). Правки другой живой сессии не трогай.`,
+    dirtyLine: (commits: number) => (commits ? `коммитов в узле: ${commits}` : 'коммитов в узле нет'),
+    overdue: '## Сроки прошли',
+    overdueHint:
+      'Срок в названии или критерии прошёл, а узел открыт. Предложи человеку: закрыть сделанное, перенести срок (`set <id> done_when="…"`) или признать, что к сроку не успели, и решить, что дальше.',
+    overdueLine: (date: string, text: string, days: number) => `срок ${date} («${text}») прошёл ${days} дн назад`,
+    long: '## Длинные названия',
+    longHint:
+      'Длиннее 60 символов. Сократи до сути в 2–6 словах, подробности — в описание: `set <id> title="…" note="…"` (note заменяет описание целиком — сохрани старое).',
+    longLine: (length: number) =>
+      `${length} ${plural(length, ['символ', 'символа', 'символов'], ['character', 'characters'])}`,
   },
   en: {
     heading: '# You are working with the whole project tree',
@@ -551,6 +584,28 @@ const ROOT_TEXT = {
       'Nobody works on these: offer the person to put the node back to work (`set <id> status=todo`) or to continue it.',
     staleLine: (h: number, last: string) =>
       `no session for ${h >= 48 ? `${Math.floor(h / 24)} d` : `${h} h`}${last ? ` · last record: ${last}` : ''}`,
+    milestone: 'milestone',
+    finished: '## All children done, the node still open',
+    finishedHint:
+      "Check the node's criterion: met — offer to close it (to review; done at the person's word); not met — add what is missing. Ideas inside move to an open branch when it closes (`set <id> parent=<id>`). Standing buckets (ideas, notes) stay open.",
+    finishedLine: (done: number, ideas: number) => `children done: ${done}${ideas ? ` · ideas inside: ${ideas}` : ''}`,
+    orphans: '## Open nodes under closed branches',
+    orphansHint:
+      'The branch is closed while the node in it is open — nobody sees it in the tree. Move it to an open branch (`set <id> parent=<id>`, an idea to the ideas branch) or close it (`set <id> status=dropped`).',
+    orphanLine: (title: string, status: string) => `under «${title}» (${status})`,
+    dirty: '## In review, but the code is not committed',
+    dirtyHint: (count: number, files: string) =>
+      `Uncommitted files in the work folder: ${count} (${files}). A node goes to review after its commit. Find out from \`git diff\` and the journals whose work it is: changes of a node in review — commit them and attach (\`diff <id> --add <sha>\`); unfinished work — put the node back to work (\`set <id> status=active\`). Leave the changes of another live session alone.`,
+    dirtyLine: (commits: number) => (commits ? `commits in the node: ${commits}` : 'no commits in the node'),
+    overdue: '## Deadlines passed',
+    overdueHint:
+      'The deadline in the title or the criterion has passed while the node is open. Offer the person to close what is done, move the deadline (`set <id> done_when="…"`) or admit it was missed and decide what next.',
+    overdueLine: (date: string, text: string, days: number) => `deadline ${date} («${text}») passed ${days} d ago`,
+    long: '## Long titles',
+    longHint:
+      'Over 60 characters. Cut to the gist in 2–6 words, details into the description: `set <id> title="…" note="…"` (note replaces the whole description — keep the old text).',
+    longLine: (length: number) =>
+      `${length} ${plural(length, ['символ', 'символа', 'символов'], ['character', 'characters'])}`,
   },
 };
 
@@ -622,6 +677,55 @@ export function projectContext(tree: Tree): string {
     if (abandoned.length > 20) lines.push(`- … ${L.more} ${abandoned.length - 20}`);
     lines.push('');
   }
+
+  // What a coordinator used to find by hand, each list with what to do about it.
+  const section = <T>(title: string, hint: string, items: T[], line: (item: T) => string) => {
+    if (!items.length) return;
+    lines.push(title, '', hint, '', ...items.slice(0, 20).map(line));
+    if (items.length > 20) lines.push(`- … ${L.more} ${items.length - 20}`);
+    lines.push('');
+  };
+  const milestone = (node: TreeNode) => (isMilestone(node) ? `${L.milestone} · ` : '');
+  section(
+    L.finished,
+    L.finishedHint,
+    finishedParents(tree),
+    ({ node, done, ideas }) => `${brief(node)} — ${milestone(node)}${L.finishedLine(done, ideas)}`,
+  );
+  section(
+    L.orphans,
+    L.orphansHint,
+    openUnderClosed(tree),
+    ({ node, parent }) =>
+      `- ${node.title} (\`${node.id}\`, ${STATUS_LABEL[node.status]}) — ${L.orphanLine(clip(parent.title, 80), STATUS_LABEL[parent.status])}`,
+  );
+  const inReview = [...tree.nodes.values()].filter((node) => node.status === 'review');
+  // Code only: the tree's own files are shared by every session and committed with `treeyard commit`.
+  const dirty = inReview.length ? uncommittedPaths(project.dir).filter((path) => !path.startsWith(`${TREE_DIR}/`)) : [];
+  if (dirty.length) {
+    const files = dirty.slice(0, 8).join(', ') + (dirty.length > 8 ? `, … ${L.more} ${dirty.length - 8}` : '');
+    const commits = (node: TreeNode) => node.commits?.length ?? 0;
+    // A node with no commits at all is the likeliest owner of the changes.
+    section(
+      L.dirty,
+      L.dirtyHint(dirty.length, files),
+      inReview.sort((a, b) => commits(a) - commits(b)),
+      (node) => `${brief(node)} — ${L.dirtyLine(commits(node))}`,
+    );
+  }
+  section(
+    L.overdue,
+    L.overdueHint,
+    overdueNodes(tree, today()),
+    ({ node, deadline, days }) =>
+      `${brief(node)} — ${milestone(node)}${L.overdueLine(deadline.date, deadline.text, days)}`,
+  );
+  section(
+    L.long,
+    L.longHint,
+    longTitles(tree),
+    (node) => `${brief(node)} — ${L.longLine([...node.title.trim()].length)}`,
+  );
 
   const events = activity(tree, 25);
   if (events.length) {

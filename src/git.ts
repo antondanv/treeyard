@@ -1,5 +1,5 @@
 /** Read-only Git data shared by the node's CLI and TUI diff viewers. */
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { t } from './i18n/i18n.js';
 
@@ -190,6 +190,43 @@ export class GitRepository {
     const paths = file ? [...(file.oldPath ? [file.oldPath] : []), file.path] : [];
     return git(this.dir, [...this.comparison(source), ...DIFF_FLAGS, '--patch', '--', ...paths]);
   }
+}
+
+const uncommittedCache = new Map<string, { at: number; paths: string[] }>();
+
+/**
+ * Paths under `dir` with uncommitted changes — staged, unstaged or untracked — relative to
+ * it; [] outside Git or when Git fails. Synchronous for an agent context, which is built in
+ * one go; a TUI re-renders that context, so an answer lives for two seconds.
+ */
+export function uncommittedPaths(dir: string): string[] {
+  const cached = uncommittedCache.get(dir);
+  if (cached && Date.now() - cached.at < 2000) return cached.paths;
+  const run = (args: string[]) =>
+    execFileSync('git', ['--literal-pathspecs', '-c', 'core.quotepath=false', ...args], {
+      cwd: dir,
+      encoding: 'utf8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' },
+    });
+  let paths: string[] = [];
+  try {
+    const prefix = run(['rev-parse', '--show-prefix']).trim();
+    const entries = run(['status', '--porcelain=v1', '-z', '--untracked-files=normal', '--', '.']).split('\0');
+    for (let at = 0; at < entries.length; at++) {
+      const entry = entries[at]!;
+      if (entry.length < 4) continue;
+      // `XY path`, relative to the repository's root; a rename is followed by its old path.
+      if (entry[0] === 'R' || entry[0] === 'C') at++;
+      const path = entry.slice(3);
+      paths.push(path.startsWith(prefix) ? path.slice(prefix.length) : path);
+    }
+  } catch {
+    paths = [];
+  }
+  uncommittedCache.set(dir, { at: Date.now(), paths });
+  return paths;
 }
 
 /** Keep filenames and code from sending terminal controls; tabs still show indentation. */
