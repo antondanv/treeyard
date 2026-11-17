@@ -12,19 +12,24 @@ import { LANGS, type Lang, lang } from '../i18n/i18n.js';
 const START = '<!-- treeyard -->';
 const END = '<!-- /treeyard -->';
 
+// Short on purpose: it is read in every session, and the rules themselves live in the `treeyard` skill.
 const TEXT: Record<Lang, string> = {
   ru: `## Дерево задач
 
-Проект ведётся деревом целей в \`.tree/\` (treeyard): обзор — \`.tree/README.md\`, узлы — \`.tree/nodes/<id>.md\`.
-Работаешь над задачей — найди её узел (\`treeyard show\`) и держись его. Итог — в журнал узла
-(\`treeyard log <id> "что сделано; что осталось"\`), всплывшие идеи — новыми узлами
-(\`treeyard add "…" --parent <id> --status idea\`). Критерий выполнен — \`treeyard set <id> status=review\`; готово ставит человек.`,
+Проект ведётся деревом целей в \`.tree/\` (treeyard). Перед любой задачей — скилл \`treeyard\` (нет его — \`treeyard skills install\`).
+- Найди узел задачи (\`treeyard show\`) и держись его; \`.tree/\` руками не правь.
+- Итог — в журнал: \`treeyard log <id> "что сделано; что осталось"\`; критерий выполнен — \`treeyard set <id> status=review\`. «Готово» — только по прямой просьбе человека.
+- Всплывшая идея — новый узел с коротким названием (2–6 слов): \`treeyard add "…" --parent <id> --status idea\`.
+- Человеку узлы называй по названию, не по id; id — только в командах.
+- Дерево длинное — \`treeyard show <id> --brief\` или \`treeyard find "…"\`, а не \`head\` и \`grep\`.`,
   en: `## Task tree
 
-The project is run as a goal tree in \`.tree/\` (treeyard): overview — \`.tree/README.md\`, nodes — \`.tree/nodes/<id>.md\`.
-Working on a task — find its node (\`treeyard show\`) and stay on it. Write the outcome to the node journal
-(\`treeyard log <id> "what is done; what is left"\`), ideas that come up — as new nodes
-(\`treeyard add "…" --parent <id> --status idea\`). Criterion met — \`treeyard set <id> status=review\`; "done" is set by a person.`,
+The project is run as a goal tree in \`.tree/\` (treeyard). Before any task, use the \`treeyard\` skill (not installed — \`treeyard skills install\`).
+- Find the task's node (\`treeyard show\`) and stay on it; never edit \`.tree/\` by hand.
+- Outcome — in the journal: \`treeyard log <id> "what is done; what is left"\`; criterion met — \`treeyard set <id> status=review\`. "Done" only when the person asks for it directly.
+- A side idea is a new node with a short title (2–6 words): \`treeyard add "…" --parent <id> --status idea\`.
+- To the person, name nodes by title, not by id; ids go in commands only.
+- The tree is long — \`treeyard show <id> --brief\` or \`treeyard find "…"\`, not \`head\` and \`grep\`.`,
 };
 
 /** The block, in the current language unless asked for another. */
@@ -108,6 +113,32 @@ export function pointerStates(dir: string): PointerStatus[] {
     });
     return carriers.length ? { file, state: 'via', via: carriers } : { file, state: 'no-block' };
   });
+}
+
+/**
+ * What the TUI nags about: `missing` — an agent file has no block, or there is no agent file at
+ * all, so sessions opened outside the tree never hear of it; `outdated` — the block is an older
+ * one. `via` and `ok` are fine. `files` are the ones `plantPointer` would write. Undefined when
+ * there is nothing to say.
+ */
+export function pointerGap(dir: string): { kind: 'missing' | 'outdated'; files: string[] } | undefined {
+  const states = pointerStates(dir);
+  const of = (state: PointerState) => states.filter((p) => p.state === state).map((p) => p.file);
+  if (states.every((p) => p.state === 'absent')) return { kind: 'missing', files: ['AGENTS.md'] };
+  if (of('no-block').length) return { kind: 'missing', files: of('no-block') };
+  if (of('outdated').length) return { kind: 'outdated', files: of('outdated') };
+  return undefined;
+}
+
+/**
+ * Puts the block into the project's agent files; with none at all, starts AGENTS.md — the file
+ * every CLI reads. Returns the files it wrote.
+ */
+export function plantPointer(dir: string): string[] {
+  let targets = pointerTargets(dir);
+  if (targets.length === 0 && pointerStates(dir).every((p) => p.state === 'absent')) targets = ['AGENTS.md'];
+  for (const file of targets) addPointer(join(dir, file));
+  return targets;
 }
 
 export function addPointer(path: string): void {

@@ -380,7 +380,7 @@ treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
 treeyard status                                 # a summary: versions, tree, nodes, skills, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
-treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md
+treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md (what it says — below)
 treeyard help                                   # all the commands; treeyard <command> --help — the lines of one
 ```
 
@@ -494,6 +494,16 @@ node, its edit stays.
 - the GitHub link: the board, issues, `gh`, and statuses that have not reached GitHub yet.
 
 It ends with «To fix»: every problem and the command that fixes it.
+
+**The block about the tree.** A session opened in the project not from a node reads only
+AGENTS.md / CLAUDE.md, so the block is how it learns about the tree. It stays short and says:
+use the `treeyard` skill (`treeyard skills install` when it is not there); find the node and stay
+on it; write the outcome to the journal, `review` when the criterion is met, and «done» only when
+the person asks directly; a side idea is a node with a short title (2–6 words); name nodes to the
+person by title, never by id; a long tree is read with `show <id> --brief` or `find`. `treeyard
+pointer` writes it between `<!-- treeyard -->` markers, so it is replaced, not duplicated. When a
+project has no block (or an old one), `treeyard status` says so, and the TUI shows «agents do not
+know about the tree» next to the project's name: `!` or a click offers to write it.
 
 | Problem | Command |
 |---|---|

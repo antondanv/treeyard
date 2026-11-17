@@ -968,6 +968,51 @@ export function ConfirmDelete(props: {
   );
 }
 
+// ── The block about the tree in the agent files ─────────────────────────────
+
+/** Sessions opened outside the tree read only AGENTS.md and the like: offer to write the block there. */
+export function PointerDialog(props: {
+  gap: 'missing' | 'outdated';
+  files: string[];
+  width: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useInput((input, key) => {
+    const shortcut = shortcutKey(input);
+    if (key.escape || shortcut === 'n') return props.onCancel();
+    if (key.return || shortcut === 'y' || input === 'д') return props.onConfirm();
+  });
+  return (
+    <Frame
+      title={props.gap === 'missing' ? t('Сказать агентам про дерево?') : t('Обновить блок о дереве?')}
+      width={props.width}
+    >
+      <Text wrap="wrap">
+        {props.gap === 'missing'
+          ? t(
+              'Сессия claude или codex, открытая в проекте не из узла, видит только AGENTS.md и CLAUDE.md. Дерева там не упомянуто: агент не найдёт узел, не запишет итог и не заведёт идею.',
+            )
+          : t('Блок о дереве в {files} написан старой версией treeyard — в нём нет новых правил для агентов.', {
+              files: props.files.join(t(' и ')),
+            })}
+      </Text>
+      <Text wrap="wrap">
+        {t('Допишу в {files} короткий блок со ссылкой на скилл treeyard; остальной текст файла не трогаю.', {
+          files: props.files.join(t(' и ')),
+        })}
+      </Text>
+      <KeyHints
+        wrap
+        hints={[
+          { key: '⏎', label: t('дописать'), color: C.brand },
+          { key: 'esc', label: t('позже'), color: C.dim },
+        ]}
+      />
+    </Frame>
+  );
+}
+
 // ── Pick a node ─────────────────────────────────────────────────────────────
 
 export function NodePicker(props: {

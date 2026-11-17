@@ -140,6 +140,7 @@ import {
   type TreeNode,
 } from '../model/types.js';
 import { MAX_PANES, SLEEP_AFTER, STALE_AFTER, settings, updateSettings } from '../settings.js';
+import { plantPointer, pointerGap } from '../templates/pointer.js';
 import { catalogHint, effortOptions, effortsFor, fitChoice, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './components/controls.js';
 import { NodeDetails, ProjectDetails, SessionDetails } from './details.js';
@@ -158,6 +159,7 @@ import {
   type NodeValues,
   Palette,
   type PaletteItem,
+  PointerDialog,
   ProjectMenu,
   type SessionChoice,
   type SettingRow,
@@ -236,7 +238,9 @@ type Modal =
   /** ⏎ on the root: the project's documents and settings. */
   | { kind: 'project' }
   | { kind: 'docs'; open?: DocsOpen }
-  | { kind: 'problems' };
+  | { kind: 'problems' }
+  /** The block about the tree is missing from (or old in) the agent files. */
+  | { kind: 'pointer' };
 
 /** Something that starts a session or spends an agent's time: asked about first, unless turned off. */
 type Intent =
@@ -337,6 +341,8 @@ export function App(props: AppProps) {
   const [toast, setToast] = useState<Toast | undefined>(props.toast);
   const [job, setJob] = useState<Job | undefined>();
   const [branch, setBranch] = useState<string | undefined>();
+  /** Sessions opened outside the tree read only the agent files: is the block about the tree in them? */
+  const [pointerNeeded, setPointerNeeded] = useState(() => pointerGap(props.dir));
   /** The project's documents for the root's card; read again after the documents window closes. */
   const [docs, setDocs] = useState<DocFile[] | undefined>();
   const [docsVersion, setDocsVersion] = useState(0);
@@ -402,6 +408,16 @@ export function App(props: AppProps) {
   useEffect(() => {
     const got = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: props.dir, encoding: 'utf8' });
     if (got.status === 0 && got.stdout.trim() && got.stdout.trim() !== 'HEAD') setBranch(got.stdout.trim());
+  }, [props.dir]);
+
+  // The agent files are edited outside the tree: look again now and then.
+  useEffect(() => {
+    const look = () => {
+      const gap = pointerGap(props.dir);
+      setPointerNeeded((now) => (now?.kind === gap?.kind && now?.files.join() === gap?.files.join() ? now : gap));
+    };
+    const timer = setInterval(look, 5000);
+    return () => clearInterval(timer);
   }, [props.dir]);
 
   // An agent edits `.tree/` too: notice it and reload.
@@ -1719,6 +1735,14 @@ export function App(props: AppProps) {
       keys: 'P',
       run: () => setModal({ kind: 'docs' }),
     },
+    pointer: {
+      label: t('Сказать агентам про дерево: блок в AGENTS.md'),
+      keys: '!',
+      run: () => {
+        if (pointerNeeded) setModal({ kind: 'pointer' });
+        else say(t('агентам уже сказано про дерево'));
+      },
+    },
     help: { label: t('Все клавиши'), keys: '?', run: () => setModal({ kind: 'help' }) },
     settings: { label: t('Настройки'), keys: ',', run: () => setModal({ kind: 'settings' }) },
     reload: {
@@ -2034,6 +2058,7 @@ export function App(props: AppProps) {
       if (input && n >= 1 && n <= VIEWS.length && !key.ctrl && !key.meta) return setView(VIEWS[n - 1]!);
       if (key.escape && filter) return setFilter('');
       if (input === '!' && tree.problems.length > 0) return setModal({ kind: 'problems' });
+      if (input === '!' && pointerNeeded) return setModal({ kind: 'pointer' });
 
       if (view === 'sessions') {
         if (key.upArrow || input === 'k') return moveCursor(-1);
@@ -2477,6 +2502,26 @@ export function App(props: AppProps) {
               handOver({ type: 'gh', args });
             }}
             onCancel={close}
+          />
+        );
+      case 'pointer':
+        if (!pointerNeeded) return null;
+        return (
+          <PointerDialog
+            gap={pointerNeeded.kind}
+            files={pointerNeeded.files}
+            width={w}
+            onCancel={close}
+            onConfirm={() => {
+              close();
+              try {
+                const files = plantPointer(props.dir);
+                setPointerNeeded(pointerGap(props.dir));
+                say(t('блок о дереве — в {files}', { files: files.join(t(' и ')) }));
+              } catch (error) {
+                say((error as Error).message, C.bad);
+              }
+            }}
           />
         );
       case 'problems':
@@ -3222,6 +3267,17 @@ export function App(props: AppProps) {
           <Text bold>{tree.project.title}</Text>
           {branch ? <Text color={C.faint}>{`  ⎇ ${branch}`}</Text> : null}
         </Text>
+        {/* Next to the title: on a narrow screen it is cut first and never pushes the right side out. */}
+        {pointerNeeded ? (
+          <Box flexShrink={4} marginLeft={2}>
+            <Clickable active={listKeys} onClick={(click) => click.double || actions.pointer!.run()}>
+              <Text color={C.warn} wrap="truncate-end">
+                {pointerNeeded.kind === 'missing' ? t('агенты не знают о дереве') : t('блок для агентов устарел')}
+                {' (!)'}
+              </Text>
+            </Clickable>
+          </Box>
+        ) : null}
       </Box>
       <Box flexShrink={0}>
         <Text>

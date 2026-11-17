@@ -1340,4 +1340,17 @@ export const EN: Record<string, string> = {
   'gh не вошёл в GitHub': 'gh is not logged in to GitHub',
   'у gh нет доступа к доскам GitHub Project': 'gh has no access to GitHub Project boards',
   'статусы узлов не дошли до GitHub: {n}': 'node statuses that have not reached GitHub: {n}',
+  'агенты не знают о дереве': 'agents do not know about the tree',
+  'блок для агентов устарел': 'the block for agents is outdated',
+  'Обновить блок о дереве?': 'Update the block about the tree?',
+  'Сессия claude или codex, открытая в проекте не из узла, видит только AGENTS.md и CLAUDE.md. Дерева там не упомянуто: агент не найдёт узел, не запишет итог и не заведёт идею.':
+    'A claude or codex session opened in the project not from a node sees only AGENTS.md and CLAUDE.md. The tree is not mentioned there: the agent will not find its node, write an outcome or add an idea.',
+  'Блок о дереве в {files} написан старой версией treeyard — в нём нет новых правил для агентов.':
+    'The block about the tree in {files} was written by an older treeyard — it lacks the newer rules for agents.',
+  'Допишу в {files} короткий блок со ссылкой на скилл treeyard; остальной текст файла не трогаю.':
+    'I will add a short block with a link to the treeyard skill to {files}; the rest of the file stays as it is.',
+  'Сказать агентам про дерево: блок в AGENTS.md': 'Tell the agents about the tree: a block in AGENTS.md',
+  'агентам уже сказано про дерево': 'the agents have already been told about the tree',
+  дописать: 'add it',
+  позже: 'later',
 };

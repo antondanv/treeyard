@@ -377,7 +377,7 @@ describe('the block about the tree in the agent files', () => {
   it('is current in either language, outdated when it differs, carried through an import, or missing', () => {
     const dir = tempDir();
     writeFileSync(join(dir, 'AGENTS.md'), `# Правила\n\n${pointer('en')}\n`);
-    writeFileSync(join(dir, 'CLAUDE.md'), `${pointer('ru').replace('готово ставит человек', 'готово ставлю я')}\n`);
+    writeFileSync(join(dir, 'CLAUDE.md'), `${pointer('ru').replace('Дерево задач', 'Дерево')}\n`);
     writeFileSync(join(dir, 'GEMINI.md'), '# Gemini\n\nСвои правила.\n@AGENTS.md\n');
     expect(pointerStates(dir)).toEqual([
       { file: 'CLAUDE.md', state: 'outdated' },

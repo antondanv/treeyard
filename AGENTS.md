@@ -51,8 +51,10 @@ npm run screenshots                # заново снять картинки RE
 <!-- treeyard -->
 ## Дерево задач
 
-Проект ведётся деревом целей в `.tree/` (treeyard): обзор — `.tree/README.md`, узлы — `.tree/nodes/<id>.md`.
-Работаешь над задачей — найди её узел (`treeyard show`) и держись его. Итог — в журнал узла
-(`treeyard log <id> "что сделано; что осталось"`), всплывшие идеи — новыми узлами
-(`treeyard add "…" --parent <id> --status idea`). Критерий выполнен — `treeyard set <id> status=review`; готово ставит человек.
+Проект ведётся деревом целей в `.tree/` (treeyard). Перед любой задачей — скилл `treeyard` (нет его — `treeyard skills install`).
+- Найди узел задачи (`treeyard show`) и держись его; `.tree/` руками не правь.
+- Итог — в журнал: `treeyard log <id> "что сделано; что осталось"`; критерий выполнен — `treeyard set <id> status=review`. «Готово» — только по прямой просьбе человека.
+- Всплывшая идея — новый узел с коротким названием (2–6 слов): `treeyard add "…" --parent <id> --status idea`.
+- Человеку узлы называй по названию, не по id; id — только в командах.
+- Дерево длинное — `treeyard show <id> --brief` или `treeyard find "…"`, а не `head` и `grep`.
 <!-- /treeyard -->
