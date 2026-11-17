@@ -17,7 +17,7 @@ sessions:
     mode: pane
     pane: claude-e3048556
 created: 2026-11-08
-updated: 2026-11-17T12:15:25+03:00
+updated: 2026-11-17T12:16:34+03:00
 ---
 
 08.11: указателя нет в Factoyard (146 узлов, CLAUDE.md около 1500 строк, AGENTS.md нет — Codex о дереве не знает) и в Brainyard. Ставить там — с согласия человека.
@@ -31,3 +31,4 @@ updated: 2026-11-17T12:15:25+03:00
 - 2026-11-17 12:15 · агент · привязан коммит 866d84d69d6168805d787fa52e7f1d538fa2b849
 - 2026-11-17 12:15 · агент · Блок treeyard pointer переписан (RU/EN, src/templates/pointer.ts): 5 строк — скилл treeyard (нет его — treeyard skills install), держись узла, итог в журнал и «готово» только по прямой просьбе, идея — узел с коротким названием (2–6 слов), человеку узлы по названию, а не по id, длинное дерево — show <id> --brief / find. treeyard status подсказывает как и раньше (pointer-missing / pointer-outdated / no-agent-file), старый блок теперь «устарел». TUI: в шапке рядом с названием проекта «агенты не знают о дереве (!)» или «блок для агентов устарел (!)»; ! или клик → диалог, ⏎ дописывает блок (без AGENTS.md — создаёт его); на узком экране подсказка обрезается первой. Справочник RU/EN, переводы. Проверка: typecheck, lint, build чисты; npm test — 70 файлов, 644 теста; новый test/pointer.test.tsx. AGENTS.md Treeyard обновлён через treeyard pointer. Не делал: ставить указатель в Factoyard и Brainyard — только с согласия человека.
 - 2026-11-17 12:15 · агент · в работе → на проверке
+- 2026-11-17 12:16 · агент · Человек 17.11.2026: «да обнови все». Сделано: treeyard skills install — скилл treeyard обновлён в Claude Code, Codex и Antigravity; treeyard pointer в Factoyard (CLAUDE.md) и Brainyard (AGENTS.md) — новый блок, treeyard status в обоих без проблем со скиллами и указателем. В Factoyard и Brainyard правки не закоммичены (там чужие незакоммиченные файлы). Осталось: в Factoyard нет AGENTS.md, Codex о дереве всё ещё не знает; git-хук не стоит в обоих (в Factoyard хуки лежат в репозитории — строку в post-commit добавляют руками).
