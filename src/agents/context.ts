@@ -181,7 +181,7 @@ const TEXT = {
     rules: '## Как ведётся проект',
     commands: '## Команды дерева',
     command: 'Команда',
-    show: 'шапка и последние записи (без --brief — целиком; можно несколько id; `--only journal,sessions,history` — только эти части)',
+    show: 'шапка и последние записи (без --brief — целиком; `--journal N` — сколько записей; можно несколько id; `--only journal,sessions,history` — только эти части)',
     showAll: 'открытое дерево (`--all` — всё)',
     showStatus:
       'узлы этих статусов в ветке, по строке на узел; статус — словом на любом языке или алиасом (review, на проверке, проверка), значки набирать не нужно',
@@ -209,7 +209,12 @@ const TEXT = {
       'сделал там нужное — закрой тот узел сам; он закроется и сам, когда человек поставит «готово» этому узлу',
     needs: 'Ждёт',
     neededBy: 'Нужен для',
-    done: 'Статус done ставит человек.',
+    noCut:
+      'Вывод `show` и `find` читай целиком, не обрезай через head, tail, grep или sed: длинно — `--brief`, `--journal N` или `--only`; ищешь — `find`.',
+    names: (example?: string) =>
+      `Человеку узлы называй по названию${example ? ` — «${example}»` : ''}, а id — только в командах, даже не в скобках рядом с названием: по коду человек узел в дереве не найдёт.`,
+    helper: (dir: string, id?: string) =>
+      `Отдаёшь работу субагенту или помощнику — передай ему id узла${id ? ` (\`${id}\`)` : ''} и \`--project ${dir}\` для команд treeyard: в git worktree \`.tree/\` — копия ветки, а человек видит дерево основной папки.`,
     images: 'Картинки узла — открой файлы, чтобы посмотреть:',
     image: 'файл.png',
     imageWhat: 'приложить к узлу картинку или скрин (например, доказательство для проверки); без файла — список',
@@ -244,7 +249,7 @@ const TEXT = {
     rules: '## How the project is run',
     commands: '## Tree commands',
     command: 'The command is',
-    show: 'header and latest entries (without --brief — in full; several ids work; `--only journal,sessions,history` — just these parts)',
+    show: 'header and latest entries (without --brief — in full; `--journal N` — how many entries; several ids work; `--only journal,sessions,history` — just these parts)',
     showAll: 'the open tree (`--all` — everything)',
     showStatus:
       'nodes of these statuses in a branch, a line each; a status is a word in either language or an alias (review, in review, check), no glyphs to type',
@@ -273,7 +278,12 @@ const TEXT = {
       'done what was needed there — close that node yourself; it also closes on its own when a person sets this node done',
     needs: 'Waits for',
     neededBy: 'Needed for',
-    done: 'Status done is set by a person.',
+    noCut:
+      'Read the output of `show` and `find` whole, never cut it with head, tail, grep or sed: too long — `--brief`, `--journal N` or `--only`; looking for something — `find`.',
+    names: (example?: string) =>
+      `Name nodes to the person by their title${example ? ` — «${example}»` : ''}; ids go in commands only, not even in brackets next to the title: a person cannot find a node in the tree by its code.`,
+    helper: (dir: string, id?: string) =>
+      `Handing work to a subagent or a helper — give it the node id${id ? ` (\`${id}\`)` : ''} and \`--project ${dir}\` for treeyard commands: in a git worktree \`.tree/\` is the branch's copy, while the person sees the tree of the main folder.`,
     images: 'Pictures of the node — open the files to look at them:',
     image: 'file.png',
     imageWhat: 'attach a picture or a screenshot to the node (evidence for review, say); without a file — the list',
@@ -360,6 +370,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} show ${node.id} --brief\` — ${L.show}; \`${self} show\` — ${L.showAll}`);
   lines.push(`- \`${self} show --status review,idea --under <id>\` — ${L.showStatus}`);
   lines.push(`- \`${self} find "${L.findWhat}"\` — ${L.find}`);
+  lines.push(`- ${L.noCut}`);
   lines.push(`- \`${self} log ${node.id} "${L.log}"\` — ${L.logWhat}`);
   lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea --note "…"\` — ${L.addWhat}`);
   lines.push(`- \`${self} log ${node.id} "${L.reviewText}" --status review --commit HEAD\` — ${L.review}`);
@@ -379,7 +390,10 @@ export function contextText(tree: Tree, id: string): string {
   }
   // Read, not applied: the context must not switch the language or the theme of whoever asks.
   if (loadSettings().notes) lines.push(`- \`${self} note "${L.note}"\` — ${L.noteWhat}`);
-  lines.push(`- ${L.done}`);
+  lines.push(`- ${L.names(node.title)}`);
+  lines.push(`- ${L.helper(quote(project.dir), node.id)}`);
+  // The same rule as from the root: a node session is asked to close nodes as often.
+  lines.push(`- ${pick(ROOT_TEXT).doneRule(self)}`);
   return lines.join('\n');
 }
 
@@ -476,7 +490,7 @@ const ROOT_TEXT = {
     rules: '## Как ведётся проект',
     commands: '## Команды дерева',
     command: 'Команда',
-    show: 'открытое дерево (`--all` — всё); `show <id…> --brief` — шапки и последние записи узлов',
+    show: 'открытое дерево (`--all` — всё); `show <id…> --brief` — шапки и последние записи узлов, `--journal N` — сколько записей',
     add: 'новый узел (родитель — по смыслу; `--status idea` для идеи); название — суть в 2–6 словах, до 60 символов, подробности — в `--note`, проверка — в `--done-when`; несколько разом, с детьми и needs — `add --parent <id> --from-json -`',
     set: 'поменять узел или несколько сразу (то же всем, after= ставит их подряд): status, title, parent, done_when, who, check, note (описание), waiting, until',
     keyValue: 'ключ=значение',
@@ -519,7 +533,7 @@ const ROOT_TEXT = {
     rules: '## How the project is run',
     commands: '## Tree commands',
     command: 'The command is',
-    show: 'the open tree (`--all` — everything); `show <id…> --brief` — headers and latest entries of nodes',
+    show: 'the open tree (`--all` — everything); `show <id…> --brief` — headers and latest entries of nodes, `--journal N` — how many entries',
     add: 'a new node (pick the parent by meaning; `--status idea` for an idea); the title is the gist in 2–6 words, up to 60 characters, details go to `--note`, the check to `--done-when`; several at once, with children and needs — `add --parent <id> --from-json -`',
     set: 'change a node or several at once (the same to each, after= puts them one after another): status, title, parent, done_when, who, check, note (description), waiting, until',
     keyValue: 'key=value',
@@ -628,6 +642,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} show\` — ${L.show}`);
   lines.push(`- \`${self} show --status review,idea [--under <id>]\` — ${T.showStatus}`);
   lines.push(`- \`${self} find "${T.findWhat}"\` — ${T.find}`);
+  lines.push(`- ${T.noCut}`);
   lines.push(`- \`${self} add "${T.add}" --parent <id> --done-when "…" --note "…"\` — ${L.add}`);
   lines.push(`- \`${self} set <id> [<id>…] ${L.keyValue}…\` — ${L.set}`);
   lines.push(`- \`${self} log <id> "…" [--status s] [--commit <ref>…]\` — ${L.log}`);
@@ -637,6 +652,8 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} sessions\` — ${L.sessions}`);
   lines.push(`- \`${self} open <id> [<id>…] --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
   if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);
+  lines.push(`- ${T.names()}`);
+  lines.push(`- ${T.helper(quote(project.dir))}`);
   lines.push(`- ${L.doneRule(self)}`);
   return lines.join('\n');
 }

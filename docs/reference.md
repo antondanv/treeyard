@@ -326,7 +326,11 @@ the exit code is 1 as without `--json`.
 ## Agents and the tree
 
 A session from a node gets a short context: the path from the root (why this), the
-criterion, the neighbours, the project's rules and the tree's commands. Agents write back
+criterion, the neighbours, the project's rules and the tree's commands. The commands end
+with the rules agents broke most often, the same from a node and from the root: name nodes
+to the person by title, ids only in commands; read `show` whole (`--brief`, `--journal N`)
+instead of cutting it; give a subagent the node id and `--project <main folder>`; status
+done only when the person asks for it in the conversation (`--as you`). Agents write back
 with the same commands a person uses:
 
 ```sh
