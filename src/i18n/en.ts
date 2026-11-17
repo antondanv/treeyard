@@ -285,6 +285,10 @@ export const EN: Record<string, string> = {
   '\n{p1} в дереве {added} новых узлов — treeyard, чтобы открыть\n':
     '\n{p1} {added} new nodes in the tree — treeyard to open it\n',
   'treeyard add "<название>" [--parent id]': 'treeyard add "<title>" [--parent id]',
+  'название на {n} симв. — суть в 2–6 словах, подробности уже в --note; сократить: treeyard set {id} title="…"':
+    'title of {n} characters — the gist in 2–6 words, the details are already in --note; shorten it: treeyard set {id} title="…"',
+  'название на {n} симв. — суть в 2–6 словах, подробности в --note, проверка в --done-when; поправить: treeyard set {id} title="…" note="…"':
+    'title of {n} characters — the gist in 2–6 words, details in --note, the check in --done-when; fix it: treeyard set {id} title="…" note="…"',
   '«{pair}» — нужно ключ=значение': '«{pair}» — key=value expected',
   'не знаю поле «{key}»': 'unknown field «{key}»',
   'порядок задаётся местом, а не числом: after=<id брата>|first|last':

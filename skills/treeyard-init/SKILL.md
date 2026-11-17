@@ -120,6 +120,11 @@ Pick a template and say why:
 Rules:
 - Root = the project's goal; 3–7 branches; depth 2–3; 15–40 nodes in total, no more.
 - A node is one agent session or one PR; more than ~10 points inside — split it.
+- **A title is a short name: the gist in 2–6 words, up to 60 characters.** The
+  person reads it in a tree row, and agents name the node by it. Never a sentence
+  or a paragraph: the check goes to `done_when`, the details to `note` — "Milestone
+  1: one channel on the bot", not "Milestone 1: a week of running one channel only
+  through the bot, every post through the bot".
 - Every node has `done_when`: something to see or run — a command, a scenario, a
   number, a screenshot. If it can't be put that way, the node is "Find out: …"
   with "the conclusion is in the node's journal".
@@ -139,9 +144,9 @@ Show the draft as text:
 
 ```
 ◆ One person runs 5–10 channels and sites through the factory and doesn't burn out
-├─ Milestone 1: a week of running one channel only through the bot
-│  ├─ ◐ The bot takes a topic and returns a draft — done when: /new "topic" → a draft in 2 min
-│  └─ ○ Publish to the channel with a button — done when: a post in the test channel
+├─ Milestone 1: one channel on the bot
+│  ├─ ◐ Draft from a topic — done when: /new "topic" → a draft in 2 min
+│  └─ ○ Publish with a button — done when: a post in the test channel
 ├─ Launch
 │  ├─ ○ Deploy checklist for a VPS (agent)
 │  ├─ ○ [you] Rent a VPS and a domain — done when: ssh works
@@ -166,10 +171,11 @@ treeyard import --from-json - <<'JSON'
   "decisions": ["Python + FastAPI: the stack is chosen and known"],
   "nodes": [
     {
-      "title": "Milestone 1: a week of running one channel only through the bot",
+      "title": "Milestone 1: one channel on the bot",
       "done_when": "for 7 days every post in the channel came through the bot",
+      "note": "The first real-life check: a week of running one channel only through the bot.",
       "children": [
-        { "title": "The bot takes a topic and returns a draft", "status": "active",
+        { "title": "Draft from a topic", "status": "active",
           "done_when": "/new \"topic\" → a draft within 2 minutes", "check": "pytest -q tests/bot" }
       ]
     },

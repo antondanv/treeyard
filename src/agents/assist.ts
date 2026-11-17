@@ -51,20 +51,20 @@ ${pick({
 
 Предложи от 3 до 7 подзадач, которые вместе доводят узел до его критерия готовности:
 - каждая — одна сессия агента или один PR; результат виден сразу, а не «ещё чуть-чуть»;
-- title — до 60 символов, по-русски, словами проекта;
+- title — название, суть в 2–6 словах (до 60 символов), по-русски, словами проекта; не фраза-абзац: подробности — в done_when и note;
 - done_when — проверяемый критерий одним предложением: команда, сценарий, то, что можно увидеть;
 - who: agent — код; human — то, что может сделать только человек (доступы, договор, решение, показать людям); any — не важно;
-- note — одна фраза: зачем этот шаг или с чего начать.
+- note — подробности: зачем этот шаг или с чего начать.
 ${existing.length ? `\nУже есть под узлом (не повторяй их):\n${existing.join('\n')}\n` : ''}
 Ответь ТОЛЬКО JSON в блоке \`\`\`json:`,
   en: `The job now is not to do the node but to break it into steps. Look into the project's code and documents as much as you need, changing nothing.
 
 Propose 3 to 7 subtasks that together bring the node to its "done when":
 - each is one agent session or one PR; its result shows right away, not "a little more";
-- title — up to 60 characters, in English, in the project's own words;
+- title — a short name, the gist in 2–6 words (up to 60 characters), in English, in the project's own words; not a paragraph: details go to done_when and note;
 - done_when — a checkable criterion in one sentence: a command, a scenario, something you can see;
 - who: agent — code; human — what only a person can do (access, a contract, a decision, showing it to people); any — either;
-- note — one phrase: why this step or where to start.
+- note — the details: why this step or where to start.
 ${existing.length ? `\nAlready under the node (do not repeat them):\n${existing.join('\n')}\n` : ''}
 Answer ONLY with JSON in a \`\`\`json block:`,
 })}

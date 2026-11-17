@@ -90,7 +90,7 @@ export function importPrompt(hint?: string, git?: string): string {
 Построй дерево:
 - goal — цель проекта в реальном мире: как человек поймёт, что проект сделал своё дело. Возьми из документов; если там её нет — предложи и скажи об этом в note первого узла.
 - Верхний уровень — 4–9 направлений или этапов, как устроен план проекта. Глубина — не больше трёх уровней.
-- title — коротко, до 60 символов, по-русски, словами проекта.
+- title — короткое название: суть в 2–6 словах, до 60 символов, по-русски, словами проекта; подробности — в note и done_when, не в названии.
 - status: done — только при свидетельстве (отмечено в документах или видно по git); active — над этим работали недавно и не закончили; waiting — упирается во внешнее (сервер, доступы, люди, деньги); idea — бэклог, «потом», «отложено»; todo — остальное.
 - who: human — то, что может сделать только человек (договор, юрист, сервер, оплата, показать людям, принять решение); agent — код; any — не важно.
 - done_when — проверяемый критерий одним предложением, где он ясен из документов. Не выдумывай, если неясно.
@@ -113,7 +113,7 @@ Change nothing: only read files.
 Build the tree:
 - goal — the project's goal in the real world: how a person will know the project did its job. Take it from the documents; if it is not there, propose one and say so in the note of the first node.
 - The top level — 4–9 directions or stages, the way the project's plan is organised. No more than three levels deep.
-- title — short, up to 60 characters, in English, in the project's own words.
+- title — a short name: the gist in 2–6 words, up to 60 characters, in English, in the project's own words; details go to note and done_when, not into the title.
 - status: done — only with evidence (marked in the documents or visible in git); active — worked on lately and not finished; waiting — blocked by something outside (a server, access, people, money); idea — backlog, "later", "postponed"; todo — the rest.
 - who: human — what only a person can do (a contract, a lawyer, a server, payment, showing it to people, a decision); agent — code; any — either.
 - done_when — a checkable criterion in one sentence, where the documents make it clear. Do not invent one.

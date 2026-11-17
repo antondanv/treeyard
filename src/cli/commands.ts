@@ -47,7 +47,7 @@ import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
 import { type FindField, findNodes } from '../model/find.js';
 import { isCreationLine, lastOwnEntry, parseEntry } from '../model/history.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
-import { journalEntries, replaceEntry } from '../model/journal.js';
+import { description, journalEntries, replaceEntry } from '../model/journal.js';
 import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
 import { addNote, homeShort, NODE_VAR, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import {
@@ -75,6 +75,7 @@ import { staleOf } from '../model/stale.js';
 import { parseStatus, parseStatuses, UnknownStatus } from '../model/status-words.js';
 import { findProject, loadTree, nodePath, writeProject } from '../model/store.js';
 import { ago, nowIso, today } from '../model/time.js';
+import { isLongTitle } from '../model/titles.js';
 import {
   childrenOf,
   descendants,
@@ -169,6 +170,7 @@ function commandLines(): string {
   treeyard add "<название>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "команда"] [--note "…"]   --after — сразу после брата (любого статуса,
                                            как set after=; без --parent — под его родителем)
+                                           название — суть в 2–6 словах; подробности — в --note и --done-when
   treeyard add "<название>" --project ../X --for <id>   узел в дереве проекта X, нужный узлу id отсюда
   treeyard add --parent <id> --from-json <файл|->   несколько узлов разом: [{"title", "done_when", "note", "who", "status",
                                            "needs", "key", "children"}]; печатает их id; ошибка — не заводится ни один
@@ -253,6 +255,7 @@ function commandLines(): string {
   treeyard add "<title>" [--parent id] [--after id] [--status s] [--who agent|human|any]
                 [--done-when "…"] [--check "command"] [--note "…"]   --after — right after a sibling (of any status,
                                            like set after=; without --parent — under its parent)
+                                           the title is the gist in 2–6 words; details go to --note and --done-when
   treeyard add "<title>" --project ../X --for <id>   a node in project X's tree that node id here needs
   treeyard add --parent <id> --from-json <file|->   several nodes at once: [{"title", "done_when", "note", "who", "status",
                                            "needs", "key", "children"}]; prints their ids; an error adds none
@@ -1239,12 +1242,33 @@ async function addCommand(args: string[]): Promise<number> {
       `${node.id} · ${tree.project.title}${branch ? ` › ${branch}` : ''} ← ${here.project.title} › ${waiter}\n`,
     );
     if (regrouped) process.stderr.write(regrouped);
+    longTitleHint(node.id, node.title, Boolean(values.note));
     return 0;
   }
   const node = addNode(tree, input, sourceOf(values.as));
   process.stdout.write(`${node.id}\n`);
   if (regrouped) process.stderr.write(regrouped);
+  longTitleHint(node.id, node.title, Boolean(values.note));
   return 0;
+}
+
+/**
+ * A title past the limit is usually a paragraph: the node is added anyway, and stderr says where
+ * the details go and how to fix it (stderr, so a script reading the id from stdout is not bothered).
+ */
+function longTitleHint(id: string, title: string, hasNote: boolean): void {
+  if (!isLongTitle(title)) return;
+  const length = [...title].length;
+  const text = hasNote
+    ? t('название на {n} симв. — суть в 2–6 словах, подробности уже в --note; сократить: treeyard set {id} title="…"', {
+        n: length,
+        id,
+      })
+    : t(
+        'название на {n} симв. — суть в 2–6 словах, подробности в --note, проверка в --done-when; поправить: treeyard set {id} title="…" note="…"',
+        { n: length, id },
+      );
+  process.stderr.write(`${err.c('#ffcf70', '!')} ${text}\n`);
 }
 
 /**
@@ -1273,6 +1297,7 @@ async function addBatch(title: string, values: Record<string, string | boolean |
     ...(values.who ? { who: whoArg(String(values.who)) } : {}),
   });
   for (const { node, depth } of planted) process.stdout.write(`${'  '.repeat(depth)}${node.id}  ${node.title}\n`);
+  for (const { node } of planted) longTitleHint(node.id, node.title, description(node.body) !== '');
   return 0;
 }
 

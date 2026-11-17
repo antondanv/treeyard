@@ -189,9 +189,9 @@ const TEXT = {
     findWhat: 'текст',
     log: 'что сделано; что осталось',
     logWhat: 'итог в журнал узла',
-    add: 'Заголовок',
+    add: 'Короткое название',
     addWhat:
-      'всплывшая задача или идея (родителя выбирай по смыслу); несколько узлов разом — `add --parent <id> --from-json -`',
+      'всплывшая задача или идея (родителя выбирай по смыслу); название — суть в 2–6 словах, до 60 символов, без деталей и абзацев; подробности — в `--note`, проверка — в `--done-when`; несколько узлов разом — `add --parent <id> --from-json -`',
     review:
       'критерий выполнен: итог, статус и коммит одной командой, а не цепочкой diff, log и set (--commit HEAD — только после своего коммита); покажи доказательства',
     reviewText: 'итог и доказательства',
@@ -252,9 +252,9 @@ const TEXT = {
     findWhat: 'text',
     log: 'what is done; what is left',
     logWhat: 'a summary in the node journal',
-    add: 'Title',
+    add: 'Short title',
     addWhat:
-      'a task or an idea that came up (pick the parent by meaning); several nodes at once — `add --parent <id> --from-json -`',
+      'a task or an idea that came up (pick the parent by meaning); the title is the gist in 2–6 words, up to 60 characters, no details or paragraphs; details go to `--note`, the check to `--done-when`; several nodes at once — `add --parent <id> --from-json -`',
     review:
       'the criterion is met: the summary, the status and the commit in one command, not a chain of diff, log and set (--commit HEAD — only after your own commit); show the evidence',
     reviewText: 'summary and evidence',
@@ -361,7 +361,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} show --status review,idea --under <id>\` — ${L.showStatus}`);
   lines.push(`- \`${self} find "${L.findWhat}"\` — ${L.find}`);
   lines.push(`- \`${self} log ${node.id} "${L.log}"\` — ${L.logWhat}`);
-  lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea\` — ${L.addWhat}`);
+  lines.push(`- \`${self} add "${L.add}" --parent ${node.id} --status idea --note "…"\` — ${L.addWhat}`);
   lines.push(`- \`${self} log ${node.id} "${L.reviewText}" --status review --commit HEAD\` — ${L.review}`);
   lines.push(`- \`${self} log ${node.id} --fix "…"\` — ${L.fix}`);
   lines.push(`- \`${self} commit ${node.id} [<id>…]\` — ${L.commit}`);
@@ -425,7 +425,9 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
       ru:
         `Проведи ревью всего дерева проекта «${tree.project.title}». Пройди узлы (\`${selfCommand()} show <id> --brief\`, файлы .tree/nodes/), ` +
         'загляни в код и git log, сколько нужно, и найди, что в дереве криво: узлы без «готово, когда» или с критерием, ' +
-        'который нельзя увидеть или запустить; переростки, которые пора разбить; «в работе» и «на проверке» без движения больше недели, ' +
+        'который нельзя увидеть или запустить; переростки, которые пора разбить; названия-абзацы (длиннее 60 символов или с деталями вместо ' +
+        'сути) — сократи до 2–6 слов, подробности в описание: `set <id> title="…" note="…"` (note заменяет описание целиком — не потеряй старое); ' +
+        '«в работе» и «на проверке» без движения больше недели, ' +
         '«на проверке» без доказательств в журнале; «ждёт», у которых условие возврата, похоже, наступило; работу, которая по коду и ' +
         'коммитам сделана, а узел не закрыт, и наоборот; дубли, идеи, которые пора поднять или закрыть, узлы не на своём месте; ' +
         'чего не хватает до ближайшей вехи и цели проекта. Начни с короткой сводки: где проект сейчас и на чём остановились. ' +
@@ -434,7 +436,9 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
       en:
         `Review the whole tree of project «${tree.project.title}». Go through the nodes (\`${selfCommand()} show <id> --brief\`, the files in .tree/nodes/), ` +
         'look into the code and git log as much as you need, and find what is crooked in the tree: nodes without "done when" or with ' +
-        'a criterion nobody can see or run; nodes grown too big to be one session; "in progress" and "in review" without movement for ' +
+        'a criterion nobody can see or run; nodes grown too big to be one session; paragraph titles (over 60 characters, or details instead of ' +
+        'the gist) — cut to 2–6 words, details into the description: `set <id> title="…" note="…"` (note replaces the whole description — keep the old text); ' +
+        '"in progress" and "in review" without movement for ' +
         'over a week, "in review" without evidence in the journal; "waiting" whose condition to come back seems to have come; work ' +
         'done by the code and commits while its node is open, and the other way round; duplicates, ideas to take up or drop, nodes in ' +
         'the wrong place; what is missing for the nearest milestone and the goal. Start with a short summary: where the project ' +
@@ -473,7 +477,7 @@ const ROOT_TEXT = {
     commands: '## Команды дерева',
     command: 'Команда',
     show: 'открытое дерево (`--all` — всё); `show <id…> --brief` — шапки и последние записи узлов',
-    add: 'новый узел (родитель — по смыслу; `--status idea` для идеи); несколько разом, с детьми и needs — `add --parent <id> --from-json -`',
+    add: 'новый узел (родитель — по смыслу; `--status idea` для идеи); название — суть в 2–6 словах, до 60 символов, подробности — в `--note`, проверка — в `--done-when`; несколько разом, с детьми и needs — `add --parent <id> --from-json -`',
     set: 'поменять узел или несколько сразу (то же всем, after= ставит их подряд): status, title, parent, done_when, who, check, note (описание), waiting, until',
     keyValue: 'ключ=значение',
     log: 'запись в журнал узла; с `--status` и `--commit` — заодно статус и коммиты',
@@ -516,7 +520,7 @@ const ROOT_TEXT = {
     commands: '## Tree commands',
     command: 'The command is',
     show: 'the open tree (`--all` — everything); `show <id…> --brief` — headers and latest entries of nodes',
-    add: 'a new node (pick the parent by meaning; `--status idea` for an idea); several at once, with children and needs — `add --parent <id> --from-json -`',
+    add: 'a new node (pick the parent by meaning; `--status idea` for an idea); the title is the gist in 2–6 words, up to 60 characters, details go to `--note`, the check to `--done-when`; several at once, with children and needs — `add --parent <id> --from-json -`',
     set: 'change a node or several at once (the same to each, after= puts them one after another): status, title, parent, done_when, who, check, note (description), waiting, until',
     keyValue: 'key=value',
     log: 'a line in the node journal; with `--status` and `--commit` — the status and commits too',
@@ -624,7 +628,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} show\` — ${L.show}`);
   lines.push(`- \`${self} show --status review,idea [--under <id>]\` — ${T.showStatus}`);
   lines.push(`- \`${self} find "${T.findWhat}"\` — ${T.find}`);
-  lines.push(`- \`${self} add "${T.add}" --parent <id> --done-when "…"\` — ${L.add}`);
+  lines.push(`- \`${self} add "${T.add}" --parent <id> --done-when "…" --note "…"\` — ${L.add}`);
   lines.push(`- \`${self} set <id> [<id>…] ${L.keyValue}…\` — ${L.set}`);
   lines.push(`- \`${self} log <id> "…" [--status s] [--commit <ref>…]\` — ${L.log}`);
   lines.push(`- \`${self} rm <id>\` — ${L.rm}`);

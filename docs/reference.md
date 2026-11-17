@@ -344,6 +344,7 @@ treeyard docs --json                            # the project's documents as the
 treeyard projects --json                        # folders with trees treeyard has seen, the most recent first: path, title, goal, when seen (without --json — a line each)
 treeyard find "rounding|cents"                  # search every node, done ones too: id, status word, path and the matching piece (--status, --under, --json, --limit)
 treeyard add "Show the product to a person" --who human --parent <id>
+treeyard add "Quiet exit on EPIPE" --parent <id> --done-when "…" --note "details"   # a title is the gist in 2–6 words; past 60 characters add still adds the node but hints at --note and set <id> title=
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling, like set after= (no --parent — under its parent; default — last)
 treeyard add --parent <id> --from-json - < nodes.json      # several nodes at once (an error adds none); prints their ids
 treeyard set <id> after=<sibling id>|first|last # the place among siblings; with parent=<id> — in a new parent

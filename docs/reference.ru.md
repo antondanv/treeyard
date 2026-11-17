@@ -368,6 +368,7 @@ treeyard docs --json                            # документы проек�
 treeyard projects --json                        # папки с деревьями, которые видел treeyard, свежие сверху: путь, название, цель, когда видел (без --json — по строке на проект)
 treeyard find "округлен|копейк"                 # поиск по всем узлам, готовым тоже: id, статус словом, путь и кусок совпадения (--status, --under, --json, --limit)
 treeyard add "Показать продукт человеку" --who human --parent <id>
+treeyard add "Тихий выход при EPIPE" --parent <id> --done-when "…" --note "подробности"   # название — суть в 2–6 словах; длиннее 60 символов add всё равно заведёт узел, но подскажет --note и set <id> title=
 treeyard add "Поправить справку" --parent <id> --after <id>   # сразу после соседа, как set after= (без --parent — под его родителем; без --after — последним)
 treeyard add --parent <id> --from-json - < nodes.json      # несколько узлов разом (ошибка — не заводится ни один); печатает их id
 treeyard set <id> after=<id соседа>|first|last  # место среди соседей; вместе с parent=<id> — в новом родителе
