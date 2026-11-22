@@ -41,6 +41,7 @@ const COMMANDS = [
   'image',
   'diff',
   'hook',
+  'uninstall',
   'context',
   'open',
   'sessions',

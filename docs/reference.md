@@ -15,6 +15,7 @@ interface shows, every key, every setting and every command.
   - [Node diffs](#node-diffs) · [Notes](#notes) · [Node pictures](#node-pictures)
   - [Shared nodes](#shared-nodes) · [A GitHub Project board](#a-github-project-board)
 - [Tree files and templates](#tree-files-and-templates)
+- [Removing treeyard](#removing-treeyard)
 - [Development](#development)
 
 ## Planting a tree with an agent
@@ -74,6 +75,7 @@ that is a link (to a checkout, say) is left alone; copies the project keeps for 
 treeyard skills            # where the skills are in each CLI: installed, outdated, not installed
 treeyard skills install    # install or refresh them now, links included
 treeyard config skills off # don't install them by yourself; TREEYARD_SKILLS=off — for one run
+treeyard uninstall         # remove them everywhere, with the hook — see «Removing treeyard»
 ```
 
 A skill is installed as a whole folder (SKILL.md and `references/`); a copy that is already
@@ -848,6 +850,35 @@ disabled when Treeyard hands the terminal to another CLI or exits.
 
 How to run a project as a tree — [practice.md](practice.md). Templates: Stages,
 Directions, Mikado, Finding improvements, Client work (`treeyard templates`).
+
+## Removing treeyard
+
+`treeyard uninstall` removes everything treeyard put outside `.tree/`:
+
+- the `treeyard`, `treeyard-init` and `treeyard-coordinate` skills from every CLI's folder —
+  `~/.claude/skills`, `~/.codex/skills`, `~/.gemini/config/skills`; a folder that is a link
+  goes as a link, what it points to stays; other skills next to them are left alone;
+- copies of these skills in the current project's folder (`.claude/skills`, `.agents/skills`)
+  — they are the project's files in git, so other projects' copies are not touched;
+- treeyard's block in the `post-commit` hook — in the current folder's repository and in every
+  project treeyard has seen (`treeyard projects`); the hook's own lines stay, a file that held
+  nothing but the block is deleted. Hooks inside the repository (husky and the like) are not
+  edited; the command says where to take the line out;
+- with `--settings` — also the settings and the list of projects in `~/.treeyard` (or
+  `$TREEYARD_HOME`), and the folder itself when nothing else is in it.
+
+The `.tree/` tree and its block in `AGENTS.md` / `CLAUDE.md` stay: they are part of the project.
+
+```sh
+treeyard uninstall --dry-run    # only show what would be removed
+treeyard uninstall              # remove the skills and the hook
+treeyard uninstall --settings   # and treeyard's settings
+npm uninstall -g @antondanv/treeyard
+```
+
+While treeyard is installed, the first command in a folder with a tree puts the skills back
+(see [the `skills` setting](#confirmation-and-settings)), so remove the package right after,
+or run `treeyard config skills off` first.
 
 ## Development
 

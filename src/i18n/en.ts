@@ -1407,4 +1407,15 @@ export const EN: Record<string, string> = {
   'Antigravity: {access}': 'Antigravity: {access}',
   'права Antigravity: full, normal или ask — спросить при запуске':
     'Antigravity access: full, normal or ask — ask at launch',
+  'хук post-commit': 'post-commit hook',
+  'настройки treeyard': 'treeyard settings',
+  'скилл {skill}': 'skill {skill}',
+  ссылка: 'link',
+  '.tree/ и блок о дереве в AGENTS.md / CLAUDE.md остаются — они часть проекта':
+    '.tree/ and the tree block in AGENTS.md / CLAUDE.md stay — they are part of the project',
+  'вне .tree от treeyard ничего нет — убирать нечего': 'nothing of treeyard outside .tree — nothing to remove',
+  'treeyard uninstall уберёт:': 'treeyard uninstall will remove:',
+  'хуки лежат в репозитории, строку убрать самому': 'hooks live in the repository, take the line out yourself',
+  'сам treeyard: npm uninstall -g @antondanv/treeyard — пока он стоит, команда в папке с деревом снова поставит скиллы (не ставить: treeyard config skills off)':
+    'treeyard itself: npm uninstall -g @antondanv/treeyard — while it is installed, a command in a folder with a tree puts the skills back (to stop that: treeyard config skills off)',
 };

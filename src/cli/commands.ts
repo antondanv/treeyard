@@ -117,6 +117,7 @@ import { locate, projectStatus } from '../status.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
+import type { Leftover } from '../uninstall.js';
 import { WATCH_VERSION, watchTree } from '../watch.js';
 import {
   foundJson,
@@ -213,6 +214,9 @@ function commandLines(): string {
   treeyard diff <id> --add <ref>… | --rm <sha>   привязать коммиты (HEAD, ветка, тег, SHA) · убрать привязку
   treeyard diff <id> --working              текущие изменения проекта (общие для узлов)
   treeyard hook install|remove|status      git-хук post-commit: коммиты сессии из узла привязываются к узлу сами
+  treeyard uninstall [--settings] [--dry-run]   убрать всё, что treeyard поставил вне .tree: скиллы из папок CLI
+                                           и проекта, хук post-commit (здесь и в известных проектах); --settings —
+                                           и ~/.treeyard; --dry-run — только показать; .tree/ и блок в AGENTS.md остаются
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   что получит агент
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
                                            сессия по узлу прямо из shell
@@ -298,6 +302,9 @@ function commandLines(): string {
   treeyard diff <id> --add <ref>… | --rm <sha>   attach commits (HEAD, a branch, a tag, a SHA) · remove the link
   treeyard diff <id> --working              current project changes (shared by nodes)
   treeyard hook install|remove|status      git post-commit hook: commits of a node's session attach to the node by themselves
+  treeyard uninstall [--settings] [--dry-run]   remove all treeyard put outside .tree: skills from the CLIs' folders
+                                           and the project, the post-commit hook (here and in known projects); --settings —
+                                           ~/.treeyard too; --dry-run — only show; .tree/ and the AGENTS.md block stay
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   what an agent gets
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
                                            a session for a node straight from the shell
@@ -441,6 +448,8 @@ async function main(argv: string[]): Promise<number> {
       return diffCommand(rest);
     case 'hook':
       return hookCommand(rest);
+    case 'uninstall':
+      return uninstallCommand(rest);
     case 'context':
       return contextCommand(rest);
     case 'open':
@@ -624,6 +633,8 @@ async function openTui(skillsNote = ''): Promise<number> {
 /** Commands that only show the setup or change it: they install nothing by themselves. */
 const NO_AUTO_SKILLS = new Set([
   'status',
+  // It is taking them away.
+  'uninstall',
   'skills',
   'skill',
   'config',
@@ -2193,6 +2204,59 @@ export async function taskArg(
   const text = (value === '-' ? await stdin() : value).trim();
   if (!text) throw new UsageError(t('--task без текста'));
   return text;
+}
+
+/** Takes away what treeyard put outside `.tree/`; `--dry-run` only lists it. */
+async function uninstallCommand(args: string[]): Promise<number> {
+  const { values } = parse(args, { settings: { type: 'boolean' }, 'dry-run': { type: 'boolean' } });
+  const { leftovers, uninstall } = await import('../uninstall.js');
+  const options = { folder: locate(process.cwd()).folder, settings: Boolean(values.settings) };
+  const what = (item: Leftover): string => {
+    if (item.kind === 'hook') return t('хук post-commit');
+    if (item.kind === 'settings') return t('настройки treeyard');
+    const where = item.brain ? BRAIN_LABEL[item.brain] : t('папка проекта');
+    return `${t('скилл {skill}', { skill: item.skill })} · ${where}${item.link ? ` · ${t('ссылка')}` : ''}`;
+  };
+  const row = (mark: string, item: Leftover, note = '') =>
+    `${mark} ${what(item)}  ${out.dim(homeShort(item.path))}${note ? ` ${out.dim(`— ${note}`)}` : ''}\n`;
+  const stays = () =>
+    process.stdout.write(
+      `${out.dim(t('.tree/ и блок о дереве в AGENTS.md / CLAUDE.md остаются — они часть проекта'))}\n`,
+    );
+
+  if (values['dry-run']) {
+    const items = leftovers(options);
+    if (!items.length) process.stdout.write(`${t('вне .tree от treeyard ничего нет — убирать нечего')}\n`);
+    else {
+      process.stdout.write(`${t('treeyard uninstall уберёт:')}\n`);
+      for (const item of items)
+        process.stdout.write(
+          row(
+            ' ',
+            item,
+            item.kind === 'hook' && item.manual ? t('хуки лежат в репозитории, строку убрать самому') : '',
+          ),
+        );
+    }
+    stays();
+    return 0;
+  }
+
+  const done = uninstall(options);
+  if (!done.length) process.stdout.write(`${t('вне .tree от treeyard ничего нет — убирать нечего')}\n`);
+  for (const { item, result, error } of done) {
+    if (result === 'removed') process.stdout.write(row(out.c('#7ee2a8', '✓'), item));
+    else if (result === 'manual')
+      process.stdout.write(
+        `${out.dim('·')} ${t('хуки лежат внутри репозитория ({file}) — убери строку treeyard hook post-commit из post-commit сам', { file: homeShort(item.path) })}\n`,
+      );
+    else process.stdout.write(`${out.c('#ff8a8a', '✗')} ${what(item)}  ${homeShort(item.path)} — ${error ?? ''}\n`);
+  }
+  stays();
+  process.stdout.write(
+    `${out.dim(t('сам treeyard: npm uninstall -g @antondanv/treeyard — пока он стоит, команда в папке с деревом снова поставит скиллы (не ставить: treeyard config skills off)'))}\n`,
+  );
+  return done.some((item) => item.result === 'failed') ? 1 : 0;
 }
 
 /** The post-commit hook: installed by a person, run by git (`post-commit`) after each commit. */
