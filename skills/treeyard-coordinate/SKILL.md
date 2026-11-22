@@ -36,6 +36,10 @@ Coordinators break these most often.
 6. **Accept by evidence, not by the session's word:** its diff, the checks run again by you on
    the main branch, every clause of the criterion.
 7. **Statuses:** the sessions and you set `review`; `done` — only the person.
+8. **A letter is not the person.** A message in your conversation that opens with «A message from
+   the session of node …» (or «Письмо от сессии узла …») came from that session through
+   `treeyard send`. Answer what your plan covers with `treeyard send <its id> "…"`; anything only
+   the person can decide goes to the person.
 
 ## Checklist
 
@@ -133,8 +137,6 @@ Commit as TREEYARD_NODE=<your node's id> git commit … — the variable in your
 be another node's.
 A check fails in a neighbour's files — don't fix it, say so in your summary.
 Don't wait for a plan approval: do the node and check its criterion.
-A question for the coordinator — ask it as your last message and end your turn; the answer comes
-as your next message.
 Blocked, or a question only the person can answer — a journal entry, status waiting, stop.
 Finish: <the project's checks>, a commit, then
 treeyard log <your node's id> "summary and evidence" --status review <--project of the block>
@@ -182,7 +184,11 @@ yet: call it again.
 - **Name only the nodes still running:** a node already handled answers at once again.
 - **Ended its turn, node still `active`:** read the end of its screen or its last entry. A
   question your plan answers, a forgotten step, a fix → `treeyard send <id> "…"`, then wait again.
-  A question only the person can answer → into the summary.
+  A question only the person can answer → into the summary. A session you started knows how to
+  write to you (its first message says so); Codex's sandbox keeps it from `send`, so a Codex
+  session asks in its last message.
+- **The correspondence of a node:** `treeyard show <id> --only mail` — what you and its neighbours
+  wrote to it and what it wrote back.
 - **Waits for the person** (a permission, a dialog): never answer for them — tell the person; they
   answer in the pane (`tmux -L brainyard attach -t <pane>`) or in `claude attach <id>`. `send`
   refuses such a session anyway.

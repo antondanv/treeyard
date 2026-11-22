@@ -8,6 +8,7 @@ import { parseEntry, statusHistory, statusSteps } from '../model/history.js';
 import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
+import { type Letter, letterPeer, lettersOf } from '../model/mail.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { type Stale, staleLabel, staleNote } from '../model/stale.js';
@@ -190,6 +191,7 @@ export const NODE_PARTS = [
   'note',
   'journal',
   'history',
+  'mail',
 ] as const;
 export type NodePart = (typeof NODE_PARTS)[number];
 
@@ -254,6 +256,11 @@ function partsText(
       titled(
         t('история статусов:'),
         statusHistory(node.body).map((entry) => `  - ${entry}`),
+      ),
+    mail: () =>
+      titled(
+        t('письма:'),
+        lettersOf(node).map((letter) => `  ${letterLine(letter, p)}`),
       ),
   };
   const blocks = NODE_PARTS.filter((part) => only.has(part)).map((part) => sections[part]().join('\n'));
@@ -362,7 +369,13 @@ export function partsJson(
     out.journal = entries.slice(entries.length - Math.min(journal, entries.length));
   }
   if (only.has('history')) out.history = statusHistory(node.body);
+  if (only.has('mail')) out.mail = lettersOf(node);
   return out;
+}
+
+/** `← 2026-11-22 21:45  от «Сайт»: «текст»` — a letter the node got (←) or its session sent (→). */
+function letterLine(letter: Letter, p: Paint): string {
+  return `${letter.direction === 'out' ? '→' : '←'} ${p.dim(letter.at)}  ${letterPeer(letter)}: «${letter.text}»`;
 }
 
 /** One node's fields for `--json`; `children` nests its subtree. */

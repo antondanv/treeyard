@@ -16,6 +16,7 @@ import { t } from '../i18n/i18n.js';
 import { daysLeft, imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
+import { lettersOf, letterText } from '../model/mail.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { type Stale, staleLabel, staleNote } from '../model/stale.js';
@@ -24,6 +25,7 @@ import { childrenOf, heldBy, pathTo, progress, summarize } from '../model/tree.j
 import { ROOT, type SessionRef, type Tree, type TreeNode } from '../model/types.js';
 import { pictureLines } from './image-view.js';
 import { liveLabel } from './rows.js';
+import { clip } from './text.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
 
 interface LineSpec {
@@ -282,6 +284,18 @@ export function NodeDetails(props: {
     gap();
     heading(t('ОПИСАНИЕ'));
     for (const paragraph of about.split('\n').slice(0, 30)) wrap(plain(paragraph), C.text);
+  }
+
+  // Letters of `treeyard send` stay in view after the journal has moved on.
+  const letters = lettersOf(node);
+  if (letters.length > 0) {
+    gap();
+    heading(t('ПИСЬМА'));
+    for (const letter of letters.slice(-4).reverse())
+      wrap(
+        `${letter.at.replace(/^\d{4}-(\d\d)-(\d\d)/, '$2.$1')} ${letterText({ ...letter, text: clip(letter.text, 120) })}`,
+        C.text,
+      );
   }
 
   const journal = journalEntries(node.body);

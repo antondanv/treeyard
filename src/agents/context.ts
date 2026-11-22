@@ -83,8 +83,36 @@ function withTask(plan: SessionPlan, task?: string): SessionPlan {
   return plan;
 }
 
-export function sessionPlan(tree: Tree, id: string, start: StartMode, brain: BrainId, task?: string): SessionPlan {
-  return withTask(basePlan(tree, id, start, brain, Boolean(task?.trim())), task);
+/**
+ * How a session opened by another node's session writes back to it. Codex's sandbox keeps a
+ * session away from tmux, so there the question is its last message, which the coordinator's
+ * `wait` reads off the screen.
+ */
+function coordinatorLine(coordinator: TreeNode, brain: BrainId): string {
+  const self = selfCommand();
+  const title = `«${coordinator.title}» (${coordinator.id})`;
+  if (brain === 'codex')
+    return pick({
+      ru: `Тебя запустила сессия узла ${title} и ждёт тебя через \`${self} wait\`. Вопрос, на который ответит только она, — задай последним сообщением и закончи ход: ответ придёт следующим сообщением.`,
+      en: `The session of node ${title} started you and waits for you with \`${self} wait\`. A question only it can answer — ask it as your last message and end your turn: the answer comes as your next message.`,
+    });
+  return pick({
+    ru: `Тебя запустила сессия узла ${title}. Появится вопрос, на который ответит только она, — \`${self} send ${coordinator.id} "…"\`, затем закончи ход: ответ придёт следующим сообщением. Письмо не ушло — задай вопрос последним сообщением и закончи ход.`,
+    en: `The session of node ${title} started you. A question only it can answer — \`${self} send ${coordinator.id} "…"\`, then end your turn: the answer comes as your next message. The letter did not go — ask it as your last message and end your turn.`,
+  });
+}
+
+export function sessionPlan(
+  tree: Tree,
+  id: string,
+  start: StartMode,
+  brain: BrainId,
+  task?: string,
+  coordinator?: TreeNode,
+): SessionPlan {
+  const back = coordinator && coordinator.id !== id ? coordinatorLine(coordinator, brain) : undefined;
+  const assignment = [task?.trim(), back].filter(Boolean).join('\n\n');
+  return withTask(basePlan(tree, id, start, brain, Boolean(assignment)), assignment);
 }
 
 function basePlan(tree: Tree, id: string, start: StartMode, brain: BrainId, hasTask: boolean): SessionPlan {

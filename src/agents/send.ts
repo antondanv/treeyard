@@ -20,11 +20,12 @@ import {
 } from '@antondanv/brainyard';
 
 import { t } from '../i18n/i18n.js';
+import { letterFrom, letterTo, letterToSession } from '../model/mail.js';
 import { nodeEnv } from '../model/notes.js';
 import { attachSession, logToNode } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import { holderOf } from '../model/tree.js';
-import type { SessionRef, Tree } from '../model/types.js';
+import type { SessionRef, Tree, TreeNode } from '../model/types.js';
 import { fullAccess } from './access.js';
 import { isPending, type PaneSize } from './panes.js';
 import { newestSession, type SessionSight, sessionSight, type World } from './wait.js';
@@ -73,13 +74,12 @@ const PASTE_START = '\u001b[200~';
 const PASTE_END = '\u001b[201~';
 const ENTER_AFTER_MS = 400;
 
-/** The journal shows what was written; the whole text is in the session. */
-const JOURNAL_TEXT = 300;
-
 export interface SendOptions {
   size?: PaneSize;
   /** Who writes, for the journal: the agent's name or «ты». */
   source?: string;
+  /** The node whose session writes (see `senderNode`): the letter goes into its journal too. */
+  sender?: TreeNode | undefined;
   sources?: SendSources;
 }
 
@@ -95,10 +95,13 @@ export async function sendToNode(tree: Tree, id: string, text: string, options: 
   const world: World = { live: new Map(live.map((s) => [s.id, s])), panes, paneSessions: new Map() };
   const sight = sessionSight(ref, world);
   const dir = tree.project.dir;
+  const sender = options.sender && options.sender.id !== id ? tree.nodes.get(options.sender.id) : undefined;
+  // In the other conversation a letter reads like the person's own message: it says whose it is.
+  const letter = sender ? `${letterHeading(sender)}\n${text}` : text;
   let sent: Sent;
   if (sight.state === 'waiting') throw new NotSent(waitingText(sight));
   if (sight.pane) {
-    await sources.type(sight.pane, `${PASTE_START}${text}${PASTE_END}`);
+    await sources.type(sight.pane, `${PASTE_START}${letter}${PASTE_END}`);
     await sources.pause(ENTER_AFTER_MS);
     await sources.type(sight.pane, '\r');
     sent = { how: 'typed', ref, pane: sight.pane, warnings: [] };
@@ -112,7 +115,7 @@ export async function sendToNode(tree: Tree, id: string, text: string, options: 
       brain: ref.brain,
       cwd: dir,
       resume: ref.id,
-      prompt: text,
+      prompt: letter,
       background: true,
       ...fullAccess(ref.brain),
       env: nodeEnv(id, dir),
@@ -130,7 +133,7 @@ export async function sendToNode(tree: Tree, id: string, text: string, options: 
       brain: ref.brain,
       cwd: dir,
       resume: ref.id,
-      prompt: text,
+      prompt: letter,
       ...fullAccess(ref.brain),
       label: node.title,
       env: nodeEnv(id, dir),
@@ -149,22 +152,23 @@ export async function sendToNode(tree: Tree, id: string, text: string, options: 
     Object.assign(found, sent.how === 'woke' ? { mode: 'pane', pane: sent.pane } : {});
     attachSession(tree, id, { ...found, opened: nowIso() });
   }
-  logToNode(
-    tree,
-    id,
-    t('письмо сессии {brain} {short}: «{text}»', { brain: ref.brain, short: short(ref), text: clip(text) }),
-    options.source,
-  );
+  if (sender) {
+    logToNode(tree, id, letterFrom(sender, text), options.source);
+    logToNode(tree, sender.id, letterTo(node, text), options.source);
+  } else logToNode(tree, id, letterToSession(ref.brain, short(ref), text), options.source);
   return sent;
+}
+
+/** The first line of a letter from a node's session: who wrote it and how to answer. */
+export function letterHeading(sender: TreeNode): string {
+  return t('Письмо от сессии узла «{title}» ({id}), не от человека; ответ — treeyard send {id} "…":', {
+    title: sender.title,
+    id: sender.id,
+  });
 }
 
 function short(ref: SessionRef): string {
   return isPending(ref) ? (ref.pane ?? ref.id) : ref.id.slice(0, 8);
-}
-
-function clip(text: string): string {
-  const line = text.replace(/\s+/g, ' ').trim();
-  return line.length > JOURNAL_TEXT ? `${line.slice(0, JOURNAL_TEXT - 1)}…` : line;
 }
 
 function waitingText(sight: SessionSight): string {

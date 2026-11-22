@@ -7,6 +7,7 @@
  */
 import { liveSessions, type OpenResult, open, type SessionInfo, sessions, stopSession } from '@antondanv/brainyard';
 import { t } from '../i18n/i18n.js';
+import { senderNode } from '../model/mail.js';
 import { nodeEnv } from '../model/notes.js';
 import { attachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
@@ -71,7 +72,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
         id,
       }),
     );
-  const plan = sessionPlan(tree, id, options.start, options.brain, options.task);
+  const plan = sessionPlan(tree, id, options.start, options.brain, options.task, senderNode(tree));
   const result = await open({
     brain: options.brain,
     cwd: tree.project.dir,

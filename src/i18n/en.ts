@@ -1460,4 +1460,14 @@ export const EN: Record<string, string> = {
   сессия: 'session',
   'конец экрана:': 'end of the screen:',
   'ещё в работе:': 'still active:',
+  // letters between the sessions of nodes
+  'письмо от «{from}»: «{text}»': 'message from «{from}»: «{text}»',
+  'письмо узлу «{to}»: «{text}»': 'message to node «{to}»: «{text}»',
+  'узлу «{peer}»': 'to «{peer}»',
+  'от «{peer}»': 'from «{peer}»',
+  'от {who} в сессию {session}': 'from {who} to session {session}',
+  'письма:': 'letters:',
+  ПИСЬМА: 'LETTERS',
+  'Письмо от сессии узла «{title}» ({id}), не от человека; ответ — treeyard send {id} "…":':
+    'A message from the session of node «{title}» ({id}), not from the person; to answer — treeyard send {id} "…":',
 };

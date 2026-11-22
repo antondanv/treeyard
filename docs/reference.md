@@ -550,10 +550,26 @@ with the text as its first message (`--resume` in a new pane). A Claude Code bac
 that ended its turn is stopped and goes on in the background with the text; a busy background
 session gets nothing — `wait` first. A session waiting for the person gets nothing either: the keys
 would land in its dialog; the person answers in the pane (`tmux -L brainyard attach -t <pane>`) or
-in `claude attach`. Neither does a session the person opened in their own terminal. The message
-goes into the node's journal (`message to session claude 1a2b3c4d: «…»`); `-` instead of the text
-reads stdin; `--json` — `{"node", "sent", "how": "typed"|"woke"|"resumed", "brain", "id", "pane",
-"warnings"}`, or `{"node", "sent": false, "error"}` with exit code 1.
+in `claude attach`. Neither does a session the person opened in their own terminal. `-` instead of
+the text reads stdin; `--json` — `{"node", "sent", "how": "typed"|"woke"|"resumed", "brain", "id",
+"pane", "warnings"}`, or `{"node", "sent": false, "error"}` with exit code 1.
+
+A message written by a node's session (the command knows its node by `TREEYARD_NODE` of this tree)
+is correspondence between two nodes: the receiver's journal gets `message from «Coordinator»: «…»`,
+the sender's `message to node «Site»: «…»`, and in the receiver's conversation it arrives under the
+line “A message from the session of node «…» (id), not from the person; to answer — treeyard send
+<id> "…"”: an agent's message never passes for the person's word. A message from outside a node's
+session (a person in a shell) goes into the receiver's journal only: `message to session claude
+1a2b3c4d: «…»`. `treeyard show <id> --only mail` — every message of the node, got `←` and sent `→`;
+with `--json`, `mail: [{direction: "in"|"out", peer, session, text, at, who}]`. The node's card in
+the TUI has a “Letters” section: the last four.
+
+A session started by another node's session (`treeyard open` from a coordinator's session) learns
+in its first message how to answer: a question — `treeyard send <coordinator's node> "…"`, then the
+end of its turn; the answer comes as its next message. Codex's sandbox keeps a session away from the
+tmux socket, so a Codex session asks its question as its last message and ends its turn — `treeyard
+wait` shows it at the end of the screen. `wait` learns that a Codex session in a pane ended its turn
+from Codex's own rollout: idle Codex sessions are not on the list of live ones.
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
 node, its edit stays.

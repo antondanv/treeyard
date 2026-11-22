@@ -54,6 +54,7 @@ import { isCreationLine, lastOwnEntry, parseEntry } from '../model/history.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
 import { description, journalEntries, replaceEntry } from '../model/journal.js';
 import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
+import { senderNode } from '../model/mail.js';
 import { addNote, homeShort, NODE_VAR, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import {
   addNode,
@@ -166,7 +167,7 @@ function commandLines(): string {
                                            родитель — свёрнутой строкой)
                 [--brief] [--journal N|all]  --brief — шапка, критерий и 3 последние записи; --journal — сколько записей
                 [--only журнал,сессии…]    только эти части: header, criterion, commits, children, sessions, note,
-                                           journal, history (смены статуса); можно по-русски
+                                           journal, history (смены статуса), mail (письма treeyard send); можно по-русски
                 [--project <папка>]        дерево другой папки, например основного worktree
   treeyard show --status review,idea [--under id]   узлы этих статусов в ветке, по строке: id, статус словом, путь
   treeyard show --under <id>               ветка узла деревом (с --open, --all, --json, как всё дерево)
@@ -260,7 +261,7 @@ function commandLines(): string {
                                            under a finished parent stays, the parent folded into one line)
                 [--brief] [--journal N|all]  --brief — header, criterion and the last 3 entries; --journal — how many entries
                 [--only journal,sessions…]  only these parts: header, criterion, commits, children, sessions, note,
-                                           journal, history (status changes)
+                                           journal, history (status changes), mail (treeyard send letters)
                 [--project <dir>]          the tree of another folder, e.g. the main worktree
   treeyard show --status review,idea [--under id]   nodes of these statuses in a branch, a line each: id, status word, path
   treeyard show --under <id>               a node's branch as a tree (--open, --all, --json work as for the whole tree)
@@ -1087,6 +1088,7 @@ const PART_WORDS: Record<NodePart, readonly string[]> = {
   note: ['note', 'description', 'about', 'описание'],
   journal: ['journal', 'log', 'журнал'],
   history: ['history', 'история'],
+  mail: ['mail', 'letters', 'письма', 'почта'],
 };
 
 /** `--only journal,sessions`: the parts of a node card to print. */
@@ -1252,7 +1254,11 @@ async function sendCommand(args: string[]): Promise<number> {
   if (!text) throw new UsageError(usage);
   let sent: Awaited<ReturnType<typeof sendToNode>>;
   try {
-    sent = await sendToNode(tree, id, text, { size: paneSize(), source: sourceOf(values.as) });
+    sent = await sendToNode(tree, id, text, {
+      size: paneSize(),
+      source: sourceOf(values.as),
+      sender: senderNode(tree),
+    });
   } catch (error) {
     if (!(error instanceof NotSent)) throw error;
     if (values.json)
@@ -2433,7 +2439,14 @@ async function contextCommand(args: string[]): Promise<number> {
   const id = nodeArg(tree, positionals[0]);
   const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
   const task = await taskArg(values.task);
-  const plan = sessionPlan(tree, id, startArg(values.start, tree.project.start ?? 'plan'), brain, task);
+  const plan = sessionPlan(
+    tree,
+    id,
+    startArg(values.start, tree.project.start ?? 'plan'),
+    brain,
+    task,
+    senderNode(tree),
+  );
   process.stdout.write(
     t('{p1}\n\n# Первое сообщение ({start})\n\n{p3}\n', {
       p1: contextText(tree, id),
