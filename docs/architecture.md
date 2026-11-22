@@ -50,7 +50,7 @@
 
 ## Входы
 
-- `src/cli/` — `treeyard <команда>`: show, add, set, log, note, open, sessions, import,
+- `src/cli/` — `treeyard <команда>`: show, add, set, log, note, open, sessions, wait, send, import,
   status, pointer, skills, config, github, docs, projects. Те же команды, что у человека, используют агенты.
 - `src/status.ts` + `cli/status-text.ts` — `treeyard status`: папка и дерево (из git worktree —
   основное), узлы, скиллы, указатель, хук, живые сессии и панели, GitHub; у каждой проблемы —
@@ -83,6 +83,11 @@
 - `panes.ts`, `pane-idle.ts` — сессии в панелях tmux: запуск, сон и пробуждение,
   автосон только при положительном подтверждении простоя, лимит живых панелей;
   `sessionPanes` — панель каждой сессии для `sessions --json` (только чтение).
+- `wait.ts`, `send.ts` — координатор ведёт розданные узлы: `treeyard wait` ждёт, пока узел уйдёт
+  из «в работе» или его сессия закончит ход, станет ждать человека или закончится (дерево — по
+  `watch.ts`, сессии — `liveSessions` и панели Brainyard); `treeyard send` пишет следующую реплику
+  той же сессии: живой панели — вставкой и Enter, уснувшей — `--resume` в новой панели, фоновой
+  Claude Code после хода — остановкой и `--resume --bg`; сессии, ждущей человека, не пишет.
 - `skills.ts` — скиллы из `skills/` (`treeyard`, `treeyard-init`, `treeyard-coordinate`): где их ищет каждый CLI (свой
   дом и папка проекта), стоит ли свежая копия, установка папкой целиком; `autoInstallSkills` — сама
   при каждой команде в папке с деревом (в дома CLI, настройка `skills`).

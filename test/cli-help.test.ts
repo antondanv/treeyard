@@ -45,6 +45,8 @@ const COMMANDS = [
   'context',
   'open',
   'sessions',
+  'wait',
+  'send',
   'github',
   'config',
 ];

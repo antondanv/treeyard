@@ -427,6 +427,8 @@ treeyard open <id> <id> --bg --json             # for a program: a JSON array, a
 treeyard open <id> --bg --task "no paid calls" --model sonnet --effort high   # a coordinator hands the node to its own session
 treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes — from stdin
 treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a session in each, a line per node
+treeyard wait <id> <id> --timeout 10m          # a coordinator waits: a node left “active”, its session ended its turn or waits for the person (--all — every one; --json)
+treeyard send <id> "fix the test"               # the next message of the node's own session, not a new session (- reads stdin)
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
 treeyard status                                 # a summary: versions, tree, nodes, skills, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
@@ -521,6 +523,37 @@ pane in each node, a line per node `✓ <id> <title> · pane <name>`, a pane tha
 `✗` line on stderr and the exit code is 1. With `--json`, one array on stdout (see “Sessions next to the tree”).
 Several nodes without `--bg` or `--pane` are an error: in this terminal sessions run one after
 another.
+
+A coordinator follows the nodes it handed out with two commands, without polling `show` and
+`git log` and without subagents of its own. `treeyard wait a b` waits until at least one node needs
+it: the node left “active” (to review, waiting, done), or its newest session ended its turn,
+waits for the person (a permission, a question in a dialog) or ended (its pane went to sleep, its
+background run is over). A node no longer active answers at once. For such a node it prints
+the status (`active → in review`), the last journal entry written by a person or an agent
+(the session's summary, as a rule) and the session's state; for a session in a pane, the end of its
+screen too — the question or the last answer. Nodes still at work get a line each under “still
+active:”. A change of the tree wakes the command at once; the sessions are asked every three
+seconds, through Brainyard. A session just started or just written to gets half a minute unless the
+command has seen it at work: a CLI says “idle” at its start before its turn begins. `--all` — wait
+for every node; `--timeout 10m` (or `90`, `90s`, `1h`) — how long to wait, after which the exit code
+is 124 with the same lines; without it — as long as it takes. `--json` —
+`{"version": 1, "timedOut", "settled", "pending"}`, each node with `node`, `title`, `status`, `from`
+(the status when the wait began), `reason` (`status`, `waiting`, `idle`, `gone` or `null`), `entry`
+(`{at, who, text}`) and `session` (`{brain, id, mode, state, waitingFor, pane, screen}`). Claude
+Code runs `wait` in the background and hears when it ends; a CLI without background commands calls
+it with a `--timeout` under its own limit per command.
+
+`treeyard send <id> "…"` writes the next message to the node's newest session — the same
+conversation going on, not a new session that would read it all again. A live pane gets the text
+typed as a paste and Enter: a session at work takes it after its turn. A sleeping pane wakes up
+with the text as its first message (`--resume` in a new pane). A Claude Code background session
+that ended its turn is stopped and goes on in the background with the text; a busy background
+session gets nothing — `wait` first. A session waiting for the person gets nothing either: the keys
+would land in its dialog; the person answers in the pane (`tmux -L brainyard attach -t <pane>`) or
+in `claude attach`. Neither does a session the person opened in their own terminal. The message
+goes into the node's journal (`message to session claude 1a2b3c4d: «…»`); `-` instead of the text
+reads stdin; `--json` — `{"node", "sent", "how": "typed"|"woke"|"resumed", "brain", "id", "pane",
+"warnings"}`, or `{"node", "sent": false, "error"}` with exit code 1.
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
 node, its edit stays.

@@ -1426,4 +1426,38 @@ export const EN: Record<string, string> = {
   'записать подробности в файл не удалось:': 'could not write the details to a file:',
   'сообщи об ошибке: {url} — приложи этот файл': 'report it at {url} — attach that file',
   'сообщи об ошибке: {url}': 'report it at {url}',
+  // treeyard wait and send
+  'у узла {id} нет сессии — начни её: treeyard open {id} --bg|--pane --task "…"':
+    'node {id} has no session — start one: treeyard open {id} --bg|--pane --task "…"',
+  'сессия {short} ещё работает — дождись её: treeyard wait {id}':
+    'session {short} is still at work — wait for it: treeyard wait {id}',
+  'фоновая сессия не продолжилась': 'the background session did not go on',
+  'сессия {short} открыта в терминале — напиши ей там или дождись, пока её закроют':
+    'session {short} is open in a terminal — write to it there, or wait until it is closed',
+  'сессия так и не получила id — её не продолжить; начни новую: treeyard open {id}':
+    'the session never got an id — it cannot go on; start a new one: treeyard open {id}',
+  'письмо сессии {brain} {short}: «{text}»': 'message to session {brain} {short}: «{text}»',
+  'ответь в панели: tmux -L brainyard attach -t {pane}': 'answer in the pane: tmux -L brainyard attach -t {pane}',
+  'ответь в ней: claude attach {id}': 'answer in it: claude attach {id}',
+  'сессия ждёт человека{why} — письмо ушло бы в её диалог; {where}':
+    'the session waits for the person{why} — a message would go into its dialog; {where}',
+  'treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]':
+    'treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]',
+  'корень не ждут — назови узлы: {usage}': 'the root is not waited for — name the nodes: {usage}',
+  '--timeout — секунды или 90s, 10m, 1h': '--timeout — seconds, or 90s, 10m, 1h',
+  'время вышло ({timeout}) — узлы ещё в работе': 'out of time ({timeout}) — the nodes are still active',
+  'treeyard send <id> "<текст>"|- [--json]': 'treeyard send <id> "<text>"|- [--json]',
+  'корню не пишут — назови узел: {usage}': 'the root takes no messages — name a node: {usage}',
+  'набрано в панели {pane}': 'typed into pane {pane}',
+  'панель {pane} проснулась с письмом': 'pane {pane} woke up with the message',
+  'фоновая сессия {short} продолжена с письмом': 'background session {short} went on with the message',
+  'ждёт человека: {why}': 'waits for the person: {why}',
+  'ждёт человека': 'waits for the person',
+  'закончила ход': 'ended its turn',
+  закончилась: 'ended',
+  'ещё не сказала, что делает': 'has not said what it is doing yet',
+  'без id': 'no id',
+  сессия: 'session',
+  'конец экрана:': 'end of the screen:',
+  'ещё в работе:': 'still active:',
 };

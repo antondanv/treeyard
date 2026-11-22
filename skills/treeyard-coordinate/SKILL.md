@@ -13,7 +13,8 @@ person's word. It works the same from any CLI: yours and the sessions' are indep
 Why sessions and not built-in subagents: a session started by `treeyard open` belongs to its
 node — the person sees it in the tree, reads it and continues it. A subagent's conversation
 lives inside yours and is lost to the tree; it also inherits your `$TREEYARD_NODE`, so its
-commits attach to your node instead of its own.
+commits attach to your node instead of its own. You still hear back from sessions:
+`treeyard wait` returns when one is done or asks, `treeyard send` writes it the next message.
 
 ## Rules
 
@@ -45,7 +46,7 @@ Coordinate:
 - [ ] 1. Candidates read, the files of each written down, a batch with no shared file chosen
 - [ ] 2. Plan agreed with the person: nodes, CLI, pane or background, model, what waits
 - [ ] 3. Sessions started: treeyard open … --pane|--bg --worktree --start do --task …
-- [ ] 4. Waiting: tree events; a blocked or asking session → its reason to the person
+- [ ] 4. Waiting: treeyard wait; a question you can answer → treeyard send; one only the person can → to them
 - [ ] 5. Each finished node accepted: journal, commits, diff, criterion
 - [ ] 6. Worktree branches merged one by one; checks green on the main branch after each
 - [ ] 7. Journal entry on each node; review; tree files committed
@@ -132,6 +133,8 @@ Commit as TREEYARD_NODE=<your node's id> git commit … — the variable in your
 be another node's.
 A check fails in a neighbour's files — don't fix it, say so in your summary.
 Don't wait for a plan approval: do the node and check its criterion.
+A question for the coordinator — ask it as your last message and end your turn; the answer comes
+as your next message.
 Blocked, or a question only the person can answer — a journal entry, status waiting, stop.
 Finish: <the project's checks>, a commit, then
 treeyard log <your node's id> "summary and evidence" --status review <--project of the block>
@@ -163,26 +166,31 @@ summary that its conversation is not in the tree.
 
 ## 4. Wait
 
-There is no `treeyard wait` yet. No shell loops around treeyard, no pipes out of it.
+```sh
+treeyard wait <a> <b> --timeout 10m
+```
 
-- **Your CLI can watch a command in the background** (Claude Code's Monitor): plain
-  `treeyard watch` in the main folder — a line per change in the tree. React when your nodes
-  move to `review` or `waiting`; ignore other nodes. Arm it again when it expires.
-- **Otherwise** (Codex, Antigravity, OpenCode): one call every few minutes,
-  `sleep 180; treeyard show <a> <b> --brief`.
-- **A pane quiet for long:** read it — `tmux -L brainyard capture-pane -p -t <pane>` (the names:
-  `treeyard sessions --json`, field `pane`). A prompt there — trust, permission, a question →
-  tell the person; they answer in the pane (it shows next to the tree, or
-  `tmux -L brainyard attach -t <pane>`). Never answer for them.
-- **A background session quiet for long:** `claude agents --json --cwd <main folder>` —
-  `state` working or done, `status` busy, waiting or idle; the person answers through
-  `claude attach <id>`.
-- **Done without review** (the node is still `active`): a background session's summary may sit
-  in its worktree's copy — `treeyard show <id> --journal 5 --project <worktree>`. Finish a
-  small rest yourself, or start a new session in the node with a task that says what is left.
+It returns when a node needs you: the node left `active` (`review`, `waiting`), or its newest
+session ended its turn, waits for the person, or ended. For that node it prints the status, the last
+journal entry (the session's summary, as a rule) and the session's state; for a pane, the end of
+its screen. The others get a line under «still active». Exit 124 — out of time, nothing needs you
+yet: call it again.
+
+- **Claude Code:** run it as a background command and act when it exits. **Codex, Antigravity,
+  OpenCode:** a `--timeout` under your shell's limit per command, then call it again. No shell
+  loops around treeyard, no pipes out of it.
+- **Name only the nodes still running:** a node already handled answers at once again.
+- **Ended its turn, node still `active`:** read the end of its screen or its last entry. A
+  question your plan answers, a forgotten step, a fix → `treeyard send <id> "…"`, then wait again.
+  A question only the person can answer → into the summary.
+- **Waits for the person** (a permission, a dialog): never answer for them — tell the person; they
+  answer in the pane (`tmux -L brainyard attach -t <pane>`) or in `claude attach <id>`. `send`
+  refuses such a session anyway.
+- **Done without review** (ended, the node still `active`): a background session's summary may sit
+  in its worktree's copy — `treeyard show <id> --journal 5 --project <worktree>`. Finish a small
+  rest yourself, or `treeyard send <id> "What is left: …"`.
 - **`waiting`:** read why. What only the person can give goes into the summary; a mistake in
-  your task → a journal entry on the node, `treeyard set <id> status=todo`, a new session with
-  the task fixed.
+  your task → `treeyard set <id> status=active` and `treeyard send <id> "…"` with the task fixed.
 
 ## 5. Accept
 
@@ -206,9 +214,9 @@ treeyard diff <id> --stat          # its commits; treeyard diff <id> — the pat
   of a node still running is not this node's.
 
 **Not accepted** → `treeyard log <id> "Not accepted: <what and why>" --status active`, then fix a
-small thing yourself (`TREEYARD_NODE=<id> git commit …`) or start a new session in the node, the
-same way as before, with `--task "Acceptance failed: <what>. The rest is done — see the journal."`.
-Once `treeyard send` exists, write to the node's own session instead.
+small thing yourself (`TREEYARD_NODE=<id> git commit …`) or write to the node's own session:
+`treeyard send <id> "Acceptance failed: <what>. The rest is done."`, and `treeyard wait <id>`. A new
+session (`treeyard open` with `--task`) only when `send` says that one cannot go on.
 
 ## 6. Merge background branches
 

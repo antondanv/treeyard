@@ -222,6 +222,8 @@ const TEXT = {
     imageWhat: 'приложить к узлу картинку или скрин (например, доказательство для проверки); без файла — список',
     coordinator:
       'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом (--bg — только Claude Code; Codex, Antigravity и OpenCode — --brain <имя> --pane вместо --bg)',
+    follow:
+      'дождаться розданных узлов, а не опрашивать show и git log: вернётся, когда узел уйдёт из «в работе» или его сессия закончит ход или станет ждать человека, и напечатает итог; `send <id> "…"` — дописать той же сессии следующую реплику, а не открывать новую',
     setMany: 'одно изменение нескольким узлам сразу (after= ставит их подряд), а не цикл',
     diffWhat:
       'после коммита привяжи его к узлу (HEAD, ветка или SHA), чтобы человек мог посмотреть диф; без --add — просмотр. Привязывай только коммиты с работой по этому узлу',
@@ -293,6 +295,8 @@ const TEXT = {
     imageWhat: 'attach a picture or a screenshot to the node (evidence for review, say); without a file — the list',
     coordinator:
       'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent (--bg is Claude Code only; for Codex, Antigravity and OpenCode use --brain <name> --pane instead of --bg)',
+    follow:
+      'wait for the nodes handed out instead of polling show and git log: it returns when a node leaves «active» or its session ends its turn or waits for the person, and prints the summary; `send <id> "…"` — write the same session its next message instead of opening a new one',
     setMany: 'the same change to several nodes at once (after= puts them one after another), not a loop',
     diffWhat:
       'after committing, attach it to the node (HEAD, a branch or a SHA) so the person can inspect the patch; without --add — view. Attach only commits with work on this node',
@@ -393,6 +397,7 @@ export function contextText(tree: Tree, id: string): string {
   // Only where work is handed out: a leaf would pay for the line in every session.
   if (kids.some((kid) => kid.status !== 'done' && kid.status !== 'dropped')) {
     lines.push(`- \`${self} open <id> [<id>…] --bg --task "…" [--model …] [--effort …]\` — ${L.coordinator}`);
+    lines.push(`- \`${self} wait <id> [<id>…] --timeout 10m\` — ${L.follow}`);
     lines.push(`- \`${self} set <id> <id>… status=todo\` — ${L.setMany}`);
   }
   // Read, not applied: the context must not switch the language or the theme of whoever asks.
@@ -515,6 +520,8 @@ const ROOT_TEXT = {
     decide: 'решение в «Решения» `.tree/tree.md` (с датой) — только когда человек так решил',
     commit: 'закоммитить файлы дерева этих узлов, README и tree.md (chore(tree): …) — вместо `git add .tree/…` руками',
     open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом (--bg — только Claude Code; Codex, Antigravity и OpenCode — --brain <имя> --pane вместо --bg)',
+    follow:
+      'дождаться розданных узлов, а не опрашивать show и git log: вернётся, когда узел уйдёт из «в работе» или его сессия закончит ход или станет ждать человека, и напечатает итог; `send <id> "…"` — дописать той же сессии следующую реплику, а не открывать новую',
     doneWhen: 'готово, когда',
     more: 'ещё',
     stale: '## В работе, но без живой сессии',
@@ -586,6 +593,8 @@ const ROOT_TEXT = {
     commit:
       'commit the tree files of these nodes, README and tree.md (chore(tree): …) — instead of `git add .tree/…` by hand',
     open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent (--bg is Claude Code only; for Codex, Antigravity and OpenCode use --brain <name> --pane instead of --bg)',
+    follow:
+      'wait for the nodes handed out instead of polling show and git log: it returns when a node leaves «active» or its session ends its turn or waits for the person, and prints the summary; `send <id> "…"` — write the same session its next message instead of opening a new one',
     doneWhen: 'done when',
     more: 'more',
     stale: '## In progress, but no live session',
@@ -776,6 +785,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} commit <id>…\` — ${L.commit}`);
   lines.push(`- \`${self} sessions\` — ${L.sessions}`);
   lines.push(`- \`${self} open <id> [<id>…] --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
+  lines.push(`- \`${self} wait <id> [<id>…] --timeout 10m\` — ${L.follow}`);
   if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);
   lines.push(`- ${T.names()}`);
   lines.push(`- ${T.helper(quote(project.dir))}`);

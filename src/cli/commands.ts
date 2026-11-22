@@ -25,7 +25,9 @@ import {
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
+import { NotSent, sendToNode } from '../agents/send.js';
 import { autoInstallSkills, skillHomes } from '../agents/skills.js';
+import { parseDuration, waitFor } from '../agents/wait.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, noteMove, removeHook } from '../commit-hook.js';
 import { CrashReported, guardCrashes } from '../crash.js';
 import { parsePatch } from '../diff.js';
@@ -136,6 +138,7 @@ import {
   watchLine,
 } from './print.js';
 import { skillLines, skillsAutoLine, statusText } from './status-text.js';
+import { waitJson, waitText } from './wait-text.js';
 
 const require = createRequire(import.meta.url);
 const VERSION = (require('../../package.json') as { version: string }).version;
@@ -229,6 +232,14 @@ function commandLines(): string {
                                            очереди, строка на узел (✓ id название · сессия <id> | панель <имя>);
                                            не встала — ✗ и код 1; --json — массив вместо объекта
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
+  treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   ждать, пока узел уйдёт из «в работе» или его сессия
+                                           закончит ход, будет ждать человека или закончится; печатает статус, последнюю
+                                           запись журнала и сессию (у панели — конец экрана); --all — пока все узлы;
+                                           время вышло — код 124; узел уже не в работе — ответ сразу
+  treeyard send <id> "<текст>"|- [--json]   следующая реплика той же сессии узла, а не новая сессия: живой панели —
+                                           как набранная (работающая сессия возьмёт её после хода), уснувшей панели —
+                                           первым сообщением при пробуждении, фоновой Claude Code после хода — продолжением
+                                           в фоне; сессии, которая ждёт человека, не пишет; письмо — в журнал узла
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
                                            репозитория (открытые — узлы, закрытие — в обе стороны)
@@ -318,6 +329,14 @@ function commandLines(): string {
                                            one that fails — ✗ and exit 1; --json — an array instead of an object
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are; ▣ — a live pane
                                            (pane in JSON)
+  treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   wait until a node leaves «active» or its session
+                                           ends its turn, waits for the person or ends; prints the status, the last journal
+                                           entry and the session (for a pane, the end of its screen); --all — until every
+                                           node does; out of time — exit code 124; a node no longer active — at once
+  treeyard send <id> "<text>"|- [--json]   the next message of the node's own session, not a new session: a live pane
+                                           gets it typed (a session at work takes it after its turn), a sleeping pane wakes
+                                           with it, a Claude Code background session that ended its turn goes on with it in
+                                           the background; never to a session waiting for the person; logged in the journal
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            a GitHub Project board (cards are nodes, columns are statuses) or a
                                            repository's issues (open ones are nodes, closing goes both ways)
@@ -420,6 +439,10 @@ async function main(argv: string[]): Promise<number> {
       return findCommand(rest);
     case 'watch':
       return watchCommand(rest);
+    case 'wait':
+      return waitCommand(rest);
+    case 'send':
+      return sendCommand(rest);
     case 'docs':
       return docsCommand(rest);
     case 'projects':
@@ -1173,6 +1196,85 @@ function watchCommand(args: string[]): Promise<number> {
         `${err.dim(t('слежу за деревом в {dir} — Ctrl+C, чтобы выйти', { dir: homeShort(dir) }))}\n`,
       );
   });
+}
+
+/**
+ * `treeyard wait <id…>`: until one of the nodes needs the coordinator — it left «в работе», or its
+ * session ended its turn, waits for the person or ended (see agents/wait.ts). Exit 124: out of time.
+ */
+async function waitCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, {
+    all: { type: 'boolean' },
+    timeout: { type: 'string' },
+    json: { type: 'boolean' },
+    project: { type: 'string' },
+  });
+  const usage = t('treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]');
+  if (!positionals.length) throw new UsageError(usage);
+  const tree = project(values.project);
+  const ids = [...new Set(positionals.map((p) => nodeArg(tree, p)))];
+  if (ids.includes(ROOT)) throw new UsageError(t('корень не ждут — назови узлы: {usage}', { usage }));
+  let timeoutMs: number | undefined;
+  if (values.timeout !== undefined) {
+    timeoutMs = parseDuration(values.timeout);
+    if (timeoutMs === undefined) throw new UsageError(t('--timeout — секунды или 90s, 10m, 1h'));
+  }
+  const result = await waitFor(tree.project.dir, ids, {
+    ...(values.all ? { all: true } : {}),
+    ...(timeoutMs ? { timeoutMs } : {}),
+  });
+  if (values.json) {
+    process.stdout.write(`${JSON.stringify(waitJson(result), null, 2)}\n`);
+    return result.timedOut ? 124 : 0;
+  }
+  if (result.timedOut)
+    process.stderr.write(
+      `${err.c('#ffcf70', '!')} ${t('время вышло ({timeout}) — узлы ещё в работе', { timeout: values.timeout ?? '' })}\n`,
+    );
+  process.stdout.write(waitText(result, out));
+  return result.timedOut ? 124 : 0;
+}
+
+/** `treeyard send <id> "…"`: the next message of the node's own session (see agents/send.ts). */
+async function sendCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, {
+    json: { type: 'boolean' },
+    project: { type: 'string' },
+    as: { type: 'string' },
+  });
+  const usage = t('treeyard send <id> "<текст>"|- [--json]');
+  if (positionals.length < 2) throw new UsageError(usage);
+  const tree = project(values.project);
+  const id = nodeArg(tree, positionals[0]);
+  if (id === ROOT) throw new UsageError(t('корню не пишут — назови узел: {usage}', { usage }));
+  const raw = positionals.slice(1).join(' ');
+  const text = (raw === '-' ? await textFrom('-') : raw).trim();
+  if (!text) throw new UsageError(usage);
+  let sent: Awaited<ReturnType<typeof sendToNode>>;
+  try {
+    sent = await sendToNode(tree, id, text, { size: paneSize(), source: sourceOf(values.as) });
+  } catch (error) {
+    if (!(error instanceof NotSent)) throw error;
+    if (values.json)
+      process.stdout.write(`${JSON.stringify({ node: id, sent: false, error: error.message }, null, 2)}\n`);
+    process.stderr.write(`${err.c('#ff7b72', '✗')} ${error.message}\n`);
+    return 1;
+  }
+  if (values.json) {
+    process.stdout.write(
+      `${JSON.stringify({ node: id, sent: true, how: sent.how, brain: sent.ref.brain, id: sent.ref.id, pane: sent.pane ?? null, warnings: sent.warnings }, null, 2)}\n`,
+    );
+    return 0;
+  }
+  for (const warning of sent.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
+  const how =
+    sent.how === 'typed'
+      ? t('набрано в панели {pane}', { pane: sent.pane })
+      : sent.how === 'woke'
+        ? t('панель {pane} проснулась с письмом', { pane: sent.pane })
+        : t('фоновая сессия {short} продолжена с письмом', { short: sent.ref.id.slice(0, 8) });
+  process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${tree.nodes.get(id)!.title} · ${how}\n`);
+  return 0;
 }
 
 /**
