@@ -1284,7 +1284,7 @@ export const EN: Record<string, string> = {
   'в работе, но живой сессии нет {time} — последняя запись журнала: {entry}':
     'in progress, but no live session for {time} — last journal line: {entry}',
   'в работе, но живой сессии нет {time}': 'in progress, but no live session for {time}',
-  'Помечать «в работе» без сессии': 'Mark «in progress» with no session',
+  '«В работе» без сессии': '«In progress», no session',
   '{n} ч': '{n} h',
   'узел в работе без живой сессии и без записей дольше этого срока':
     'a node in progress with no live session and no records for longer than this',

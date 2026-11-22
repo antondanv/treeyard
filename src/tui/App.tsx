@@ -3108,7 +3108,7 @@ export function App(props: AppProps) {
       },
       {
         key: 'staleAfter',
-        label: t('Помечать «в работе» без сессии'),
+        label: t('«В работе» без сессии'),
         options: STALE_AFTER.map((n) => ({ value: String(n), label: n ? t('{n} ч', { n }) : t('выкл') })),
         value: String(s.staleAfter),
         hint: t('узел в работе без живой сессии и без записей дольше этого срока'),

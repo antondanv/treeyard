@@ -48,6 +48,7 @@ import { MultilineField } from './components/multiline.js';
 import { shortcutKey } from './keys.js';
 import { Clickable } from './mouse.js';
 import { liveLabel, paneState } from './rows.js';
+import { clip } from './text.js';
 import { C, STATUS_COLOR } from './theme.js';
 
 // ── Node form ───────────────────────────────────────────────────────────────
@@ -1875,6 +1876,9 @@ export interface SettingRow {
   enter?: { label: string; run: () => void } | undefined;
 }
 
+/** Columns between a setting's label and its value. */
+const LABEL_GAP = 2;
+
 export function SettingsDialog(props: {
   rows: SettingRow[];
   width: number;
@@ -1932,7 +1936,12 @@ export function SettingsDialog(props: {
   });
   // Once the parent shows a value, it is the truth again.
   for (const item of props.rows) if (chosen.current[item.key] === item.value) delete chosen.current[item.key];
-  const labelWidth = Math.min(30, Math.max(...props.rows.map((item) => item.label.length)) + 3);
+  // The column fits the longest label plus a gap; on a narrow screen labels are clipped
+  // instead, so a label never runs into its value.
+  const labelWidth = Math.min(
+    Math.max(...props.rows.map((item) => stringWidth(item.label))) + LABEL_GAP,
+    Math.max(16, Math.floor(props.width * 0.4)),
+  );
   const fieldWidth = Math.max(12, props.width - labelWidth - 8);
   // Keep the selected setting visible, including its heading and hint.
   const budget = Math.max(3, props.height - 6);
@@ -1976,7 +1985,7 @@ export function SettingsDialog(props: {
               <Text color={selected ? C.brand : C.faint}>{selected ? '❯ ' : '  '}</Text>
               <Box width={labelWidth} flexShrink={0}>
                 <Text color={selected ? C.brand : undefined} bold={selected}>
-                  {item.label}
+                  {clip(item.label, labelWidth - LABEL_GAP)}
                 </Text>
               </Box>
               {item.options ? (
