@@ -24,7 +24,7 @@ import {
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
-import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, removeHook } from '../commit-hook.js';
+import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, noteMove, removeHook } from '../commit-hook.js';
 import { parsePatch } from '../diff.js';
 import { lineCount, linesLabel, projectDocs } from '../docs.js';
 import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, gitRepository } from '../git.js';
@@ -1428,6 +1428,9 @@ async function setCommand(args: string[]): Promise<number> {
         ...(values.note ? { note: values.note } : {}),
       });
     }
+    // One node set to «в работе» from a node's session: the session moved there, its commits follow.
+    // Several at once say nothing about where the session itself works.
+    if (status === 'active' && ids.length === 1) noteMove(tree, ids[0]!);
   }
   for (const id of ids) {
     const node = tree.nodes.get(id)!;
@@ -1642,6 +1645,7 @@ async function logCommand(args: string[]): Promise<number> {
       before === next.status ? STATUS_LABEL[next.status] : `${STATUS_LABEL[before]} → ${STATUS_LABEL[next.status]}`,
     );
     if (next.demoted) said.push(demotedNote(values.as));
+    if (next.status === 'active') noteMove(tree, id);
   }
   process.stdout.write(`${said.join(' · ')}\n`);
   return 0;

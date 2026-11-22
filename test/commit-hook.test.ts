@@ -7,11 +7,11 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { contextText } from '../src/agents/context.js';
-import { bindHeadCommit, hookInstalled, hookStatus, installHook, removeHook } from '../src/commit-hook.js';
+import { bindHeadCommit, hookInstalled, hookStatus, installHook, noteMove, removeHook } from '../src/commit-hook.js';
 import { gitRepository } from '../src/git.js';
 import { setLang } from '../src/i18n/i18n.js';
-import { NODE_VAR, nodeEnv, PROJECT_VAR } from '../src/model/notes.js';
-import { addNode } from '../src/model/ops.js';
+import { NODE_VAR, nodeEnv, PROJECT_VAR, SESSION_VAR } from '../src/model/notes.js';
+import { addNode, deleteNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { emptyTree, tempDir } from './helpers.js';
 
@@ -219,36 +219,124 @@ describe('treeyard hook post-commit', () => {
     expect(bindHeadCommit({ [NODE_VAR]: id, [PROJECT_VAR]: dir }, other)).toBe(sha);
     expect(commitsOf(dir, id)).toEqual([sha]);
   });
+
+  it('follows the session to the node its agent set to active, and back to the opening node', () => {
+    const { dir, id } = project();
+    const moved = addNode(loadTree(dir), { title: 'Другой' }).id;
+    const env = { [NODE_VAR]: id, [PROJECT_VAR]: dir, [SESSION_VAR]: 'one' };
+    const before = commit(dir);
+    expect(bindHeadCommit(env, dir)).toBe(before);
+    noteMove(loadTree(dir), moved, env);
+    const there = commit(dir);
+    expect(bindHeadCommit(env, dir)).toBe(there);
+    // Another session of the same node has not moved.
+    const neighbour = commit(dir);
+    expect(bindHeadCommit({ ...env, [SESSION_VAR]: 'two' }, dir)).toBe(neighbour);
+    noteMove(loadTree(dir), id, env);
+    const back = commit(dir);
+    expect(bindHeadCommit(env, dir)).toBe(back);
+    expect(commitsOf(dir, id)).toEqual([before, neighbour, back]);
+    expect(commitsOf(dir, moved)).toEqual([there]);
+    expect(existsSync(join(dir, '.tree', '.local', 'sessions.json'))).toBe(true);
+  });
+
+  it('stays with the opening node without a session mark, for another tree and once the node is gone', () => {
+    const { dir, id } = project();
+    const moved = addNode(loadTree(dir), { title: 'Другой' }).id;
+    // A session from before TREEYARD_SESSION cannot be told from the others of its node.
+    noteMove(loadTree(dir), moved, { [NODE_VAR]: id, [PROJECT_VAR]: dir });
+    const unmarked = commit(dir);
+    expect(bindHeadCommit({ [NODE_VAR]: id, [PROJECT_VAR]: dir }, dir)).toBe(unmarked);
+    // A node of another tree with the same id is not a move inside this one.
+    const env = { [NODE_VAR]: id, [PROJECT_VAR]: dir, [SESSION_VAR]: 'one' };
+    const other = emptyTree();
+    other.nodes.set(moved, { ...loadTree(dir).nodes.get(moved)! });
+    noteMove(other, moved, env);
+    const foreign = commit(dir);
+    expect(bindHeadCommit(env, dir)).toBe(foreign);
+    noteMove(loadTree(dir), moved, env);
+    deleteNode(loadTree(dir), moved);
+    const gone = commit(dir);
+    expect(bindHeadCommit(env, dir)).toBe(gone);
+    expect(commitsOf(dir, id)).toEqual([unmarked, foreign, gone]);
+  });
 });
 
+/** A project with the hook installed and a treeyard on PATH that runs this source tree, as in a real session. */
+function hooked() {
+  const { dir, id } = project();
+  const bin = tempDir();
+  writeFileSync(join(bin, 'treeyard'), `#!/bin/sh\nexec "${process.execPath}" --import "${tsx}" "${cli}" "$@"\n`);
+  chmodSync(join(bin, 'treeyard'), 0o755);
+  installHook(dir);
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: `${bin}:${process.env.PATH}`,
+    TREEYARD_HOME: tempDir(),
+    TREEYARD_LANG: 'ru',
+  };
+  // The session running these tests must not leak into the sessions they play.
+  for (const key of [NODE_VAR, PROJECT_VAR, SESSION_VAR, 'CLAUDE_CODE_SESSION_ID']) delete env[key];
+  const commitAs = (extra: NodeJS.ProcessEnv, file: string) => {
+    writeFileSync(join(dir, file), file);
+    git(dir, 'add', '--', file);
+    return execFileSync(
+      'git',
+      ['-c', 'user.name=T', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', file],
+      { cwd: dir, env: { ...env, ...extra, GIT_DIR: undefined }, encoding: 'utf8' },
+    );
+  };
+  const treeyard = (extra: NodeJS.ProcessEnv, ...args: string[]) =>
+    run('treeyard', args, { cwd: dir, env: { ...env, ...extra } });
+  return { dir, id, commitAs, treeyard, head: () => git(dir, 'rev-parse', 'HEAD') };
+}
+
 describe('end to end', () => {
-  it('a commit made with the session env lands in the node, and a commit without it does not', async () => {
-    const { dir, id } = project();
-    // A treeyard on PATH that runs this source tree.
-    const bin = tempDir();
-    writeFileSync(join(bin, 'treeyard'), `#!/bin/sh\nexec "${process.execPath}" --import "${tsx}" "${cli}" "$@"\n`);
-    chmodSync(join(bin, 'treeyard'), 0o755);
-    const home = tempDir();
-    installHook(dir);
-    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, TREEYARD_HOME: home, TREEYARD_LANG: 'ru' };
-    const commitAs = (extra: NodeJS.ProcessEnv, file: string) => {
-      writeFileSync(join(dir, file), file);
-      git(dir, 'add', '--', file);
-      return execFileSync(
-        'git',
-        ['-c', 'user.name=T', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', file],
-        { cwd: dir, env: { ...env, ...extra, GIT_DIR: undefined }, encoding: 'utf8' },
-      );
-    };
+  it('a commit made with the session env lands in the node, and a commit without it does not', () => {
+    const { dir, id, commitAs, head } = hooked();
     const stray = commitAs({}, 'plain.txt');
     expect(stray).not.toContain('treeyard');
     expect(commitsOf(dir, id)).toEqual([]);
     const output = commitAs({ [NODE_VAR]: id, [PROJECT_VAR]: dir }, 'bound.txt');
     expect(output).not.toMatch(/treeyard|привязан/);
-    expect(commitsOf(dir, id)).toEqual([git(dir, 'rev-parse', 'HEAD')]);
+    expect(commitsOf(dir, id)).toEqual([head()]);
     // The message of the commit carries no signature.
     expect(git(dir, 'log', '-1', '--format=%B').trim()).toBe('bound.txt');
   }, 30_000);
+
+  it('after the agent sets another node to active, the session commits there; back home, to its node', async () => {
+    const { dir, id, commitAs, treeyard, head } = hooked();
+    const moved = addNode(loadTree(dir), { title: 'Другой', status: 'todo' }).id;
+    const third = addNode(loadTree(dir), { title: 'Третий', status: 'todo' }).id;
+    const session = { [NODE_VAR]: id, [PROJECT_VAR]: dir, [SESSION_VAR]: 'session-1' };
+    // Not moved yet: the opening node, as before.
+    commitAs(session, 'home.txt');
+    const home = head();
+    expect(commitsOf(dir, id)).toEqual([home]);
+
+    await treeyard(session, 'set', moved, 'status=active');
+    expect(loadTree(dir).nodes.get(moved)!.status).toBe('active');
+    commitAs(session, 'moved.txt');
+    const there = head();
+    expect(commitsOf(dir, moved)).toEqual([there]);
+    expect(commitsOf(dir, id)).toEqual([home]);
+
+    // Another session opened from the same node has not moved anywhere.
+    commitAs({ ...session, [SESSION_VAR]: 'session-2' }, 'other-session.txt');
+    const neighbour = head();
+    expect(commitsOf(dir, id)).toEqual([home, neighbour]);
+
+    // Several nodes at once do not say where this session works: it stays where it was.
+    await treeyard(session, 'set', id, third, 'status=active');
+    commitAs(session, 'still-moved.txt');
+    expect(commitsOf(dir, moved)).toEqual([there, head()]);
+
+    // Back to the opening node through log --status active.
+    await treeyard(session, 'log', id, 'вернулся', '--status', 'active');
+    commitAs(session, 'back.txt');
+    expect(commitsOf(dir, id)).toEqual([home, neighbour, head()]);
+    expect(commitsOf(dir, third)).toEqual([]);
+  }, 60_000);
 });
 
 describe('the agent context', () => {
@@ -269,5 +357,11 @@ describe('the agent context', () => {
     expect(nodeEnv('k3f9', '/p/tree')).toMatchObject({ [NODE_VAR]: 'k3f9', [PROJECT_VAR]: '/p/tree' });
     expect(nodeEnv('k3f9')).not.toHaveProperty(PROJECT_VAR);
     expect(nodeEnv('', '/p/tree')).not.toHaveProperty(PROJECT_VAR);
+    // Each launch is its own session, even from the same node.
+    const one = nodeEnv('k3f9', '/p/tree')[SESSION_VAR];
+    expect(one).toMatch(/^[0-9a-f-]{36}$/);
+    expect(nodeEnv('k3f9', '/p/tree')[SESSION_VAR]).not.toBe(one);
+    expect(nodeEnv('k3f9')).not.toHaveProperty(SESSION_VAR);
+    expect(nodeEnv('', '/p/tree')).not.toHaveProperty(SESSION_VAR);
   });
 });

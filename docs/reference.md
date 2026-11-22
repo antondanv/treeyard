@@ -640,9 +640,18 @@ treeyard hook remove     # remove only that block (the file too, if nothing else
 ```
 
 The hook is one quiet line: it does nothing, and never fails a commit, when `treeyard` is
-not on `PATH`. Every session from a node gets `TREEYARD_NODE` (the node) and
-`TREEYARD_PROJECT` (the folder of its tree); the hook binds the commit to that node of that
-tree. It does not fire when:
+not on `PATH`. Every session from a node gets `TREEYARD_NODE` (the node),
+`TREEYARD_PROJECT` (the folder of its tree) and `TREEYARD_SESSION` (this launch of the
+session); the hook binds the commit to that node of that tree.
+
+When the session's agent moves on to another node of the same tree and sets it to active
+(`treeyard set <id> status=active` or `treeyard log <id> "…" --status active`), the session's
+commits go to that node from then on; setting the opening node to active brings them back.
+Setting several nodes to active in one command does not move the session. Moves are kept per
+machine in `.tree/.local/sessions.json`; a session resumed later starts again from the node
+it was opened from, and so do sessions started before `TREEYARD_SESSION` existed.
+
+The hook does not fire when:
 
 - the commit is made outside a node's session (no `TREEYARD_NODE`);
 - the commit is in another repository than the tree's (the agent stepped into a neighbour);

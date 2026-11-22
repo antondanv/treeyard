@@ -4,6 +4,7 @@
  * the work. A note says where it came from — the project and the node whose
  * session wrote it — so the review knows what was being done at the time.
  */
+import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import type { EnvOverrides } from '@antondanv/brainyard';
@@ -41,12 +42,21 @@ export const NODE_VAR = 'TREEYARD_NODE';
 export const PROJECT_VAR = 'TREEYARD_PROJECT';
 
 /**
- * The env of a session started from a node: its id and tree, and without the NODE_ENV Treeyard
- * set for itself. A session of no node (empty id) has no tree to bind commits to either.
+ * One launch of a session: when its agent moves to another node, the move is kept under this
+ * mark, so the session's commits follow it and other sessions of the same node do not.
+ */
+export const SESSION_VAR = 'TREEYARD_SESSION';
+
+/**
+ * The env of a session started from a node: its id, tree and own mark, and without the NODE_ENV
+ * Treeyard set for itself. A session of no node (empty id) has no tree to bind commits to either.
  */
 export function nodeEnv(id: string, project?: string): EnvOverrides {
   const env: EnvOverrides = { [NODE_VAR]: id };
-  if (id && project) env[PROJECT_VAR] = project;
+  if (id && project) {
+    env[PROJECT_VAR] = project;
+    env[SESSION_VAR] = randomUUID();
+  }
   if (ownNodeEnv()) env.NODE_ENV = undefined;
   return env;
 }
