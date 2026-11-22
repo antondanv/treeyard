@@ -10,6 +10,7 @@ import { render } from 'ink';
 
 import { BRAIN_LABEL, launch, resume, resumeLoose } from '../agents/launch.js';
 import type { Pane } from '../agents/panes.js';
+import { CrashReported, holdTerminal, reportCrash } from '../crash.js';
 import { followStatuses, settlePushes } from '../github.js';
 import { t } from '../i18n/i18n.js';
 import { purgeImages } from '../model/images.js';
@@ -33,6 +34,9 @@ export async function runTui(dir: string, plantingPane?: Pane, toast?: Toast): P
   purgeImages(loadTree(dir));
   try {
     await loop(dir, plantingPane, toast);
+  } catch (error) {
+    // The loop has already given the terminal back; the error goes to a file, not into the void.
+    throw new CrashReported(reportCrash(error));
   } finally {
     unfollow();
     await settlePushes();
@@ -44,6 +48,8 @@ async function loop(dir: string, plantingPane?: Pane, first?: Toast): Promise<vo
   for (;;) {
     const ui = loadUi(dir);
     let next = { type: 'quit' } as Action;
+    // A crash or a signal from here on hands the terminal back before the process ends.
+    const hold = holdTerminal();
     const input = new TerminalInput(process.stdin);
     const releaseMouse = captureMouse(process.stdout);
     const releaseFocus = captureFocus(process.stdout);
@@ -71,6 +77,7 @@ async function loop(dir: string, plantingPane?: Pane, first?: Toast): Promise<vo
           incrementalRendering: true,
         },
       );
+      hold.unmount = () => instance.unmount();
       await instance.waitUntilExit();
     } finally {
       // Unmounted Ink has left the alternate screen: the CLI or the shell gets wrapping back.
@@ -78,6 +85,7 @@ async function loop(dir: string, plantingPane?: Pane, first?: Toast): Promise<vo
       releaseFocus();
       releaseMouse();
       input.destroy();
+      hold.release();
     }
     // Give the keyboard back: the CLI that comes next reads it.
     if (process.stdin.isTTY) process.stdin.setRawMode?.(false);

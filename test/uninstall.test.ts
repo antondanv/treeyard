@@ -80,6 +80,9 @@ describe('treeyard uninstall', () => {
     expect((await here.sh('config', 'lang', 'ru')).code).toBe(0);
     const settings = join(env.TREEYARD_HOME, 'settings.json');
     expect(existsSync(settings)).toBe(true);
+    // A crash once left its log in treeyard's home folder.
+    mkdirSync(join(env.TREEYARD_HOME, 'crashes'));
+    writeFileSync(join(env.TREEYARD_HOME, 'crashes', 'a.log'), 'treeyard 0.1.1');
     const tree = readFileSync(join(here.dir, '.tree', 'tree.md'), 'utf8');
 
     // --dry-run lists everything and removes nothing.
@@ -118,6 +121,7 @@ describe('treeyard uninstall', () => {
     const again = await here.sh('uninstall', '--settings');
     expect(again.code).toBe(0);
     expect(again.stdout).toContain('✓ настройки treeyard');
+    expect(again.stdout).toContain('✓ журналы падений treeyard');
     expect(existsSync(env.TREEYARD_HOME)).toBe(false);
     expect((await here.sh('uninstall')).stdout).toContain('убирать нечего');
     expect(lstatSync(join(here.dir, '.tree')).isDirectory()).toBe(true);

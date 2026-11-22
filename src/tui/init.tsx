@@ -17,6 +17,7 @@ import { type ReactNode, useRef, useState } from 'react';
 
 import { BRAIN_LABEL } from '../agents/launch.js';
 import { type FolderFacts, folderFacts, plantingInPane } from '../agents/planting.js';
+import { holdTerminal } from '../crash.js';
 import { plural, t } from '../i18n/i18n.js';
 import { BRAIN_IDS, type BrainId } from '../model/types.js';
 import { addPointer, pointerTargets } from '../templates/pointer.js';
@@ -35,12 +36,18 @@ export interface InitResult {
 
 export async function runInit(dir: string, templateId?: string): Promise<InitResult> {
   const result: InitResult = { created: false };
+  const hold = holdTerminal();
   const instance = render(
     <Wizard dir={dir} {...(templateId ? { templateId } : {})} onDone={(done) => Object.assign(result, done)} />,
     // Ink stops drawing when CI is set; a terminal is still a terminal there.
     { interactive: Boolean(process.stdout.isTTY), alternateScreen: true, exitOnCtrlC: true, patchConsole: false },
   );
-  await instance.waitUntilExit();
+  hold.unmount = () => instance.unmount();
+  try {
+    await instance.waitUntilExit();
+  } finally {
+    hold.release();
+  }
   if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
   process.stdin.pause();
   return result;

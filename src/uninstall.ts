@@ -10,6 +10,7 @@ import { join } from 'node:path';
 
 import { PROJECT_SKILLS, shippedSkills, skillHomes, skillsRoot } from './agents/skills.js';
 import { hookInstalled, hookPlace, removeHook } from './commit-hook.js';
+import { crashFolder } from './crash.js';
 import { t } from './i18n/i18n.js';
 import { driverCommand, gitConfigFile, removeMergeDriver } from './merge-driver.js';
 import type { BrainId } from './model/types.js';
@@ -24,7 +25,9 @@ export type Leftover =
   /** The overview's merge driver in a repository's config (`.tree/.gitattributes` stays with the tree). */
   | { kind: 'merge'; path: string; folder: string }
   /** settings.json or projects.json in treeyard's home folder. */
-  | { kind: 'settings'; path: string };
+  | { kind: 'settings'; path: string }
+  /** The crash logs folder in treeyard's home folder. */
+  | { kind: 'crashes'; path: string };
 
 export interface UninstallOptions {
   /** The folder the command runs in: its project's skill copies and its repository's hook. */
@@ -84,9 +87,12 @@ export function leftovers(options: UninstallOptions): Leftover[] {
     out.push({ kind: 'merge', path: file, folder });
   }
 
-  if (options.settings)
+  if (options.settings) {
     for (const path of [settingsPath(env), projectsPath(env)])
       if (existsSync(path)) out.push({ kind: 'settings', path });
+    const crashes = crashFolder(env);
+    if (existsSync(crashes)) out.push({ kind: 'crashes', path: crashes });
+  }
   return out;
 }
 

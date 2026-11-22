@@ -1420,4 +1420,10 @@ export const EN: Record<string, string> = {
   'хуки лежат в репозитории, строку убрать самому': 'hooks live in the repository, take the line out yourself',
   'сам treeyard: npm uninstall -g @antondanv/treeyard — пока он стоит, команда в папке с деревом снова поставит скиллы (не ставить: treeyard config skills off)':
     'treeyard itself: npm uninstall -g @antondanv/treeyard — while it is installed, a command in a folder with a tree puts the skills back (to stop that: treeyard config skills off)',
+  'журналы падений treeyard': 'treeyard crash logs',
+  'treeyard {version} упал: {message}': 'treeyard {version} crashed: {message}',
+  'подробности — в {file}': 'details are in {file}',
+  'записать подробности в файл не удалось:': 'could not write the details to a file:',
+  'сообщи об ошибке: {url} — приложи этот файл': 'report it at {url} — attach that file',
+  'сообщи об ошибке: {url}': 'report it at {url}',
 };

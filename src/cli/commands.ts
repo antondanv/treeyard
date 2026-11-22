@@ -27,6 +27,7 @@ import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
 import { autoInstallSkills, skillHomes } from '../agents/skills.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, noteMove, removeHook } from '../commit-hook.js';
+import { CrashReported, guardCrashes } from '../crash.js';
 import { parsePatch } from '../diff.js';
 import { lineCount, linesLabel, projectDocs } from '../docs.js';
 import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, gitRepository } from '../git.js';
@@ -2219,6 +2220,7 @@ async function uninstallCommand(args: string[]): Promise<number> {
     if (item.kind === 'hook') return t('хук post-commit');
     if (item.kind === 'merge') return t('драйвер слияния обзора дерева');
     if (item.kind === 'settings') return t('настройки treeyard');
+    if (item.kind === 'crashes') return t('журналы падений treeyard');
     const where = item.brain ? BRAIN_LABEL[item.brain] : t('папка проекта');
     return `${t('скилл {skill}', { skill: item.skill })} · ${where}${item.link ? ` · ${t('ссылка')}` : ''}`;
   };
@@ -2767,11 +2769,16 @@ function configCommand(args: string[]): number {
  * importing this module (a test does) runs nothing.
  */
 export function run(argv: string[]): void {
+  guardCrashes();
   main(argv).then(
     (code) => {
       process.exitCode = code;
     },
     (error: unknown) => {
+      if (error instanceof CrashReported) {
+        process.exitCode = 1;
+        return;
+      }
       if (error instanceof UsageError) {
         process.stderr.write(`${err.c('#ff7b72', '✗')} ${error.message}\n`);
         process.exitCode = 2;

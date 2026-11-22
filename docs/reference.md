@@ -864,6 +864,17 @@ disabled when Treeyard hands the terminal to another CLI or exits.
 How to run a project as a tree — [practice.md](practice.md). Templates: Stages,
 Directions, Mikado, Finding improvements, Client work (`treeyard templates`).
 
+## When treeyard crashes
+
+An error treeyard did not expect, `SIGTERM` or `SIGHUP` (and `SIGINT` sent with `kill`) first
+give the terminal back: mouse and focus reports off, line wrapping on, the main screen, the
+cursor and ordinary line input. A signal then ends treeyard with the usual code (143, 129);
+an error is written with treeyard's version, Node, the command and the stack to
+`~/.treeyard/crashes/` (`$TREEYARD_HOME`; the last 20 are kept), and the terminal shows what
+broke, the file's path and where to report it —
+[github.com/antondanv/treeyard/issues](https://github.com/antondanv/treeyard/issues). A closed
+pipe (`treeyard show | head`) is not a crash: treeyard exits quietly.
+
 ## Removing treeyard
 
 `treeyard uninstall` removes everything treeyard put outside `.tree/`:
@@ -879,8 +890,8 @@ Directions, Mikado, Finding improvements, Client work (`treeyard templates`).
   edited; the command says where to take the line out;
 - the overview's merge driver `merge.treeyard` from `.git/config`, in the same places;
   `.tree/.gitattributes` stays with the tree;
-- with `--settings` — also the settings and the list of projects in `~/.treeyard` (or
-  `$TREEYARD_HOME`), and the folder itself when nothing else is in it.
+- with `--settings` — also the settings, the list of projects and the crash logs in
+  `~/.treeyard` (or `$TREEYARD_HOME`), and the folder itself when nothing else is in it.
 
 The `.tree/` tree and its block in `AGENTS.md` / `CLAUDE.md` stay: they are part of the project.
 
