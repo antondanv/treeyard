@@ -34,7 +34,7 @@ import { findProject, loadTree } from './model/store.js';
 import { duration } from './model/time.js';
 import { sessionHolders, sessionOwners } from './model/tree.js';
 import { type BrainId, ROOT, STATUSES, type Status, type Tree } from './model/types.js';
-import { settings } from './settings.js';
+import { settings, skillsAuto } from './settings.js';
 import { type PointerStatus, pointerStates } from './templates/pointer.js';
 
 const require = createRequire(import.meta.url);
@@ -203,6 +203,8 @@ export interface ProjectStatus {
   tree?: { dir: string; title: string; problems: string[] };
   nodes?: { total: number; byStatus: Record<Status, number>; abandoned: Abandoned[] };
   skills: SkillStatus[];
+  /** treeyard installs and refreshes the skills by itself (setting `skills`). */
+  skillsAuto: boolean;
   pointer?: PointerStatus[];
   hook?: HookInfo;
   sessions?: LiveSession[];
@@ -272,8 +274,9 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     };
   }
   const skills = skillStates(place.folder, env);
+  const skillsOn = skillsAuto(env);
   if (!place.project) {
-    const status: ProjectStatus = { ...head, skills, problems: [] };
+    const status: ProjectStatus = { ...head, skills, skillsAuto: skillsOn, problems: [] };
     status.problems = problemsOf(status, place);
     return status;
   }
@@ -338,6 +341,7 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     tree: { dir: tree.project.dir, title: tree.project.title, problems: tree.problems },
     nodes: { total: tree.nodes.size, byStatus, abandoned },
     skills,
+    skillsAuto: skillsOn,
     pointer: pointerStates(place.folder),
     hook: hookInfo(place.folder),
     sessions,

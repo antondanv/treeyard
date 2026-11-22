@@ -3121,6 +3121,18 @@ export function App(props: AppProps) {
         hint: t('папка с деревом для treeyard note · «.» — этот · пусто — убрать'),
       },
       {
+        key: 'skills',
+        label: t('Скиллы в CLI'),
+        options: [
+          { value: 'on', label: t('ставить сами') },
+          { value: 'off', label: t('вручную') },
+        ],
+        value: s.skills ? 'on' : 'off',
+        hint: s.skills
+          ? t('в Claude Code, Codex и Antigravity, свежие с каждой версией')
+          : t('treeyard skills install — поставить или обновить вручную'),
+      },
+      {
         key: 'brain',
         section: t('ЭТОТ ПРОЕКТ  .tree/tree.md'),
         label: t('Мозг по умолчанию'),
@@ -3223,6 +3235,7 @@ export function App(props: AppProps) {
     else if (key === 'sleepAfter') updateSettings({ sleepAfter: Number(value) });
     else if (key === 'maxPanes') updateSettings({ maxPanes: Number(value) });
     else if (key === 'staleAfter') updateSettings({ staleAfter: Number(value) });
+    else if (key === 'skills') updateSettings({ skills: on });
     else if (key === 'github') {
       if (value !== 'linked') change(t('узел GitHub'), () => setOffer(tree, on));
     } else if (key === 'notes') {

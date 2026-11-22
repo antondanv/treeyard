@@ -888,6 +888,13 @@ export const EN: Record<string, string> = {
     "now in any folder: «plant this project's tree», or /{skill} in Claude Code",
   'нет CLI': 'no CLI',
   'treeyard skills install — поставить во все найденные CLI': 'treeyard skills install — install into every CLI found',
+  'папка проекта': 'the project folder',
+  'скиллы treeyard {version} — в {where} · не ставить их самому: treeyard config skills off':
+    'treeyard {version} skills are in {where} · to stop installing them: treeyard config skills off',
+  'ставятся и обновляются сами при запуске treeyard · выключить — treeyard config skills off':
+    'installed and updated by treeyard as it runs · to turn off — treeyard config skills off',
+  'сами не ставятся · включить — treeyard config skills on':
+    'not installed automatically · to turn on — treeyard config skills on',
   'git · {n} {commits}': 'git · {n} {commits}',
   'без git': 'no git',
   'папка почти пустая': 'the folder is nearly empty',
@@ -935,6 +942,13 @@ export const EN: Record<string, string> = {
   'в {dir} нет дерева — treeyard config notes <папка с деревом>':
     'no tree in {dir} — treeyard config notes <folder with a tree>',
   'здесь нет дерева (.tree/) — --node не к чему отнести': 'no tree here (.tree/) — --node has nothing to point to',
+  'Скиллы в CLI': 'Skills in the CLIs',
+  'ставить сами': 'install by itself',
+  вручную: 'by hand',
+  'в Claude Code, Codex и Antigravity, свежие с каждой версией':
+    'in Claude Code, Codex and Antigravity, fresh with every version',
+  'treeyard skills install — поставить или обновить вручную':
+    'treeyard skills install — install or update them by hand',
   'Куда падают замечания': 'Where notes go',
   'папка с деревом для treeyard note · «.» — этот · пусто — убрать':
     'a folder with a tree for treeyard note · «.» — this one · empty — unset',

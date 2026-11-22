@@ -4,7 +4,8 @@
  * belongs to one project — default brain, model, how sessions start — lives
  * in its `.tree/tree.md` instead, next to the tree.
  *
- * `TREEYARD_LANG=ru` overrides the language for one run.
+ * `TREEYARD_LANG=ru` overrides the language for one run, `TREEYARD_SKILLS=off`
+ * the setting `skills` (see `skillsAuto`).
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -48,6 +49,8 @@ export interface Settings {
   notes: string;
   /** Antigravity with full access or in its own mode; empty — not chosen yet, asked before the first launch. */
   antigravityAccess: Access | '';
+  /** treeyard puts its skills into the CLIs by itself and keeps them at its version. */
+  skills: boolean;
 }
 
 export type OpenIn = 'pane' | 'terminal';
@@ -72,6 +75,7 @@ export const DEFAULTS: Settings = {
   staleAfter: 2,
   notes: '',
   antigravityAccess: '',
+  skills: true,
 };
 
 /** `~/.treeyard`, or `$TREEYARD_HOME`: what follows the person from project to project. */
@@ -116,6 +120,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     if (typeof data.notes === 'string') settings.notes = data.notes.trim();
     const access = data.antigravity_access ?? data.antigravityAccess;
     if (access === 'full' || access === 'normal') settings.antigravityAccess = access;
+    if (typeof data.skills === 'boolean') settings.skills = data.skills;
   } catch {
     // No file yet: the defaults.
   }
@@ -139,6 +144,15 @@ export function saveSettings(settings: Settings, env: NodeJS.ProcessEnv = proces
     ...(antigravityAccess ? { antigravity_access: antigravityAccess } : {}),
   };
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+/** Whether treeyard installs its skills by itself in this run: the setting, unless `TREEYARD_SKILLS` says otherwise. */
+export function skillsAuto(env: NodeJS.ProcessEnv = process.env): boolean {
+  // Read here, not in loadSettings: a one-run override must not end up in settings.json.
+  const forced = env.TREEYARD_SKILLS?.trim().toLowerCase();
+  if (forced === 'off' || forced === '0' || forced === 'false') return false;
+  if (forced === 'on' || forced === '1' || forced === 'true') return true;
+  return settings().skills;
 }
 
 /** Makes the settings take effect in this process. */

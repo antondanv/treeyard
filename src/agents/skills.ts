@@ -7,8 +7,13 @@
  * A skill is a folder (SKILL.md and its references/), so it is compared and
  * installed as a whole: an installed copy that differs in any file is
  * outdated, and installing replaces the folder.
+ *
+ * treeyard installs them by itself (setting `skills`, see `autoInstallSkills`)
+ * into the CLIs' personal folders, not into the project: the repository gets
+ * no copies to commit and keep in step, the one copy follows the treeyard
+ * installed on the machine, and `treeyard-init` works where no tree is yet.
  */
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,17 +41,26 @@ export interface SkillHome {
   present: boolean;
 }
 
+/** Folders under ~/.gemini that Antigravity's CLI, IDE or settings make. */
+const AGY_FOLDERS = ['antigravity-cli', 'antigravity', 'config'];
+
 /** Where each CLI reads personal skills from. */
 export function skillHomes(env: NodeJS.ProcessEnv = process.env): SkillHome[] {
   const home = env.HOME?.trim() || homedir();
   const claude = env.CLAUDE_CONFIG_DIR?.trim() || join(home, '.claude');
   const codex = env.CODEX_HOME?.trim() || join(home, '.codex');
   // Antigravity: the global customization root is ~/.gemini/config.
-  const agy = join(home, '.gemini', 'config');
+  const gemini = join(home, '.gemini');
+  const agy = join(gemini, 'config');
   return [
     { brain: 'claude', dir: join(claude, 'skills'), present: existsSync(claude) },
     { brain: 'codex', dir: join(codex, 'skills'), present: existsSync(codex) },
-    { brain: 'antigravity', dir: join(agy, 'skills'), present: existsSync(join(home, '.gemini')) },
+    {
+      brain: 'antigravity',
+      dir: join(agy, 'skills'),
+      // ~/.gemini alone may be Gemini CLI's: only Antigravity's own folders say it is here.
+      present: AGY_FOLDERS.some((name) => existsSync(join(gemini, name))),
+    },
   ];
 }
 
@@ -143,14 +157,51 @@ export function skillStates(
 
 export interface Installed {
   path: string;
-  /** `written` — put there now; `current` — already the shipped one, left alone. */
-  action: 'written' | 'current';
+  /**
+   * `written` — put there now; `current` — already the shipped one, left alone;
+   * `linked` — a link to elsewhere, left alone; `failed` — could not be written.
+   */
+  action: 'written' | 'current' | 'linked' | 'failed';
 }
 
 function copySkill(source: string, target: string): void {
-  // A whole folder: a reference the new version dropped must not linger.
-  rmSync(target, { recursive: true, force: true });
-  cpSync(source, target, { recursive: true, filter: (path) => !basename(path).startsWith('.') });
+  // A whole folder: a reference the new version dropped must not linger. Built next to the
+  // target and swapped in, so a CLI starting meanwhile, or another treeyard doing the same,
+  // never sees half a skill.
+  const fresh = join(dirname(target), `.${basename(target)}-${process.pid}.new`);
+  const old = join(dirname(target), `.${basename(target)}-${process.pid}.old`);
+  try {
+    rmSync(fresh, { recursive: true, force: true });
+    cpSync(source, fresh, { recursive: true, filter: (path) => !basename(path).startsWith('.') });
+    rmSync(old, { recursive: true, force: true });
+    if (existsSync(target) || isLink(target)) renameSync(target, old);
+    try {
+      renameSync(fresh, target);
+    } catch (error) {
+      // Another treeyard got there first, or the folder is not ours to write: the old copy stays.
+      if (!existsSync(target) && existsSync(old)) renameSync(old, target);
+      throw error;
+    }
+  } finally {
+    rmSync(fresh, { recursive: true, force: true });
+    rmSync(old, { recursive: true, force: true });
+  }
+}
+
+function isLink(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+export interface InstallOptions {
+  /**
+   * Installing by itself: a skill folder that is a link is left to whoever linked it (a
+   * checkout), and a folder that cannot be written is skipped instead of stopping the rest.
+   */
+  auto?: boolean;
 }
 
 /**
@@ -162,6 +213,7 @@ export function installSkills(
   project?: string,
   env: NodeJS.ProcessEnv = process.env,
   root = skillsRoot(),
+  options: InstallOptions = {},
 ): Installed[] {
   const done: Installed[] = [];
   const put = (source: string, target: string) => {
@@ -170,7 +222,17 @@ export function installSkills(
       done.push({ path: target, action: 'current' });
       return;
     }
-    copySkill(source, target);
+    if (options.auto && isLink(target)) {
+      done.push({ path: target, action: 'linked' });
+      return;
+    }
+    try {
+      copySkill(source, target);
+    } catch (error) {
+      if (!options.auto) throw error;
+      done.push({ path: target, action: 'failed' });
+      return;
+    }
     done.push({ path: target, action: 'written' });
   };
   for (const home of skillHomes(env)) {
@@ -184,4 +246,21 @@ export function installSkills(
         if (existsSync(join(target, 'SKILL.md'))) put(join(root, skill), target);
       }
   return done;
+}
+
+/**
+ * What treeyard does by itself where there is a tree (or one is being planted; the caller
+ * checks the setting `skills`): every shipped skill into every CLI on the machine,
+ * refreshed when this version ships another one. A linked folder is left to whoever linked
+ * it; a folder it cannot write is skipped — the command goes on, and `treeyard status`
+ * shows what is missing. Returns what it wrote.
+ */
+export function autoInstallSkills(
+  project: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+  root = skillsRoot(),
+): string[] {
+  return installSkills(project, env, root, { auto: true })
+    .filter((item) => item.action === 'written')
+    .map((item) => item.path);
 }

@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { basename, resolve } from 'node:path';
+import { basename, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { parseArgs } from 'node:util';
@@ -25,6 +25,7 @@ import {
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
+import { autoInstallSkills, skillHomes } from '../agents/skills.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, noteMove, removeHook } from '../commit-hook.js';
 import { parsePatch } from '../diff.js';
 import { lineCount, linesLabel, projectDocs } from '../docs.js';
@@ -102,7 +103,16 @@ import {
   type Who,
 } from '../model/types.js';
 import { rememberProject, seenProjects } from '../projects.js';
-import { type Access, MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
+import {
+  type Access,
+  MAX_PANES,
+  orderOf,
+  SLEEP_AFTER,
+  settings,
+  settingsPath,
+  skillsAuto,
+  updateSettings,
+} from '../settings.js';
 import { locate, projectStatus } from '../status.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
@@ -123,7 +133,7 @@ import {
   treeText,
   watchLine,
 } from './print.js';
-import { skillLines, statusText } from './status-text.js';
+import { skillLines, skillsAutoLine, statusText } from './status-text.js';
 
 const require = createRequire(import.meta.url);
 const VERSION = (require('../../package.json') as { version: string }).version;
@@ -376,9 +386,12 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
   }
+  const skillsNote = autoSkills(command);
+  // The tree says it in a toast; the others before their own output.
+  if (skillsNote && command !== undefined) process.stderr.write(`${err.dim(skillsNote)}\n`);
   switch (command) {
     case undefined:
-      return openTui();
+      return openTui(skillsNote);
     case 'init':
       return initCommand(rest);
     case 'import':
@@ -590,17 +603,65 @@ function byPerson(given: string | undefined): boolean {
 
 // ── TUI ─────────────────────────────────────────────────────────────────────
 
-async function openTui(): Promise<number> {
+async function openTui(skillsNote = ''): Promise<number> {
   if (!process.stdout.isTTY || !process.stdin.isTTY) {
+    if (skillsNote) process.stderr.write(`${err.dim(skillsNote)}\n`);
     // No terminal to draw in: print the tree instead.
     return showCommand([]);
   }
   const dir = findProject();
-  // No tree here yet: the first-run wizard, which may hand over to an agent.
-  if (!dir) return wizard(process.cwd());
+  // No tree here yet: the first-run wizard, which may hand over to an agent; the note waits until it is over.
+  if (!dir) {
+    const code = await wizard(process.cwd());
+    if (skillsNote) process.stderr.write(`${err.dim(skillsNote)}\n`);
+    return code;
+  }
   const { runTui } = await import('../tui/run.js');
-  await runTui(dir);
+  await runTui(dir, undefined, skillsNote ? { text: skillsNote } : undefined);
   return 0;
+}
+
+/** Commands that only show the setup or change it: they install nothing by themselves. */
+const NO_AUTO_SKILLS = new Set([
+  'status',
+  'skills',
+  'skill',
+  'config',
+  'settings',
+  'help',
+  '--help',
+  '-h',
+  '--version',
+  '-v',
+  'version',
+]);
+
+/**
+ * Where there is a tree, or one is about to be planted (`init`, `treeyard` with the wizard), the
+ * skills its agents read are put into every CLI on the machine and kept at this version — unless
+ * the setting `skills` is off. Returns what to tell the person; empty when nothing was written.
+ */
+function autoSkills(command: string | undefined): string {
+  if (command && NO_AUTO_SKILLS.has(command)) return '';
+  const project = findProject();
+  const planting = command === 'init' || (command === undefined && Boolean(process.stdin.isTTY));
+  if (!project && !planting) return '';
+  if (!skillsAuto()) return '';
+  const written = autoInstallSkills(project ?? undefined);
+  if (!written.length) return '';
+  const homes = skillHomes();
+  const where = [
+    ...new Set(
+      written.map((path) => {
+        const home = homes.find((h) => path.startsWith(h.dir + sep));
+        return home ? BRAIN_LABEL[home.brain] : t('папка проекта');
+      }),
+    ),
+  ];
+  return t('скиллы treeyard {version} — в {where} · не ставить их самому: treeyard config skills off', {
+    version: VERSION,
+    where: where.join(', '),
+  });
 }
 
 async function initCommand(args: string[]): Promise<number> {
@@ -764,6 +825,7 @@ async function skillsCommand(args: string[]): Promise<number> {
   if (action !== 'list') throw new UsageError(t('treeyard skills [install]'));
   process.stdout.write(`${out.bold(t('скиллы treeyard'))}  ${out.dim(homeShort(skillsRoot()))}\n`);
   for (const line of skillLines(skillStates(folder), out)) process.stdout.write(`  ${line}\n`);
+  process.stdout.write(`${out.dim(skillsAutoLine(skillsAuto()))}\n`);
   process.stdout.write(`${out.dim(t('treeyard skills install — поставить во все найденные CLI'))}\n`);
   return 0;
 }
@@ -2504,6 +2566,7 @@ const GLOBAL_KEYS = [
   'staleAfter',
   'notes',
   'antigravityAccess',
+  'skills',
 ] as const;
 /** Keys in settings.json and on the command line, where they differ from the code. */
 const SNAKE: Record<string, string> = {

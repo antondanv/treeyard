@@ -14,6 +14,8 @@ export default defineConfig({
     env: {
       TREEYARD_HOME: mkdtempSync(join(tmpdir(), 'treeyard-home-')),
       TREEYARD_LANG: 'ru',
+      // The CLIs the tests spawn must not put skills into the person's ~/.claude, ~/.codex, ~/.gemini.
+      TREEYARD_SKILLS: 'off',
       BRAINYARD_CODEX_BIN: 'treeyard-test-no-codex',
       BRAINYARD_AGY_BIN: 'treeyard-test-no-agy',
       BRAINYARD_OPENCODE_BIN: 'treeyard-test-no-opencode',

@@ -59,18 +59,27 @@
 Без tmux (или с настройкой `open=terminal`) агент работает на весь экран прямо в этом
 терминале. Когда ты выйдешь из сессии, откроется дерево.
 
-Чтобы обычные `claude`, `codex` и `agy` в любой папке знали скиллы treeyard — `treeyard-init`
-(посадка), `treeyard` (работа с деревом) и `treeyard-coordinate` (раздать несколько узлов
-сессиям, принять и влить их работу), — их можно установить отдельно:
+Скиллы treeyard — `treeyard-init` (посадка), `treeyard` (работа с деревом) и
+`treeyard-coordinate` (раздать несколько узлов сессиям, принять и влить их работу) — ставятся
+сами: `treeyard init`, `treeyard` и любая команда в папке с деревом кладут их во все CLI на
+машине — `~/.claude/skills`, `~/.codex/skills`, `~/.gemini/config/skills` — и обновляют, когда
+новая версия treeyard приносит другие. Поэтому их знает и обычный `claude`, `codex` или `agy`,
+запущенный в проекте, а не только сессия из узла. Если что-то записано, команда скажет об этом
+строкой (дерево — всплывающей подсказкой).
+
+Ставятся они в папки самих CLI, а не в проект: в репозитории не появляется копий, которые надо
+коммитить и держать в ногу с версией, а `treeyard-init` работает и там, где дерева ещё нет.
+Папку скилла, которая сделана ссылкой (например, на checkout), treeyard не трогает; копии,
+которые проект держит у себя (`.claude/skills`, `.agents/skills`), обновляет, но не заводит. Где
+они стоят, показывают `treeyard status` и `treeyard skills`.
 
 ```sh
 treeyard skills            # где стоят скиллы в каждом CLI: стоит, устарел, не стоит
-treeyard skills install    # ~/.claude/skills, ~/.codex/skills, ~/.gemini/config/skills; копии в проекте — обновить
+treeyard skills install    # поставить или обновить сейчас, и ссылки тоже
+treeyard config skills off # не ставить их самому; TREEYARD_SKILLS=off — на один запуск
 ```
 
 Скилл ставится папкой целиком (SKILL.md и `references/`); уже свежая копия остаётся как есть.
-Копии, которые проект держит у себя (`.claude/skills`, `.agents/skills`), команда обновляет, но
-не заводит.
 
 ## Как это выглядит
 
@@ -248,6 +257,7 @@ treeyard skills install    # ~/.claude/skills, ~/.codex/skills, ~/.gemini/config
 | `stale_after` | через сколько часов узел «в работе» без живой сессии и без записей помечается «без сессии N ч» (по умолчанию 2); `0` — не помечать |
 | `notes` | папка с деревом, куда `treeyard note` складывает замечания из любого проекта; `off` — не собирать. В настройках (`,`) это пункт «Куда падают замечания»: путь (`~`, `.` — этот проект) или пустое значение, чтобы отключить |
 | `antigravity_access` | права Antigravity: `full` (без подтверждений), `normal` (спрашивает перед каждой командой) или `ask` (по умолчанию — спросить перед первым запуском); подробнее — «Что разрешено агентам» |
+| `skills` | ставить скиллы treeyard в Claude Code, Codex и Antigravity и держать их в версии treeyard (по умолчанию да); `off` — только вручную, `treeyard skills install` |
 
 Когда `live` включён, у узла с работающим Codex крутится спиннер, а сама сессия
 учитывается в счётчике «работает агентов» вверху, даже если она длинная. Если агент в
@@ -286,6 +296,7 @@ treeyard config status_order done-first  # готовые сверху
 treeyard config status_order todo,review,active,waiting,idea,done,dropped  # свой порядок
 treeyard config notes ~/Projects/my-notes  # куда складывать замечания
 treeyard config antigravity_access normal  # Antigravity спрашивает перед каждой командой
+treeyard config skills off      # скиллы только вручную: treeyard skills install
 TREEYARD_LANG=ru treeyard       # язык только на этот запуск
 ```
 
@@ -539,7 +550,7 @@ Antigravity и OpenCode, у которых нет `--bg` (он только у C
   в отличие от `show`, здесь живые сессии и панели учитываются;
 - скиллы `treeyard`, `treeyard-init` и `treeyard-coordinate` в Claude Code, Codex и Antigravity:
   стоит, устарел (какой-то файл отличается от того, что пришёл с этой версией), не стоит или нет CLI; копии в папке
-  проекта (`.claude/skills`, `.agents/skills`) тоже считаются;
+  проекта (`.claude/skills`, `.agents/skills`) тоже считаются; и ставит ли их treeyard сам (настройка `skills`);
 - блок о дереве в CLAUDE.md, AGENTS.md и GEMINI.md: есть, устарел, без блока, через импорт
   (`@AGENTS.md`) или нет файла;
 - git-хук post-commit;

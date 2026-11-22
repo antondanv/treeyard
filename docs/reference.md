@@ -55,18 +55,29 @@ tree, `f` to the conversation, `F` shows the conversation full screen. Nothing t
 after planting. Without tmux (or with `open=terminal`) the agent works full screen in this
 terminal: leave the session, and the tree opens.
 
-For plain `claude`, `codex` and `agy` to know treeyard's skills in any folder — `treeyard-init`
-(planting), `treeyard` (working with a tree) and `treeyard-coordinate` (handing several nodes
-out to sessions, accepting and merging their work):
+treeyard's skills — `treeyard-init` (planting), `treeyard` (working with a tree) and
+`treeyard-coordinate` (handing several nodes out to sessions, accepting and merging their
+work) — install themselves: `treeyard init`, `treeyard` and any command in a folder with a
+tree put them into every CLI on the machine — `~/.claude/skills`, `~/.codex/skills`,
+`~/.gemini/config/skills` — and bring them up to date when a new version of treeyard ships
+other ones. So a plain `claude`, `codex` or `agy` started in the project knows them too, not
+only a session opened from a node. Once something is written, the command says so in a line
+(the tree — in a toast).
+
+They go into the CLIs' own folders, not into the project: the repository gets no copies to
+commit and keep in step, and `treeyard-init` works where there is no tree yet. A skill folder
+that is a link (to a checkout, say) is left alone; copies the project keeps for itself
+(`.claude/skills`, `.agents/skills`) are refreshed, never created. `treeyard status` and
+`treeyard skills` show where they are.
 
 ```sh
 treeyard skills            # where the skills are in each CLI: installed, outdated, not installed
-treeyard skills install    # ~/.claude/skills, ~/.codex/skills, ~/.gemini/config/skills; copies in the project — refreshed
+treeyard skills install    # install or refresh them now, links included
+treeyard config skills off # don't install them by yourself; TREEYARD_SKILLS=off — for one run
 ```
 
 A skill is installed as a whole folder (SKILL.md and `references/`); a copy that is already
-current is left alone. Copies the project keeps for itself (`.claude/skills`, `.agents/skills`)
-are refreshed, never created.
+current is left alone.
 
 ## What it looks like
 
@@ -229,6 +240,7 @@ Settings — the `,` key (always shown in the top right corner) or `treeyard con
 | `stale_after` | hours after which an «in progress» node with no live session and no records is marked «no session N h» (default 2); `0` — off |
 | `notes` | the folder with the tree where `treeyard note` writes notes from any project; `off` — none. In `,` — “Where notes go”: a path (`~`, `.` — this project), empty — none |
 | `antigravity_access` | Antigravity's access: `full` (no confirmations), `normal` (it asks before every command) or `ask` (the default — asked before the first launch); see “What agents may do” |
+| `skills` | install treeyard's skills into Claude Code, Codex and Antigravity and keep them at its version (default on); `off` — only by hand, `treeyard skills install` |
 
 With `live` on, a working Codex shows a spinner at its node and counts among “agents
 working” at the top, in a long session too. A question or a permission request in a pane
@@ -264,6 +276,7 @@ treeyard config status_order done-first  # done on top
 treeyard config status_order todo,review,active,waiting,idea,done,dropped  # your own order
 treeyard config notes ~/Projects/my-notes  # where notes go
 treeyard config antigravity_access normal  # Antigravity asks before every command
+treeyard config skills off      # skills only by hand: treeyard skills install
 TREEYARD_LANG=ru treeyard       # the language for one run
 ```
 
@@ -521,7 +534,8 @@ node, its edit stays.
   longer than `stale_after` hours; unlike `show`, live sessions and panes count here;
 - the `treeyard`, `treeyard-init` and `treeyard-coordinate` skills in Claude Code, Codex and
   Antigravity: installed, outdated (some file differs from what came with this version), not installed, or no CLI; copies
-  in the project folder (`.claude/skills`, `.agents/skills`) count too;
+  in the project folder (`.claude/skills`, `.agents/skills`) count too; and whether treeyard installs
+  them by itself (the `skills` setting);
 - the block about the tree in CLAUDE.md, AGENTS.md and GEMINI.md: in place, outdated, no block,
   via an import (`@AGENTS.md`), or no file;
 - the post-commit git hook;

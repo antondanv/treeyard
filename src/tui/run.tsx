@@ -23,7 +23,8 @@ import { PlantingApp } from './planting.js';
 import { C } from './theme.js';
 import { loadUi, saveUi } from './ui-state.js';
 
-export async function runTui(dir: string, plantingPane?: Pane): Promise<void> {
+/** `toast` — a word for the first screen (what treeyard did on its way in). */
+export async function runTui(dir: string, plantingPane?: Pane, toast?: Toast): Promise<void> {
   // A status changed here moves its card on the GitHub board; quitting waits for the moves.
   const unfollow = followStatuses();
   // So `treeyard projects` lists it.
@@ -31,15 +32,15 @@ export async function runTui(dir: string, plantingPane?: Pane): Promise<void> {
   // Pictures of nodes closed a week ago go now, not while someone looks at them.
   purgeImages(loadTree(dir));
   try {
-    await loop(dir, plantingPane);
+    await loop(dir, plantingPane, toast);
   } finally {
     unfollow();
     await settlePushes();
   }
 }
 
-async function loop(dir: string, plantingPane?: Pane): Promise<void> {
-  let toast: Toast | undefined;
+async function loop(dir: string, plantingPane?: Pane, first?: Toast): Promise<void> {
+  let toast: Toast | undefined = first;
   for (;;) {
     const ui = loadUi(dir);
     let next = { type: 'quit' } as Action;

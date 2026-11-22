@@ -61,6 +61,13 @@ export function skillLines(skills: readonly SkillStatus[], p: Paint): string[] {
   });
 }
 
+/** Whether treeyard keeps the skills in place by itself, and how to switch that. */
+export function skillsAutoLine(on: boolean): string {
+  return on
+    ? t('ставятся и обновляются сами при запуске treeyard · выключить — treeyard config skills off')
+    : t('сами не ставятся · включить — treeyard config skills on');
+}
+
 function sessionState(session: LiveSession): string {
   if (session.status === 'busy') return t('работает{p1}', { p1: '' });
   if (session.status === 'waiting')
@@ -113,6 +120,7 @@ export function statusText(s: ProjectStatus, p: Paint): string {
     if (i === 0) row(t('скиллы'), line);
     else more(line);
   });
+  more(p.dim(skillsAutoLine(s.skillsAuto)));
 
   if (s.pointer) {
     const word = (state: string, via?: string[]) =>
