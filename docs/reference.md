@@ -289,7 +289,9 @@ time it is back in its node. All four CLIs work this way.
 
 The top right shows how many sessions are alive and how much memory they take (Claude Code
 — about 200–300 MB, Codex — about 80, Antigravity — about 350, OpenCode — 0.5–1 GB).
-Treeyard reads the screen only of the session in sight and leaves the rest alone. Quiet
+Treeyard reads the screen only of the session in sight and leaves the rest alone: 8 times
+a second while nothing happens, and right after a key or a scroll at once and then often for
+half a second, so the CLI's echo shows without delay. Quiet
 sessions fall asleep by themselves (`sleep_after`, by default after 30 idle minutes), and
 when more than `max_panes` are alive (5 by default), the one idle the longest falls
 asleep. A session that is working, waiting for you or open on the screen never falls
