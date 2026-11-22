@@ -1,0 +1,2 @@
+# treeyard: on a merge the overview is drawn again from both sides, not merged line by line
+README.md merge=treeyard
