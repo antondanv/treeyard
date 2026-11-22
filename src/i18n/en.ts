@@ -361,6 +361,8 @@ export const EN: Record<string, string> = {
   '> `○` к работе · `◐` в работе · `◎` на проверке · `‖` ждёт · `✓` готово · `◇` идея · `✗` отказ':
     '> `○` todo · `◐` active · `◎` in review · `‖` waiting · `✓` done · `◇` idea · `✗` dropped',
   ' · *ты*': ' · *you*',
+  'драйвер слияния обзора дерева': 'merge driver of the tree overview',
+  'git config не убрал драйвер': 'git config did not remove the driver',
   ' · ждёт: {p1}': ' · waiting for: {p1}',
   '{file}: id {id} уже занят другим узлом — файл пропущен': '{file}: id {id} is taken by another node — file skipped',
   '{id}: родитель {parent} не найден — узел поднят наверх': '{id}: parent {parent} not found — node moved to the top',

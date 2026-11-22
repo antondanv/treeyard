@@ -7,6 +7,7 @@
  */
 
 import { t } from '../i18n/i18n.js';
+import { ensureMergeDriver } from '../merge-driver.js';
 import { atomicWrite, TREE_DIR } from './store.js';
 import { childrenByOrder, childrenOf, progress, summarize } from './tree.js';
 import { ROOT, type Status, type Tree, type TreeNode } from './types.js';
@@ -77,4 +78,6 @@ function escapeMd(text: string): string {
 
 export function writeOverview(tree: Tree): void {
   atomicWrite(`${tree.project.dir}/${TREE_DIR}/README.md`, overviewText(tree));
+  // Committed and rebuilt on every write, the overview needs its merge driver, or every merge conflicts in it.
+  ensureMergeDriver(tree.project.dir, TREE_DIR);
 }

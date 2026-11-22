@@ -413,7 +413,7 @@ treeyard goal "Ten strangers order from us"     # the tree's goal in .tree/tree.
 treeyard rules --from - < rules.md              # the rules (tree.md without «Decisions»); the header and «Decisions» stay; without --from — print them (--json)
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
 treeyard diff <id> --add HEAD                   # attach your commit to the node for review
-treeyard commit <id> [<id>…]                    # commit the tree files of these nodes, README and tree.md (chore(tree): …); never code, other nodes or the index of others
+treeyard commit <id> [<id>…]                    # commit the tree files of these nodes, README, tree.md and .gitattributes (chore(tree): …); never code, other nodes or the index of others
 treeyard add "Codex: turn status" --project ../api --for <id>   # a change needed in another project
 treeyard set <id> needs=<other id>              # waits for a node of this tree (needs=../api#<id> — of another)
 treeyard open root --start plan --pane          # a review of the tree in a pane
@@ -833,6 +833,19 @@ The tree is plain md files in `.tree/` (`tree.md` and `nodes/*.md`): edit them w
 anything and commit them along with the code. The view, the selected node and the open
 branches are remembered in `.tree/.local/` — that folder doesn't go into git. `ui.json` is
 saved when the view or the selection changes; animation frames don't write it.
+
+Nodes live one per file, so two branches that touch different nodes merge in git without
+conflicts. The overview, `.tree/README.md`, is drawn from all the nodes and committed too. So
+that it doesn't conflict on every merge, the first write of the tree in a repository puts
+`.tree/.gitattributes` in place (it is committed with the tree) and sets the merge driver
+`merge.treeyard` in `.git/config`. On `merge`, `rebase` and `cherry-pick` the driver reads
+the three versions of the overview, merges them node by node and draws the overview again,
+so counters and progress are right for the merged tree. An overview that doesn't read back
+(a hand edit, another format), and a clone without treeyard, merge line by line as usual.
+When one node changed on both branches, the conflict stays in that node's file, and the
+next write of the tree fixes the overview. Merges on GitHub don't run the driver: bring
+the branch up to date locally.
+
 The tree is read at startup and reloaded when its files change. Animation frames
 reuse it; ordering work and ideas builds the tree order once per list.
 
@@ -864,6 +877,8 @@ Directions, Mikado, Finding improvements, Client work (`treeyard templates`).
   project treeyard has seen (`treeyard projects`); the hook's own lines stay, a file that held
   nothing but the block is deleted. Hooks inside the repository (husky and the like) are not
   edited; the command says where to take the line out;
+- the overview's merge driver `merge.treeyard` from `.git/config`, in the same places;
+  `.tree/.gitattributes` stays with the tree;
 - with `--settings` — also the settings and the list of projects in `~/.treeyard` (or
   `$TREEYARD_HOME`), and the folder itself when nothing else is in it.
 

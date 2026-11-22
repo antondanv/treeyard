@@ -1,6 +1,6 @@
 /**
- * `treeyard commit <id>…`: a commit of the tree's own files — the nodes named, the overview
- * and `tree.md` — and nothing else. Other sessions share the work folder: their code, their
+ * `treeyard commit <id>…`: a commit of the tree's own files — the nodes named, the overview,
+ * `tree.md` and `.gitattributes` — and nothing else. Other sessions share the work folder: their code, their
  * nodes and whatever they staged stay out of this commit and stay staged.
  */
 import { execFileSync } from 'node:child_process';
@@ -36,7 +36,12 @@ function git(dir: string, args: string[]): string {
 /** The tree's files of these nodes that differ from HEAD: changed, new or deleted. */
 export function treeChanges(tree: Tree, ids: readonly string[]): string[] {
   const dir = tree.project.dir;
-  const paths = [...ids.map((id) => `${TREE_DIR}/nodes/${id}.md`), `${TREE_DIR}/README.md`, `${TREE_DIR}/tree.md`];
+  const paths = [
+    ...ids.map((id) => `${TREE_DIR}/nodes/${id}.md`),
+    `${TREE_DIR}/README.md`,
+    `${TREE_DIR}/tree.md`,
+    `${TREE_DIR}/.gitattributes`,
+  ];
   const status = git(dir, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', ...paths]);
   const changed = new Set<string>();
   // `XY path\0`, a rename adds `\0old path`: the names are relative to the repository's root.

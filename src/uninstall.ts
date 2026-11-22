@@ -1,6 +1,7 @@
 /**
  * `treeyard uninstall`: takes back what treeyard put outside `.tree/` — its skills in the
- * CLIs' personal folders and in the project, the post-commit hook, and, when asked, its own
+ * CLIs' personal folders and in the project, the post-commit hook, the merge driver of the
+ * overview in the repository's config, and, when asked, its own
  * settings in `~/.treeyard`. The tree itself, and the pointer block in AGENTS.md / CLAUDE.md
  * that belongs to it, stay: they are the project's, in its git.
  */
@@ -9,6 +10,8 @@ import { join } from 'node:path';
 
 import { PROJECT_SKILLS, shippedSkills, skillHomes, skillsRoot } from './agents/skills.js';
 import { hookInstalled, hookPlace, removeHook } from './commit-hook.js';
+import { t } from './i18n/i18n.js';
+import { driverCommand, gitConfigFile, removeMergeDriver } from './merge-driver.js';
 import type { BrainId } from './model/types.js';
 import { projectsPath, seenProjects } from './projects.js';
 import { homeFolder, settingsPath } from './settings.js';
@@ -18,6 +21,8 @@ export type Leftover =
   | { kind: 'skill'; path: string; skill: string; brain?: BrainId; link: boolean }
   /** treeyard's block in a post-commit hook; `manual` — hooks live in the repository, the person takes it out. */
   | { kind: 'hook'; path: string; manual: boolean; folder: string }
+  /** The overview's merge driver in a repository's config (`.tree/.gitattributes` stays with the tree). */
+  | { kind: 'merge'; path: string; folder: string }
   /** settings.json or projects.json in treeyard's home folder. */
   | { kind: 'settings'; path: string };
 
@@ -72,6 +77,12 @@ export function leftovers(options: UninstallOptions): Leftover[] {
     seen.add(place.file);
     out.push({ kind: 'hook', path: place.file, manual: place.tracked, folder });
   }
+  for (const folder of folders) {
+    const file = driverCommand(folder) === undefined ? undefined : gitConfigFile(folder);
+    if (!file || seen.has(file)) continue;
+    seen.add(file);
+    out.push({ kind: 'merge', path: file, folder });
+  }
 
   if (options.settings)
     for (const path of [settingsPath(env), projectsPath(env)])
@@ -101,6 +112,8 @@ export function uninstall(options: UninstallOptions): Removed[] {
       if (item.kind === 'hook') {
         // Only treeyard's block, and the file when nothing of the person's is left.
         removeHook(item.folder);
+      } else if (item.kind === 'merge') {
+        if (!removeMergeDriver(item.folder)) throw new Error(t('git config не убрал драйвер'));
       } else {
         // A link goes, not what it points at.
         rmSync(item.path, { recursive: !isLink(item.path), force: true });

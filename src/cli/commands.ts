@@ -448,6 +448,8 @@ async function main(argv: string[]): Promise<number> {
       return diffCommand(rest);
     case 'hook':
       return hookCommand(rest);
+    case 'merge-overview':
+      return mergeOverviewCommand(rest);
     case 'uninstall':
       return uninstallCommand(rest);
     case 'context':
@@ -633,6 +635,8 @@ async function openTui(skillsNote = ''): Promise<number> {
 /** Commands that only show the setup or change it: they install nothing by themselves. */
 const NO_AUTO_SKILLS = new Set([
   'status',
+  // Run by git in the middle of a merge: quiet and quick.
+  'merge-overview',
   // It is taking them away.
   'uninstall',
   'skills',
@@ -2213,6 +2217,7 @@ async function uninstallCommand(args: string[]): Promise<number> {
   const options = { folder: locate(process.cwd()).folder, settings: Boolean(values.settings) };
   const what = (item: Leftover): string => {
     if (item.kind === 'hook') return t('хук post-commit');
+    if (item.kind === 'merge') return t('драйвер слияния обзора дерева');
     if (item.kind === 'settings') return t('настройки treeyard');
     const where = item.brain ? BRAIN_LABEL[item.brain] : t('папка проекта');
     return `${t('скилл {skill}', { skill: item.skill })} · ${where}${item.link ? ` · ${t('ссылка')}` : ''}`;
@@ -2257,6 +2262,14 @@ async function uninstallCommand(args: string[]): Promise<number> {
     `${out.dim(t('сам treeyard: npm uninstall -g @antondanv/treeyard — пока он стоит, команда в папке с деревом снова поставит скиллы (не ставить: treeyard config skills off)'))}\n`,
   );
   return done.some((item) => item.result === 'failed') ? 1 : 0;
+}
+
+/** Git's merge driver for `.tree/README.md` (`.tree/.gitattributes`): `merge-overview %O %A %B`. */
+async function mergeOverviewCommand(args: string[]): Promise<number> {
+  const [base, ours, theirs, ...extra] = args;
+  if (!base || !ours || !theirs || extra.length) throw new UsageError('treeyard merge-overview <base> <ours> <theirs>');
+  const { runMergeDriver } = await import('../model/overview-merge.js');
+  return runMergeDriver(base, ours, theirs);
 }
 
 /** The post-commit hook: installed by a person, run by git (`post-commit`) after each commit. */
