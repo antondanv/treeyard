@@ -32,7 +32,7 @@ import { loadTree } from '../src/model/store.js';
 import { DEFAULTS, resetSettings } from '../src/settings.js';
 import { type Action, App } from '../src/tui/App.js';
 import { TerminalInput } from '../src/tui/input.js';
-import { cursorLine, paneInput, screenLine } from '../src/tui/terminal.js';
+import { CAPTURE_MS, cursorLine, paneInput, screenLine } from '../src/tui/terminal.js';
 import { defaultUi } from '../src/tui/ui-state.js';
 import { emptyTree } from './helpers.js';
 
@@ -487,6 +487,69 @@ describe('terminal panes in the tree', () => {
     app.stdin.write('\u001b[<65;80;10M');
     await until(() => app.stdout.frame.includes('hello from the CLI'));
     expect(app.action).not.toHaveBeenCalled();
+  });
+
+  describe('without waiting for the next idle read', () => {
+    const idle = CAPTURE_MS.idle;
+    // An idle read that never comes within a test: whatever shows up was read because of the key.
+    beforeEach(() => {
+      CAPTURE_MS.idle = 60_000;
+    });
+    afterEach(() => {
+      CAPTURE_MS.idle = idle;
+    });
+
+    it('a typed key brings its echo at once, and a late echo within the moment after it', async () => {
+      const app = mount();
+      await until(() => app.stdout.frame.includes('hello from the CLI'));
+      app.stdin.write('f');
+      await until(() => app.stdout.frame.includes('печатаешь в Claude Code'));
+      const screen = (lines: string[]) => ({
+        lines,
+        width: 60,
+        height: 12,
+        cursor: { x: 0, y: 1, visible: true },
+        historySize: 100,
+        scrollOffset: 0,
+      });
+      backend.capturePane.mockResolvedValue(screen(['> x']));
+      app.stdin.write('x');
+      await until(() => app.stdout.frame.includes('> x'));
+
+      // A CLI slower to echo: the first reads after the key still show the old screen.
+      let reads = 0;
+      backend.capturePane.mockImplementation(async () => screen([++reads > 3 ? '> xy' : '> x']));
+      app.stdin.write('y');
+      await until(() => app.stdout.frame.includes('> xy'));
+      // The moment passes and the pane goes back to its idle pace.
+      await pause(CAPTURE_MS.window + 100);
+      const settled = backend.capturePane.mock.calls.length;
+      await pause(200);
+      expect(backend.capturePane.mock.calls.length).toBe(settled);
+    });
+
+    it('a wheel notch shows the history at once, its offset in the same frame as its rows', async () => {
+      history();
+      const app = mount();
+      await until(() => app.stdout.frame.includes('hello from the CLI'));
+      const frames: string[] = [];
+      const write = app.stdout.write;
+      app.stdout.write = (text: string) => {
+        frames.push(text);
+        return write(text);
+      };
+      app.stdin.write('\u001b[<64;80;10M');
+      await until(() => app.stdout.frame.includes('old output 3'));
+      app.stdin.write('\u001b[<64;80;10M');
+      await until(() => app.stdout.frame.includes('old output 6'));
+      // Never the new offset over the old rows: that frame would hold the real one back.
+      expect(frames.filter((frame) => frame.includes('история ↑3')).every((f) => f.includes('old output 3'))).toBe(
+        true,
+      );
+      expect(frames.filter((frame) => frame.includes('история ↑6')).every((f) => f.includes('old output 6'))).toBe(
+        true,
+      );
+    });
   });
 
   it('pages through history, returns with End or typing, and preserves pasted escape sequences', async () => {

@@ -66,7 +66,7 @@ async function loop(dir: string, plantingPane?: Pane): Promise<void> {
           alternateScreen: true,
           exitOnCtrlC: false,
           patchConsole: false,
-          maxFps: 30,
+          maxFps: 60,
           incrementalRendering: true,
         },
       );

@@ -16,6 +16,14 @@ import { type Cell, highlight, rowSpan, type Selection, selectedText } from './s
 import { useTerminalFocus } from './terminal-focus.js';
 import { C } from './theme.js';
 
+/**
+ * How often the screen is read. A tmux read costs ~3 ms; the wait for the next one is what a person
+ * feels: a typed letter or a wheel notch waited up to a whole idle period. So a key or a scroll reads
+ * the screen at once and then often for a moment — long enough for a CLI to echo — and idle panes
+ * stay cheap. Mutable for tests.
+ */
+export const CAPTURE_MS = { idle: 125, active: 16, window: 500 };
+
 /** Ctrl+Q belongs to the tree; all other bytes belong to the CLI. */
 export function paneInput(data: string): { data: string; leave: boolean } {
   const at = data.indexOf('\u0011');
@@ -89,16 +97,24 @@ export function TerminalPane(props: {
   const callbacks = useRef(props);
   callbacks.current = props;
   const sending = useRef<Promise<void>>(Promise.resolve());
+  // Read the screen now and often for a moment: set by the capture loop while it runs.
+  const wake = useRef<() => void>(() => {});
 
   const scrollTo = (offset: number) => {
     // Another part of the history comes into view: what was selected is not there any more.
     setSelection(undefined);
-    viewport.current = Math.max(0, Math.min(screenRef.current?.historySize ?? 0, offset));
-    setScrollOffset(viewport.current);
+    const next = Math.max(0, Math.min(screenRef.current?.historySize ?? 0, offset));
+    if (next === viewport.current) return;
+    viewport.current = next;
+    // The read that follows sets the offset together with its rows: one frame, not a frame of the
+    // old rows under the new offset that holds the real one back by Ink's frame interval.
+    wake.current();
   };
   const send = (data: string | Uint8Array) => {
     sending.current = sending.current
       .then(() => sendToPane(pane.pane, data))
+      // The CLI echoes what it got: show it without waiting for the next idle read.
+      .then(() => wake.current())
       .catch((error: Error) => callbacks.current.onError(error.message));
   };
   const copy = (selected: Selection) => {
@@ -120,19 +136,37 @@ export function TerminalPane(props: {
       screenRef.current = undefined;
     }
     let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // One read at a time; a wake or a scroll during a read asks for another right after it.
+    let reading = false;
+    let again = false;
+    let activeUntil = 0;
+    const schedule = (ms: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(capture, ms);
+    };
     const capture = async () => {
+      if (reading) {
+        again = true;
+        return;
+      }
+      reading = true;
       const requested = viewport.current;
+      // The view moved while tmux was reading: that screen is stale, read the new one at once.
+      const moved = () => {
+        if (requested !== viewport.current) again = true;
+        return requested !== viewport.current;
+      };
       try {
         let next = await capturePane(pane.pane, requested ? { scroll: requested } : {});
-        if (stopped || requested !== viewport.current) return;
+        if (stopped || moved()) return;
         if (!next) return callbacks.current.onGone();
         // Keep the same history rows in view while more output arrives.
         const added = Math.max(0, next.historySize - (screenRef.current?.historySize ?? next.historySize));
         const offset = Math.min(next.historySize, requested + (requested ? added : 0));
         if (offset !== requested) {
           next = await capturePane(pane.pane, { scroll: offset });
-          if (stopped || requested !== viewport.current) return;
+          if (stopped || moved()) return;
           if (!next) return callbacks.current.onGone();
         }
         viewport.current = next.scrollOffset || 0;
@@ -142,8 +176,19 @@ export function TerminalPane(props: {
       } catch (error) {
         if (!stopped) callbacks.current.onError((error as Error).message);
       } finally {
-        if (!stopped) timer = setTimeout(capture, 125);
+        reading = false;
+        if (!stopped) {
+          const now = again;
+          again = false;
+          schedule(now ? 0 : Date.now() < activeUntil ? CAPTURE_MS.active : CAPTURE_MS.idle);
+        }
       }
+    };
+    wake.current = () => {
+      if (stopped) return;
+      activeUntil = Date.now() + CAPTURE_MS.window;
+      if (reading) again = true;
+      else schedule(0);
     };
     const poll = async () => {
       try {
