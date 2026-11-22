@@ -2,13 +2,14 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { contextText, fullAccess, sessionPlan } from '../src/agents/context.js';
+import { accessText, fullAccess, needsAccessChoice } from '../src/agents/access.js';
+import { contextText, sessionPlan } from '../src/agents/context.js';
 import { countNodes, parseProposal, plant } from '../src/agents/importer.js';
 import { addNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { childrenOf } from '../src/model/tree.js';
 import { ROOT } from '../src/model/types.js';
-import { DEFAULTS, saveSettings } from '../src/settings.js';
+import { DEFAULTS, loadSettings, resetSettings, saveSettings } from '../src/settings.js';
 import { addPointer, removePointer } from '../src/templates/pointer.js';
 import { createTree, fill, getTemplate, listTemplates, variables } from '../src/templates/templates.js';
 import { emptyTree, tempDir } from './helpers.js';
@@ -117,15 +118,59 @@ describe('what an agent gets', () => {
     }
   });
 
-  it('gives Antigravity full access in every mode; Claude Code and Codex keep their own settings', () => {
+  it('gives Antigravity full access in every mode only once the person chose it; Claude Code and Codex keep their own settings', () => {
     const tree = emptyTree();
     const node = addNode(tree, { title: 'X' });
-    for (const start of ['plan', 'do', 'chat'] as const)
-      expect(sessionPlan(tree, node.id, start, 'antigravity').permissionMode).toBe('bypassPermissions');
-    expect(sessionPlan(tree, node.id, 'do', 'codex').permissionMode).toBeUndefined();
-    expect(sessionPlan(tree, node.id, 'do', 'claude').permissionMode).toBeUndefined();
-    expect(fullAccess('antigravity')).toEqual({ permissionMode: 'bypassPermissions' });
-    expect(fullAccess('codex')).toEqual({});
+    try {
+      // Not chosen yet: no extra rights, and the first launch asks.
+      resetSettings({ ...DEFAULTS });
+      expect(needsAccessChoice('antigravity')).toBe(true);
+      expect(fullAccess('antigravity')).toEqual({});
+      expect(sessionPlan(tree, node.id, 'do', 'antigravity').permissionMode).toBeUndefined();
+      expect(accessText('antigravity')).toBe('обычный режим: спрашивает перед каждой командой');
+
+      resetSettings({ ...DEFAULTS, antigravityAccess: 'full' });
+      expect(needsAccessChoice('antigravity')).toBe(false);
+      for (const start of ['plan', 'do', 'chat'] as const)
+        expect(sessionPlan(tree, node.id, start, 'antigravity').permissionMode).toBe('bypassPermissions');
+      expect(sessionPlan(tree, ROOT, 'plan', 'antigravity').permissionMode).toBe('bypassPermissions');
+      expect(fullAccess('antigravity')).toEqual({ permissionMode: 'bypassPermissions' });
+      expect(accessText('antigravity', 'bypassPermissions')).toMatch(/^полный доступ/);
+
+      resetSettings({ ...DEFAULTS, antigravityAccess: 'normal' });
+      expect(needsAccessChoice('antigravity')).toBe(false);
+      expect(sessionPlan(tree, node.id, 'do', 'antigravity').permissionMode).toBeUndefined();
+
+      // The others are never asked: their own settings decide.
+      for (const brain of ['claude', 'codex', 'opencode'] as const) {
+        expect(needsAccessChoice(brain)).toBe(false);
+        expect(fullAccess(brain)).toEqual({});
+      }
+      expect(sessionPlan(tree, node.id, 'do', 'codex').permissionMode).toBeUndefined();
+      expect(sessionPlan(tree, node.id, 'do', 'claude').permissionMode).toBeUndefined();
+      expect(accessText('claude', 'plan')).toMatch(/^режим плана/);
+      expect(accessText('codex')).toContain('config.toml');
+    } finally {
+      resetSettings(undefined);
+    }
+  });
+
+  it('keeps the choice of Antigravity access in settings.json, and «not chosen» out of it', () => {
+    const home = process.env.TREEYARD_HOME;
+    process.env.TREEYARD_HOME = tempDir('treeyard-home-');
+    try {
+      const file = join(process.env.TREEYARD_HOME, 'settings.json');
+      saveSettings({ ...DEFAULTS });
+      expect(readFileSync(file, 'utf8')).not.toContain('antigravity_access');
+      expect(loadSettings().antigravityAccess).toBe('');
+      saveSettings({ ...DEFAULTS, antigravityAccess: 'normal' });
+      expect(JSON.parse(readFileSync(file, 'utf8')).antigravity_access).toBe('normal');
+      expect(loadSettings().antigravityAccess).toBe('normal');
+      writeFileSync(file, JSON.stringify({ antigravity_access: 'everything' }));
+      expect(loadSettings().antigravityAccess).toBe('');
+    } finally {
+      process.env.TREEYARD_HOME = home;
+    }
   });
 
   it('OpenCode keeps its own access; a plan starts in its plan agent, and there is no /goal', () => {

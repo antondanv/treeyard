@@ -192,6 +192,19 @@ treeyard import                            # the agent quietly reads the project
 6. A new idea on the way — `a`, as an idea. Once a week, look through **Waiting** (`3`):
    has the condition come?
 
+## What agents are allowed to do
+
+- **Claude Code**, **Codex**, **OpenCode** — what their own settings allow; treeyard adds
+  nothing. A “plan” start opens Claude Code in plan mode and OpenCode with its plan agent:
+  no edits until you agree.
+- **Antigravity** asks before every command, so before its first launch treeyard asks you
+  once: **full access** (commands, files and the network with no confirmations,
+  `--dangerously-skip-permissions`) or its **ordinary mode**. Change it later in `,`.
+- **Break into steps** and **write a “done when”** — read-only, whichever agent does them.
+
+Before each launch the confirmation shows what access the agent gets. Details —
+[What agents may do](docs/reference.md#what-agents-may-do).
+
 ## Documentation
 
 - [docs/reference.md](docs/reference.md) — everything in detail: planting a tree, the

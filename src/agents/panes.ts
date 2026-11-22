@@ -29,7 +29,8 @@ import { attachSession, detachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import { holderOf, sessionHolders } from '../model/tree.js';
 import type { BrainId, SessionRef, Tree, TreeNode } from '../model/types.js';
-import { fullAccess, sessionPlan } from './context.js';
+import { fullAccess } from './access.js';
+import { sessionPlan } from './context.js';
 import type { LaunchOptions } from './launch.js';
 
 export { panesAvailable };

@@ -10,6 +10,7 @@ import { afterEach } from 'vitest';
 import { NODE_VAR, PROJECT_VAR, SESSION_VAR } from '../src/model/notes.js';
 import { loadTree } from '../src/model/store.js';
 import type { Tree } from '../src/model/types.js';
+import { DEFAULTS, saveSettings } from '../src/settings.js';
 import { createTree, getTemplate } from '../src/templates/templates.js';
 
 const made: string[] = [];
@@ -21,6 +22,13 @@ export function tempDir(prefix = 'treeyard-test-'): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   made.push(dir);
   return dir;
+}
+
+/** A treeyard home where the person has already chosen Antigravity's full access: an agent's `open` needs that. */
+export function accessHome(): string {
+  const home = tempDir('treeyard-home-');
+  saveSettings({ ...DEFAULTS, antigravityAccess: 'full' }, { TREEYARD_HOME: home });
+  return home;
 }
 
 /** A fresh tree with no nodes, from the `directions` template without its skeleton. */

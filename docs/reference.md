@@ -8,7 +8,7 @@ interface shows, every key, every setting and every command.
 - [Planting a tree with an agent](#planting-a-tree-with-an-agent)
 - [What it looks like](#what-it-looks-like)
 - [Keys](#keys) · [With the mouse](#with-the-mouse)
-- [Confirmation and settings](#confirmation-and-settings)
+- [Confirmation and settings](#confirmation-and-settings) · [What agents may do](#what-agents-may-do)
 - [Sessions next to the tree](#sessions-next-to-the-tree)
 - [Agents and the tree: the CLI commands](#agents-and-the-tree)
   - [Project status](#project-status) · [The root and the project's documents](#the-root-and-the-projects-documents)
@@ -196,14 +196,10 @@ While a dialog is open, the tree on the left takes no clicks.
 
 Before every session and agent task treeyard asks: which node, who (Claude Code, Codex,
 Antigravity, OpenCode), where (in a pane, in this terminal or in the background), how to
-start, which model — and shows the first message the agent will get. `⏎` starts, `o`
-changes the parameters, `esc` cancels, `!` stops asking. `treeyard open` from the shell
-asks the same way (`--yes` — without asking).
-
-Claude Code, Codex and OpenCode take their permissions from their own settings (OpenCode —
-the `permission` in its `opencode.json`). Antigravity has only plan and accept-edits there
-and asks before every command, so treeyard starts and resumes it with full access
-(`--dangerously-skip-permissions`).
+start, which model, what access the agent gets — and shows the first message the agent will
+get. `⏎` starts, `o` changes the parameters, `esc` cancels, `!` stops asking. `treeyard open`
+from the shell asks the same way (`--yes` — without asking). What each agent may do — in
+[What agents may do](#what-agents-may-do).
 
 “Plan” starts Claude Code in its plan mode and OpenCode with its plan agent: edits are
 closed until you agree. Claude Code with a plan ready asks itself whether to get to work;
@@ -232,6 +228,7 @@ Settings — the `,` key (always shown in the top right corner) or `treeyard con
 | `max_panes` | the limit of the project's live panes: 3/5/8 (default 5); `0` — no limit |
 | `stale_after` | hours after which an «in progress» node with no live session and no records is marked «no session N h» (default 2); `0` — off |
 | `notes` | the folder with the tree where `treeyard note` writes notes from any project; `off` — none. In `,` — “Where notes go”: a path (`~`, `.` — this project), empty — none |
+| `antigravity_access` | Antigravity's access: `full` (no confirmations), `normal` (it asks before every command) or `ask` (the default — asked before the first launch); see “What agents may do” |
 
 With `live` on, a working Codex shows a spinner at its node and counts among “agents
 working” at the top, in a long session too. A question or a permission request in a pane
@@ -266,8 +263,30 @@ treeyard config stale_after 4   # mark «in progress» nodes nobody has touched 
 treeyard config status_order done-first  # done on top
 treeyard config status_order todo,review,active,waiting,idea,done,dropped  # your own order
 treeyard config notes ~/Projects/my-notes  # where notes go
+treeyard config antigravity_access normal  # Antigravity asks before every command
 TREEYARD_LANG=ru treeyard       # the language for one run
 ```
+
+## What agents may do
+
+| Agent | Access from the tree |
+| --- | --- |
+| Claude Code | its own settings (`permissions` in `~/.claude/settings.json`); a “plan” start — its plan mode: no edits until you agree |
+| Codex | its own settings: the sandbox and approvals from `~/.codex/config.toml`; treeyard adds no flags |
+| OpenCode | its own settings (`permission` in `opencode.json`); a “plan” start — its plan agent |
+| Antigravity | your choice: **full access** — commands, editing and deleting files, the network with no confirmations (`--dangerously-skip-permissions`), or the **ordinary mode** — it asks before every command |
+| Break into steps, write a “done when” | read-only, no network — whichever agent does it |
+
+Antigravity has only plan and accept-edits in its own settings and asks before every
+command, while an agent from a node has to run treeyard, tests and git. So before the first
+launch of Antigravity — a new session, a resumed one or a woken pane — treeyard asks once:
+full access or the ordinary mode. The question comes even with `confirm` off; `esc` starts
+nothing. The choice is kept in `~/.treeyard/settings.json` (`antigravity_access`) and
+changes in `,` → “Antigravity access” or with `treeyard config antigravity_access
+full|normal|ask` (`ask` — ask again at the next launch). Until it is chosen, Antigravity gets
+no extra rights. `treeyard open` and `treeyard init --agent` in a terminal ask the same
+question; without a terminal (an agent or a script calling `open`) they stop with exit code
+2 and say how the person chooses — `--yes` skips the confirmation, it does not grant access.
 
 ## Sessions next to the tree
 

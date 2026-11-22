@@ -46,9 +46,13 @@ export interface Settings {
   staleAfter: number;
   /** The folder whose tree takes `treeyard note` from every project; empty — not set. */
   notes: string;
+  /** Antigravity with full access or in its own mode; empty — not chosen yet, asked before the first launch. */
+  antigravityAccess: Access | '';
 }
 
 export type OpenIn = 'pane' | 'terminal';
+/** `full` — no confirmations at all; `normal` — the CLI's own mode, which asks. */
+export type Access = 'full' | 'normal';
 export const SLEEP_AFTER = [0, 15, 30, 60] as const;
 export const MAX_PANES = [0, 3, 5, 8] as const;
 export const STALE_AFTER = [0, 1, 2, 4, 8, 24] as const;
@@ -67,6 +71,7 @@ export const DEFAULTS: Settings = {
   maxPanes: 5,
   staleAfter: 2,
   notes: '',
+  antigravityAccess: '',
 };
 
 /** `~/.treeyard`, or `$TREEYARD_HOME`: what follows the person from project to project. */
@@ -87,6 +92,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
       stale_after?: unknown;
       status_order?: unknown;
       custom_order?: unknown;
+      antigravity_access?: unknown;
     };
     if (data.lang && (LANGS as readonly string[]).includes(data.lang)) settings.lang = data.lang;
     if (typeof data.confirm === 'boolean') settings.confirm = data.confirm;
@@ -108,6 +114,8 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
       settings.statusOrder = statusOrder as StatusOrderName;
     if (isStatusOrder(customOrder)) settings.customOrder = customOrder;
     if (typeof data.notes === 'string') settings.notes = data.notes.trim();
+    const access = data.antigravity_access ?? data.antigravityAccess;
+    if (access === 'full' || access === 'normal') settings.antigravityAccess = access;
   } catch {
     // No file yet: the defaults.
   }
@@ -119,7 +127,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
 export function saveSettings(settings: Settings, env: NodeJS.ProcessEnv = process.env): void {
   const path = settingsPath(env);
   mkdirSync(dirname(path), { recursive: true });
-  const { sleepAfter, maxPanes, staleAfter, statusOrder, customOrder, ...rest } = settings;
+  const { sleepAfter, maxPanes, staleAfter, statusOrder, customOrder, antigravityAccess, ...rest } = settings;
   const data = {
     ...rest,
     status_order: statusOrder,
@@ -127,6 +135,8 @@ export function saveSettings(settings: Settings, env: NodeJS.ProcessEnv = proces
     sleep_after: sleepAfter,
     max_panes: maxPanes,
     stale_after: staleAfter,
+    // Not chosen stays out of the file: the next launch asks.
+    ...(antigravityAccess ? { antigravity_access: antigravityAccess } : {}),
   };
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }

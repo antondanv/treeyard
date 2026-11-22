@@ -12,7 +12,8 @@ import { attachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import { holderOf } from '../model/tree.js';
 import type { BrainId, SessionRef, StartMode, Tree } from '../model/types.js';
-import { fullAccess, sessionPlan } from './context.js';
+import { fullAccess } from './access.js';
+import { sessionPlan } from './context.js';
 
 export const BRAIN_LABEL: Record<BrainId, string> = {
   claude: 'Claude Code',

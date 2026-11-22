@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { addNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import type { BrainId } from '../src/model/types.js';
-import { emptyTree, tempDir, treeyardIn } from './helpers.js';
+import { accessHome, emptyTree, tempDir, treeyardIn } from './helpers.js';
 
 const node = process.execPath;
 const fixture = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
@@ -44,6 +44,8 @@ describe.skipIf(!panesAvailable())('a pane for a program: Codex and Antigravity'
         CODEX_HOME: join(home, '.codex'),
         XDG_DATA_HOME: join(home, '.local', 'share'),
         CLAUDE_CONFIG_DIR: join(home, '.claude'),
+        // Antigravity starts from an agent's `open` only once the person has chosen its access.
+        TREEYARD_HOME: accessHome(),
         BRAINYARD_TMUX_SOCKET: socket,
         BRAINYARD_CLAUDE_BIN: 'treeyard-test-no-claude',
         BRAINYARD_CODEX_BIN: 'treeyard-test-no-codex',

@@ -21,7 +21,7 @@ const RIGHT = '\u001b[C';
 const DOWN = '\u001b[B';
 const ESC = '\u001b';
 /** «Порядок статусов» on the settings screen: language, confirm, theme, animation, marquee, then it. */
-const STATUS_ORDER_ROW = 5;
+const STATUS_ORDER_ROW = 6;
 const root = fileURLToPath(new URL('..', import.meta.url));
 
 function sample() {

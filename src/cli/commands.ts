@@ -13,6 +13,7 @@ import { createInterface } from 'node:readline';
 
 import { parseArgs } from 'node:util';
 
+import { ACCESS_HINT, ACCESS_LABEL, accessText, fullAccess, needsAccessChoice } from '../agents/access.js';
 import {
   contextText,
   ROOT_START_HINT,
@@ -101,7 +102,7 @@ import {
   type Who,
 } from '../model/types.js';
 import { rememberProject, seenProjects } from '../projects.js';
-import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
+import { type Access, MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, updateSettings } from '../settings.js';
 import { locate, projectStatus } from '../status.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
@@ -654,6 +655,7 @@ async function wizard(dir: string, template?: string): Promise<number> {
 async function plantCommand(dir: string, brain: BrainId, confirmed: boolean): Promise<number> {
   const { folderFacts, plantingInPane, plantWithAgent } = await import('../agents/planting.js');
   const facts = folderFacts(dir);
+  if (!(await chooseAccess(brain))) return 0;
   if (!confirmed && settings().confirm && process.stdin.isTTY) {
     process.stderr.write(
       `\n${inlineMark(err.c)}\n` +
@@ -665,7 +667,8 @@ async function plantCommand(dir: string, brain: BrainId, confirmed: boolean): Pr
               ? t('попросит выложить всё о проекте, потом поведёт по вопросам')
               : t('изучит папку, даст короткий отчёт, потом поведёт по вопросам')
         }\n` +
-        `  ${err.dim(t('Запишет'))}    ${t('дерево и короткие документы — только после твоего «да»')}\n\n`,
+        `  ${err.dim(t('Запишет'))}    ${t('дерево и короткие документы — только после твоего «да»')}\n` +
+        `  ${err.dim(t('Права'))}      ${accessText(brain, fullAccess(brain).permissionMode)}\n\n`,
     );
     if (!(await askYes(t('Начать?')))) {
       process.stderr.write(`${err.dim(t('не запускаю'))}\n`);
@@ -2234,10 +2237,12 @@ async function openCommand(args: string[]): Promise<number> {
     ...(values.worktree ? { worktree: true } : {}),
     ...(task ? { task } : {}),
   };
+  // Rights before the confirmation, and even with --yes: --yes skips a question, it does not grant access.
+  if (!(await chooseAccess(brain))) return 0;
   if (settings().confirm && !values.yes && process.stdin.isTTY) {
     const titles = ids.map((each) => holderOf(tree, each)!.title);
     const plan = sessionPlan(tree, id, options.start, brain, task);
-    const labels = [ids.length > 1 ? t('Узлы') : t('Узел'), t('Кто'), t('Как начать')];
+    const labels = [ids.length > 1 ? t('Узлы') : t('Узел'), t('Кто'), t('Как начать'), t('Права')];
     // Padded to the longest label, so the columns line up in either language.
     const width = Math.max(...labels.map((label) => label.length)) + 2;
     const row = (label: string, text: string) => `  ${err.dim(label)}${' '.repeat(width - label.length)}${text}\n`;
@@ -2252,6 +2257,7 @@ async function openCommand(args: string[]): Promise<number> {
           labels[2]!,
           `${(id === ROOT ? ROOT_START_LABEL : START_LABEL)[plan.start]} — ${(id === ROOT ? ROOT_START_HINT : START_HINT)[plan.start]}`,
         ) +
+        row(labels[3]!, accessText(brain, plan.permissionMode)) +
         '\n',
     );
     if (!(await askYes(ids.length > 1 ? t('Запустить сессии: {n}?', { n: ids.length }) : t('Запустить сессию?')))) {
@@ -2440,6 +2446,50 @@ async function askYes(question: string): Promise<boolean> {
   return !/^\s*(n|no|н|нет|т)\s*$/i.test(answer);
 }
 
+/**
+ * Before the first launch of a CLI that treeyard would start with more rights than its own
+ * settings give: the person sees them and picks full access or the ordinary mode, once. Without
+ * a terminal nobody can answer — an agent's `open` stops and says how the person chooses.
+ * False — the person did not choose: nothing starts.
+ */
+async function chooseAccess(brain: BrainId): Promise<boolean> {
+  if (!needsAccessChoice(brain)) return true;
+  if (!process.stdin.isTTY)
+    throw new UsageError(
+      t(
+        'права Antigravity ещё не выбраны — человек выбирает в дереве («,» → «Права Antigravity») или командой treeyard config antigravity_access full|normal',
+      ),
+    );
+  const width = Math.max(ACCESS_LABEL.full.length, ACCESS_LABEL.normal.length) + 2;
+  const row = (key: string, access: Access) =>
+    `  ${err.bold(key)}  ${ACCESS_LABEL[access]}${' '.repeat(width - ACCESS_LABEL[access].length)}${err.dim(ACCESS_HINT[access])}\n`;
+  process.stderr.write(
+    `\n${inlineMark(err.c)}\n` +
+      `  ${err.bold(t('Какие права дать Antigravity?'))}\n` +
+      `  ${t('Antigravity спрашивает разрешения перед каждой командой, а агенту из узла нужно запускать treeyard, тесты и git. Treeyard может запускать его с полным доступом (--dangerously-skip-permissions).')}\n\n` +
+      row('y', 'full') +
+      row('n', 'normal') +
+      `\n  ${err.dim(t('Выбор запомнится для всех проектов · поменять — treeyard config antigravity_access или «,» в дереве'))}\n`,
+  );
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const answer = await new Promise<string>((done) =>
+    rl.question(`${t('Полный доступ?')} ${err.dim(t('[y — полный · n — обычный · ⏎ — не запускать]'))} `, done),
+  );
+  rl.close();
+  const access: Access | undefined = /^\s*(y|yes|д|да)\s*$/i.test(answer)
+    ? 'full'
+    : /^\s*(n|no|н|нет|т)\s*$/i.test(answer)
+      ? 'normal'
+      : undefined;
+  if (!access) {
+    process.stderr.write(`${err.dim(t('не запускаю'))}\n`);
+    return false;
+  }
+  updateSettings({ antigravityAccess: access });
+  process.stderr.write(`${err.dim(t('Antigravity: {access}', { access: ACCESS_LABEL[access] }))}\n`);
+  return true;
+}
+
 const GLOBAL_KEYS = [
   'lang',
   'confirm',
@@ -2453,6 +2503,7 @@ const GLOBAL_KEYS = [
   'maxPanes',
   'staleAfter',
   'notes',
+  'antigravityAccess',
 ] as const;
 /** Keys in settings.json and on the command line, where they differ from the code. */
 const SNAKE: Record<string, string> = {
@@ -2460,6 +2511,7 @@ const SNAKE: Record<string, string> = {
   maxPanes: 'max_panes',
   staleAfter: 'stale_after',
   statusOrder: 'status_order',
+  antigravityAccess: 'antigravity_access',
 };
 const PROJECT_KEYS = ['brain', 'start', 'model', 'effort', 'assist_model'] as const;
 
@@ -2473,7 +2525,7 @@ function configCommand(args: string[]): number {
     process.stdout.write(`${out.bold(t('Для всех проектов'))}  ${out.dim(settingsPath())}\n`);
     for (const name of GLOBAL_KEYS) {
       const label = SNAKE[name] ?? name;
-      process.stdout.write(`  ${label.padEnd(13)} ${shown(name)}\n`);
+      process.stdout.write(`  ${label.padEnd(18)} ${shown(name)}\n`);
     }
     if (tree) {
       process.stdout.write(`${out.bold(t('Этот проект'))}  ${out.dim('.tree/tree.md')}\n`);
@@ -2485,7 +2537,7 @@ function configCommand(args: string[]): number {
         effort: p.effort,
         assist_model: p.assistModel,
       };
-      for (const name of PROJECT_KEYS) process.stdout.write(`  ${name.padEnd(13)} ${values[name] ?? out.dim('—')}\n`);
+      for (const name of PROJECT_KEYS) process.stdout.write(`  ${name.padEnd(18)} ${values[name] ?? out.dim('—')}\n`);
     }
     process.stdout.write(`\n${out.dim(t('Изменить: treeyard config <ключ> <значение> · в дереве — клавиша «,»'))}\n`);
     return 0;
@@ -2493,6 +2545,8 @@ function configCommand(args: string[]): number {
   function shown(name: (typeof GLOBAL_KEYS)[number]): string {
     const now = settings();
     if (name === 'notes') return now.notes || '—';
+    // Not chosen: the first launch of Antigravity asks.
+    if (name === 'antigravityAccess') return now.antigravityAccess || 'ask';
     if (name !== 'statusOrder') return String(now[name]);
     // The order itself, so a preset says what it means.
     return `${now.statusOrder}  ${orderOf(now).join(',')}`;
@@ -2539,6 +2593,10 @@ function configCommand(args: string[]): number {
       if (!Number.isInteger(n) || n < 0)
         throw new UsageError(t('{key}: часы целым числом, 0 — выключено', { key: requestedKey }));
       updateSettings({ staleAfter: n });
+    } else if (key === 'antigravityAccess') {
+      if (value !== 'full' && value !== 'normal' && value !== 'ask')
+        throw new UsageError(t('права Antigravity: full, normal или ask — спросить при запуске'));
+      updateSettings({ antigravityAccess: value === 'ask' ? '' : value });
     } else if (key === 'notes') {
       try {
         updateSettings({ notes: notesFolder(value) });

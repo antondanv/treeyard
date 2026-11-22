@@ -7,6 +7,7 @@ import { Box, type Key, Text, useInput } from 'ink';
 import { useRef, useState } from 'react';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
+import { ACCESS_HINT, ACCESS_LABEL } from '../agents/access.js';
 import type { AssistChoice, AssistJob } from '../agents/assist.js';
 import { ROOT_START_HINT, ROOT_START_LABEL, START_HINT, START_LABEL } from '../agents/context.js';
 import { BRAIN_LABEL, BRAIN_SHORT, type LaunchOptions, sessionEffort } from '../agents/launch.js';
@@ -28,6 +29,7 @@ import {
   WHO,
   type Who,
 } from '../model/types.js';
+import type { Access } from '../settings.js';
 import { catalogHint, effortOptions, effortsFor, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import {
   Choice,
@@ -1639,6 +1641,74 @@ export function ConfirmLaunch(props: {
           </Text>
         </Box>
       ) : null}
+    </Frame>
+  );
+}
+
+/**
+ * Before Antigravity's first launch from the tree: what full access means, and
+ * the ordinary mode instead. Asked once — the choice goes to the settings.
+ */
+export function AccessDialog(props: { width: number; onChoose: (access: Access) => void; onCancel: () => void }) {
+  const choices: Access[] = ['full', 'normal'];
+  // As in ConfirmLaunch: the Enter that opened the question does not answer it.
+  const opened = useRef(Date.now());
+  const answered = useRef(false);
+  const [index, setIndex, indexRef] = useLatest(0);
+  useInput((input, key) => {
+    if (answered.current) return;
+    if (key.escape) {
+      answered.current = true;
+      return props.onCancel();
+    }
+    if (key.upArrow || key.downArrow || key.tab || shortcutKey(input) === 'k' || shortcutKey(input) === 'j')
+      return setIndex((i) => (i + 1) % choices.length);
+    if (key.return) {
+      if (Date.now() - opened.current < CONFIRM_GUARD_MS) return;
+      answered.current = true;
+      props.onChoose(choices[indexRef.current]!);
+    }
+  });
+  const labelWidth = Math.max(...choices.map((choice) => ACCESS_LABEL[choice].length)) + 3;
+  return (
+    <Frame
+      title={t('Какие права дать Antigravity?')}
+      width={props.width}
+      color={C.agent}
+      footer={[
+        { key: '↑↓', label: t('выбор') },
+        { key: '⏎', label: t('запомнить и запустить') },
+        { key: 'esc', label: t('отмена') },
+      ]}
+    >
+      <Text wrap="wrap">
+        {t(
+          'Antigravity спрашивает разрешения перед каждой командой, а агенту из узла нужно запускать treeyard, тесты и git. Treeyard может запускать его с полным доступом (--dangerously-skip-permissions).',
+        )}
+      </Text>
+      <Box flexDirection="column" marginTop={1}>
+        {choices.map((choice, i) => {
+          const selected = i === index;
+          return (
+            <Box key={choice}>
+              <Text color={selected ? C.brand : C.faint}>{selected ? '❯ ' : '  '}</Text>
+              <Box width={labelWidth} flexShrink={0}>
+                <Text color={selected ? C.brand : undefined} bold={selected}>
+                  {ACCESS_LABEL[choice]}
+                </Text>
+              </Box>
+              <Text color={choice === 'full' ? C.warn : C.dim} wrap="wrap">
+                {ACCESS_HINT[choice]}
+              </Text>
+            </Box>
+          );
+        })}
+      </Box>
+      <Box marginTop={1}>
+        <Text color={C.faint} wrap="wrap">
+          {t('Выбор запомнится для всех проектов · поменять — «,» → «Права Antigravity»')}
+        </Text>
+      </Box>
     </Frame>
   );
 }

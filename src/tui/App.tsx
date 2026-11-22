@@ -18,6 +18,7 @@ import { Box, type Key, Text, useAnimation, useApp, useInput, usePaste, useWindo
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import stringWidth from 'string-width';
 
+import { ACCESS_HINT, ACCESS_LABEL, accessText, fullAccess, needsAccessChoice } from '../agents/access.js';
 import {
   ASSIST_EFFORT,
   type AssistChoice,
@@ -145,6 +146,7 @@ import { catalogHint, effortOptions, effortsFor, fitChoice, fitEffort, modelOpti
 import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './components/controls.js';
 import { NodeDetails, ProjectDetails, SessionDetails } from './details.js';
 import {
+  AccessDialog,
   CheckDialog,
   ConfirmAssist,
   ConfirmDelete,
@@ -227,6 +229,8 @@ type Modal =
   | { kind: 'criterion'; node: string; doneWhen: string; check?: string }
   | { kind: 'check'; node: string; result: CheckResult }
   | { kind: 'confirm'; intent: Intent }
+  /** Antigravity's first launch: full access or its ordinary mode, asked once. */
+  | { kind: 'access'; intent: Intent }
   | { kind: 'settings'; at?: string }
   | { kind: 'statusOrder' }
   | { kind: 'help' }
@@ -762,6 +766,7 @@ export function App(props: AppProps) {
       'settings',
       'statusOrder',
       'confirm',
+      'access',
       'github',
       'githubChoice',
       'images',
@@ -969,8 +974,18 @@ export function App(props: AppProps) {
 
   /** Every session and every agent job goes through here: confirmed first, unless the person turned that off. */
   const request = (intent: Intent) => {
+    // Rights come before the confirmation and are asked even with it off: once, before the first launch.
+    const brain = sessionBrain(intent);
+    if (brain && needsAccessChoice(brain)) return setModal({ kind: 'access', intent });
     if (settings().confirm) return setModal({ kind: 'confirm', intent });
     perform(intent);
+  };
+  /** The CLI a session intent starts or resumes; agent jobs run read-only and have none. */
+  const sessionBrain = (intent: Intent): BrainId | undefined => {
+    if (intent.kind === 'new') return intent.options.brain;
+    if (intent.kind === 'resume') return intent.ref.brain;
+    if (intent.kind === 'loose') return intent.session.brain;
+    return undefined;
   };
   const perform = (intent: Intent) => {
     const node = 'node' in intent ? holderOf(tree, intent.node) : undefined;
@@ -2359,6 +2374,25 @@ export function App(props: AppProps) {
           />
         );
       }
+      case 'access': {
+        const intent = modal.intent;
+        return (
+          <AccessDialog
+            width={Math.min(width - 2, 96)}
+            onCancel={close}
+            onChoose={(access) => {
+              updateSettings({ antigravityAccess: access });
+              // The confirmation, when it is on, opens in place of this question.
+              setModal(undefined);
+              say(
+                t('Antigravity: {access} · поменять — «,» → «Права Antigravity»', { access: ACCESS_LABEL[access] }),
+                access === 'full' ? C.warn : undefined,
+              );
+              request(intent);
+            }}
+          />
+        );
+      }
       case 'settings':
         return (
           <SettingsDialog
@@ -2878,6 +2912,12 @@ export function App(props: AppProps) {
       value: `${n.id === ROOT ? '◆' : GLYPH[n.status]} ${n.title}`,
       color: n.id === ROOT ? C.brand : STATUS_COLOR[n.status],
     });
+    // Full access stands out: the agent will not ask before anything.
+    const accessRow = (brain: BrainId, mode: string | undefined): ConfirmRow => ({
+      label: t('Права'),
+      value: accessText(brain, mode),
+      color: mode === 'bypassPermissions' ? C.warn : undefined,
+    });
     if (intent.kind === 'new') {
       if (!node) return undefined;
       const { options } = intent;
@@ -2897,6 +2937,7 @@ export function App(props: AppProps) {
           label: t('Модель'),
           value: `${options.model ?? t('по умолчанию CLI')} · ${t('усилие')} ${options.effort ?? t('по умолчанию')}`,
         },
+        accessRow(options.brain, plan.permissionMode),
       ];
       if (options.worktree) rows.push({ label: 'Worktree', value: t('отдельный git worktree') });
       const note = options.background
@@ -2924,6 +2965,7 @@ export function App(props: AppProps) {
           { label: t('Кто'), value: BRAIN_LABEL[intent.ref.brain], color: C.agent },
           { label: t('Сессия'), value: intent.ref.name ?? intent.ref.id },
           { label: t('Последний раз'), value: ago(intent.ref.opened ?? intent.ref.started) || '—' },
+          accessRow(intent.ref.brain, fullAccess(intent.ref.brain).permissionMode),
         ],
         note:
           intent.ref.mode === 'pane'
@@ -2944,6 +2986,7 @@ export function App(props: AppProps) {
           { label: t('Кто'), value: BRAIN_LABEL[intent.session.brain], color: C.agent },
           { label: t('Сессия'), value: intent.session.title ?? intent.session.id },
           { label: t('Последний раз'), value: ago(intent.session.updatedAt ?? intent.session.startedAt) || '—' },
+          accessRow(intent.session.brain, fullAccess(intent.session.brain).permissionMode),
         ],
         note: t('Сессия не привязана к узлу — после неё нажми l, чтобы привязать.'),
       };
@@ -2978,6 +3021,19 @@ export function App(props: AppProps) {
         options: yesNo,
         value: s.confirm ? 'on' : 'off',
         hint: t('спрашивать перед каждой сессией и задачей агента'),
+      },
+      {
+        key: 'antigravityAccess',
+        label: t('Права Antigravity'),
+        options: [
+          { value: '', label: t('спросить при запуске') },
+          { value: 'full', label: ACCESS_LABEL.full },
+          { value: 'normal', label: ACCESS_LABEL.normal },
+        ],
+        value: s.antigravityAccess,
+        hint: s.antigravityAccess
+          ? ACCESS_HINT[s.antigravityAccess]
+          : t('спрошу перед первым запуском Antigravity; Claude Code, Codex и OpenCode — по своим настройкам'),
       },
       {
         key: 'theme',
@@ -3155,6 +3211,8 @@ export function App(props: AppProps) {
     const on = value === 'on';
     if (key === 'lang' && (value === 'ru' || value === 'en')) updateSettings({ lang: value });
     else if (key === 'confirm') updateSettings({ confirm: on });
+    else if (key === 'antigravityAccess' && (value === '' || value === 'full' || value === 'normal'))
+      updateSettings({ antigravityAccess: value });
     else if (key === 'theme' && (value === 'dark' || value === 'light')) updateSettings({ theme: value });
     else if (key === 'animation') updateSettings({ animation: on });
     else if (key === 'marquee') updateSettings({ marquee: on });

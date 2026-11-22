@@ -13,7 +13,7 @@ const RIGHT = '\u001b[C';
 const LEFT = '\u001b[D';
 const downs = (n: number) => Array.from({ length: n }, () => DOWN);
 /** Rows of the settings screen before «Модель сессий»: language … status order … live, panes, notes, brain, start. */
-const MODEL_ROW = 14;
+const MODEL_ROW = 15;
 
 beforeEach(() => {
   process.env.TREEYARD_HOME = tempDir('treeyard-home-');
@@ -88,7 +88,7 @@ describe('models come from the CLI, not from typing', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(12), RIGHT, DOWN, DOWN],
+      keys: [',', ...downs(13), RIGHT, DOWN, DOWN],
     });
     const project = loadTree(tree.project.dir).project;
     expect(project.brain).toBe('codex');
@@ -108,7 +108,7 @@ describe('models come from the CLI, not from typing', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(12), LEFT, DOWN, DOWN, DOWN],
+      keys: [',', ...downs(13), LEFT, DOWN, DOWN, DOWN],
     });
     const project = loadTree(tree.project.dir).project;
     expect(project.brain).toBe('opencode');
@@ -174,7 +174,7 @@ describe('settings are easy to find', () => {
 
   it('the live status covers every CLI', async () => {
     const tree = sample();
-    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(6)] });
+    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(7)] });
     expect(frame).toContain('Живые статусы сессий');
     expect(frame).toContain('Claude Code, Codex, Antigravity и OpenCode');
   });

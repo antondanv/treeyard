@@ -1357,4 +1357,40 @@ export const EN: Record<string, string> = {
   'агентам уже сказано про дерево': 'the agents have already been told about the tree',
   дописать: 'add it',
   позже: 'later',
+  'полный доступ': 'full access',
+  'обычный режим': 'ordinary mode',
+  'команды, правка и удаление файлов, сеть — без подтверждений':
+    'commands, editing and deleting files, the network — with no confirmations',
+  'Antigravity спрашивает перед каждой командой — подтверждаешь в его сессии':
+    'Antigravity asks before every command — you confirm in its session',
+  'полный доступ: команды, файлы и сеть без подтверждений':
+    'full access: commands, files and the network with no confirmations',
+  'агент plan: правит файлы только после твоего «да»': 'the plan agent: edits files only after your “yes”',
+  'режим плана: правит файлы только после твоего «да»': 'plan mode: edits files only after your “yes”',
+  'обычный режим: спрашивает перед каждой командой': 'ordinary mode: asks before every command',
+  'как в настройках Codex: песочница и подтверждения из его config.toml':
+    'as in Codex settings: the sandbox and approvals from its config.toml',
+  'как в настройках OpenCode: permission в opencode.json': 'as in OpenCode settings: permission in opencode.json',
+  'как в настройках Claude Code: спрашивает по своим правилам': 'as in Claude Code settings: asks by its own rules',
+  'Какие права дать Antigravity?': 'What access should Antigravity get?',
+  'запомнить и запустить': 'remember and start',
+  'Antigravity спрашивает разрешения перед каждой командой, а агенту из узла нужно запускать treeyard, тесты и git. Treeyard может запускать его с полным доступом (--dangerously-skip-permissions).':
+    'Antigravity asks for permission before every command, while an agent from a node has to run treeyard, tests and git. Treeyard can start it with full access (--dangerously-skip-permissions).',
+  'Выбор запомнится для всех проектов · поменять — «,» → «Права Antigravity»':
+    'The choice is kept for all projects · change it — “,” → “Antigravity access”',
+  'Antigravity: {access} · поменять — «,» → «Права Antigravity»':
+    'Antigravity: {access} · change it — “,” → “Antigravity access”',
+  'Права Antigravity': 'Antigravity access',
+  'спросить при запуске': 'ask at launch',
+  'спрошу перед первым запуском Antigravity; Claude Code, Codex и OpenCode — по своим настройкам':
+    'asked before Antigravity first starts; Claude Code, Codex and OpenCode follow their own settings',
+  'права Antigravity ещё не выбраны — человек выбирает в дереве («,» → «Права Antigravity») или командой treeyard config antigravity_access full|normal':
+    'Antigravity access is not chosen yet — the person chooses in the tree (“,” → “Antigravity access”) or with treeyard config antigravity_access full|normal',
+  'Выбор запомнится для всех проектов · поменять — treeyard config antigravity_access или «,» в дереве':
+    'The choice is kept for all projects · change it — treeyard config antigravity_access or “,” in the tree',
+  'Полный доступ?': 'Full access?',
+  '[y — полный · n — обычный · ⏎ — не запускать]': '[y — full · n — ordinary · ⏎ — do not start]',
+  'Antigravity: {access}': 'Antigravity: {access}',
+  'права Antigravity: full, normal или ask — спросить при запуске':
+    'Antigravity access: full, normal or ask — ask at launch',
 };

@@ -29,6 +29,7 @@ import { today } from '../model/time.js';
 import { actionable, childrenOf, pathTo, progress, summarize, waitingNodes } from '../model/tree.js';
 import { type BrainId, ROOT, type StartMode, type Tree, type TreeNode } from '../model/types.js';
 import { loadSettings } from '../settings.js';
+import { fullAccess } from './access.js';
 
 export interface SessionPlan {
   /** The session's name: in Claude Code's `/resume`, agent view and the terminal title. */
@@ -37,7 +38,7 @@ export interface SessionPlan {
   system: string;
   /** The first message; none for `chat`. */
   prompt?: string;
-  /** Permission mode to start in: Claude Code `plan`, OpenCode's plan agent, Antigravity full access. */
+  /** Permission mode to start in: Claude Code `plan`, OpenCode's plan agent, Antigravity full access once the person chose it. */
   permissionMode?: string;
   /** The start mode actually used (`goal` falls back to `do` outside Claude Code). */
   start: StartMode;
@@ -56,16 +57,6 @@ export const START_HINT: Record<StartMode, string> = labels(() => ({
   goal: t('Claude работает, пока критерий не выполнен (/goal)'),
   chat: t('сессия с контекстом узла, первое сообщение — твоё'),
 }));
-
-/**
- * Claude Code, Codex and OpenCode take their access from their own settings;
- * agy has only plan and accept-edits there, and asks before every command — an
- * agent from a node has to run treeyard and the project's tests. The flag
- * lives for one run, so a resumed session needs it again.
- */
-export function fullAccess(brain: BrainId): { permissionMode?: string } {
-  return brain === 'antigravity' ? { permissionMode: 'bypassPermissions' } : {};
-}
 
 /**
  * A plan starts where the CLI itself keeps edits out until the person agrees:

@@ -23,7 +23,7 @@ import { pick } from '../i18n/i18n.js';
 import { nodeEnv } from '../model/notes.js';
 import type { BrainId } from '../model/types.js';
 import { settings } from '../settings.js';
-import { fullAccess } from './context.js';
+import { fullAccess } from './access.js';
 import type { Pane, PaneSize } from './panes.js';
 
 export const SKILL = 'treeyard-init';
