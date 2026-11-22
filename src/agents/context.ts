@@ -235,6 +235,8 @@ const TEXT = {
     diffWhat:
       'после коммита привяжи его к узлу (HEAD, ветка или SHA), чтобы человек мог посмотреть диф; без --add — просмотр. Привязывай только коммиты с работой по этому узлу',
     diffAuto: 'коммиты этой сессии привязываются к узлу сами (post-commit); чужие коммиты — так; без --add — просмотр',
+    statusWhat:
+      'сводка по проекту: папка и дерево (из git worktree — основное, с `--project` для команд), скиллы, указатель, git-хук, живые сессии; у каждой проблемы — команда, которая её исправит. Сомневаешься в настройке — сверься им, а не перебирай файлы',
   },
   en: {
     heading: '# You are working on a node of the project tree',
@@ -305,6 +307,8 @@ const TEXT = {
       'after committing, attach it to the node (HEAD, a branch or a SHA) so the person can inspect the patch; without --add — view. Attach only commits with work on this node',
     diffAuto:
       "this session's commits attach to the node by themselves (post-commit); commits of others — like this; without --add — view",
+    statusWhat:
+      'the project at a glance: the folder and its tree (from a git worktree — the main one, with the `--project` for commands), skills, the pointer, the git hook, live sessions; each problem comes with the command that fixes it. Unsure about the setup — check it here instead of going through files',
   },
 };
 
@@ -391,6 +395,7 @@ export function contextText(tree: Tree, id: string): string {
   lines.push(`- \`${self} add "${L.other}" --project ../X --for ${node.id}\` — ${L.otherWhat}`);
   lines.push(`- \`${self} set <id> status=done --project ../X\` — ${L.closeOther}`);
   lines.push(`- \`${self} image ${node.id} ${L.image} --note "…"\` — ${L.imageWhat}`);
+  lines.push(`- \`${self} status\` — ${L.statusWhat}`);
   // With the hook in place the session's own commits need no command; the check is one cheap git call.
   if (hookInstalled(project.dir)) lines.push(`- \`${self} diff ${node.id} --add <ref>\` — ${L.diffAuto}`);
   else lines.push(`- \`${self} diff ${node.id} --add HEAD\` — ${L.diffWhat}`);

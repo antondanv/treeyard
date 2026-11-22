@@ -18,8 +18,8 @@ sets your node `done`. If you did its work yourself, close it right away with
 ## Git worktrees
 
 In a git worktree, `.tree/` is the branch's copy; the person sees the main tree.
-`git worktree list` prints the main folder first. Pass `--project <main folder>` to `show`,
-`find`, `log`, `set` and `diff`. `add --project` requires `--for`, so put a side idea into your
+`treeyard status` names the main tree and the `--project <main folder>` to pass to `show`,
+`find`, `log`, `set` and `diff` (`git worktree list` prints the main folder first, too). `add --project` requires `--for`, so put a side idea into your
 journal entry on the main tree instead.
 
 ## Handing a node to another session

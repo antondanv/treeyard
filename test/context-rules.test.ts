@@ -57,6 +57,19 @@ describe('a node session', () => {
     expect(text).toContain('`--journal N` — how many entries');
   });
 
+  it('points to treeyard status for the main tree from a worktree and the setup', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Оплата картой' });
+    expect(commands(contextText(tree, node.id))).toContain(
+      `- \`${self} status\` — сводка по проекту: папка и дерево (из git worktree — основное, с \`--project\` для команд), скиллы, указатель, git-хук`,
+    );
+
+    setLang('en');
+    expect(commands(contextText(tree, node.id))).toContain(
+      `- \`${self} status\` — the project at a glance: the folder and its tree (from a git worktree — the main one, with the \`--project\` for commands), skills, the pointer, the git hook`,
+    );
+  });
+
   it('a project folder with a space is quoted, so the helper can paste it', () => {
     const dir = tempDir('treeyard test ');
     createTree(dir, getTemplate('directions')!, { title: 'Тест', answers: { goal: 'всё' }, skeleton: false });

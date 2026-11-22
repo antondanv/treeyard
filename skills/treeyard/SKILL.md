@@ -72,6 +72,12 @@ by title.
   branch, a line each. A status is a word (`review`, `на проверке`, `wip`), never a glyph.
 - `treeyard find "text"` — titles, criteria, descriptions and journals of every node, done
   ones too. Instead of `grep` over `.tree/` or over `show`.
+- `treeyard status` — the project at a glance: its folder and tree, nodes by status and
+  abandoned ones, skills per CLI, the pointer in CLAUDE.md and AGENTS.md, the git hook, live
+  sessions; each problem comes with the command that fixes it. In a git worktree it names
+  the main tree and the `--project` to pass. Run it when the setup looks off (a skill
+  missing, commits not attaching, the tree not where you expect) instead of checking files
+  one by one.
 - `--json` — only when a script needs the fields.
 
 A cut output drops what you came for: the criterion, why a node waits, the last entry. Many
@@ -194,8 +200,8 @@ overview; a hand edit skips them. Reading the files is fine.
   session. If the project commits its tree (`git log --oneline -- .tree`), commit yours with
   `treeyard commit <id> [<id>…]` — the named nodes, README and tree.md, nothing else; with no
   clear habit, leave it to the person and say so. Never `git add .tree/…` by hand.
-- A session opened from a node with the hook installed (`treeyard hook status`) attaches its
-  commits by itself; otherwise `--commit HEAD` in the closing `log`, or
+- A session opened from a node with the hook installed (`treeyard status` shows it)
+  attaches its commits by itself; otherwise `--commit HEAD` in the closing `log`, or
   `treeyard diff <id> --add HEAD`.
 - Push, PR, merge — only when the person asks.
 
@@ -226,6 +232,7 @@ What to look for and the commands — see [references/tree-order.md](references/
 
 - `treeyard show [<id>…] [--brief] [--journal N] [--only …]` — the tree, nodes
 - `treeyard show --status review,idea [--under <id>]` · `treeyard find "…"` — look things up
+- `treeyard status` — the tree (the main one from a worktree) and the setup, with fixes
 - `treeyard set <id> status=active` · `status=todo`; several ids — the same to each
 - `treeyard set <id> status=waiting waiting="…" until="…"` — blocked
 - `treeyard set <id> title="…" done_when="…" note="…" parent=<id> after=<id>` — change a node
