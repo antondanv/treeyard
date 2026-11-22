@@ -68,6 +68,7 @@ function waitSources(world: World, onLook?: (count: number) => void): WaitSource
             alternate: false,
           }
         : undefined,
+    idle: async (_panes, asked) => asked,
     watch: (_dir, wake) => {
       sources.wake = wake;
       return { stop: () => undefined };
@@ -191,6 +192,18 @@ describe('treeyard wait', () => {
       { id: named.id, reason: 'idle', session: { id: 'th-1', pane: 'codex-bb' } },
       { id: asleep.id, reason: 'gone', session: { state: 'gone' } },
     ]);
+  });
+
+  it('takes the idle state of a Codex pane from its rollout, since Codex lists only busy sessions', async () => {
+    const tree = emptyTree();
+    const node = nodeWithSession(tree, 'Codex', { id: 'th-2', brain: 'codex', mode: 'pane', pane: 'codex-cc' });
+    const sources = waitSources({ live: [], panes: [pane('codex-cc', { brain: 'codex', sessionId: 'th-2' })] });
+    const silent = await waitFor(tree.project.dir, [node.id], { ...fast, timeoutMs: 40, sources });
+    expect(silent.pending).toMatchObject([{ session: { state: 'unknown' } }]);
+    sources.idle = async (panes, asked) =>
+      new Map([...asked, ...panes.map((p) => [p.sessionId!, live(p.sessionId!, 'idle')] as const)]);
+    const idle = await waitFor(tree.project.dir, [node.id], { ...fast, sources });
+    expect(idle.settled).toMatchObject([{ reason: 'idle', session: { id: 'th-2', state: 'idle', pane: 'codex-cc' } }]);
   });
 
   it('wakes when the tree changes and, with --all, waits for every node', async () => {

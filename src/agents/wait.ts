@@ -21,6 +21,7 @@ import { journalEntries } from '../model/journal.js';
 import { loadTree } from '../model/store.js';
 import type { SessionRef, Status, Tree, TreeNode } from '../model/types.js';
 import { watchTree } from '../watch.js';
+import { withPaneIdle } from './pane-idle.js';
 import { isPending, paneFor, paneInProject } from './panes.js';
 
 /** What a session is doing, as its CLI tells it; `gone` — its process ended (a pane asleep, a finished background run). */
@@ -70,6 +71,8 @@ export interface WaitSources {
   /** The session a Codex, Antigravity or OpenCode pane started. */
   paneSession(pane: PaneInfo): Promise<string | undefined>;
   capture(pane: string): Promise<PaneScreen | undefined>;
+  /** Adds the idle state of panes whose CLI lists only busy sessions (Codex, Antigravity). */
+  idle(panes: readonly PaneInfo[], live: ReadonlyMap<string, SessionInfo>): Promise<ReadonlyMap<string, SessionInfo>>;
   watch(dir: string, wake: () => void): { stop(): void };
   now(): number;
 }
@@ -81,6 +84,7 @@ export const SOURCES: WaitSources = {
   panes: () => listPanes(),
   paneSession: async (pane) => (await findPaneSession(pane))?.id,
   capture: (pane) => capturePane(pane),
+  idle: (panes, live) => withPaneIdle(panes, live),
   watch: (dir, wake) => watchTree(dir, wake),
   now: () => Date.now(),
 };
@@ -185,7 +189,6 @@ export async function look(
   const world: World = { live: new Map(), panes: [], paneSessions: new Map() };
   if (asking) {
     const [live, panes] = await Promise.all([sources.live().catch(() => []), sources.panes().catch(() => [])]);
-    world.live = new Map(live.map((session) => [session.id, session]));
     world.panes = panes;
     const names = new Map<string, string>();
     for (const pane of panes)
@@ -194,6 +197,11 @@ export async function look(
         if (id) names.set(pane.pane, id);
       }
     world.paneSessions = names;
+    const named = panes.map((pane) =>
+      pane.sessionId || !names.has(pane.pane) ? pane : { ...pane, sessionId: names.get(pane.pane)! },
+    );
+    const asked = new Map(live.map((session) => [session.id, session]));
+    world.live = await sources.idle(named, asked).catch(() => asked);
   }
   const now = sources.now();
   const sights: Sight[] = [];
