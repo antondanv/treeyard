@@ -20,8 +20,8 @@ const SHIFT_DOWN = '\u001b[1;2B';
 const RIGHT = '\u001b[C';
 const DOWN = '\u001b[B';
 const ESC = '\u001b';
-/** «Порядок статусов» on the settings screen: language, confirm, theme, animation, marquee, then it. */
-const STATUS_ORDER_ROW = 6;
+/** «Порядок статусов» on the settings screen: language, confirm, Antigravity, Codex, theme, animation, marquee, then it. */
+const STATUS_ORDER_ROW = 7;
 const root = fileURLToPath(new URL('..', import.meta.url));
 
 function sample() {

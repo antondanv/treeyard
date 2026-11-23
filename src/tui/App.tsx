@@ -18,7 +18,16 @@ import { Box, type Key, Text, useAnimation, useApp, useInput, usePaste, useWindo
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import stringWidth from 'string-width';
 
-import { ACCESS_HINT, ACCESS_LABEL, accessText, fullAccess, needsAccessChoice } from '../agents/access.js';
+import {
+  ACCESS_HINT,
+  ACCESS_LABEL,
+  accessChoices,
+  accessPatch,
+  accessQuestion,
+  accessText,
+  fullAccess,
+  needsAccessChoice,
+} from '../agents/access.js';
 import {
   ASSIST_EFFORT,
   type AssistChoice,
@@ -2376,18 +2385,19 @@ export function App(props: AppProps) {
       }
       case 'access': {
         const intent = modal.intent;
+        const brain = sessionBrain(intent);
+        // Asked only for a session of a CLI that has a question (see `request`).
+        if (!brain) return null;
         return (
           <AccessDialog
+            brain={brain}
             width={Math.min(width - 2, 96)}
             onCancel={close}
             onChoose={(access) => {
-              updateSettings({ antigravityAccess: access });
+              updateSettings(accessPatch(brain, access));
               // The confirmation, when it is on, opens in place of this question.
               setModal(undefined);
-              say(
-                t('Antigravity: {access} · поменять — «,» → «Права Antigravity»', { access: ACCESS_LABEL[access] }),
-                access === 'full' ? C.warn : undefined,
-              );
+              say(accessQuestion(brain).chosen(access), access === 'full' ? C.warn : undefined);
               request(intent);
             }}
           />
@@ -2965,7 +2975,7 @@ export function App(props: AppProps) {
           { label: t('Кто'), value: BRAIN_LABEL[intent.ref.brain], color: C.agent },
           { label: t('Сессия'), value: intent.ref.name ?? intent.ref.id },
           { label: t('Последний раз'), value: ago(intent.ref.opened ?? intent.ref.started) || '—' },
-          accessRow(intent.ref.brain, fullAccess(intent.ref.brain).permissionMode),
+          accessRow(intent.ref.brain, fullAccess(intent.ref.brain, tree.project.dir).permissionMode),
         ],
         note:
           intent.ref.mode === 'pane'
@@ -2986,7 +2996,7 @@ export function App(props: AppProps) {
           { label: t('Кто'), value: BRAIN_LABEL[intent.session.brain], color: C.agent },
           { label: t('Сессия'), value: intent.session.title ?? intent.session.id },
           { label: t('Последний раз'), value: ago(intent.session.updatedAt ?? intent.session.startedAt) || '—' },
-          accessRow(intent.session.brain, fullAccess(intent.session.brain).permissionMode),
+          accessRow(intent.session.brain, fullAccess(intent.session.brain, tree.project.dir).permissionMode),
         ],
         note: t('Сессия не привязана к узлу — после неё нажми l, чтобы привязать.'),
       };
@@ -3022,19 +3032,20 @@ export function App(props: AppProps) {
         value: s.confirm ? 'on' : 'off',
         hint: t('спрашивать перед каждой сессией и задачей агента'),
       },
-      {
-        key: 'antigravityAccess',
-        label: t('Права Antigravity'),
-        options: [
-          { value: '', label: t('спросить при запуске') },
-          { value: 'full', label: ACCESS_LABEL.full },
-          { value: 'normal', label: ACCESS_LABEL.normal },
-        ],
-        value: s.antigravityAccess,
-        hint: s.antigravityAccess
-          ? ACCESS_HINT[s.antigravityAccess]
-          : t('спрошу перед первым запуском Antigravity; Claude Code, Codex и OpenCode — по своим настройкам'),
-      },
+      ...(['antigravity', 'codex'] as const).map((cli) => {
+        const question = accessQuestion(cli);
+        const chosen = cli === 'codex' ? s.codexAccess : s.antigravityAccess;
+        return {
+          key: cli === 'codex' ? 'codexAccess' : 'antigravityAccess',
+          label: question.row,
+          options: [
+            { value: '', label: t('спросить при запуске') },
+            ...accessChoices(cli).map((choice) => ({ value: choice, label: ACCESS_LABEL[choice] })),
+          ],
+          value: chosen,
+          hint: chosen ? ACCESS_HINT[chosen] : question.unset,
+        };
+      }),
       {
         key: 'theme',
         label: t('Тема'),
@@ -3224,7 +3235,9 @@ export function App(props: AppProps) {
     if (key === 'lang' && (value === 'ru' || value === 'en')) updateSettings({ lang: value });
     else if (key === 'confirm') updateSettings({ confirm: on });
     else if (key === 'antigravityAccess' && (value === '' || value === 'full' || value === 'normal'))
-      updateSettings({ antigravityAccess: value });
+      updateSettings(accessPatch('antigravity', value));
+    else if (key === 'codexAccess' && (value === '' || value === 'sandbox' || value === 'config'))
+      updateSettings(accessPatch('codex', value));
     else if (key === 'theme' && (value === 'dark' || value === 'light')) updateSettings({ theme: value });
     else if (key === 'animation') updateSettings({ animation: on });
     else if (key === 'marquee') updateSettings({ marquee: on });

@@ -12,6 +12,7 @@ import { join, relative, resolve, sep } from 'node:path';
 
 import { VERSION as BRAINYARD_VERSION, liveSessions, type SessionInfo } from '@antondanv/brainyard';
 
+import { configLines, reach, readSandbox } from './agents/codex-config.js';
 import { BRAIN_LABEL } from './agents/launch.js';
 import { type Pane, paneFor, paneInProject, readPanes } from './agents/panes.js';
 import { type SkillStatus, skillStates } from './agents/skills.js';
@@ -186,6 +187,8 @@ export interface Problem {
   fix: string;
   /** Another way to fix it. */
   or?: string;
+  /** What to write where `or` points, line by line. */
+  lines?: string[];
 }
 
 export interface WorktreeStatus extends Worktree {
@@ -193,6 +196,18 @@ export interface WorktreeStatus extends Worktree {
   tree?: 'main' | 'branch';
   /** The worktree keeps its own copy of `.tree/` (the branch's), which the person does not see. */
   copy: boolean;
+}
+
+/** How a Codex session from the tree gets to treeyard and git through its sandbox. */
+export interface CodexStatus {
+  /** What the person chose; `ask` — not yet, the first launch asks. */
+  choice: 'sandbox' | 'config' | 'ask';
+  /** The config.toml its sandbox comes from. */
+  file: string;
+  /** What config.toml alone lets a session do. */
+  config: { network: boolean; git: boolean };
+  /** What to add to config.toml so that it does; empty when it already does. */
+  lines: string[];
 }
 
 export interface ProjectStatus {
@@ -205,6 +220,8 @@ export interface ProjectStatus {
   skills: SkillStatus[];
   /** treeyard installs and refreshes the skills by itself (setting `skills`). */
   skillsAuto: boolean;
+  /** Present when Codex is installed or the person chose how to start it. */
+  codex?: CodexStatus;
   pointer?: PointerStatus[];
   hook?: HookInfo;
   sessions?: LiveSession[];
@@ -228,6 +245,21 @@ async function liveIn(dirs: string[]): Promise<SessionInfo[]> {
   const unique = new Map<string, SessionInfo>();
   for (const session of lists.flat()) unique.set(`${session.brain}:${session.id}`, session);
   return [...unique.values()];
+}
+
+/** Codex's way into treeyard and git; undefined when it is not on this machine and nobody chose. */
+function codexInfo(dir: string, skills: SkillStatus[], env: NodeJS.ProcessEnv): CodexStatus | undefined {
+  const choice = settings().codexAccess || 'ask';
+  const installed = skills.some((skill) => skill.brain === 'codex' && skill.state !== 'no-cli');
+  if (!installed && choice === 'ask') return undefined;
+  const sandbox = readSandbox(env);
+  const state = reach(sandbox, dir);
+  return {
+    choice,
+    file: sandbox.file,
+    config: { network: state.network, git: state.git },
+    lines: configLines(sandbox, dir),
+  };
 }
 
 function hookInfo(folder: string): HookInfo {
@@ -277,6 +309,8 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
   const skillsOn = skillsAuto(env);
   if (!place.project) {
     const status: ProjectStatus = { ...head, skills, skillsAuto: skillsOn, problems: [] };
+    const codex = codexInfo(place.folder, skills, env);
+    if (codex) status.codex = codex;
     status.problems = problemsOf(status, place);
     return status;
   }
@@ -335,6 +369,7 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     };
   });
 
+  const codex = codexInfo(tree.project.dir, skills, env);
   // In the order of the text, so `--json` reads the same way.
   const status: ProjectStatus = {
     ...head,
@@ -342,6 +377,7 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     nodes: { total: tree.nodes.size, byStatus, abandoned },
     skills,
     skillsAuto: skillsOn,
+    ...(codex ? { codex } : {}),
     pointer: pointerStates(place.folder),
     hook: hookInfo(place.folder),
     sessions,
@@ -417,6 +453,24 @@ export function problemsOf(status: ProjectStatus, place: Place): Problem[] {
       what: t('скиллы устарели: {places}', { places: list([...new Set(outdated)]) }),
       fix: 'treeyard skills install',
     });
+
+  // The sandbox keeps `treeyard send` and `git commit` out of a Codex session unless one of two things lets them in.
+  const codex = status.codex;
+  if (codex && codex.choice !== 'sandbox' && codex.lines.length) {
+    const { network, git } = codex.config;
+    out.push({
+      kind: 'codex-access',
+      what:
+        !network && !git
+          ? t('Codex без доступа к treeyard и git: песочница закрыта для сокета tmux и для .git проекта')
+          : !network
+            ? t('Codex без доступа к treeyard: песочница закрыта для сокета tmux (treeyard send, панели)')
+            : t('Codex без доступа к git: песочница не пускает в .git проекта (git commit)'),
+      fix: 'treeyard config codex_access sandbox',
+      or: t('строки в {file}:', { file: homeShort(codex.file) }),
+      lines: codex.lines,
+    });
+  }
 
   if (status.pointer) {
     const of = (state: PointerStatus['state']) => status.pointer!.filter((p) => p.state === state).map((p) => p.file);

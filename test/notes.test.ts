@@ -82,7 +82,7 @@ describe('notes', () => {
 describe('where notes go, from the settings screen', () => {
   const DOWN = '\u001b[B';
   /** «Куда падают замечания»: the last of the settings for all projects. */
-  const toNotes = [',', ...Array.from({ length: 12 }, () => DOWN)];
+  const toNotes = [',', ...Array.from({ length: 13 }, () => DOWN)];
   const home = process.env.TREEYARD_HOME;
 
   afterEach(() => {

@@ -5,11 +5,16 @@ import { taskArg } from '../src/cli/commands.js';
 import { setLang } from '../src/i18n/i18n.js';
 import { addNode } from '../src/model/ops.js';
 import { ROOT } from '../src/model/types.js';
+import { settings } from '../src/settings.js';
 import { emptyTree, withStdin } from './helpers.js';
 
 const TASK = 'без платных вызовов; "завод" не перезапускать';
 
-beforeEach(() => setLang('ru'));
+beforeEach(() => {
+  // A plan reads the settings, and their first load sets the language: do it before the test sets its own.
+  settings();
+  setLang('ru');
+});
 
 describe('a coordinator task in the first message', () => {
   it('goes after the standard prompt as its own paragraph in plan, do and goal', () => {

@@ -40,6 +40,8 @@ export interface SessionPlan {
   prompt?: string;
   /** Permission mode to start in: Claude Code `plan`, OpenCode's plan agent, Antigravity full access once the person chose it. */
   permissionMode?: string;
+  /** Flags the CLI takes besides its permission mode: Codex's sandbox, once the person chose it. */
+  extraArgs?: string[];
   /** The start mode actually used (`goal` falls back to `do` outside Claude Code). */
   start: StartMode;
 }
@@ -124,7 +126,7 @@ function basePlan(tree: Tree, id: string, start: StartMode, brain: BrainId, hasT
     name: sessionName(tree, node),
     system: contextText(tree, id),
     start: mode,
-    ...fullAccess(brain),
+    ...fullAccess(brain, tree.project.dir),
   };
   const title = `«${node.title}» (${node.id})`;
   const check = node.check ? `\`${node.check}\`` : '';
@@ -465,7 +467,7 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
     name: name.length > 64 ? `${name.slice(0, 63)}…` : name,
     system: projectContext(tree),
     start: mode,
-    ...fullAccess(brain),
+    ...fullAccess(brain, tree.project.dir),
   };
   if (mode === 'chat' && !hasTask) {
     // Some CLIs deliver the context as a first message instead of a system instruction.

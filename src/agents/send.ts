@@ -117,7 +117,7 @@ export async function sendToNode(tree: Tree, id: string, text: string, options: 
       resume: ref.id,
       prompt: letter,
       background: true,
-      ...fullAccess(ref.brain),
+      ...fullAccess(ref.brain, dir),
       env: nodeEnv(id, dir),
     });
     if (result.error || !result.ok) throw new NotSent(result.error?.message ?? t('фоновая сессия не продолжилась'));
@@ -134,7 +134,7 @@ export async function sendToNode(tree: Tree, id: string, text: string, options: 
       cwd: dir,
       resume: ref.id,
       prompt: letter,
-      ...fullAccess(ref.brain),
+      ...fullAccess(ref.brain, dir),
       label: node.title,
       env: nodeEnv(id, dir),
       ...(options.size ? { width: options.size.width, height: options.size.height } : {}),

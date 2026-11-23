@@ -1397,16 +1397,49 @@ export const EN: Record<string, string> = {
   'Antigravity: {access} · поменять — «,» → «Права Antigravity»':
     'Antigravity: {access} · change it — “,” → “Antigravity access”',
   'Права Antigravity': 'Antigravity access',
+  'Права Codex': 'Codex access',
+  'песочница + treeyard и git': 'sandbox + treeyard and git',
+  'как в config.toml': 'as in config.toml',
+  'workspace-write, сеть и .git проекта открыты: treeyard send и git commit работают; остальное — из config.toml':
+    'workspace-write with the network and the project’s .git open: treeyard send and git commit work; the rest from config.toml',
+  'песочница и подтверждения только из config.toml: treeyard send и git commit могут упереться в песочницу':
+    'the sandbox and approvals from config.toml alone: treeyard send and git commit may hit the sandbox',
+  'песочница + treeyard и git: workspace-write, сеть и .git проекта открыты; остальное — из config.toml':
+    'sandbox + treeyard and git: workspace-write with the network and the project’s .git open; the rest from config.toml',
+  'Как запускать Codex из дерева?': 'How should Codex start from the tree?',
+  'По умолчанию песочница Codex не пускает ни в сокет tmux, ни в .git проекта: treeyard send и git commit из его сессии не проходят. Treeyard может запускать его в песочнице workspace-write с открытой сетью и .git проекта среди записываемых папок; остальное — из config.toml.':
+    'By default Codex’s sandbox keeps out both the tmux socket and the project’s .git: treeyard send and git commit from its session fail. Treeyard can start it in the workspace-write sandbox with the network open and the project’s .git among the writable folders; the rest comes from config.toml.',
+  'Песочница + treeyard и git?': 'Sandbox + treeyard and git?',
+  '[y — песочница + treeyard и git · n — как в config.toml · ⏎ — не запускать]':
+    '[y — sandbox + treeyard and git · n — as in config.toml · ⏎ — do not start]',
+  'Выбор запомнится для всех проектов · поменять — «,» → «Права Codex»':
+    'The choice is kept for all projects · change it — “,” → “Codex access”',
+  'Выбор запомнится для всех проектов · поменять — treeyard config codex_access или «,» в дереве':
+    'The choice is kept for all projects · change it — treeyard config codex_access or “,” in the tree',
+  'Codex: {access} · поменять — «,» → «Права Codex»': 'Codex: {access} · change it — “,” → “Codex access”',
+  'права Codex ещё не выбраны — человек выбирает в дереве («,» → «Права Codex») или командой treeyard config codex_access sandbox|config':
+    'Codex access is not chosen yet — the person chooses in the tree (“,” → “Codex access”) or with treeyard config codex_access sandbox|config',
+  'права Codex: sandbox, config или ask — спросить при запуске': 'Codex access: sandbox, config or ask — ask at launch',
+  'Codex без доступа к treeyard и git: песочница закрыта для сокета tmux и для .git проекта':
+    'Codex has no access to treeyard and git: its sandbox is closed to the tmux socket and to the project’s .git',
+  'Codex без доступа к treeyard: песочница закрыта для сокета tmux (treeyard send, панели)':
+    'Codex has no access to treeyard: its sandbox is closed to the tmux socket (treeyard send, panes)',
+  'Codex без доступа к git: песочница не пускает в .git проекта (git commit)':
+    'Codex has no access to git: its sandbox keeps out of the project’s .git (git commit)',
+  'строки в {file}:': 'lines in {file}:',
+  'не выбрано — спросит при первом запуске': 'not chosen — asked at the first launch',
+  'config.toml не даёт доступа к treeyard и git': 'config.toml gives no access to treeyard and git',
+  'config.toml даёт доступ к treeyard и git': 'config.toml gives access to treeyard and git',
   'спросить при запуске': 'ask at launch',
-  'спрошу перед первым запуском Antigravity; Claude Code, Codex и OpenCode — по своим настройкам':
-    'asked before Antigravity first starts; Claude Code, Codex and OpenCode follow their own settings',
+  'спрошу перед первым запуском Antigravity': 'asked before Antigravity first starts',
+  'спрошу перед первым запуском Codex': 'asked before Codex first starts',
   'права Antigravity ещё не выбраны — человек выбирает в дереве («,» → «Права Antigravity») или командой treeyard config antigravity_access full|normal':
     'Antigravity access is not chosen yet — the person chooses in the tree (“,” → “Antigravity access”) or with treeyard config antigravity_access full|normal',
   'Выбор запомнится для всех проектов · поменять — treeyard config antigravity_access или «,» в дереве':
     'The choice is kept for all projects · change it — treeyard config antigravity_access or “,” in the tree',
   'Полный доступ?': 'Full access?',
   '[y — полный · n — обычный · ⏎ — не запускать]': '[y — full · n — ordinary · ⏎ — do not start]',
-  'Antigravity: {access}': 'Antigravity: {access}',
+  '{brain}: {access}': '{brain}: {access}',
   'права Antigravity: full, normal или ask — спросить при запуске':
     'Antigravity access: full, normal or ask — ask at launch',
   'хук post-commit': 'post-commit hook',

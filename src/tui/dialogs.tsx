@@ -7,7 +7,7 @@ import { Box, type Key, Text, useInput } from 'ink';
 import { useRef, useState } from 'react';
 import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
-import { ACCESS_HINT, ACCESS_LABEL } from '../agents/access.js';
+import { ACCESS_HINT, ACCESS_LABEL, type AccessChoice, accessChoices, accessQuestion } from '../agents/access.js';
 import type { AssistChoice, AssistJob } from '../agents/assist.js';
 import { ROOT_START_HINT, ROOT_START_LABEL, START_HINT, START_LABEL } from '../agents/context.js';
 import { BRAIN_LABEL, BRAIN_SHORT, type LaunchOptions, sessionEffort } from '../agents/launch.js';
@@ -29,7 +29,6 @@ import {
   WHO,
   type Who,
 } from '../model/types.js';
-import type { Access } from '../settings.js';
 import { catalogHint, effortOptions, effortsFor, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import {
   Choice,
@@ -1647,11 +1646,18 @@ export function ConfirmLaunch(props: {
 }
 
 /**
- * Before Antigravity's first launch from the tree: what full access means, and
- * the ordinary mode instead. Asked once — the choice goes to the settings.
+ * Before the first launch from the tree of a CLI that gets more rights than its own settings
+ * give (Antigravity, Codex): what they are, and the CLI's own way instead. Asked once — the
+ * choice goes to the settings.
  */
-export function AccessDialog(props: { width: number; onChoose: (access: Access) => void; onCancel: () => void }) {
-  const choices: Access[] = ['full', 'normal'];
+export function AccessDialog(props: {
+  brain: BrainId;
+  width: number;
+  onChoose: (access: AccessChoice) => void;
+  onCancel: () => void;
+}) {
+  const choices = accessChoices(props.brain);
+  const question = accessQuestion(props.brain);
   // As in ConfirmLaunch: the Enter that opened the question does not answer it.
   const opened = useRef(Date.now());
   const answered = useRef(false);
@@ -1673,7 +1679,7 @@ export function AccessDialog(props: { width: number; onChoose: (access: Access) 
   const labelWidth = Math.max(...choices.map((choice) => ACCESS_LABEL[choice].length)) + 3;
   return (
     <Frame
-      title={t('Какие права дать Antigravity?')}
+      title={question.title}
       width={props.width}
       color={C.agent}
       footer={[
@@ -1682,11 +1688,7 @@ export function AccessDialog(props: { width: number; onChoose: (access: Access) 
         { key: 'esc', label: t('отмена') },
       ]}
     >
-      <Text wrap="wrap">
-        {t(
-          'Antigravity спрашивает разрешения перед каждой командой, а агенту из узла нужно запускать treeyard, тесты и git. Treeyard может запускать его с полным доступом (--dangerously-skip-permissions).',
-        )}
-      </Text>
+      <Text wrap="wrap">{question.intro}</Text>
       <Box flexDirection="column" marginTop={1}>
         {choices.map((choice, i) => {
           const selected = i === index;
@@ -1707,7 +1709,7 @@ export function AccessDialog(props: { width: number; onChoose: (access: Access) 
       </Box>
       <Box marginTop={1}>
         <Text color={C.faint} wrap="wrap">
-          {t('Выбор запомнится для всех проектов · поменять — «,» → «Права Antigravity»')}
+          {question.kept}
         </Text>
       </Box>
     </Frame>

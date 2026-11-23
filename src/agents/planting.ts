@@ -142,7 +142,7 @@ export async function plantWithAgent(dir: string, brain: BrainId, size?: PaneSiz
     } Do not ask them to launch treeyard again.`,
     prompt: plantingPrompt(facts),
     ...(brain === 'claude' ? { name } : {}),
-    ...fullAccess(brain),
+    ...fullAccess(brain, dir),
     env: nodeEnv(''),
   };
   if (!pane) return { mode: 'terminal', result: await open(options) };

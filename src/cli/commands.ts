@@ -13,7 +13,17 @@ import { createInterface } from 'node:readline';
 
 import { parseArgs } from 'node:util';
 
-import { ACCESS_HINT, ACCESS_LABEL, accessText, fullAccess, needsAccessChoice } from '../agents/access.js';
+import {
+  ACCESS_HINT,
+  ACCESS_LABEL,
+  type AccessChoice,
+  accessChoices,
+  accessPatch,
+  accessQuestion,
+  accessText,
+  fullAccess,
+  needsAccessChoice,
+} from '../agents/access.js';
 import {
   contextText,
   ROOT_START_HINT,
@@ -108,16 +118,7 @@ import {
   type Who,
 } from '../model/types.js';
 import { rememberProject, seenProjects } from '../projects.js';
-import {
-  type Access,
-  MAX_PANES,
-  orderOf,
-  SLEEP_AFTER,
-  settings,
-  settingsPath,
-  skillsAuto,
-  updateSettings,
-} from '../settings.js';
+import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, skillsAuto, updateSettings } from '../settings.js';
 import { locate, projectStatus } from '../status.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
@@ -157,8 +158,9 @@ function commandLines(): string {
   treeyard import [--brain claude]         агент молча читает план проекта и строит дерево
   treeyard import --from-json <файл|->     посадить дерево из JSON (так сажает агент)
   treeyard status [--json] [--project <папка>]   сводка: версии, папка и дерево, узлы по статусам и брошенные,
-                                           скиллы, указатель, git-хук, живые сессии и панели, GitHub;
-                                           у каждой проблемы — команда, которая её исправит
+                                           скиллы, как Codex проходит песочницу к treeyard и git, указатель, git-хук,
+                                           живые сессии и панели, GitHub; у каждой проблемы — команда, которая её исправит
+                                           (Codex без доступа — ещё и строки для ~/.codex/config.toml)
   treeyard pointer                         дописать блок о дереве в AGENTS.md / CLAUDE.md
   treeyard skills [install]                скиллы treeyard, treeyard-init и treeyard-coordinate: где стоят, поставить
                                            в Claude Code, Codex, Antigravity (папки в проекте — обновить)
@@ -253,14 +255,19 @@ function commandLines(): string {
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
                                            репозитория (открытые — узлы, закрытие — в обе стороны)
-  treeyard config [ключ [значение]]        настройки: lang ru|en, confirm, theme…`,
+  treeyard config [ключ [значение]]        настройки: lang ru|en, confirm, theme…
+                                           codex_access sandbox|config|ask — как запускать Codex из дерева: песочница
+                                           + treeyard и git (workspace-write, сеть и .git проекта открыты) или как в
+                                           ~/.codex/config.toml; ask — спросить перед запуском; antigravity_access full|normal|ask`,
     en: `  treeyard init [--template <id>]          plant a tree: with an agent or from a template (wizard)
   treeyard init --agent [--brain codex]    an agent studies the folder, asks questions, plants the tree
   treeyard import [--brain claude]         an agent silently reads the project's plan and builds the tree
   treeyard import --from-json <file|->     plant a tree from JSON (how the agent plants it)
   treeyard status [--json] [--project <dir>]   a summary: versions, the folder and its tree, nodes by status and
-                                           abandoned ones, skills, the pointer, the git hook, live sessions and panes,
-                                           GitHub; every problem with the command that fixes it
+                                           abandoned ones, skills, Codex's way through its sandbox to treeyard and git,
+                                           the pointer, the git hook, live sessions and panes, GitHub;
+                                           every problem with the command that fixes it (a Codex without access —
+                                           the lines for ~/.codex/config.toml too)
   treeyard pointer                         add the block about the tree to AGENTS.md / CLAUDE.md
   treeyard skills [install]                the treeyard, treeyard-init and treeyard-coordinate skills: where they are,
                                            install into Claude Code, Codex, Antigravity (copies in the project — refresh)
@@ -358,7 +365,10 @@ function commandLines(): string {
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            a GitHub Project board (cards are nodes, columns are statuses) or a
                                            repository's issues (open ones are nodes, closing goes both ways)
-  treeyard config [key [value]]            settings: lang ru|en, confirm, theme…`,
+  treeyard config [key [value]]            settings: lang ru|en, confirm, theme…
+                                           codex_access sandbox|config|ask — how Codex starts from the tree: the sandbox
+                                           + treeyard and git (workspace-write, the network and the project's .git open) or
+                                           as ~/.codex/config.toml says; ask — ask before the launch; antigravity_access full|normal|ask`,
   });
 }
 
@@ -788,7 +798,7 @@ async function plantCommand(dir: string, brain: BrainId, confirmed: boolean): Pr
               : t('изучит папку, даст короткий отчёт, потом поведёт по вопросам')
         }\n` +
         `  ${err.dim(t('Запишет'))}    ${t('дерево и короткие документы — только после твоего «да»')}\n` +
-        `  ${err.dim(t('Права'))}      ${accessText(brain, fullAccess(brain).permissionMode)}\n\n`,
+        `  ${err.dim(t('Права'))}      ${accessText(brain, fullAccess(brain, dir).permissionMode)}\n\n`,
     );
     if (!(await askYes(t('Начать?')))) {
       process.stderr.write(`${err.dim(t('не запускаю'))}\n`);
@@ -2865,45 +2875,42 @@ async function askYes(question: string): Promise<boolean> {
 
 /**
  * Before the first launch of a CLI that treeyard would start with more rights than its own
- * settings give: the person sees them and picks full access or the ordinary mode, once. Without
- * a terminal nobody can answer — an agent's `open` stops and says how the person chooses.
- * False — the person did not choose: nothing starts.
+ * settings give (Antigravity, Codex): the person sees them and picks the wider or the CLI's own
+ * way, once. Without a terminal nobody can answer — an agent's `open` stops and says how the
+ * person chooses. False — the person did not choose: nothing starts.
  */
 async function chooseAccess(brain: BrainId): Promise<boolean> {
   if (!needsAccessChoice(brain)) return true;
-  if (!process.stdin.isTTY)
-    throw new UsageError(
-      t(
-        'права Antigravity ещё не выбраны — человек выбирает в дереве («,» → «Права Antigravity») или командой treeyard config antigravity_access full|normal',
-      ),
-    );
-  const width = Math.max(ACCESS_LABEL.full.length, ACCESS_LABEL.normal.length) + 2;
-  const row = (key: string, access: Access) =>
+  const question = accessQuestion(brain);
+  if (!process.stdin.isTTY) throw new UsageError(question.notChosen);
+  const [yes, no] = accessChoices(brain) as [AccessChoice, AccessChoice];
+  const width = Math.max(ACCESS_LABEL[yes].length, ACCESS_LABEL[no].length) + 2;
+  const row = (key: string, access: AccessChoice) =>
     `  ${err.bold(key)}  ${ACCESS_LABEL[access]}${' '.repeat(width - ACCESS_LABEL[access].length)}${err.dim(ACCESS_HINT[access])}\n`;
   process.stderr.write(
     `\n${inlineMark(err.c)}\n` +
-      `  ${err.bold(t('Какие права дать Antigravity?'))}\n` +
-      `  ${t('Antigravity спрашивает разрешения перед каждой командой, а агенту из узла нужно запускать treeyard, тесты и git. Treeyard может запускать его с полным доступом (--dangerously-skip-permissions).')}\n\n` +
-      row('y', 'full') +
-      row('n', 'normal') +
-      `\n  ${err.dim(t('Выбор запомнится для всех проектов · поменять — treeyard config antigravity_access или «,» в дереве'))}\n`,
+      `  ${err.bold(question.title)}\n` +
+      `  ${question.intro}\n\n` +
+      row('y', yes) +
+      row('n', no) +
+      `\n  ${err.dim(question.keptInShell)}\n`,
   );
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   const answer = await new Promise<string>((done) =>
-    rl.question(`${t('Полный доступ?')} ${err.dim(t('[y — полный · n — обычный · ⏎ — не запускать]'))} `, done),
+    rl.question(`${question.prompt} ${err.dim(question.answers)} `, done),
   );
   rl.close();
-  const access: Access | undefined = /^\s*(y|yes|д|да)\s*$/i.test(answer)
-    ? 'full'
+  const access: AccessChoice | undefined = /^\s*(y|yes|д|да)\s*$/i.test(answer)
+    ? yes
     : /^\s*(n|no|н|нет|т)\s*$/i.test(answer)
-      ? 'normal'
+      ? no
       : undefined;
   if (!access) {
     process.stderr.write(`${err.dim(t('не запускаю'))}\n`);
     return false;
   }
-  updateSettings({ antigravityAccess: access });
-  process.stderr.write(`${err.dim(t('Antigravity: {access}', { access: ACCESS_LABEL[access] }))}\n`);
+  updateSettings(accessPatch(brain, access));
+  process.stderr.write(`${err.dim(t('{brain}: {access}', { brain: question.name, access: ACCESS_LABEL[access] }))}\n`);
   return true;
 }
 
@@ -2921,6 +2928,7 @@ const GLOBAL_KEYS = [
   'staleAfter',
   'notes',
   'antigravityAccess',
+  'codexAccess',
   'skills',
 ] as const;
 /** Keys in settings.json and on the command line, where they differ from the code. */
@@ -2930,6 +2938,7 @@ const SNAKE: Record<string, string> = {
   staleAfter: 'stale_after',
   statusOrder: 'status_order',
   antigravityAccess: 'antigravity_access',
+  codexAccess: 'codex_access',
 };
 const PROJECT_KEYS = ['brain', 'start', 'model', 'effort', 'assist_model'] as const;
 
@@ -2965,6 +2974,7 @@ function configCommand(args: string[]): number {
     if (name === 'notes') return now.notes || '—';
     // Not chosen: the first launch of Antigravity asks.
     if (name === 'antigravityAccess') return now.antigravityAccess || 'ask';
+    if (name === 'codexAccess') return now.codexAccess || 'ask';
     if (name !== 'statusOrder') return String(now[name]);
     // The order itself, so a preset says what it means.
     return `${now.statusOrder}  ${orderOf(now).join(',')}`;
@@ -3011,10 +3021,11 @@ function configCommand(args: string[]): number {
       if (!Number.isInteger(n) || n < 0)
         throw new UsageError(t('{key}: часы целым числом, 0 — выключено', { key: requestedKey }));
       updateSettings({ staleAfter: n });
-    } else if (key === 'antigravityAccess') {
-      if (value !== 'full' && value !== 'normal' && value !== 'ask')
-        throw new UsageError(t('права Antigravity: full, normal или ask — спросить при запуске'));
-      updateSettings({ antigravityAccess: value === 'ask' ? '' : value });
+    } else if (key === 'antigravityAccess' || key === 'codexAccess') {
+      const brain: BrainId = key === 'codexAccess' ? 'codex' : 'antigravity';
+      if (value !== 'ask' && !(accessChoices(brain) as readonly string[]).includes(value))
+        throw new UsageError(accessQuestion(brain).badValue);
+      updateSettings(accessPatch(brain, value === 'ask' ? '' : (value as AccessChoice)));
     } else if (key === 'notes') {
       try {
         updateSettings({ notes: notesFolder(value) });
