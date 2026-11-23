@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const backend = vi.hoisted(() => ({
@@ -67,7 +67,8 @@ const SANDBOX = (gitDir: string) => [
   '-c',
   'sandbox_workspace_write.network_access=true',
   '-c',
-  `sandbox_workspace_write.writable_roots=["${gitDir}"]`,
+  // The tree too: a session in the node's own worktree writes it from outside the project folder.
+  `sandbox_workspace_write.writable_roots=["${gitDir}","${join(dirname(gitDir), '.tree')}"]`,
 ];
 
 describe('Codex starts with the sandbox the person chose', () => {
@@ -115,7 +116,7 @@ describe('Codex starts with the sandbox the person chose', () => {
       '[sandbox_workspace_write]\nwritable_roots = ["/data/shared"]\n',
     );
     expect(fullAccess('codex', tree.project.dir).extraArgs?.at(-1)).toBe(
-      `sandbox_workspace_write.writable_roots=["/data/shared","${gitDir}"]`,
+      `sandbox_workspace_write.writable_roots=["/data/shared","${gitDir}","${join(dirname(gitDir), '.tree')}"]`,
     );
   });
 

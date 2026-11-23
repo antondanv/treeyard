@@ -9,9 +9,11 @@
  * for three of them.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+import { TREE_DIR } from '../model/store.js';
 
 export interface CodexSandbox {
   /** The config.toml this was read from. */
@@ -186,14 +188,18 @@ function array(items: string[]): string {
 
 /**
  * Flags for `codex` and `codex resume`: workspace-write with the network open and the
- * project's `.git` among the writable roots; approvals, model and the rest stay as
+ * project's `.git` and `.tree` among the writable roots; approvals, model and the rest stay as
  * config.toml has them. The person's own writable roots stay too: a `-c` array replaces.
  */
 export function sandboxArgs(dir: string, env: NodeJS.ProcessEnv = process.env): string[] {
   const own = readSandbox(env);
   const args = ['--sandbox', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=true'];
   const gitDir = gitDirOf(dir);
-  const roots = [...new Set([...own.roots, ...(gitDir ? [gitDir] : [])])];
+  // A session in a node's git worktree works outside the project folder, yet its treeyard
+  // commands write the project's tree and mailbox.
+  const treeDir = join(dir, TREE_DIR);
+  const tree = existsSync(treeDir) ? [treeDir] : [];
+  const roots = [...new Set([...own.roots, ...(gitDir ? [gitDir] : []), ...tree])];
   if (roots.length) args.push('-c', `sandbox_workspace_write.writable_roots=${array(roots)}`);
   return args;
 }

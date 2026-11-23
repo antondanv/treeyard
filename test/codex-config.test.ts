@@ -199,6 +199,14 @@ describe('the flags of «sandbox + treeyard and git»', () => {
     expect(sandboxArgs(linked, codexHome('')).at(-1)).toBe(`sandbox_workspace_write.writable_roots=["${gitDir}"]`);
   });
 
+  it('a project with a tree opens its .tree too: a session in a node’s worktree writes it from outside', () => {
+    const { dir, gitDir } = repo();
+    mkdirSync(join(dir, '.tree'));
+    expect(sandboxArgs(dir, codexHome('')).at(-1)).toBe(
+      `sandbox_workspace_write.writable_roots=["${gitDir}","${join(dir, '.tree')}"]`,
+    );
+  });
+
   it('outside a repository only the network is opened', () => {
     const args = sandboxArgs(tempDir('treeyard-codex-plain-'), codexHome(''));
     expect(args).toEqual(['--sandbox', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=true']);
