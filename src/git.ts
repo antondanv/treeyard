@@ -1,5 +1,6 @@
 /** Read-only Git data shared by the node's CLI and TUI diff viewers. */
 import { execFile, execFileSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { t } from './i18n/i18n.js';
 
@@ -115,6 +116,22 @@ export async function gitRepository(dir: string): Promise<GitRepository> {
       throw new Error(t('здесь нет Git-репозитория — дифы недоступны'));
     throw error;
   }
+}
+
+/**
+ * The repository whose refs a command means. From a git worktree of the same repository (a
+ * session's own branch) `HEAD` is that branch's commit even when the tree is the main folder's
+ * (`--project`); elsewhere — the repository of the tree's folder.
+ */
+export async function refRepository(dir: string, cwd = process.cwd()): Promise<GitRepository> {
+  try {
+    const common = async (where: string) =>
+      realpathSync((await git(where, ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim());
+    if ((await common(cwd)) === (await common(dir))) return await gitRepository(cwd);
+  } catch {
+    // Outside a repository, or another one: the tree's folder decides.
+  }
+  return gitRepository(dir);
 }
 
 export class GitRepository {

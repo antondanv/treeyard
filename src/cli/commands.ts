@@ -32,7 +32,7 @@ import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, moveText, noteMove,
 import { CrashReported, guardCrashes } from '../crash.js';
 import { parsePatch } from '../diff.js';
 import { lineCount, linesLabel, projectDocs } from '../docs.js';
-import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, gitRepository } from '../git.js';
+import { type DiffSource, diffText, fileLabel, fileStats, type GitFile, refRepository } from '../git.js';
 import {
   type Board,
   boardOf,
@@ -1815,7 +1815,7 @@ async function logCommand(args: string[]): Promise<number> {
   const refs = (values.commit ?? []).flatMap((ref) => ref.split(',')).filter((ref) => ref.trim());
   let commits: string[] = [];
   if (refs.length) {
-    const repo = await gitRepository(dir);
+    const repo = await refRepository(dir);
     commits = (await Promise.all(refs.map((ref) => repo.commit(ref.trim())))).map((commit) => commit.sha);
     // Git reads are asynchronous; keep any journal entries written in the meantime.
     tree = loadTree(dir);
@@ -1951,7 +1951,7 @@ async function diffCommand(args: string[]): Promise<number> {
     );
     return 0;
   }
-  const repo = await gitRepository(dir);
+  const repo = await refRepository(dir);
   if (values.add) {
     const refs = values.add.flatMap((ref) => ref.split(',')).filter((ref) => ref.trim());
     const commits = await Promise.all(refs.map((sha) => repo.commit(sha.trim())));

@@ -709,6 +709,10 @@ treeyard diff <id> --json                       # commits, files and diffs for a
 treeyard diff <id> --project ../X --add HEAD    # attach to the tree of another folder or the main worktree
 ```
 
+`diff --add` and `log --commit` resolve a ref (`HEAD`, a branch) in the repository of the folder
+they run in when it is a git worktree of the same repository: from a session's worktree `HEAD` is
+its branch's commit, with `--project <main folder>` too. From another repository — in the tree's.
+
 #### Commit hook
 
 `treeyard hook install` puts a `post-commit` hook into the repository of the current
