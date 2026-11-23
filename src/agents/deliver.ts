@@ -49,6 +49,7 @@ import { loadTree } from '../model/store.js';
 import { nowIso } from '../model/time.js';
 import { holderOf } from '../model/tree.js';
 import type { SessionRef, Tree } from '../model/types.js';
+import { sessionFolder } from '../worktree.js';
 import { fullAccess } from './access.js';
 import { withPaneIdle } from './pane-idle.js';
 import { isPending, type PaneSize } from './panes.js';
@@ -198,6 +199,8 @@ export async function deliverNode(
     };
   }
   const body = letterBody(tree, letters);
+  // A session in the node's own git worktree goes on there, not in the project folder.
+  const folder = sessionFolder(dir, ref);
   const attempt: Attempt = { node: id, letters: numbers, ref, warnings: [] };
   try {
     if (route.kind === 'type') {
@@ -206,10 +209,10 @@ export async function deliverNode(
       await sources.type(route.pane, '\r');
       Object.assign(attempt, { how: 'typed', pane: route.pane });
     } else if (route.kind === 'resume') {
-      if (route.stop) await sources.stop({ brain: ref.brain, sessionId: ref.id, cwd: dir });
+      if (route.stop) await sources.stop({ brain: ref.brain, sessionId: ref.id, cwd: folder });
       const result = await sources.open({
         brain: ref.brain,
-        cwd: dir,
+        cwd: folder,
         resume: ref.id,
         prompt: body,
         background: true,
@@ -221,7 +224,7 @@ export async function deliverNode(
     } else {
       const started = await sources.startPane({
         brain: ref.brain,
-        cwd: dir,
+        cwd: folder,
         resume: ref.id,
         prompt: body,
         ...fullAccess(ref.brain, dir),

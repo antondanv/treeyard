@@ -3211,7 +3211,8 @@ function configCommand(args: string[]): number {
   const [requestedKey, ...rest] = args;
   const key = Object.keys(SNAKE).find((name) => SNAKE[name] === requestedKey) ?? requestedKey;
   const value = rest.join(' ').trim();
-  const dir = findProject();
+  // From a node's worktree — the main tree's settings, not the branch's copy.
+  const dir = treeOfWorktree() ?? findProject();
   const tree = dir ? loadTree(dir) : undefined;
   if (!key) {
     process.stdout.write(`${out.bold(t('Для всех проектов'))}  ${out.dim(settingsPath())}\n`);

@@ -37,6 +37,7 @@ import { sessionHolders, sessionOwners } from './model/tree.js';
 import { type BrainId, ROOT, STATUSES, type Status, type Tree } from './model/types.js';
 import { settings, skillsAuto } from './settings.js';
 import { type PointerStatus, pointerStates } from './templates/pointer.js';
+import { worktreeDirs } from './worktree.js';
 
 const require = createRequire(import.meta.url);
 /** src/ and dist/ both sit one level below package.json. */
@@ -315,7 +316,8 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     return status;
   }
   const tree = loadTree(place.project);
-  const dirs = [...new Set([tree.project.dir, place.folder])];
+  // The nodes' own git worktrees hold sessions of this tree too.
+  const dirs = [...new Set([tree.project.dir, place.folder, ...worktreeDirs(tree.project.dir)])];
   const [live, panes, github] = await Promise.all([
     (deps.live ?? liveIn)(dirs).catch(() => [] as SessionInfo[]),
     (deps.panes ?? readPanes)().catch(() => [] as Pane[]),
