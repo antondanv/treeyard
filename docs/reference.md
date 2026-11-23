@@ -257,6 +257,7 @@ permission request also looks like work, not “waits for you”.
 | `start` | how a session starts: plan, do, goal, chat |
 | `model`, `effort` | the sessions' model and effort — picked from the list the CLI itself gives |
 | `assist_model` | the model for “break into steps” and the criterion — can be a cheaper one |
+| `setup` | a command that prepares a new [worktree of a node](#git-worktrees-of-nodes): `npm install`, a build…; `treeyard config setup "npm ci"` |
 
 Models don't need typing in: treeyard asks the CLIs for them (`codex debug models`, `agy
 models`, `opencode models` — the models of the providers connected to OpenCode; for Claude
@@ -422,7 +423,8 @@ treeyard open <id> --brain codex                # a session for the node right f
 treeyard open <id> --brain codex --pane         # start a pane and return to the shell
 treeyard open <id> --brain opencode --pane      # the same with OpenCode
 treeyard open <id> --pane --json                # for a program: the session id and the tmux pane name as JSON
-treeyard open <id> <id> <id> --brain codex --pane   # three panes, one per node (--json: an array)
+treeyard open <id> <id> <id> --brain codex --pane   # three panes, one per node (--json: an array); the first stays in the project's folder, the others get a git worktree each
+treeyard open <id> --brain codex --pane --worktree   # the node's own git worktree and branch treeyard/<id>, for any CLI (--no-worktree — the project's folder)
 treeyard open <id> <id> --bg --json             # for a program: a JSON array, an object per started session
 treeyard open <id> --bg --task "no paid calls" --model sonnet --effort high   # a coordinator hands the node to its own session
 treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes — from stdin
@@ -430,6 +432,7 @@ treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a
 treeyard wait <id> <id> --timeout 10m          # a coordinator waits: a node left “active”, its session ended its turn or waits for the person (--all — every one; --json)
 treeyard send <id> "fix the test"               # the next message of the node's own session, not a new session (- reads stdin)
 treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's open children in order, two sessions at a time, the next when a node leaves “active”
+treeyard worktree                               # the nodes' worktrees: folder, branch, commits, what is not committed (add | setup | rm <id>)
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
 treeyard status                                 # a summary: versions, tree, nodes, skills, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
@@ -511,8 +514,8 @@ message, after the standard one, under “Task for this node:” (in a `chat` st
 becomes the first message; `--task -` reads it from stdin; `treeyard context <id> --task "…"`
 shows the result; with `--start goal` it becomes part of the `/goal` condition).
 `--model` and `--effort` set the model and the effort for this launch only; without them the CLI
-uses its own defaults. `--worktree` is passed to Claude Code, which starts the session in a new git
-worktree; Codex, Antigravity and OpenCode ignore it and print a warning. `--bg` (Claude Code)
+uses its own defaults. `--worktree` starts the session in the node's own
+[git worktree](#git-worktrees-of-nodes), in any CLI; `--no-worktree` — in the project's folder. `--bg` (Claude Code)
 starts the session in the background and returns at once; the session is saved in the node.
 With `--bg` you can name several nodes: `treeyard open a b c --bg --task "…"` checks every id
 first (a wrong one — no session at all), starts the sessions one after another with the same
@@ -586,7 +589,59 @@ person, `‖` a limit or a node that never got its `needs`, `✗` did not start 
 a JSON line per event with `at`. The queue ends when all have gone (exit 0) or the rest will never
 get their `needs` (exit 1). Ctrl+C — start no more; the same command again picks up the nodes at
 work. The start is `do` by default; `--brain`, `--start`, `--model`, `--effort`, `--worktree`,
-`--task`, `--yes` — as for `open`.
+`--no-worktree`, `--task`, `--yes` — as for `open`. With `--parallel` from 2 one node works in the
+project's folder and every other one in a worktree of its own (`--worktree` — all of them,
+`--no-worktree` — none); the folder is freed when its node leaves “active”.
+
+### Git worktrees of nodes
+
+Sessions of one project in one folder step on each other's files. `treeyard open <id> --worktree`
+gives the node a folder and a branch of its own, for **Claude Code, Codex, OpenCode and Antigravity**
+alike: treeyard makes the worktree itself, not the CLI.
+
+- **The branch** is `treeyard/<id>` — the node's id is in its name — from the commit the main folder
+  stands on. The folder is `<project>.worktrees/<id>`, next to the project, so no tool of the project
+  scans it. The node remembers it in `.tree/.local/worktrees.json` (per machine, out of git); the
+  node's session notes the folder in its `dir`, because the CLIs find a conversation by the folder it
+  ran in. Opening the node again — a new session, a resume, waking a sleeping pane — goes to the same
+  worktree without the flag; `--no-worktree` sends one session to the project's folder.
+- **Several nodes at once.** `open a b c --pane|--bg` and `queue` (with `--parallel` from 2) keep one
+  session in the project's folder and give every other node a worktree. A folder without git, or a
+  repository without a commit, makes no worktrees and the nodes stay together, as they did.
+  `--worktree` gives one to every node, `--no-worktree` to none. The confirmation says which.
+- **Commands from inside write the main tree.** The session's `treeyard log`, `set`, `show`… from a
+  worktree treeyard made go to the main tree, not to the branch's copy of `.tree/` — no
+  `--project` needed. (A git worktree treeyard did not make, such as Claude Code's own, is left as
+  it was.) The session's first message says where it stands and that the branch is merged by the
+  coordinator or the person.
+- **Commits are the node's by themselves.** What the branch made since it started shows in the node
+  (`treeyard show <id>`, the card, `V` in the tree) and in `treeyard diff <id>` — no
+  [hook](#commit-hook) and no `--add`. When the branch is merged and the worktree removed, its
+  commits are attached to the node for good.
+- **Preparation.** The files of the main folder that git does not track and that
+  `.worktreeinclude` (patterns as in `.gitignore`, in the repository's root) names — `.env`, local
+  keys — are copied to a new worktree; a tracked file or one that is already there is left alone.
+  The project's `setup` command (`treeyard config setup "npm ci"`, key `setup` in `.tree/tree.md`) runs
+  in the new worktree before the session starts. A setup that fails stops the launch and says why; the
+  worktree stays, and `treeyard worktree setup <id>` or the next launch runs it again.
+- **Work is not lost.** `treeyard worktree rm <id>` removes the folder and the branch only when
+  nothing is uncommitted and the main folder's branch has all the commits of the node's branch; or it
+  says what is left, and a session still open there keeps it too. There is no `--force`: it is for
+  git (`git worktree remove`) and for the person.
+- **In the tree.** `treeyard show <id>` and `show --json` give the folder, the branch and what it
+  holds (`commits: 3 · not merged: 3 · not committed: 2`); the node card shows the branch and the
+  folder; the launch window (`o`) has a «Worktree» row for every brain. Panes and sessions in a
+  worktree count as the project's: the tree lists them, `max_panes` counts them, `wait`, `send` and
+  `sessions` find them.
+
+```sh
+treeyard open <id> --brain codex --pane --worktree   # one node in its own worktree
+treeyard open a b c --brain opencode --pane          # a in the project's folder, b and c in worktrees
+treeyard worktree                                    # the list with what each holds (--json)
+treeyard worktree add <id>                           # make one without a session; prints the folder
+treeyard worktree setup <id>                         # copy by .worktreeinclude and run setup again
+treeyard worktree rm <id>                            # only when nothing would be lost
+```
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
 node, its edit stays.
@@ -694,7 +749,8 @@ there is none); `--project <dir>` — the tree of another folder.
 linked to the selected node. `a` picks a commit from the Git log; `n` in the list of
 commits loads 100 more. After a commit, the agent attaches it with `treeyard diff
 <id> --add HEAD` — the command is in the node's context — or the
-[commit hook](#commit-hook) does it by itself. The links are kept in the node
+[commit hook](#commit-hook) does it by itself; the commits of the node's own
+[worktree](#git-worktrees-of-nodes) branch are in the list without either. The links are kept in the node
 file's `commits` field and are committed along with the tree. Attach the commits with work
 on this node: the view shows the whole selected commit.
 
