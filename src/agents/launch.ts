@@ -8,6 +8,7 @@
 import { liveSessions, type OpenResult, open, type SessionInfo, sessions, stopSession } from '@antondanv/brainyard';
 import { t } from '../i18n/i18n.js';
 import { senderNode } from '../model/mail.js';
+import { markDelivered } from '../model/mailbox.js';
 import { nodeEnv } from '../model/notes.js';
 import { attachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
@@ -96,6 +97,8 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
     mode: options.background ? 'background' : 'terminal',
   };
   const how = options.background ? t('в фоне') : t('в терминале');
+  if (plan.letters?.length)
+    markDelivered(tree.project.dir, plan.letters, 'first', { session: `${options.brain} ${ref.id.slice(0, 8)}` });
   attachSession(
     tree,
     id,

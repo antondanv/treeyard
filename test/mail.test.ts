@@ -5,6 +5,7 @@ import { sessionPlan } from '../src/agents/context.js';
 import { type SendSources, sendToNode } from '../src/agents/send.js';
 import { setLang } from '../src/i18n/i18n.js';
 import { letterFrom, lettersOf, letterText, letterTo, parseLetter, senderNode } from '../src/model/mail.js';
+import { addLetter, markDelivered, markHeld } from '../src/model/mailbox.js';
 import { NODE_VAR, PROJECT_VAR } from '../src/model/notes.js';
 import { addNode, attachSession, logToNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
@@ -15,7 +16,16 @@ afterEach(() => setLang('ru'));
 /** A live pane for node `id`'s session, and Brainyard that only records what was typed. */
 function paneNode(title: string, tree = emptyTree()) {
   const node = addNode(tree, { title, status: 'active' });
-  const ref = { brain: 'claude' as const, id: `s-${node.id}`, mode: 'pane' as const, pane: `claude-${node.id}` };
+  // Opened a minute ago: a pane that has had time to start takes letters at once.
+  const minute = new Date(Date.now() - 60_000).toISOString();
+  const ref = {
+    brain: 'claude' as const,
+    id: `s-${node.id}`,
+    mode: 'pane' as const,
+    pane: `claude-${node.id}`,
+    started: minute,
+    opened: minute,
+  };
   attachSession(tree, node.id, ref);
   return { tree, node, ref };
 }
@@ -70,26 +80,36 @@ describe('letters between the sessions of nodes', () => {
     await sendToNode(tree, node.id, 'привет', { sources, source: 'ты' });
     const [letter] = lettersOf(loadTree(tree.project.dir).nodes.get(node.id)!);
     expect(letter).toMatchObject({ direction: 'in', session: `claude s-${node.id}`, who: 'ты', text: 'привет' });
-    expect(letterText(letter!)).toBe(`← от ты в сессию claude s-${node.id}: «привет»`);
+    expect(letterText(letter!)).toBe(`← №1 от ты в сессию claude s-${node.id}: «привет»`);
   });
 
   it('are read back in either language, and other entries are not letters', () => {
     const tree = emptyTree();
     const a = addNode(tree, { title: 'Бот' });
     const b = addNode(tree, { title: 'Сайт' });
-    const ru = letterFrom(a, 'длинный\nтекст');
+    const ru = letterFrom(a, 'длинный\nтекст', 7);
     setLang('en');
-    const en = letterTo(b, 'a reply');
-    expect(en).toBe('message to node «Сайт»: «a reply»');
+    const en = letterTo(b, 'a reply', 8);
+    expect(en).toBe('message #8 to node «Сайт»: «a reply»');
     setLang('ru');
     expect(parseLetter(`2026-11-22 21:45 · claude · ${ru}`)).toMatchObject({
+      n: 7,
       direction: 'in',
       peer: 'Бот',
       text: 'длинный текст',
       at: '2026-11-22 21:45',
       who: 'claude',
     });
-    expect(parseLetter(`2026-11-22 21:46 · агент · ${en}`)).toMatchObject({ direction: 'out', peer: 'Сайт' });
+    expect(parseLetter(`2026-11-22 21:46 · агент · ${en}`)).toMatchObject({ n: 8, direction: 'out', peer: 'Сайт' });
+    // Journals from before letters had numbers read as they did.
+    expect(parseLetter('2026-11-22 21:44 · claude · письмо от «Бот»: «старое»')).toEqual({
+      direction: 'in',
+      peer: 'Бот',
+      text: 'старое',
+      at: '2026-11-22 21:44',
+      who: 'claude',
+    });
+    expect(parseLetter('2026-11-22 21:44 · ты · письмо №3: «из shell»')).toMatchObject({ n: 3, direction: 'in' });
     expect(parseLetter('2026-11-22 21:47 · агент · в работе → на проверке')).toBeUndefined();
     expect(parseLetter('2026-11-22 21:47 · агент · итог: письмо от «Бот» дошло')).toBeUndefined();
   });
@@ -121,26 +141,37 @@ describe('letters between the sessions of nodes', () => {
 });
 
 describe('show --only mail', () => {
-  it('lists the letters of a node, got and sent, in text and JSON', async () => {
+  it('lists the letters of a node, got and sent, whole and with their state, in text and JSON', async () => {
     const tree = emptyTree();
+    const dir = tree.project.dir;
     const a = addNode(tree, { title: 'Бот' });
     const b = addNode(tree, { title: 'Сайт' });
-    logToNode(tree, a.id, letterTo(b, 'нужен ключ?'), 'claude');
+    const asked = addLetter(dir, { to: b.id, from: a.id, who: 'claude', text: 'нужен ключ?\nи где он лежит' });
+    logToNode(tree, a.id, letterTo(b, asked.text, asked.n), 'claude');
     logToNode(tree, a.id, 'обычная запись', 'claude');
-    logToNode(tree, a.id, letterFrom(b, 'да, в .env'), 'codex');
-    const sh = treeyardIn(tree.project.dir);
+    const answer = addLetter(dir, { to: a.id, from: b.id, who: 'codex', text: 'да, в .env' });
+    logToNode(tree, a.id, letterFrom(b, answer.text, answer.n), 'codex');
+    markDelivered(dir, [asked.n], 'typed', { session: 'codex 1a2b3c4d', pane: 'codex-aa' });
+    markHeld(dir, [answer.n], 'busy');
+    // A letter from before the mailbox: the journal's line, no state.
+    logToNode(tree, a.id, 'письмо от «Сайт»: «старое»', 'codex');
+    const sh = treeyardIn(dir);
     const text = await sh('show', a.id, '--only', 'письма');
     expect(text.code, text.stderr).toBe(0);
     expect(text.stdout).toMatch(
-      /письма:\n {2}→ \S+ \S+ {2}узлу «Сайт»: «нужен ключ\?»\n {2}← \S+ \S+ {2}от «Сайт»: «да, в \.env»/,
+      /письма:\n {2}→ \S+ \S+ {2}№1 узлу «Сайт»: «нужен ключ\?\n {6}и где он лежит» · доставлено: набрано в панели\n {2}← \S+ \S+ {2}№2 от «Сайт»: «да, в \.env» · в очереди: сессия занята — придёт, когда она закончит ход\n {2}← \S+ \S+ {2}от «Сайт»: «старое»\n/,
     );
     expect(text.stdout).not.toContain('обычная запись');
     const json = JSON.parse((await sh('show', a.id, '--only', 'mail', '--json')).stdout);
     expect(json.mail).toMatchObject([
-      { direction: 'out', peer: 'Сайт', who: 'claude' },
-      { direction: 'in', peer: 'Сайт', who: 'codex', text: 'да, в .env' },
+      { n: 1, direction: 'out', peer: 'Сайт', who: 'claude', state: 'delivered', how: 'typed' },
+      { n: 2, direction: 'in', peer: 'Сайт', who: 'codex', text: 'да, в .env', state: 'queued', held: 'busy' },
+      { direction: 'in', peer: 'Сайт', text: 'старое' },
     ]);
-    const none = await sh('show', b.id, '--only', 'mail');
+    const other = await sh('show', b.id, '--only', 'mail');
+    // The mailbox knows the letters of a node whose journal has no line of them.
+    expect(other.stdout).toMatch(/№1 от «Бот»: «нужен ключ\?/);
+    const none = await sh('show', addNode(tree, { title: 'Тихий' }).id, '--only', 'mail');
     expect(none.stdout).toContain('письма: —');
   }, 40_000);
 });

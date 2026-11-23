@@ -428,7 +428,8 @@ treeyard open <id> --bg --task "no paid calls" --model sonnet --effort high   # 
 treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes — from stdin
 treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a session in each, a line per node
 treeyard wait <id> <id> --timeout 10m          # a coordinator waits: a node left “active”, its session ended its turn or waits for the person (--all — every one; --json)
-treeyard send <id> "fix the test"               # the next message of the node's own session, not a new session (- reads stdin)
+treeyard send <id> "fix the test"               # the next message of the node's own session, not a new session (- reads stdin); can't take it now — queued, treeyard delivers it
+treeyard deliver --once                          # one delivery pass over waiting messages (the deliverer usually starts by itself)
 treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's open children in order, two sessions at a time, the next when a node leaves “active”
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
 treeyard status                                 # a summary: versions, tree, nodes, skills, pointer, hook, sessions, GitHub; a command for every problem (--json)
@@ -545,25 +546,51 @@ Code runs `wait` in the background and hears when it ends; a CLI without backgro
 it with a `--timeout` under its own limit per command.
 
 `treeyard send <id> "…"` writes the next message to the node's newest session — the same
-conversation going on, not a new session that would read it all again. A live pane gets the text
-typed as a paste and Enter: a session at work takes it after its turn. A sleeping pane wakes up
-with the text as its first message (`--resume` in a new pane). A Claude Code background session
-that ended its turn is stopped and goes on in the background with the text; a busy background
-session gets nothing — `wait` first. A session waiting for the person gets nothing either: the keys
-would land in its dialog; the person answers in the pane (`tmux -L brainyard attach -t <pane>`) or
-in `claude attach`. Neither does a session the person opened in their own terminal. `-` instead of
-the text reads stdin; `--json` — `{"node", "sent", "how": "typed"|"woke"|"resumed", "brain", "id",
-"pane", "warnings"}`, or `{"node", "sent": false, "error"}` with exit code 1.
+conversation going on, not a new session that would read it all again. A message is never lost or
+refused for what the receiver is doing: it goes whole into the project's mailbox first
+(`.tree/.local/mail/`, a file per message, not in git) and gets a number, then it is delivered — at
+once if the session can take it, otherwise by itself as soon as it can:
+
+- a live pane whose turn is over — typed as a paste and Enter;
+- a sleeping pane — the same conversation resumed in a new pane (`--resume`) with the message as
+  its first one;
+- a Claude Code background session — resumed in the background (one that ended its turn is stopped
+  first);
+- a busy session, one waiting for the person (a permission, a question in a dialog — keys would
+  land in it) and one open in the person's terminal — the message waits: for the end of the turn,
+  for the person's answer in the pane (`tmux -L brainyard attach -t <pane>`) or in `claude attach`,
+  for the terminal to be closed — then the session wakes in a pane;
+- a node with no session — the message waits for its first one: `treeyard open` and a start from
+  the tree put every waiting message into its first message.
+
+Waiting messages are delivered by treeyard itself, not by the sender: `send` starts the deliverer
+`treeyard deliver` in the background — one per project; it looks at the sessions every three
+seconds (every 15 after ten minutes) and ends when nothing is left to wait for. Stopped (a reboot, a
+sandbox without tmux) — the next `send`, `wait` or the tree starts it again. `treeyard deliver
+--once` — one pass by hand, a line per node. Several messages for one session go as one message, in
+order. A session just written to or started gets a few seconds: a CLI says “idle” before its turn
+begins.
+
+`send` prints the number and the state: `message #12 delivered: typed into its pane` or `message
+#12 queued: the session is busy — it arrives when its turn is over`, and what happens next on the
+following line. Exit code 0 either way; 1 — only when there is no such node. `-` instead of the
+text reads stdin; `--json` — `{"node", "sent": true, "letter": 12, "state": "queued"|"delivered",
+"how": "typed"|"woke"|"resumed"|null, "held": "busy"|"waiting"|"terminal"|"starting"|"none"|null,
+"heldFor", "brain", "id", "pane", "warnings"}`.
 
 A message written by a node's session (the command knows its node by `TREEYARD_NODE` of this tree)
-is correspondence between two nodes: the receiver's journal gets `message from «Coordinator»: «…»`,
-the sender's `message to node «Site»: «…»`, and in the receiver's conversation it arrives under the
-line “A message from the session of node «…» (id), not from the person; to answer — treeyard send
-<id> "…"”: an agent's message never passes for the person's word. A message from outside a node's
-session (a person in a shell) goes into the receiver's journal only: `message to session claude
-1a2b3c4d: «…»`. `treeyard show <id> --only mail` — every message of the node, got `←` and sent `→`;
-with `--json`, `mail: [{direction: "in"|"out", peer, session, text, at, who}]`. The node's card in
-the TUI has a “Letters” section: the last four.
+is correspondence between two nodes: the receiver's journal gets `message #12 from «Coordinator»:
+«…»`, the sender's `message #12 to node «Site»: «…»`, a line per message whatever happens to it
+next; in the receiver's conversation it arrives under the line “A message from the session of node
+«…» (id), not from the person; to answer — treeyard send <id> "…"”: an agent's message never passes
+for the person's word. A message from outside a node's session (a person in a shell) goes into the
+receiver's journal only: `message #12 to session claude 1a2b3c4d: «…»`, or `message #12: «…»` to a
+node with no session. `treeyard show <id> --only mail` — every message of the node, got `←` and sent
+`→`, whole and with its state from this machine's mailbox (“queued: …”, “delivered: …”); messages
+journals have without a mailbox (another machine, before the mailbox) — as the journal's line, no
+state. With `--json`, `mail: [{n, direction: "in"|"out", peer, session, text, at, who, state, held,
+heldFor, how}]`. The node's card in the TUI has a “Letters” section: the last four, each with its
+state; a waiting one in yellow.
 
 A session started by another node's session (`treeyard open` from a coordinator's session) learns
 in its first message how to answer: a question — `treeyard send <coordinator's node> "…"`, then the

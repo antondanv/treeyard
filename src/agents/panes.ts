@@ -25,6 +25,7 @@ import {
 
 import { t } from '../i18n/i18n.js';
 import { senderNode } from '../model/mail.js';
+import { markDelivered } from '../model/mailbox.js';
 import { nodeEnv } from '../model/notes.js';
 import { attachSession, detachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
@@ -104,6 +105,11 @@ export async function launchInPane(
     mode: 'pane',
     pane: started.pane,
   };
+  if (plan.letters?.length)
+    markDelivered(tree.project.dir, plan.letters, 'first', {
+      session: `${options.brain} ${started.sessionId?.slice(0, 8) ?? started.pane}`,
+      pane: started.pane,
+    });
   attachSession(
     tree,
     id,

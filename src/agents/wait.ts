@@ -133,6 +133,30 @@ export interface World {
   paneSessions: ReadonlyMap<string, string>;
 }
 
+/** What `observe` asks; `paneSession` and `idle` only make the answer sharper. */
+export type ObserveSources = Pick<WaitSources, 'live' | 'panes'> & Partial<Pick<WaitSources, 'paneSession' | 'idle'>>;
+
+/**
+ * What the sessions of the machine are doing now: their live states, the panes, the sessions of
+ * panes whose CLI named them late, the idle state of Codex and Antigravity panes.
+ */
+export async function observe(dir: string, sources: ObserveSources): Promise<World> {
+  const [live, panes] = await Promise.all([sources.live().catch(() => []), sources.panes().catch(() => [])]);
+  const names = new Map<string, string>();
+  if (sources.paneSession)
+    for (const pane of panes)
+      if (pane.brain && !pane.sessionId && paneInProject(pane, dir)) {
+        const id = await sources.paneSession(pane).catch(() => undefined);
+        if (id) names.set(pane.pane, id);
+      }
+  const named = panes.map((pane) =>
+    pane.sessionId || !names.has(pane.pane) ? pane : { ...pane, sessionId: names.get(pane.pane)! },
+  );
+  const asked = new Map(live.map((session) => [session.id, session]));
+  const states = sources.idle ? await sources.idle(named, asked).catch(() => asked) : asked;
+  return { live: states, panes, paneSessions: names };
+}
+
 /** What a session is doing, from its live state and its pane. */
 export function sessionSight(ref: SessionRef, world: World): SessionSight {
   const pane = paneFor(ref, world.panes);
@@ -186,23 +210,7 @@ export async function look(
   const tree = sources.load(dir);
   const nodes = ids.map((id) => tree.nodes.get(id)).filter((node): node is TreeNode => Boolean(node));
   const asking = nodes.some((node) => node.sessions.length);
-  const world: World = { live: new Map(), panes: [], paneSessions: new Map() };
-  if (asking) {
-    const [live, panes] = await Promise.all([sources.live().catch(() => []), sources.panes().catch(() => [])]);
-    world.panes = panes;
-    const names = new Map<string, string>();
-    for (const pane of panes)
-      if (pane.brain && !pane.sessionId && paneInProject(pane, dir)) {
-        const id = await sources.paneSession(pane).catch(() => undefined);
-        if (id) names.set(pane.pane, id);
-      }
-    world.paneSessions = names;
-    const named = panes.map((pane) =>
-      pane.sessionId || !names.has(pane.pane) ? pane : { ...pane, sessionId: names.get(pane.pane)! },
-    );
-    const asked = new Map(live.map((session) => [session.id, session]));
-    world.live = await sources.idle(named, asked).catch(() => asked);
-  }
+  const world: World = asking ? await observe(dir, sources) : { live: new Map(), panes: [], paneSessions: new Map() };
   const now = sources.now();
   const sights: Sight[] = [];
   for (const node of nodes) {

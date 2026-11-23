@@ -13,6 +13,8 @@ import { activity } from '../model/activity.js';
 import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
+import { letterBody } from '../model/mail.js';
+import { queuedFor } from '../model/mailbox.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import {
@@ -42,6 +44,8 @@ export interface SessionPlan {
   permissionMode?: string;
   /** The start mode actually used (`goal` falls back to `do` outside Claude Code). */
   start: StartMode;
+  /** Letters that waited for a session, in the first message: delivered once the session starts. */
+  letters?: number[];
 }
 
 export const START_LABEL: Record<StartMode, string> = labels(() => ({
@@ -112,7 +116,22 @@ export function sessionPlan(
 ): SessionPlan {
   const back = coordinator && coordinator.id !== id ? coordinatorLine(coordinator, brain) : undefined;
   const assignment = [task?.trim(), back].filter(Boolean).join('\n\n');
-  return withTask(basePlan(tree, id, start, brain, Boolean(assignment)), assignment);
+  return withLetters(tree, id, withTask(basePlan(tree, id, start, brain, Boolean(assignment)), assignment));
+}
+
+/** Letters that waited for the node's session (busy, asleep, or none yet) come in the first message of a new one. */
+function withLetters(tree: Tree, id: string, plan: SessionPlan): SessionPlan {
+  if (id === ROOT) return plan;
+  const letters = queuedFor(tree.project.dir, id);
+  if (!letters.length) return plan;
+  const label = pick({
+    ru: 'Письма узлу, которые ждали его сессии, — ответ тому, кто написал:',
+    en: 'Messages to this node that waited for its session — answer whoever wrote them:',
+  });
+  const text = `${label}\n\n${letterBody(tree, letters)}`;
+  plan.prompt = plan.prompt ? `${plan.prompt}\n\n${text}` : text;
+  plan.letters = letters.map((letter) => letter.n);
+  return plan;
 }
 
 function basePlan(tree: Tree, id: string, start: StartMode, brain: BrainId, hasTask: boolean): SessionPlan {

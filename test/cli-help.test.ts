@@ -47,6 +47,7 @@ const COMMANDS = [
   'sessions',
   'wait',
   'send',
+  'deliver',
   'queue',
   'github',
   'config',

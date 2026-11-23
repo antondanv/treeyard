@@ -70,7 +70,7 @@ describe('what the journal says about itself', () => {
     logToNode(tree, node.id, 'чужая', 'claude');
     attachCommit(tree, node.id, SHA, 'агент');
     // A letter the session sent is written under its name too, yet it is not its entry.
-    logToNode(tree, node.id, letterTo(other, 'нужен ключ?'), 'агент');
+    logToNode(tree, node.id, letterTo(other, 'нужен ключ?', 1), 'агент');
     setStatus(tree, node.id, 'review', { source: 'агент' });
     const body = tree.nodes.get(node.id)!.body;
     expect(statusHistory(body).map((line) => parseEntry(line).text)).toEqual([
@@ -116,7 +116,7 @@ describe('treeyard log --fix and set note=', () => {
     const node = addNode(tree, { title: 'Узел', status: 'active' });
     const other = addNode(tree, { title: 'Сосед' });
     logToNode(tree, node.id, 'итог с опечаткой', 'агент');
-    logToNode(tree, node.id, letterTo(other, 'нужен ключ?'), 'агент');
+    logToNode(tree, node.id, letterTo(other, 'нужен ключ?', 1), 'агент');
     const [summary, letter] = journalEntries(tree.nodes.get(node.id)!.body).slice(-2);
     const res = await treeyardIn(tree.project.dir)('log', node.id, '--fix', 'итог');
     expect(res.code).toBe(0);

@@ -16,7 +16,7 @@ import { t } from '../i18n/i18n.js';
 import { daysLeft, imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
-import { lettersOf, letterText } from '../model/mail.js';
+import { letterState, letterText, mailOf } from '../model/mail.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { type Stale, staleLabel, staleNote } from '../model/stale.js';
@@ -287,15 +287,19 @@ export function NodeDetails(props: {
   }
 
   // Letters of `treeyard send` stay in view after the journal has moved on.
-  const letters = lettersOf(node);
+  const letters = mailOf(tree, node);
   if (letters.length > 0) {
     gap();
     heading(t('ПИСЬМА'));
-    for (const letter of letters.slice(-4).reverse())
+    for (const letter of letters.slice(-4).reverse()) {
       wrap(
-        `${letter.at.replace(/^\d{4}-(\d\d)-(\d\d)/, '$2.$1')} ${letterText({ ...letter, text: clip(letter.text, 120) })}`,
+        `${letter.at.replace(/^\d{4}-(\d\d)-(\d\d)/, '$2.$1')} ${letterText({ ...letter, text: clip(letter.text.replace(/\s+/g, ' '), 120) })}`,
         C.text,
       );
+      // Still waiting is what the person may need to act on; delivered is quiet.
+      const state = letterState(letter);
+      if (state) wrap(state, letter.state === 'queued' ? C.warn : C.faint);
+    }
   }
 
   const journal = journalEntries(node.body);

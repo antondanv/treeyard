@@ -1,10 +1,24 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { PaneInfo, SessionInfo } from '@antondanv/brainyard';
 import { describe, expect, it } from 'vitest';
 
-import { NotSent, type SendSources, sendToNode } from '../src/agents/send.js';
+import { sessionPlan } from '../src/agents/context.js';
+import { deliverAll, ensureDeliverer, runDeliverer } from '../src/agents/deliver.js';
+import { type SendSources, sendToNode } from '../src/agents/send.js';
 import { parseDuration, screenTail, type WaitSources, waitFor } from '../src/agents/wait.js';
 import { journalEntries } from '../src/model/journal.js';
 import { letterFrom, letterTo } from '../src/model/mail.js';
+import {
+  addLetter,
+  delivererRunning,
+  letterByNumber,
+  mailDir,
+  markDelivered,
+  queuedFor,
+  queuedLetters,
+  readMail,
+} from '../src/model/mailbox.js';
 import { addNode, attachCommit, attachSession, logToNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import type { SessionRef, Tree } from '../src/model/types.js';
@@ -118,8 +132,8 @@ describe('treeyard wait', () => {
     const node = nodeWithSession(tree, 'Фон', { id: 'bg-1' });
     const coordinator = addNode(tree, { title: 'Координатор' });
     logToNode(tree, node.id, 'итог: тесты 12/12', 'claude');
-    logToNode(tree, node.id, letterFrom(coordinator, 'а README поправил?'), 'агент');
-    logToNode(tree, node.id, letterTo(coordinator, 'да, поправил'), 'claude');
+    logToNode(tree, node.id, letterFrom(coordinator, 'а README поправил?', 1), 'агент');
+    logToNode(tree, node.id, letterTo(coordinator, 'да, поправил', 2), 'claude');
     const result = await waitFor(tree.project.dir, [node.id], {
       ...fast,
       sources: waitSources({ live: [live('bg-1', 'idle', { state: 'done' })], panes: [] }),
@@ -287,42 +301,73 @@ function sendSources(world: World) {
 }
 
 describe('treeyard send', () => {
-  it('types into a live pane as a paste, then Enter, and logs the message', async () => {
+  it('types into a live pane whose turn is over, as a paste, then Enter, and logs the letter with its number', async () => {
     const tree = emptyTree();
     const node = nodeWithSession(tree, 'Панель', { id: 'p-1', mode: 'pane', pane: 'claude-aa' });
     const { sources, calls } = sendSources({
-      live: [live('p-1', 'busy')],
+      live: [live('p-1', 'idle')],
       panes: [pane('claude-aa', { sessionId: 'p-1' })],
     });
     const sent = await sendToNode(tree, node.id, 'поправь тест\nи закоммить', { sources, source: 'claude' });
-    expect(sent).toMatchObject({ how: 'typed', pane: 'claude-aa' });
+    expect(sent).toMatchObject({ how: 'typed', pane: 'claude-aa', letter: { n: 1, state: 'delivered' } });
     expect(calls.typed).toEqual([
       ['claude-aa', '\u001b[200~поправь тест\nи закоммить\u001b[201~'],
       ['claude-aa', '\r'],
     ]);
     const saved = loadTree(tree.project.dir).nodes.get(node.id)!;
     expect(journalEntries(saved.body).at(-1)).toMatch(
-      / · claude · письмо сессии claude p-1: «поправь тест и закоммить»$/,
+      / · claude · письмо №1 сессии claude p-1: «поправь тест и закоммить»$/,
     );
+    expect(letterByNumber(tree.project.dir, 1)).toMatchObject({
+      to: node.id,
+      text: 'поправь тест\nи закоммить',
+      state: 'delivered',
+      delivered: { how: 'typed', session: 'claude p-1', pane: 'claude-aa' },
+    });
     // `wait` gives the session time to take it from here.
     expect(Date.now() - Date.parse(saved.sessions[0]!.opened!)).toBeLessThan(5000);
   });
 
-  it('writes nothing to a session that waits for the person', async () => {
+  it('queues a letter to a busy pane, then types it, with the next one, in one message once the turn is over', async () => {
     const tree = emptyTree();
-    const node = nodeWithSession(tree, 'Диалог', { id: 'p-1', mode: 'pane', pane: 'claude-aa' });
-    const { sources, calls } = sendSources({
-      live: [live('p-1', 'waiting', { waitingFor: 'permission: Bash' })],
-      panes: [pane('claude-aa', { sessionId: 'p-1' })],
-    });
-    await expect(sendToNode(tree, node.id, 'да', { sources })).rejects.toThrow(NotSent);
-    await expect(sendToNode(tree, node.id, 'да', { sources })).rejects.toThrow(
-      /permission: Bash.*tmux -L brainyard attach -t claude-aa/,
-    );
+    const node = nodeWithSession(tree, 'Панель', { id: 'p-1', mode: 'pane', pane: 'claude-aa' });
+    const world: World = { live: [live('p-1', 'busy')], panes: [pane('claude-aa', { sessionId: 'p-1' })] };
+    const { sources, calls } = sendSources(world);
+    const spawned: string[] = [];
+    const first = await sendToNode(tree, node.id, 'первое', { sources, spawn: (dir) => spawned.push(dir) });
+    const second = await sendToNode(tree, node.id, 'второе', { sources, spawn: (dir) => spawned.push(dir) });
+    expect(first).toMatchObject({ held: 'busy', letter: { n: 1, state: 'queued' } });
+    expect(second).toMatchObject({ held: 'busy', letter: { n: 2, state: 'queued' } });
     expect(calls.typed).toEqual([]);
+    // The deliverer is started for what waits: nothing more is asked of the sender.
+    expect(spawned.length).toBeGreaterThan(0);
+    world.live = [live('p-1', 'idle')];
+    const attempts = await deliverAll(tree.project.dir, { sources });
+    expect(attempts).toMatchObject([{ node: node.id, letters: [1, 2], how: 'typed', pane: 'claude-aa' }]);
+    expect(calls.typed[0]![1]).toBe('\u001b[200~первое\n\nвторое\u001b[201~');
+    expect(queuedFor(tree.project.dir, node.id)).toEqual([]);
+    // Just written to: its «idle» may be from before the message, so the next letter waits.
+    await sendToNode(loadTree(tree.project.dir), node.id, 'третье', { sources, spawn: () => undefined });
+    expect(letterByNumber(tree.project.dir, 3)).toMatchObject({ state: 'queued', held: 'busy' });
   });
 
-  it('stops a background session that ended its turn and resumes it in the background with the message', async () => {
+  it('keeps a letter to a session that waits for the person, and says what it waits for', async () => {
+    const tree = emptyTree();
+    const node = nodeWithSession(tree, 'Диалог', { id: 'p-1', mode: 'pane', pane: 'claude-aa' });
+    const world: World = {
+      live: [live('p-1', 'waiting', { waitingFor: 'permission: Bash' })],
+      panes: [pane('claude-aa', { sessionId: 'p-1' })],
+    };
+    const { sources, calls } = sendSources(world);
+    const sent = await sendToNode(tree, node.id, 'да', { sources, spawn: () => undefined });
+    expect(sent).toMatchObject({ held: 'waiting', heldFor: 'permission: Bash', letter: { state: 'queued' } });
+    expect(calls.typed).toEqual([]);
+    world.live = [live('p-1', 'idle')];
+    await deliverAll(tree.project.dir, { sources });
+    expect(calls.typed.map(([, data]) => data)).toEqual(['\u001b[200~да\u001b[201~', '\r']);
+  });
+
+  it('stops a background session that ended its turn and resumes it in the background with the letter', async () => {
     const tree = emptyTree();
     const node = nodeWithSession(tree, 'Фон', { id: 'bg-1' });
     const { sources, calls } = sendSources({ live: [live('bg-1', 'idle', { state: 'working' })], panes: [] });
@@ -341,19 +386,26 @@ describe('treeyard send', () => {
     ]);
   });
 
-  it('resumes a finished background session without stopping it, and leaves a busy one alone', async () => {
+  it('resumes a finished background session without stopping it, and queues for a busy one', async () => {
     const tree = emptyTree();
     const done = nodeWithSession(tree, 'Кончилась', { id: 'bg-1' });
     const busy = nodeWithSession(tree, 'Работает', { id: 'bg-2' });
-    const { sources, calls } = sendSources({ live: [live('bg-2', 'busy')], panes: [] });
+    const world: World = { live: [live('bg-2', 'busy')], panes: [] };
+    const { sources, calls } = sendSources(world);
     await sendToNode(tree, done.id, 'ещё', { sources });
     expect(calls.stopped).toEqual([]);
     expect(calls.opened).toHaveLength(1);
-    await expect(sendToNode(tree, busy.id, 'ещё', { sources })).rejects.toThrow(/ещё работает.*treeyard wait/);
+    expect(await sendToNode(tree, busy.id, 'ещё', { sources, spawn: () => undefined })).toMatchObject({
+      held: 'busy',
+    });
     expect(calls.opened).toHaveLength(1);
+    world.live = [live('bg-2', 'idle', { state: 'done' })];
+    await deliverAll(tree.project.dir, { sources });
+    expect(calls.opened).toHaveLength(2);
+    expect(calls.opened[1]).toMatchObject({ resume: 'bg-2', prompt: 'ещё' });
   });
 
-  it('wakes a sleeping pane with the message and remembers the new pane', async () => {
+  it('wakes a sleeping pane with the letter and remembers the new pane', async () => {
     const tree = emptyTree();
     const node = nodeWithSession(tree, 'Спит', { id: 'p-9', mode: 'pane', pane: 'claude-old' });
     const { sources, calls } = sendSources({ live: [], panes: [] });
@@ -374,12 +426,100 @@ describe('treeyard send', () => {
     ]);
   });
 
-  it('refuses a node without a session and a session open in a terminal', async () => {
+  it('keeps letters to a node without a session and to a session open in the person’s terminal', async () => {
     const tree = emptyTree();
     const bare = addNode(tree, { title: 'Пусто', status: 'active' });
     const terminal = nodeWithSession(tree, 'Терминал', { id: 't-1', mode: 'terminal' });
-    const { sources } = sendSources({ live: [live('t-1', 'idle')], panes: [] });
-    await expect(sendToNode(tree, bare.id, 'привет', { sources })).rejects.toThrow(/нет сессии.*treeyard open/);
-    await expect(sendToNode(tree, terminal.id, 'привет', { sources })).rejects.toThrow(/открыта в терминале/);
+    const world: World = { live: [live('t-1', 'idle', { kind: 'interactive' })], panes: [] };
+    const { sources, calls } = sendSources(world);
+    const spawned: string[] = [];
+    const spawn = (dir: string) => spawned.push(dir);
+    expect(await sendToNode(tree, bare.id, 'привет', { sources, spawn })).toMatchObject({ held: 'none' });
+    expect(journalEntries(loadTree(tree.project.dir).nodes.get(bare.id)!.body).at(-1)).toMatch(/письмо №1: «привет»$/);
+    // Nobody to deliver it to until a session starts: no deliverer for it.
+    expect(spawned).toEqual([]);
+    expect(await sendToNode(tree, terminal.id, 'привет', { sources, spawn })).toMatchObject({ held: 'terminal' });
+    expect(spawned).toHaveLength(1);
+    expect(calls.typed).toEqual([]);
+    // The person closed it: it wakes in a pane with the letter.
+    world.live = [];
+    await deliverAll(tree.project.dir, { sources });
+    expect(calls.panes).toMatchObject([{ resume: 't-1', prompt: 'привет' }]);
+    expect(letterByNumber(tree.project.dir, 2)).toMatchObject({ state: 'delivered', delivered: { how: 'woke' } });
+    expect(letterByNumber(tree.project.dir, 1)).toMatchObject({ state: 'queued', held: 'none' });
+  });
+
+  it('gives the waiting letters to a new session of the node in its first message', () => {
+    const tree = emptyTree();
+    const coordinator = addNode(tree, { title: 'Координатор' });
+    const node = addNode(tree, { title: 'Сайт', doneWhen: 'сайт открывается' });
+    addLetter(tree.project.dir, { to: node.id, from: coordinator.id, text: 'возьми шаблон из docs/' });
+    addLetter(tree.project.dir, { to: node.id, text: 'и без платных вызовов' });
+    const plan = sessionPlan(tree, node.id, 'do', 'claude');
+    expect(plan.letters).toEqual([1, 2]);
+    expect(plan.prompt).toContain(
+      `Письма узлу, которые ждали его сессии, — ответ тому, кто написал:\n\nПисьмо от сессии узла «Координатор» (${coordinator.id}), не от человека; ответ — treeyard send ${coordinator.id} "…":\nвозьми шаблон из docs/\n\nи без платных вызовов`,
+    );
+    markDelivered(tree.project.dir, plan.letters!, 'first', { session: 'claude 12345678' });
+    expect(sessionPlan(tree, node.id, 'do', 'claude').letters).toBeUndefined();
+    expect(letterByNumber(tree.project.dir, 2)).toMatchObject({ delivered: { how: 'first' } });
+  });
+});
+
+describe('the mailbox and its deliverer', () => {
+  it('numbers letters one after another, never twice, and keeps each whole', () => {
+    const tree = emptyTree();
+    const dir = tree.project.dir;
+    const a = addLetter(dir, { to: 'aaaa', text: 'раз' });
+    // Somebody took the next number a moment ago: the letter gets the one after it.
+    writeFileSync(join(mailDir(dir), '2.json'), JSON.stringify({ n: 2, to: 'bbbb', text: 'чужое', state: 'queued' }));
+    const c = addLetter(dir, { to: 'aaaa', text: 'три\nстроки\nцеликом' });
+    expect([a.n, c.n]).toEqual([1, 3]);
+    expect(readMail(dir).map((item) => item.n)).toEqual([1, 2, 3]);
+    expect(queuedFor(dir, 'aaaa').map((item) => item.text)).toEqual(['раз', 'три\nстроки\nцеликом']);
+  });
+
+  it('runs once per project, delivers as sessions free up, and stops when nothing is left to deliver', async () => {
+    const tree = emptyTree();
+    const dir = tree.project.dir;
+    const node = nodeWithSession(tree, 'Панель', { id: 'p-1', mode: 'pane', pane: 'claude-aa' });
+    const bare = addNode(tree, { title: 'Пусто', status: 'active' });
+    const world: World = { live: [live('p-1', 'busy')], panes: [pane('claude-aa', { sessionId: 'p-1' })] };
+    const { sources, calls } = sendSources(world);
+    await sendToNode(tree, node.id, 'когда освободишься', { sources, spawn: () => undefined });
+    await sendToNode(tree, bare.id, 'тебе потом', { sources, spawn: () => undefined });
+    let passes = 0;
+    const running = runDeliverer(dir, {
+      sources,
+      intervalMs: 10,
+      onAttempt: () => {
+        passes++;
+        if (passes === 3) world.live = [live('p-1', 'idle')];
+      },
+    });
+    // A second one for the same project returns at once.
+    expect(await runDeliverer(dir, { sources, intervalMs: 10 })).toBe(0);
+    expect(delivererRunning(dir)).toBe(true);
+    expect(await running).toBe(1);
+    expect(calls.typed[0]).toEqual(['claude-aa', '\u001b[200~когда освободишься\u001b[201~']);
+    expect(delivererRunning(dir)).toBe(false);
+    // The letter to the node without a session waits for its first one.
+    expect(queuedLetters(dir).map((item) => item.to)).toEqual([bare.id]);
+  });
+
+  it('is started only for letters a session can take, and only when none runs', () => {
+    const tree = emptyTree();
+    const node = nodeWithSession(tree, 'Фон', { id: 'bg-1' });
+    const bare = addNode(tree, { title: 'Пусто', status: 'active' });
+    const started: string[] = [];
+    const start = (dir: string) => started.push(dir);
+    expect(ensureDeliverer(tree, start)).toBe(false);
+    addLetter(tree.project.dir, { to: bare.id, text: 'потом' });
+    expect(ensureDeliverer(tree, start)).toBe(false);
+    addLetter(tree.project.dir, { to: node.id, text: 'сейчас' });
+    expect(ensureDeliverer(tree, start)).toBe(true);
+    expect(started).toEqual([tree.project.dir]);
+    // TREEYARD_DELIVER=off (the tests' environment): the real one never starts.
+    expect(ensureDeliverer(tree)).toBe(false);
   });
 });

@@ -2,42 +2,45 @@
  * `treeyard send`: the coordinator writes the next message to a node's own session instead of
  * starting a new one — a new session reads the whole conversation again, the same one goes on.
  *
- * A live pane gets it typed in, as a person would (pasted, then Enter): a CLI at work queues it.
- * A pane asleep wakes with it as the first message of the resumed conversation. A Claude Code
- * background session that ended its turn is stopped and resumed in the background with it.
- * A session that waits for the person (a permission, a question in a dialog) gets nothing: keys
- * typed into a dialog answer it, and only the person answers those.
+ * The letter goes into the project's mailbox first (model/mailbox.ts), whatever the addressee is
+ * doing, and gets a number; then it is delivered at once if the session can take it, and otherwise
+ * waits — busy, waiting for the person, asleep, open in the person's terminal or no session yet —
+ * for the deliverer (deliver.ts) to hand it over. Nothing is refused for the addressee's state.
  */
-import {
-  listPanes,
-  liveSessions,
-  open,
-  type PaneInfo,
-  type SessionInfo,
-  sendToPane,
-  startPane,
-  stopSession,
-} from '@antondanv/brainyard';
-
 import { t } from '../i18n/i18n.js';
-import { letterFrom, letterTo, letterToSession } from '../model/mail.js';
-import { nodeEnv } from '../model/notes.js';
-import { attachSession, logToNode } from '../model/ops.js';
-import { nowIso } from '../model/time.js';
+import { letterFrom, letterFromShell, letterHeading, letterTo, letterToSession } from '../model/mail.js';
+import { addLetter, type Delivery, type Hold, letterByNumber, type MailItem, withMailLock } from '../model/mailbox.js';
+import { logToNode } from '../model/ops.js';
 import { holderOf } from '../model/tree.js';
 import type { SessionRef, Tree, TreeNode } from '../model/types.js';
-import { fullAccess } from './access.js';
-import { isPending, type PaneSize } from './panes.js';
-import { newestSession, type SessionSight, sessionSight, type World } from './wait.js';
+import {
+  type Attempt,
+  DELIVER_SOURCES,
+  type DeliverSources,
+  deliverNode,
+  ensureDeliverer,
+  shortId,
+  spawnDeliverer,
+} from './deliver.js';
+import type { PaneSize } from './panes.js';
+import { newestSession, observe } from './wait.js';
 
-/** How the message got there. */
-export type Delivery = 'typed' | 'woke' | 'resumed';
+export { letterHeading };
 
 export interface Sent {
-  how: Delivery;
-  ref: SessionRef;
+  /** The letter as the mailbox has it after this send: queued or delivered. */
+  letter: MailItem;
+  /** Delivered now: how. */
+  how?: Delivery;
+  /** The session it went to, or waits for. */
+  ref?: SessionRef;
   /** The pane it went to, when it went to one. */
   pane?: string;
+  /** Still waiting: why. */
+  held?: Hold;
+  heldFor?: string;
+  /** The deliverer was started for it. */
+  deliverer?: boolean;
   warnings: string[];
 }
 
@@ -45,34 +48,8 @@ export interface Sent {
 export class NotSent extends Error {}
 
 /** What send uses of Brainyard; tests put their own. */
-export interface SendSources {
-  live(): Promise<SessionInfo[]>;
-  panes(): Promise<PaneInfo[]>;
-  type(pane: string, data: string): Promise<void>;
-  startPane: typeof startPane;
-  open: typeof open;
-  stop: typeof stopSession;
-  pause(ms: number): Promise<void>;
-}
-
-export const SEND_SOURCES: SendSources = {
-  live: () => liveSessions({ panes: {} }),
-  panes: () => listPanes(),
-  type: (pane, data) => sendToPane(pane, data),
-  startPane,
-  open,
-  stop: stopSession,
-  pause: (ms) => new Promise((done) => setTimeout(done, ms)),
-};
-
-/**
- * Bracketed paste: the CLI takes the whole text as one paste, newlines included, instead of
- * sending the message at its first line. The Enter comes after a pause, apart from the paste:
- * Codex counts keys that come too fast as part of a paste and would put a newline instead.
- */
-const PASTE_START = '\u001b[200~';
-const PASTE_END = '\u001b[201~';
-const ENTER_AFTER_MS = 400;
+export type SendSources = DeliverSources;
+export const SEND_SOURCES: SendSources = DELIVER_SOURCES;
 
 export interface SendOptions {
   size?: PaneSize;
@@ -81,100 +58,53 @@ export interface SendOptions {
   /** The node whose session writes (see `senderNode`): the letter goes into its journal too. */
   sender?: TreeNode | undefined;
   sources?: SendSources;
+  /** Starts the deliverer for a letter that waits; tests put their own. */
+  spawn?: (dir: string) => void;
 }
 
-/** Writes `text` to the newest session of node `id`. Throws `NotSent` when it cannot. */
+/** Writes `text` to node `id`: into the mailbox, and to its newest session as soon as it can take it. */
 export async function sendToNode(tree: Tree, id: string, text: string, options: SendOptions = {}): Promise<Sent> {
   const sources = options.sources ?? SEND_SOURCES;
   const node = holderOf(tree, id);
   if (!node) throw new NotSent(t('нет узла {id}', { id }));
-  const ref = newestSession(node);
-  if (!ref)
-    throw new NotSent(t('у узла {id} нет сессии — начни её: treeyard open {id} --bg|--pane --task "…"', { id }));
-  const [live, panes] = await Promise.all([sources.live().catch(() => []), sources.panes().catch(() => [])]);
-  const world: World = { live: new Map(live.map((s) => [s.id, s])), panes, paneSessions: new Map() };
-  const sight = sessionSight(ref, world);
   const dir = tree.project.dir;
   const sender = options.sender && options.sender.id !== id ? tree.nodes.get(options.sender.id) : undefined;
-  // In the other conversation a letter reads like the person's own message: it says whose it is.
-  const letter = sender ? `${letterHeading(sender)}\n${text}` : text;
-  let sent: Sent;
-  if (sight.state === 'waiting') throw new NotSent(waitingText(sight));
-  if (sight.pane) {
-    await sources.type(sight.pane, `${PASTE_START}${letter}${PASTE_END}`);
-    await sources.pause(ENTER_AFTER_MS);
-    await sources.type(sight.pane, '\r');
-    sent = { how: 'typed', ref, pane: sight.pane, warnings: [] };
-  } else if (ref.mode === 'background') {
-    if (sight.state === 'busy')
-      throw new NotSent(t('сессия {short} ещё работает — дождись её: treeyard wait {id}', { short: short(ref), id }));
-    // A background session whose turn is over still holds the conversation: it lets go first.
-    if (sight.state === 'idle' && live.find((s) => s.id === ref.id)?.live?.state !== 'done')
-      await sources.stop({ brain: ref.brain, sessionId: ref.id, cwd: dir });
-    const result = await sources.open({
-      brain: ref.brain,
-      cwd: dir,
-      resume: ref.id,
-      prompt: letter,
-      background: true,
-      ...fullAccess(ref.brain),
-      env: nodeEnv(id, dir),
-    });
-    if (result.error || !result.ok) throw new NotSent(result.error?.message ?? t('фоновая сессия не продолжилась'));
-    sent = { how: 'resumed', ref, warnings: result.warnings };
-  } else {
-    if (sight.state === 'busy' || sight.state === 'idle')
-      throw new NotSent(
-        t('сессия {short} открыта в терминале — напиши ей там или дождись, пока её закроют', { short: short(ref) }),
-      );
-    if (isPending(ref))
-      throw new NotSent(t('сессия так и не получила id — её не продолжить; начни новую: treeyard open {id}', { id }));
-    const started = await sources.startPane({
-      brain: ref.brain,
-      cwd: dir,
-      resume: ref.id,
-      prompt: letter,
-      ...fullAccess(ref.brain),
-      label: node.title,
-      env: nodeEnv(id, dir),
-      ...(options.size ? { width: options.size.width, height: options.size.height } : {}),
-    });
-    sent = {
-      how: 'woke',
-      ref: { ...ref, mode: 'pane', pane: started.pane },
-      pane: started.pane,
-      warnings: started.warnings,
-    };
-  }
-  // `opened` is when the session last heard from the tree: `wait` gives it time to take the message.
-  const found = node.sessions.find((s) => s.brain === ref.brain && s.id === ref.id);
-  if (found) {
-    Object.assign(found, sent.how === 'woke' ? { mode: 'pane', pane: sent.pane } : {});
-    attachSession(tree, id, { ...found, opened: nowIso() });
-  }
-  if (sender) {
-    logToNode(tree, id, letterFrom(sender, text), options.source);
-    logToNode(tree, sender.id, letterTo(node, text), options.source);
-  } else logToNode(tree, id, letterToSession(ref.brain, short(ref), text), options.source);
-  return sent;
-}
-
-/** The first line of a letter from a node's session: who wrote it and how to answer. */
-export function letterHeading(sender: TreeNode): string {
-  return t('Письмо от сессии узла «{title}» ({id}), не от человека; ответ — treeyard send {id} "…":', {
-    title: sender.title,
-    id: sender.id,
+  const ref = newestSession(node);
+  const letter = addLetter(dir, {
+    to: id,
+    ...(sender ? { from: sender.id } : {}),
+    ...(options.source ? { who: options.source } : {}),
+    text,
   });
-}
+  // One line per letter in each journal, whatever happens to it next.
+  if (sender) {
+    logToNode(tree, id, letterFrom(sender, text, letter.n), options.source);
+    logToNode(tree, sender.id, letterTo(node, text, letter.n), options.source);
+  } else if (ref) logToNode(tree, id, letterToSession(ref.brain, shortId(ref), text, letter.n), options.source);
+  else logToNode(tree, id, letterFromShell(text, letter.n), options.source);
 
-function short(ref: SessionRef): string {
-  return isPending(ref) ? (ref.pane ?? ref.id) : ref.id.slice(0, 8);
-}
-
-function waitingText(sight: SessionSight): string {
-  const why = sight.waitingFor ? ` (${sight.waitingFor})` : '';
-  const where = sight.pane
-    ? t('ответь в панели: tmux -L brainyard attach -t {pane}', { pane: sight.pane })
-    : t('ответь в ней: claude attach {id}', { id: sight.id?.slice(0, 8) ?? '' });
-  return t('сессия ждёт человека{why} — письмо ушло бы в её диалог; {where}', { why, where });
+  const world = await observe(dir, sources);
+  let attempt: Attempt | undefined;
+  try {
+    attempt = await withMailLock(dir, () =>
+      deliverNode(tree, id, world, { sources, ...(options.size ? { size: options.size } : {}) }),
+    );
+  } catch (error) {
+    // The lock is held by a delivery that takes long: the deliverer picks the letter up.
+    attempt = { node: id, letters: [letter.n], warnings: [error instanceof Error ? error.message : String(error)] };
+  }
+  const now = letterByNumber(dir, letter.n) ?? letter;
+  const sent: Sent = { letter: now, warnings: [...(attempt?.warnings ?? [])] };
+  const to = attempt?.ref ?? ref;
+  if (to) sent.ref = to;
+  if (now.state === 'delivered') {
+    if (now.delivered?.how) sent.how = now.delivered.how;
+    if (now.delivered?.pane) sent.pane = now.delivered.pane;
+    return sent;
+  }
+  if (attempt?.error) sent.warnings.push(t('не доставлено сразу: {error}', { error: attempt.error }));
+  sent.held = now.held ?? attempt?.held ?? 'busy';
+  if (now.heldFor) sent.heldFor = now.heldFor;
+  if (sent.held !== 'none') sent.deliverer = ensureDeliverer(tree, options.spawn ?? spawnDeliverer);
+  return sent;
 }

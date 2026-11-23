@@ -36,13 +36,14 @@ afterEach(async () => {
   }
 });
 
-function setup() {
+function setup(extra: NodeJS.ProcessEnv = {}) {
   const tree = emptyTree();
   const home = tempDir('treeyard-claude-home-');
   homes.push(home);
   const sh = treeyardIn(tree.project.dir, {
     CLAUDE_CONFIG_DIR: home,
     BRAINYARD_CLAUDE_BIN: JSON.stringify([process.execPath, fixture]),
+    ...extra,
   });
   const launches = (): { args: string[]; node: string }[] => {
     const log = join(home, 'launches.jsonl');
@@ -122,38 +123,63 @@ describe('treeyard wait from the shell', () => {
 });
 
 describe('treeyard send from the shell', () => {
-  it('refuses a node without a session, in text and in JSON', async () => {
-    const { tree, sh } = setup();
-    const node = addNode(tree, { title: 'Пусто', status: 'active' });
-    const text = await sh('send', node.id, 'привет');
-    expect(text.code).toBe(1);
-    expect(text.stderr).toContain(`у узла ${node.id} нет сессии`);
-    const json = await sh('send', node.id, 'привет', '--json');
-    expect(json.code).toBe(1);
-    expect(JSON.parse(json.stdout)).toMatchObject({ node: node.id, sent: false });
-  }, 40_000);
+  it('queues a letter to a node without a session, and the node’s first session gets it', async () => {
+    const { tree, sh, launches } = setup();
+    const node = addNode(tree, { title: 'Пусто', doneWhen: 'фон работает' });
+    const text = await sh('send', node.id, 'возьми шаблон из docs/', '--as', 'ты');
+    expect(text.code, text.stderr).toBe(0);
+    expect(text.stdout).toContain('письмо №1 в очереди: у узла нет сессии — письмо получит первая');
+    expect(text.stdout).toContain(`начать её: treeyard open ${node.id} --bg|--pane --task "…"`);
+    const json = await sh('send', node.id, 'и без платных вызовов', '--json');
+    expect(json.code).toBe(0);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      node: node.id,
+      sent: true,
+      letter: 2,
+      state: 'queued',
+      held: 'none',
+      how: null,
+    });
+    const open = await sh('open', node.id, '--bg', '--start', 'do', '--yes', '--json');
+    expect(open.code, open.stderr).toBe(0);
+    const prompt = launches().at(-1)!.args.at(-1)!;
+    expect(prompt).toContain('Письма узлу, которые ждали его сессии');
+    expect(prompt).toContain('возьми шаблон из docs/\n\nи без платных вызовов');
+    const mail = JSON.parse((await sh('show', node.id, '--only', 'mail', '--json')).stdout).mail;
+    expect(mail).toMatchObject([
+      { n: 1, state: 'delivered', how: 'first' },
+      { n: 2, state: 'delivered', how: 'first' },
+    ]);
+  }, 60_000);
 
-  it('leaves a busy background session alone, and resumes it with the message once it has ended', async () => {
-    const { tree, home, sh, launches } = setup();
+  it('queues a letter to a busy background session, and treeyard resumes it with the letter once its turn is over', async () => {
+    // The deliverer on: nobody sends anything more after the letter.
+    const { tree, home, sh, launches } = setup({ TREEYARD_DELIVER: '' });
     const node = addNode(tree, { title: 'Фон', doneWhen: 'фон работает' });
     const open = await sh('open', node.id, '--bg', '--start', 'do', '--yes', '--json');
     const session = JSON.parse(open.stdout).id as string;
 
-    const busy = await sh('send', node.id, 'добавь тест');
-    expect(busy.code).toBe(1);
-    expect(busy.stderr).toContain('ещё работает — дождись её: treeyard wait');
-
-    for (const row of workers(home)) process.kill(row.pid, 'SIGTERM');
-    await new Promise((done) => setTimeout(done, 300));
-    const sent = await sh('send', node.id, 'добавь тест', '--as', 'claude');
-    expect(sent.code, sent.stderr).toBe(0);
-    expect(sent.stdout).toContain(`фоновая сессия ${session.slice(0, 8)} продолжена с письмом`);
-    const resumed = launches().at(-1)!;
-    expect(resumed.node).toBe(node.id);
-    expect(resumed.args).toEqual(expect.arrayContaining(['--resume', session, '--bg', '--', 'добавь тест']));
+    const busy = await sh('send', node.id, 'добавь тест', '--as', 'claude');
+    expect(busy.code, busy.stderr).toBe(0);
+    expect(busy.stdout).toContain('письмо №1 в очереди: сессия занята — придёт, когда она закончит ход');
+    expect(busy.stdout).toContain(`доставит treeyard сам; посмотреть — treeyard show ${node.id} --only mail`);
     const entries = journalEntries(loadTree(tree.project.dir).nodes.get(node.id)!.body);
     expect(entries.at(-1)).toMatch(
-      new RegExp(`· claude · письмо сессии claude ${session.slice(0, 8)}: «добавь тест»$`),
+      new RegExp(`· claude · письмо №1 сессии claude ${session.slice(0, 8)}: «добавь тест»$`),
     );
+
+    for (const row of workers(home)) process.kill(row.pid, 'SIGTERM');
+    const end = Date.now() + 20_000;
+    const resumedWith = () => launches().find((row) => row.args.includes('--resume'));
+    while (!resumedWith() && Date.now() < end) await new Promise((done) => setTimeout(done, 200));
+    const resumed = resumedWith();
+    expect(resumed?.node).toBe(node.id);
+    expect(resumed?.args).toEqual(expect.arrayContaining(['--resume', session, '--bg', '--', 'добавь тест']));
+    const mail = JSON.parse((await sh('show', node.id, '--only', 'mail', '--json')).stdout).mail;
+    expect(mail).toMatchObject([{ n: 1, state: 'delivered', how: 'resumed' }]);
+    // One line per letter: the delivery adds none.
+    expect(
+      journalEntries(loadTree(tree.project.dir).nodes.get(node.id)!.body).filter((e) => e.includes('письмо №1')),
+    ).toHaveLength(1);
   }, 60_000);
 });

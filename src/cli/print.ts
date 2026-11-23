@@ -8,7 +8,7 @@ import { parseEntry, statusHistory, statusSteps } from '../model/history.js';
 import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
-import { type Letter, letterPeer, lettersOf } from '../model/mail.js';
+import { type Letter, letterPeer, letterState, mailOf } from '../model/mail.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { type Stale, staleLabel, staleNote } from '../model/stale.js';
@@ -260,7 +260,7 @@ function partsText(
     mail: () =>
       titled(
         t('письма:'),
-        lettersOf(node).map((letter) => `  ${letterLine(letter, p)}`),
+        mailOf(tree, node).map((letter) => `  ${letterLine(letter, p)}`),
       ),
   };
   const blocks = NODE_PARTS.filter((part) => only.has(part)).map((part) => sections[part]().join('\n'));
@@ -369,13 +369,17 @@ export function partsJson(
     out.journal = entries.slice(entries.length - Math.min(journal, entries.length));
   }
   if (only.has('history')) out.history = statusHistory(node.body);
-  if (only.has('mail')) out.mail = lettersOf(node);
+  if (only.has('mail')) out.mail = mailOf(tree, node);
   return out;
 }
 
 /** `← 2026-11-22 21:45  от «Сайт»: «текст»` — a letter the node got (←) or its session sent (→). */
 function letterLine(letter: Letter, p: Paint): string {
-  return `${letter.direction === 'out' ? '→' : '←'} ${p.dim(letter.at)}  ${letterPeer(letter)}: «${letter.text}»`;
+  const n = letter.n === undefined ? '' : `${t('№{n}', { n: letter.n })} `;
+  // The whole letter, as the mailbox keeps it: its lines under the first one.
+  const text = letter.text.replace(/\n/g, '\n      ');
+  const state = letterState(letter);
+  return `${letter.direction === 'out' ? '→' : '←'} ${p.dim(letter.at)}  ${n}${letterPeer(letter)}: «${text}»${state ? p.dim(` · ${state}`) : ''}`;
 }
 
 /** One node's fields for `--json`; `children` nests its subtree. */

@@ -22,6 +22,7 @@ import {
   START_LABEL,
   sessionPlan,
 } from '../agents/context.js';
+import { type Attempt, deliverAll, ensureDeliverer, runDeliverer } from '../agents/deliver.js';
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
@@ -55,7 +56,7 @@ import { isCreationLine, lastOwnEntry, parseEntry } from '../model/history.js';
 import { addImage, imagePath, listImages, purgeImages, removeImage, setImageNote } from '../model/images.js';
 import { description, journalEntries, replaceEntry } from '../model/journal.js';
 import { addLinkedNode, isSameTree, normalizeRef, setNeeds } from '../model/links.js';
-import { senderNode } from '../model/mail.js';
+import { DELIVERY_TEXT, letterState, senderNode } from '../model/mail.js';
 import { addNote, homeShort, NODE_VAR, noteOrigin, notesFolder, originText } from '../model/notes.js';
 import {
   addNode,
@@ -238,10 +239,12 @@ function commandLines(): string {
                                            закончит ход, будет ждать человека или закончится; печатает статус, последнюю
                                            запись журнала и сессию (у панели — конец экрана); --all — пока все узлы;
                                            время вышло — код 124; узел уже не в работе — ответ сразу
-  treeyard send <id> "<текст>"|- [--json]   следующая реплика той же сессии узла, а не новая сессия: живой панели —
-                                           как набранная (работающая сессия возьмёт её после хода), уснувшей панели —
-                                           первым сообщением при пробуждении, фоновой Claude Code после хода — продолжением
-                                           в фоне; сессии, которая ждёт человека, не пишет; письмо — в журнал узла
+  treeyard send <id> "<текст>"|- [--json]   письмо следующей репликой той же сессии узла, а не новой сессии: сначала
+                                           в ящик (номер), потом свободной панели — вставкой, уснувшей — пробуждением,
+                                           фоновой Claude Code — продолжением; занятой, ждущей человека, открытой в его
+                                           терминале и узлу без сессии — в очереди: доставит treeyard сам (первой сессии
+                                           узла — в первом сообщении); вывод — номер и статус; строка — в журнал узла
+  treeyard deliver [--once]                доставить ждущие письма; обычно запускается сам из send
   treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   очередь узлов:
                                            у одного узла с детьми — его открытые дети по порядку, иначе — как названы;
                                            не больше --parallel сессий (панелей — и не больше max_panes), следующий —
@@ -343,10 +346,13 @@ function commandLines(): string {
                                            ends its turn, waits for the person or ends; prints the status, the last journal
                                            entry and the session (for a pane, the end of its screen); --all — until every
                                            node does; out of time — exit code 124; a node no longer active — at once
-  treeyard send <id> "<text>"|- [--json]   the next message of the node's own session, not a new session: a live pane
-                                           gets it typed (a session at work takes it after its turn), a sleeping pane wakes
-                                           with it, a Claude Code background session that ended its turn goes on with it in
-                                           the background; never to a session waiting for the person; logged in the journal
+  treeyard send <id> "<text>"|- [--json]   a message as the next one of the node's own session, not a new session: into
+                                           the mailbox first (a number), then typed into an idle pane, waking a sleeping
+                                           one, resuming a Claude Code background one; for a busy one, one waiting for the
+                                           person, one open in their terminal and a node with no session — queued: treeyard
+                                           delivers it by itself (a node's first session gets it in its first message);
+                                           prints the number and the state; a line in the node's journal
+  treeyard deliver [--once]                deliver the waiting messages; send usually starts it by itself
   treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   a queue of nodes:
                                            one node with children — its open children in order, otherwise as named; at
                                            most --parallel sessions (panes — and at most max_panes), the next one when a
@@ -461,6 +467,8 @@ async function main(argv: string[]): Promise<number> {
       return waitCommand(rest);
     case 'send':
       return sendCommand(rest);
+    case 'deliver':
+      return deliverCommand(rest);
     case 'queue':
       return queueCommand(rest);
     case 'docs':
@@ -671,6 +679,10 @@ async function openTui(skillsNote = ''): Promise<number> {
     if (skillsNote) process.stderr.write(`${err.dim(skillsNote)}\n`);
     return code;
   }
+  // Letters left waiting since the last deliverer stopped go on while the tree is open and after.
+  try {
+    ensureDeliverer(loadTree(dir));
+  } catch {}
   const { runTui } = await import('../tui/run.js');
   await runTui(dir, undefined, skillsNote ? { text: skillsNote } : undefined);
   return 0;
@@ -681,6 +693,8 @@ const NO_AUTO_SKILLS = new Set([
   'status',
   // Run by git in the middle of a merge: quiet and quick.
   'merge-overview',
+  // Started in the background by send: nothing to install or say.
+  'deliver',
   // It is taking them away.
   'uninstall',
   'skills',
@@ -1235,6 +1249,8 @@ async function waitCommand(args: string[]): Promise<number> {
   const tree = project(values.project);
   const ids = [...new Set(positionals.map((p) => nodeArg(tree, p)))];
   if (ids.includes(ROOT)) throw new UsageError(t('корень не ждут — назови узлы: {usage}', { usage }));
+  // Letters left waiting since the last deliverer stopped (a restart, a sandbox) go on now.
+  ensureDeliverer(tree);
   let timeoutMs: number | undefined;
   if (values.timeout !== undefined) {
     timeoutMs = parseDuration(values.timeout);
@@ -1256,7 +1272,10 @@ async function waitCommand(args: string[]): Promise<number> {
   return result.timedOut ? 124 : 0;
 }
 
-/** `treeyard send <id> "…"`: the next message of the node's own session (see agents/send.ts). */
+/**
+ * `treeyard send <id> "…"`: a letter to the node's own session (see agents/send.ts) — delivered at
+ * once when the session can take it, queued in the mailbox and delivered by treeyard otherwise.
+ */
 async function sendCommand(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, {
     json: { type: 'boolean' },
@@ -1287,19 +1306,84 @@ async function sendCommand(args: string[]): Promise<number> {
   }
   if (values.json) {
     process.stdout.write(
-      `${JSON.stringify({ node: id, sent: true, how: sent.how, brain: sent.ref.brain, id: sent.ref.id, pane: sent.pane ?? null, warnings: sent.warnings }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          node: id,
+          sent: true,
+          letter: sent.letter.n,
+          state: sent.letter.state,
+          how: sent.how ?? null,
+          held: sent.held ?? null,
+          heldFor: sent.heldFor ?? null,
+          brain: sent.ref?.brain ?? null,
+          id: sent.ref?.id ?? null,
+          pane: sent.pane ?? null,
+          warnings: sent.warnings,
+        },
+        null,
+        2,
+      )}\n`,
     );
     return 0;
   }
   for (const warning of sent.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
-  const how =
-    sent.how === 'typed'
-      ? t('набрано в панели {pane}', { pane: sent.pane })
-      : sent.how === 'woke'
-        ? t('панель {pane} проснулась с письмом', { pane: sent.pane })
-        : t('фоновая сессия {short} продолжена с письмом', { short: sent.ref.id.slice(0, 8) });
-  process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${tree.nodes.get(id)!.title} · ${how}\n`);
+  const title = tree.nodes.get(id)!.title;
+  if (sent.how) {
+    const how =
+      sent.how === 'typed'
+        ? t('набрано в панели {pane}', { pane: sent.pane })
+        : sent.how === 'woke'
+          ? t('панель {pane} проснулась с письмом', { pane: sent.pane })
+          : t('фоновая сессия {short} продолжена с письмом', { short: sent.ref?.id.slice(0, 8) ?? '' });
+    process.stdout.write(
+      `${out.c('#7ee2a8', '✓')} ${id}  ${title} · ${t('письмо №{n} доставлено: {how}', { n: sent.letter.n, how })}\n`,
+    );
+    return 0;
+  }
+  const why = letterState({ state: 'queued', held: sent.held, ...(sent.heldFor ? { heldFor: sent.heldFor } : {}) });
+  process.stdout.write(`${out.c('#ffcf70', '✉')} ${id}  ${title} · ${t('письмо №{n}', { n: sent.letter.n })} ${why}\n`);
+  // Where the person answers what the session waits for; the letter goes after that.
+  if (sent.held === 'waiting' && sent.ref)
+    process.stdout.write(
+      `  ${out.dim(
+        sent.ref.mode === 'pane' && sent.pane
+          ? t('ответить ей: tmux -L brainyard attach -t {pane}', { pane: sent.pane })
+          : sent.ref.mode === 'pane' && sent.ref.pane
+            ? t('ответить ей: tmux -L brainyard attach -t {pane}', { pane: sent.ref.pane })
+            : t('ответить ей: claude attach {id}', { id: sent.ref.id.slice(0, 8) }),
+      )}\n`,
+    );
+  if (sent.held === 'none')
+    process.stdout.write(`  ${out.dim(t('начать её: treeyard open {id} --bg|--pane --task "…"', { id }))}\n`);
+  else
+    process.stdout.write(
+      `  ${out.dim(t('доставит treeyard сам; посмотреть — treeyard show {id} --only mail', { id }))}\n`,
+    );
   return 0;
+}
+
+/**
+ * `treeyard deliver`: hands the waiting letters of the project to their sessions until none is left
+ * that a session could take. `send` starts it in the background by itself; by hand — to look.
+ */
+async function deliverCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, { project: { type: 'string' }, once: { type: 'boolean' } });
+  if (positionals.length) throw new UsageError(t('treeyard deliver [--once] [--project <папка>]'));
+  const dir = projectDir(values.project);
+  if (values.once) {
+    const attempts = await deliverAll(dir, { size: paneSize() });
+    for (const attempt of attempts) process.stdout.write(`${attemptLine(attempt)}\n`);
+    return 0;
+  }
+  await runDeliverer(dir, { size: paneSize() });
+  return 0;
+}
+
+function attemptLine(attempt: Attempt): string {
+  const numbers = attempt.letters.map((n) => t('№{n}', { n })).join(', ');
+  if (attempt.how) return `${out.c('#7ee2a8', '✓')} ${attempt.node}  ${numbers} · ${DELIVERY_TEXT[attempt.how]}`;
+  if (attempt.error) return `${out.c('#ff7b72', '✗')} ${attempt.node}  ${numbers} · ${attempt.error}`;
+  return `${out.c('#ffcf70', '✉')} ${attempt.node}  ${numbers} · ${letterState({ state: 'queued', ...(attempt.held ? { held: attempt.held } : {}), ...(attempt.heldFor ? { heldFor: attempt.heldFor } : {}) })}`;
 }
 
 /** `treeyard queue <id…>`: start the nodes one after another as slots and limits allow (see agents/queue.ts). */

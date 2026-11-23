@@ -83,9 +83,15 @@ export function isCreationLine(text: string): boolean {
  * The journal lines of a letter between sessions (`treeyard send`, see mail.ts). `send` writes
  * them, not the author: the session's summary and the entry `log --fix` corrects lie elsewhere.
  */
-export const LETTER_FROM = 'письмо от «{from}»: «{text}»';
-export const LETTER_TO = 'письмо узлу «{to}»: «{text}»';
-export const LETTER_SESSION = 'письмо сессии {brain} {short}: «{text}»';
+export const LETTER_FROM = 'письмо №{n} от «{from}»: «{text}»';
+export const LETTER_TO = 'письмо №{n} узлу «{to}»: «{text}»';
+export const LETTER_SESSION = 'письмо №{n} сессии {brain} {short}: «{text}»';
+/** A letter from a shell to a node with no session yet: its first session gets it. */
+export const LETTER_SHELL = 'письмо №{n}: «{text}»';
+/** The same lines before letters had numbers: older journals keep them. */
+export const OLD_LETTER_FROM = 'письмо от «{from}»: «{text}»';
+export const OLD_LETTER_TO = 'письмо узлу «{to}»: «{text}»';
+export const OLD_LETTER_SESSION = 'письмо сессии {brain} {short}: «{text}»';
 
 /** Lines treeyard writes by itself, keyed by their Russian text; `{x}` stands for anything. */
 const OWN = [
@@ -100,6 +106,10 @@ const OWN = [
   LETTER_FROM,
   LETTER_TO,
   LETTER_SESSION,
+  LETTER_SHELL,
+  OLD_LETTER_FROM,
+  OLD_LETTER_TO,
+  OLD_LETTER_SESSION,
 ];
 const OWN_LINES = OWN.flatMap((key) => [key, EN[key] ?? key]).map(
   (template) => new RegExp(`^${literal(template).replace(/\\\{\w+\\\}/g, '.*')}$`),
