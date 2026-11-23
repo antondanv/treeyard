@@ -1476,4 +1476,28 @@ export const EN: Record<string, string> = {
   'коммиты этой сессии снова привязываются к «{to}»': "this session's commits attach to «{to}» again",
   'у узла своя сессия — коммиты этой сессии остаются у «{at}»':
     "the node has a session of its own — this session's commits stay with «{at}»",
+  // treeyard queue
+  'treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]':
+    'treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]',
+  'выбери одно: --pane или --bg — {usage}': 'pick one: --pane or --bg — {usage}',
+  'корень в очередь не ставят — назови узлы: {usage}': 'the root does not go into a queue — name the nodes: {usage}',
+  '--parallel — целое от 1': '--parallel — a whole number from 1',
+  '--limit — проценты, от 1 до 100': '--limit — percent, from 1 to 100',
+  'Поставить в очередь: {n}, по {parallel} сразу?': 'Queue {n}, {parallel} at a time?',
+  'сессия не встала': 'the session did not start',
+  'сессия закончилась, узел ещё в работе — загляни: treeyard show {id}':
+    'the session ended, the node is still active — have a look: treeyard show {id}',
+  'ждёт человека{why}': 'waits for the person{why}',
+  'закончила ход, узел ещё в работе — treeyard wait {id}, ответ — treeyard send {id}':
+    'ended its turn, the node is still active — treeyard wait {id}, to answer — treeyard send {id}',
+  'лимит {brain} ({window}) — {percent}%: новые узлы не запускаю{until}':
+    '{brain} limit ({window}) — {percent}%: starting no new nodes{until}',
+  ' до {time}': ' until {time}',
+  'лимит {brain} снова есть — продолжаю': 'the {brain} limit is back — going on',
+  'не дождался: {needs}': 'never got: {needs}',
+  'не запустился': 'did not start',
+  'очередь остановлена: запущено {started}, закончено {finished}; та же команда подхватит узлы в работе':
+    'the queue stopped: started {started}, finished {finished}; the same command picks up the nodes at work',
+  'очередь прошла: запущено {started}, закончено {finished}, не дождались {blocked}':
+    'the queue is through: started {started}, finished {finished}, never started {blocked}',
 };

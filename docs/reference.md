@@ -429,6 +429,7 @@ treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes 
 treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a session in each, a line per node
 treeyard wait <id> <id> --timeout 10m          # a coordinator waits: a node left “active”, its session ended its turn or waits for the person (--all — every one; --json)
 treeyard send <id> "fix the test"               # the next message of the node's own session, not a new session (- reads stdin)
+treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's open children in order, two sessions at a time, the next when a node leaves “active”
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
 treeyard status                                 # a summary: versions, tree, nodes, skills, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
@@ -570,6 +571,22 @@ end of its turn; the answer comes as its next message. Codex's sandbox keeps a s
 tmux socket, so a Codex session asks its question as its last message and ends its turn — `treeyard
 wait` shows it at the end of the screen. `wait` learns that a Codex session in a pane ended its turn
 from Codex's own rollout: idle Codex sessions are not on the list of live ones.
+
+`treeyard queue <id…> --pane|--bg` keeps a queue of nodes instead of the coordinator's chat. One
+node with children — its open children (to do and active, the person's own steps aside) in their
+order among siblings; several ids — as named. At most `--parallel` (2) sessions at a time, for panes
+also at most `max_panes` live panes of the project. The next node starts when a node leaves
+“active” or its session ends; a session that ended its turn or waits for the person keeps its slot —
+the queue says so, and `treeyard send` answers it. A node with `needs` on nodes of this tree waits
+until they are in review or done. Before a start the queue looks at the CLI's subscription windows
+(Brainyard's `usage()`, only what the CLI saved itself, no model call) and with one filled to
+`--limit` (90%) starts nothing new until it resets. A line per event: `▶` started, `✓` left
+“active”, `■` the session ended while the node is active, `?` ended its turn or waits for the
+person, `‖` a limit or a node that never got its `needs`, `✗` did not start (no retry); `--json` —
+a JSON line per event with `at`. The queue ends when all have gone (exit 0) or the rest will never
+get their `needs` (exit 1). Ctrl+C — start no more; the same command again picks up the nodes at
+work. The start is `do` by default; `--brain`, `--start`, `--model`, `--effort`, `--worktree`,
+`--task`, `--yes` — as for `open`.
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
 node, its edit stays.

@@ -108,7 +108,22 @@ Two ways; the session's CLI is `--brain` (default: `brain:` in `.tree/tree.md`):
 | Background | `treeyard open <a> <b> --bg --worktree …` | Claude Code only | its own worktree and branch — merge in step 6 |
 
 A pane is the default: any CLI, and the person sees it next to the tree and can answer it
-there. Background — Claude Code without tmux, or a node whose checks must not trip over a
+there.
+
+**A longer batch** — the children of one node, or a list where some wait for others (`needs`) —
+goes to `treeyard queue` instead of one `open` per node:
+
+```sh
+treeyard queue <parent> --pane --parallel 2 --start do --yes --json --task "…" [--brain …] [--model …]
+```
+
+It starts the open children in their order, two at a time, the next one when a node leaves
+`active` or its session ends, a node with `needs` once they are in review or done, and starts
+nothing while the CLI's window is 90% used. Run it as a background command (Codex: in a pane of
+its own, or rounds of `open`); its lines are your events: `?` asks — answer with `treeyard send`;
+`■` ended while still `active` — look at it; `‖` a limit or unmet `needs` — into the summary. Ctrl+C
+stops new starts; the same command again picks up the nodes at work. Accept each node as below while
+the queue goes on. Background — Claude Code without tmux, or a node whose checks must not trip over a
 neighbour's half-done edits.
 
 ```sh

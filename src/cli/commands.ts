@@ -25,6 +25,7 @@ import {
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
+import { LIMIT, type QueueEvent, queueNodes, queueSources, runQueue } from '../agents/queue.js';
 import { NotSent, sendToNode } from '../agents/send.js';
 import { autoInstallSkills, skillHomes } from '../agents/skills.js';
 import { parseDuration, waitFor } from '../agents/wait.js';
@@ -241,6 +242,14 @@ function commandLines(): string {
                                            как набранная (работающая сессия возьмёт её после хода), уснувшей панели —
                                            первым сообщением при пробуждении, фоновой Claude Code после хода — продолжением
                                            в фоне; сессии, которая ждёт человека, не пишет; письмо — в журнал узла
+  treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   очередь узлов:
+                                           у одного узла с детьми — его открытые дети по порядку, иначе — как названы;
+                                           не больше --parallel сессий (панелей — и не больше max_panes), следующий —
+                                           когда узел ушёл из «в работе» или его сессия закончилась; узел с needs —
+                                           когда нужные на проверке или готовы; при лимите CLI от --limit % ждёт сброса
+                                           окна; строка на событие, пока все не пройдут; Ctrl+C — больше не запускать,
+                                           повторный запуск подхватит узлы в работе; --brain, --start (do), --model,
+                                           --effort, --worktree, --yes — как у open
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
                                            репозитория (открытые — узлы, закрытие — в обе стороны)
@@ -338,6 +347,14 @@ function commandLines(): string {
                                            gets it typed (a session at work takes it after its turn), a sleeping pane wakes
                                            with it, a Claude Code background session that ended its turn goes on with it in
                                            the background; never to a session waiting for the person; logged in the journal
+  treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   a queue of nodes:
+                                           one node with children — its open children in order, otherwise as named; at
+                                           most --parallel sessions (panes — and at most max_panes), the next one when a
+                                           node leaves «active» or its session ends; a node with needs — when they are in
+                                           review or done; with the CLI's window at --limit % it waits for the reset; a line
+                                           per event until all have gone; Ctrl+C — start no more, running it again picks
+                                           up the nodes at work; --brain, --start (do), --model, --effort, --worktree,
+                                           --yes — as for open
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            a GitHub Project board (cards are nodes, columns are statuses) or a
                                            repository's issues (open ones are nodes, closing goes both ways)
@@ -444,6 +461,8 @@ async function main(argv: string[]): Promise<number> {
       return waitCommand(rest);
     case 'send':
       return sendCommand(rest);
+    case 'queue':
+      return queueCommand(rest);
     case 'docs':
       return docsCommand(rest);
     case 'projects':
@@ -1281,6 +1300,142 @@ async function sendCommand(args: string[]): Promise<number> {
         : t('фоновая сессия {short} продолжена с письмом', { short: sent.ref.id.slice(0, 8) });
   process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${tree.nodes.get(id)!.title} · ${how}\n`);
   return 0;
+}
+
+/** `treeyard queue <id…>`: start the nodes one after another as slots and limits allow (see agents/queue.ts). */
+async function queueCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, {
+    brain: { type: 'string', short: 'b' },
+    start: { type: 'string' },
+    bg: { type: 'boolean' },
+    pane: { type: 'boolean' },
+    parallel: { type: 'string' },
+    limit: { type: 'string' },
+    model: { type: 'string' },
+    effort: { type: 'string' },
+    worktree: { type: 'boolean' },
+    task: { type: 'string' },
+    yes: { type: 'boolean', short: 'y' },
+    json: { type: 'boolean' },
+  });
+  const usage = t('treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]');
+  if (!positionals.length) throw new UsageError(usage);
+  if (values.pane === values.bg) throw new UsageError(t('выбери одно: --pane или --bg — {usage}', { usage }));
+  const tree = project();
+  const ids = [...new Set(positionals.map((p) => nodeArg(tree, p)))];
+  if (ids.includes(ROOT)) throw new UsageError(t('корень в очередь не ставят — назови узлы: {usage}', { usage }));
+  const parallel = values.parallel === undefined ? 2 : Number(values.parallel);
+  if (!Number.isInteger(parallel) || parallel < 1) throw new UsageError(t('--parallel — целое от 1'));
+  const limit = values.limit === undefined ? LIMIT * 100 : Number(values.limit);
+  if (!Number.isFinite(limit) || limit <= 0 || limit > 100) throw new UsageError(t('--limit — проценты, от 1 до 100'));
+  const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
+  const task = await taskArg(values.task);
+  const options: LaunchOptions = {
+    brain,
+    // Nobody approves a plan in a queue: its sessions do the node.
+    start: startArg(values.start, 'do'),
+    ...(values.bg ? { background: true } : { pane: true }),
+    ...(values.model ? { model: values.model } : {}),
+    ...(values.effort ? { effort: values.effort } : {}),
+    ...(values.worktree ? { worktree: true } : {}),
+    ...(task ? { task } : {}),
+  };
+  if (!(await chooseAccess(brain))) return 0;
+  if (settings().confirm && !values.yes && process.stdin.isTTY) {
+    const titles = queueNodesOf(tree, ids);
+    process.stderr.write(`\n${titles.map((title) => `  ${title}`).join('\n')}\n\n`);
+    if (!(await askYes(t('Поставить в очередь: {n}, по {parallel} сразу?', { n: titles.length, parallel })))) return 0;
+  }
+  const json = values.json === true;
+  const controller = new AbortController();
+  process.once('SIGINT', () => controller.abort());
+  process.once('SIGTERM', () => controller.abort());
+  const end = await runQueue(tree.project.dir, ids, {
+    launch: options,
+    parallel,
+    ...(options.pane ? { maxPanes: settings().maxPanes } : {}),
+    limit: limit / 100,
+    signal: controller.signal,
+    sources: queueSources(async (current, id, launchOptions) => {
+      if (launchOptions.pane) {
+        const { pane, ref } = await launchInPane(current, id, launchOptions, paneSize());
+        return { pane, ...(isPending(ref) ? {} : { session: ref.id }) };
+      }
+      const { result, ref } = await launch(current, id, launchOptions);
+      if (result.error || !ref) throw new Error(result.error?.message ?? t('сессия не встала'));
+      return { session: ref.id };
+    }),
+    onEvent: (event) =>
+      process.stdout.write(`${json ? JSON.stringify({ ...event, at: nowIso() }) : queueLine(event, out)}\n`),
+  });
+  return end.type === 'end' && end.blocked ? 1 : 0;
+}
+
+function queueNodesOf(tree: Tree, ids: string[]): string[] {
+  return queueNodes(tree, ids).map((id) => `${id}  ${tree.nodes.get(id)?.title ?? ''}`);
+}
+
+/** A queue event as one line: the time, a mark, the node and what happened. */
+function queueLine(event: QueueEvent, p: typeof out): string {
+  const now = new Date();
+  const clock = p.dim(
+    [now.getHours(), now.getMinutes(), now.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':'),
+  );
+  const node = (id: string, title: string) => `${id}  ${title}`;
+  switch (event.type) {
+    case 'start':
+      return `${clock}  ${p.c('#8ab4ff', '▶')} ${node(event.node, event.title)} · ${
+        event.pane ? t('панель {pane}', { pane: event.pane }) : t('сессия {session}', { session: event.session ?? '?' })
+      }`;
+    case 'fail':
+      return `${clock}  ${p.c('#ff7b72', '✗')} ${node(event.node, event.title)} · ${event.error}`;
+    case 'done':
+      return event.ended
+        ? `${clock}  ${p.c('#ffcf70', '■')} ${node(event.node, event.title)} · ${t('сессия закончилась, узел ещё в работе — загляни: treeyard show {id}', { id: event.node })}`
+        : `${clock}  ${p.c('#7ee2a8', '✓')} ${node(event.node, event.title)} · ${STATUS_LABEL[event.status]}`;
+    case 'asks':
+      return `${clock}  ${p.c('#ffcf70', '?')} ${node(event.node, event.title)} · ${
+        event.state === 'waiting'
+          ? t('ждёт человека{why}', { why: event.waitingFor ? `: ${event.waitingFor}` : '' })
+          : t('закончила ход, узел ещё в работе — treeyard wait {id}, ответ — treeyard send {id}', { id: event.node })
+      }`;
+    case 'limit':
+      return `${clock}  ${p.c('#ffcf70', '‖')} ${t(
+        'лимит {brain} ({window}) — {percent}%: новые узлы не запускаю{until}',
+        {
+          brain: event.brain,
+          window: event.window,
+          percent: Math.round(event.utilization * 100),
+          until: event.resetsAt ? t(' до {time}', { time: clockOf(event.resetsAt * 1000) }) : '',
+        },
+      )}`;
+    case 'resume':
+      return `${clock}  ${p.c('#8ab4ff', '▶')} ${t('лимит {brain} снова есть — продолжаю', { brain: event.brain })}`;
+    case 'blocked':
+      return `${clock}  ${p.c('#ffcf70', '‖')} ${node(event.node, event.title)} · ${
+        event.reason ? t('не дождался: {needs}', { needs: event.reason }) : t('не запустился')
+      }`;
+    default: {
+      const counts = { started: event.started, finished: event.finished, blocked: event.blocked };
+      return `${clock}  ${p.dim(
+        event.stopped
+          ? t(
+              'очередь остановлена: запущено {started}, закончено {finished}; та же команда подхватит узлы в работе',
+              counts,
+            )
+          : t('очередь прошла: запущено {started}, закончено {finished}, не дождались {blocked}', counts),
+      )}`;
+    }
+  }
+}
+
+/** `18:40`, or `24.11 18:40` for another day. */
+function clockOf(ms: number): string {
+  const at = new Date(ms);
+  const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+  return at.toDateString() === new Date().toDateString()
+    ? time
+    : `${String(at.getDate()).padStart(2, '0')}.${String(at.getMonth() + 1).padStart(2, '0')} ${time}`;
 }
 
 /**
