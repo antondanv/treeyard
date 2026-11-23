@@ -16,6 +16,7 @@ import { configLines, reach, readSandbox } from './agents/codex-config.js';
 import { BRAIN_LABEL } from './agents/launch.js';
 import { type Pane, paneFor, paneInProject, readPanes } from './agents/panes.js';
 import { type SkillStatus, skillStates } from './agents/skills.js';
+import { type MailHookPlace, mailHookPlaces } from './agents/turn-hook.js';
 import { HOOK_LINE, hookInstalled, hookPlace } from './commit-hook.js';
 import {
   boardOf,
@@ -224,6 +225,8 @@ export interface ProjectStatus {
   codex?: CodexStatus;
   pointer?: PointerStatus[];
   hook?: HookInfo;
+  /** The Claude Code hook that hands letters to a busy session: in the project's settings and in the person's. */
+  mailHook?: MailHookPlace[];
   sessions?: LiveSession[];
   panes?: PaneSummary[];
   github?: GithubInfo;
@@ -380,6 +383,7 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     ...(codex ? { codex } : {}),
     pointer: pointerStates(place.folder),
     hook: hookInfo(place.folder),
+    mailHook: mailHookPlaces(tree.project.dir, env),
     sessions,
     panes: paneList,
     github,

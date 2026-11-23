@@ -9,6 +9,7 @@ import { existsSync, lstatSync, readdirSync, rmdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { PROJECT_SKILLS, shippedSkills, skillHomes, skillsRoot } from './agents/skills.js';
+import { type ClaudeScope, mailHookPlaces, removeMailHook } from './agents/turn-hook.js';
 import { hookInstalled, hookPlace, removeHook } from './commit-hook.js';
 import { crashFolder } from './crash.js';
 import { t } from './i18n/i18n.js';
@@ -22,6 +23,8 @@ export type Leftover =
   | { kind: 'skill'; path: string; skill: string; brain?: BrainId; link: boolean }
   /** treeyard's block in a post-commit hook; `manual` — hooks live in the repository, the person takes it out. */
   | { kind: 'hook'; path: string; manual: boolean; folder: string }
+  /** The Claude Code hook for letters in a project's `.claude/settings.local.json` or in the person's own settings. */
+  | { kind: 'claude-hook'; path: string; scope: ClaudeScope; folder: string }
   /** The overview's merge driver in a repository's config (`.tree/.gitattributes` stays with the tree). */
   | { kind: 'merge'; path: string; folder: string }
   /** settings.json or projects.json in treeyard's home folder. */
@@ -80,6 +83,12 @@ export function leftovers(options: UninstallOptions): Leftover[] {
     seen.add(place.file);
     out.push({ kind: 'hook', path: place.file, manual: place.tracked, folder });
   }
+  for (const folder of folders)
+    for (const place of mailHookPlaces(folder, env)) {
+      if (!place.installed || seen.has(place.file)) continue;
+      seen.add(place.file);
+      out.push({ kind: 'claude-hook', path: place.file, scope: place.scope, folder });
+    }
   for (const folder of folders) {
     const file = driverCommand(folder) === undefined ? undefined : gitConfigFile(folder);
     if (!file || seen.has(file)) continue;
@@ -118,6 +127,9 @@ export function uninstall(options: UninstallOptions): Removed[] {
       if (item.kind === 'hook') {
         // Only treeyard's block, and the file when nothing of the person's is left.
         removeHook(item.folder);
+      } else if (item.kind === 'claude-hook') {
+        // Only our entry: the rest of Claude Code's settings is the person's.
+        removeMailHook(item.scope, item.folder, env);
       } else if (item.kind === 'merge') {
         if (!removeMergeDriver(item.folder)) throw new Error(t('git config не убрал драйвер'));
       } else {

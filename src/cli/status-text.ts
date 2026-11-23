@@ -164,6 +164,16 @@ export function statusText(s: ProjectStatus, p: Paint): string {
     );
   }
 
+  if (s.mailHook) {
+    const found = s.mailHook.find((place) => place.installed);
+    row(
+      t('хук писем'),
+      found
+        ? `Claude Code ${ok(t('стоит'))}  ${p.dim(`${found.scope === 'user' ? t('у тебя') : t('в проекте')} · ${homeShort(found.file)}`)}`
+        : `Claude Code ${p.dim(t('не стоит · treeyard hook claude install'))}`,
+    );
+  }
+
   if (s.sessions && s.panes) {
     const live = s.sessions.length;
     row(

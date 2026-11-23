@@ -39,6 +39,13 @@ import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
 import { LIMIT, type QueueEvent, queueNodes, queueSources, runQueue } from '../agents/queue.js';
 import { NotSent, sendToNode } from '../agents/send.js';
 import { autoInstallSkills, skillHomes } from '../agents/skills.js';
+import {
+  deliverMidTurn,
+  installMailHook,
+  mailHookPlaces,
+  parseHookInput,
+  removeMailHook,
+} from '../agents/turn-hook.js';
 import { parseDuration, waitFor } from '../agents/wait.js';
 import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, moveText, noteMove, removeHook } from '../commit-hook.js';
 import { CrashReported, guardCrashes } from '../crash.js';
@@ -223,6 +230,9 @@ function commandLines(): string {
   treeyard diff <id> --add <ref>… | --rm <sha>   привязать коммиты (HEAD, ветка, тег, SHA) · убрать привязку
   treeyard diff <id> --working              текущие изменения проекта (общие для узлов)
   treeyard hook install|remove|status      git-хук post-commit: коммиты сессии из узла привязываются к узлу сами
+  treeyard hook claude install|remove|status [--user]   хук Claude Code: письмо занятой сессии узла приходит между
+                                           двумя вызовами инструментов, а не после хода; ставится в проект
+                                           (.claude/settings.local.json, git его не видит), с --user — в настройки Claude Code
   treeyard uninstall [--settings] [--dry-run]   убрать всё, что treeyard поставил вне .tree: скиллы из папок CLI
                                            и проекта, хук post-commit (здесь и в известных проектах); --settings —
                                            и ~/.treeyard; --dry-run — только показать; .tree/ и блок в AGENTS.md остаются
@@ -334,6 +344,9 @@ function commandLines(): string {
   treeyard diff <id> --add <ref>… | --rm <sha>   attach commits (HEAD, a branch, a tag, a SHA) · remove the link
   treeyard diff <id> --working              current project changes (shared by nodes)
   treeyard hook install|remove|status      git post-commit hook: commits of a node's session attach to the node by themselves
+  treeyard hook claude install|remove|status [--user]   Claude Code hook: a letter for a busy node session arrives between
+                                           two tool calls, not after the turn; goes into the project
+                                           (.claude/settings.local.json, git does not see it), with --user into Claude Code's settings
   treeyard uninstall [--settings] [--dry-run]   remove all treeyard put outside .tree: skills from the CLIs' folders
                                            and the project, the post-commit hook (here and in known projects); --settings —
                                            ~/.treeyard too; --dry-run — only show; .tree/ and the AGENTS.md block stay
@@ -705,6 +718,8 @@ const NO_AUTO_SKILLS = new Set([
   'merge-overview',
   // Started in the background by send: nothing to install or say.
   'deliver',
+  // Run by git after a commit and by Claude Code between tool calls: quiet and quick.
+  'hook',
   // It is taking them away.
   'uninstall',
   'skills',
@@ -2581,6 +2596,7 @@ async function uninstallCommand(args: string[]): Promise<number> {
   const options = { folder: locate(process.cwd()).folder, settings: Boolean(values.settings) };
   const what = (item: Leftover): string => {
     if (item.kind === 'hook') return t('хук post-commit');
+    if (item.kind === 'claude-hook') return t('хук Claude Code для писем');
     if (item.kind === 'merge') return t('драйвер слияния обзора дерева');
     if (item.kind === 'settings') return t('настройки treeyard');
     if (item.kind === 'crashes') return t('журналы падений treeyard');
@@ -2637,9 +2653,82 @@ async function mergeOverviewCommand(args: string[]): Promise<number> {
   return runMergeDriver(base, ours, theirs);
 }
 
+/** Stdin as text, given a moment: Claude Code writes it at once and closes it; a terminal has nothing. */
+function readHookStdin(waitMs = 1000): Promise<string> {
+  if (process.stdin.isTTY) return Promise.resolve('');
+  return new Promise((done) => {
+    const chunks: Buffer[] = [];
+    const finish = () => {
+      clearTimeout(timer);
+      process.stdin.removeAllListeners();
+      process.stdin.pause();
+      done(Buffer.concat(chunks).toString('utf8'));
+    };
+    const timer = setTimeout(finish, waitMs);
+    process.stdin.on('data', (chunk: Buffer) => chunks.push(chunk));
+    process.stdin.on('end', finish);
+    process.stdin.on('error', finish);
+  });
+}
+
+/**
+ * The Claude Code hook that hands waiting letters to a session between its tool calls
+ * (agents/turn-hook.ts): `install | remove | status` are the person's; `mail` is what Claude Code runs.
+ */
+async function claudeHookCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, { user: { type: 'boolean' } });
+  const [action, ...extra] = positionals;
+  if (action === 'mail' && !extra.length) {
+    // Called before a tool call of any session of a node: whatever goes wrong, the tool call goes on.
+    try {
+      await deliverMidTurn(process.env, parseHookInput(await readHookStdin()));
+    } catch {
+      // Silent by design: the letter stays in the mailbox and comes after the turn.
+    }
+    return 0;
+  }
+  if (!['install', 'remove', 'status'].includes(action ?? '') || extra.length)
+    throw new UsageError(t('treeyard hook claude install | remove | status [--user]'));
+  const dir = projectDir();
+  const scope = values.user ? 'user' : 'project';
+  const where = (file: string) => homeShort(file);
+  if (action === 'status') {
+    const places = mailHookPlaces(dir);
+    for (const place of places)
+      process.stdout.write(
+        `${place.scope === 'project' ? t('в проекте') : t('у тебя')}: ${
+          place.installed
+            ? t('хук стоит: {file}', { file: where(place.file) })
+            : t('хука нет: {file}', { file: where(place.file) })
+        }\n`,
+      );
+    if (!places.some((place) => place.installed))
+      process.stdout.write(
+        `${t('поставить — treeyard hook claude install (только для проекта) или с --user (для всех проектов)')}\n`,
+      );
+    return 0;
+  }
+  const result = action === 'install' ? installMailHook(scope, dir) : removeMailHook(scope, dir);
+  const file = where(result.file);
+  const text = {
+    installed: t('хук поставлен: {file}', { file }),
+    updated: t('хук обновлён: {file}', { file }),
+    already: t('хук уже стоит: {file}', { file }),
+    removed: t('хук убран: {file}', { file }),
+    absent: t('хука нет: {file}', { file }),
+  }[result.kind];
+  process.stdout.write(`${text}\n`);
+  if (action === 'install' && result.kind !== 'already')
+    process.stdout.write(
+      `${t('сессии Claude Code из узлов получат письма посреди хода; уже запущенные — после перезапуска. Убрать — treeyard hook claude remove{p1}', { p1: scope === 'user' ? ' --user' : '' })}\n`,
+    );
+  return 0;
+}
+
 /** The post-commit hook: installed by a person, run by git (`post-commit`) after each commit. */
-function hookCommand(args: string[]): number {
+function hookCommand(args: string[]): number | Promise<number> {
   const [action, ...extra] = args;
+  if (action === 'claude') return claudeHookCommand(extra);
   if (action === 'post-commit') {
     // Called by git; whatever goes wrong, the commit stays untouched.
     try {

@@ -8,7 +8,17 @@
  * asleep, open in the person's terminal, or no session at all); the deliverer (agents/deliver.ts)
  * hands it over as soon as it can, and a new session of the node gets it in its first message.
  */
-import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, unlinkSync, writeSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import { atomicWrite, TREE_DIR } from './store.js';
@@ -25,7 +35,9 @@ export type Delivery =
   /** In the first message of a new session of the node. */
   | 'first'
   /** `treeyard wait` of the addressee's own session printed it. */
-  | 'wait';
+  | 'wait'
+  /** The session was at work: its Claude Code hook (agents/turn-hook.ts) handed it over between two tool calls. */
+  | 'turn';
 
 /** Why a letter still waits. */
 export type Hold =
@@ -68,6 +80,41 @@ export interface MailItem {
 
 export function mailDir(dir: string): string {
   return join(dir, TREE_DIR, '.local', 'mail');
+}
+
+/**
+ * The inbox flag of a node: a file that exists while letters wait for it. A tool-call hook runs
+ * before every tool call of every session and must cost next to nothing when there is no letter:
+ * the shell line of the hook only tests this file (`[ -e … ]`) and starts treeyard when it is
+ * there. A hint, not the truth — the letters are: a stale flag is dropped by the hook that finds
+ * nothing behind it, a missing one is raised again by the deliverer's next pass.
+ */
+export const INBOX = 'inbox';
+
+function flagPath(dir: string, node: string): string | undefined {
+  // Node ids are short names; anything that could leave the folder is not one.
+  return /^[\w-]+$/.test(node) ? join(mailDir(dir), INBOX, node) : undefined;
+}
+
+/** Marks that letters wait for `node`. */
+export function raiseFlag(dir: string, node: string): void {
+  const path = flagPath(dir, node);
+  if (!path || existsSync(path)) return;
+  try {
+    mkdirSync(join(mailDir(dir), INBOX), { recursive: true });
+    closeSync(openSync(path, 'a'));
+  } catch {
+    // Without the flag the letter goes the slower way (after the turn); nothing is lost.
+  }
+}
+
+/** Takes the mark away: nothing waits for `node` any more. */
+export function lowerFlag(dir: string, node: string): void {
+  const path = flagPath(dir, node);
+  if (!path) return;
+  try {
+    unlinkSync(path);
+  } catch {}
 }
 
 const LETTER_FILE = /^(\d+)\.json$/;
@@ -161,6 +208,7 @@ export function addLetter(dir: string, letter: Omit<MailItem, 'n' | 'state' | 'a
         closeSync(fd);
       }
       cache = undefined;
+      raiseFlag(dir, item.to);
       return item;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
@@ -191,6 +239,8 @@ export function markDelivered(
     saveLetter(dir, next);
     done.push(next);
   }
+  // Nothing left for a node: its hook has no reason to start treeyard.
+  for (const to of new Set(done.map((item) => item.to))) if (!queuedFor(dir, to).length) lowerFlag(dir, to);
   return done;
 }
 
@@ -199,6 +249,8 @@ export function markHeld(dir: string, numbers: readonly number[], held: Hold, he
   for (const n of numbers) {
     const item = letterByNumber(dir, n);
     if (item?.state !== 'queued') continue;
+    // Every pass of the deliverer makes sure the hook of the node's session knows a letter waits.
+    raiseFlag(dir, item.to);
     if (item.held === held && item.heldFor === heldFor) continue;
     const { heldFor: _for, ...rest } = item;
     saveLetter(dir, { ...rest, held, ...(heldFor ? { heldFor } : {}) });
