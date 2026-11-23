@@ -3,3 +3,4 @@ dist/
 .scratch/
 coverage/
 .DS_Store
+.claude/worktrees/
