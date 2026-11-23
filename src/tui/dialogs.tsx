@@ -1694,7 +1694,10 @@ export function AccessDialog(props: {
           const selected = i === index;
           return (
             <Box key={choice}>
-              <Text color={selected ? C.brand : C.faint}>{selected ? '❯ ' : '  '}</Text>
+              {/* A long label and a long hint must not squeeze the marker out of its space. */}
+              <Box width={2} flexShrink={0}>
+                <Text color={selected ? C.brand : C.faint}>{selected ? '❯' : ''}</Text>
+              </Box>
               <Box width={labelWidth} flexShrink={0}>
                 <Text color={selected ? C.brand : undefined} bold={selected}>
                   {ACCESS_LABEL[choice]}
