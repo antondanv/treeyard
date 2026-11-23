@@ -24,10 +24,13 @@ export function tempDir(prefix = 'treeyard-test-'): string {
   return dir;
 }
 
-/** A treeyard home where the person has already chosen Antigravity's full access: an agent's `open` needs that. */
+/**
+ * A treeyard home where the person has already chosen how Antigravity (full access) and Codex
+ * (its own config.toml, so no flags to match) start: an agent's `open` needs that.
+ */
 export function accessHome(): string {
   const home = tempDir('treeyard-home-');
-  saveSettings({ ...DEFAULTS, antigravityAccess: 'full' }, { TREEYARD_HOME: home });
+  saveSettings({ ...DEFAULTS, antigravityAccess: 'full', codexAccess: 'config' }, { TREEYARD_HOME: home });
   return home;
 }
 

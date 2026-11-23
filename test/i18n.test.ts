@@ -206,7 +206,7 @@ describe('the TUI in English and with confirmations', () => {
 
   it('the settings screen switches the language on the spot and remembers it', async () => {
     const tree = sample();
-    const before = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [','] });
+    const before = await snapshot(tree.project.dir, { columns: 110, rows: 36, keys: [','] });
     expect(before).toContain('Настройки');
     expect(before).toContain('Подтверждать запуск');
     expect(before).toContain('ЭТОТ ПРОЕКТ');
@@ -220,7 +220,7 @@ describe('the TUI in English and with confirmations', () => {
   it('project settings land in tree.md', async () => {
     const tree = sample();
     // Down to «Default brain», one to the right: Codex.
-    const downs = Array.from({ length: 14 }, () => '\u001b[B');
+    const downs = Array.from({ length: 15 }, () => '\u001b[B');
     await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs, '\u001b[C'] });
     expect(loadTree(tree.project.dir).project.brain).toBe('codex');
     expect(settings().lang).toBe('ru');

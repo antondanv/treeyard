@@ -136,7 +136,13 @@ describe('treeyard status', () => {
     expect(before.code).toBe(0);
     const found = JSON.parse(before.stdout) as ProjectStatus;
     const fixes = [...new Set(found.problems.map((problem) => problem.fix))];
-    expect(fixes).toEqual(['treeyard skills install', 'treeyard pointer', 'treeyard hook install']);
+    // The home has Codex and no config.toml: its sandbox keeps treeyard send and git commit out.
+    expect(fixes).toEqual([
+      'treeyard skills install',
+      'treeyard config codex_access sandbox',
+      'treeyard pointer',
+      'treeyard hook install',
+    ]);
     for (const fix of fixes) expect((await sh(...fix.split(' ').slice(1))).code).toBe(0);
     const after = await sh('status');
     expect(after.code).toBe(0);

@@ -13,7 +13,7 @@ const RIGHT = '\u001b[C';
 const LEFT = '\u001b[D';
 const downs = (n: number) => Array.from({ length: n }, () => DOWN);
 /** Rows of the settings screen before «Мозг по умолчанию»: language … status order … live, panes, notes, skills. */
-const BRAIN_ROW = 14;
+const BRAIN_ROW = 15;
 /** Rows before «Модель сессий»: the brain and the start come after them. */
 const MODEL_ROW = BRAIN_ROW + 2;
 
@@ -176,7 +176,7 @@ describe('settings are easy to find', () => {
 
   it('the live status covers every CLI', async () => {
     const tree = sample();
-    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(7)] });
+    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(8)] });
     expect(frame).toContain('Живые статусы сессий');
     expect(frame).toContain('Claude Code, Codex, Antigravity и OpenCode');
   });

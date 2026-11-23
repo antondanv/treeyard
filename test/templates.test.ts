@@ -118,14 +118,14 @@ describe('what an agent gets', () => {
     }
   });
 
-  it('gives Antigravity full access in every mode only once the person chose it; Claude Code and Codex keep their own settings', () => {
+  it('gives Antigravity full access in every mode only once the person chose it; Claude Code and OpenCode keep their own settings', () => {
     const tree = emptyTree();
     const node = addNode(tree, { title: 'X' });
     try {
       // Not chosen yet: no extra rights, and the first launch asks.
       resetSettings({ ...DEFAULTS });
       expect(needsAccessChoice('antigravity')).toBe(true);
-      expect(fullAccess('antigravity')).toEqual({});
+      expect(fullAccess('antigravity', tree.project.dir)).toEqual({});
       expect(sessionPlan(tree, node.id, 'do', 'antigravity').permissionMode).toBeUndefined();
       expect(accessText('antigravity')).toBe('обычный режим: спрашивает перед каждой командой');
 
@@ -134,21 +134,23 @@ describe('what an agent gets', () => {
       for (const start of ['plan', 'do', 'chat'] as const)
         expect(sessionPlan(tree, node.id, start, 'antigravity').permissionMode).toBe('bypassPermissions');
       expect(sessionPlan(tree, ROOT, 'plan', 'antigravity').permissionMode).toBe('bypassPermissions');
-      expect(fullAccess('antigravity')).toEqual({ permissionMode: 'bypassPermissions' });
+      expect(fullAccess('antigravity', tree.project.dir)).toEqual({ permissionMode: 'bypassPermissions' });
       expect(accessText('antigravity', 'bypassPermissions')).toMatch(/^полный доступ/);
 
       resetSettings({ ...DEFAULTS, antigravityAccess: 'normal' });
       expect(needsAccessChoice('antigravity')).toBe(false);
       expect(sessionPlan(tree, node.id, 'do', 'antigravity').permissionMode).toBeUndefined();
 
-      // The others are never asked: their own settings decide.
-      for (const brain of ['claude', 'codex', 'opencode'] as const) {
+      // Claude Code and OpenCode are never asked: their own settings decide.
+      for (const brain of ['claude', 'opencode'] as const) {
         expect(needsAccessChoice(brain)).toBe(false);
-        expect(fullAccess(brain)).toEqual({});
+        expect(fullAccess(brain, tree.project.dir)).toEqual({});
       }
-      expect(sessionPlan(tree, node.id, 'do', 'codex').permissionMode).toBeUndefined();
       expect(sessionPlan(tree, node.id, 'do', 'claude').permissionMode).toBeUndefined();
       expect(accessText('claude', 'plan')).toMatch(/^режим плана/);
+      // Codex is asked too, but never gets a permission mode: its sandbox goes by flags (test/codex-access.test.ts).
+      expect(needsAccessChoice('codex')).toBe(true);
+      expect(sessionPlan(tree, node.id, 'do', 'codex').permissionMode).toBeUndefined();
       expect(accessText('codex')).toContain('config.toml');
     } finally {
       resetSettings(undefined);
@@ -176,7 +178,7 @@ describe('what an agent gets', () => {
   it('OpenCode keeps its own access; a plan starts in its plan agent, and there is no /goal', () => {
     const tree = emptyTree();
     const node = addNode(tree, { title: 'X', doneWhen: 'тесты зелёные' });
-    expect(fullAccess('opencode')).toEqual({});
+    expect(fullAccess('opencode', tree.project.dir)).toEqual({});
     expect(sessionPlan(tree, node.id, 'plan', 'opencode').permissionMode).toBe('plan');
     expect(sessionPlan(tree, node.id, 'do', 'opencode').permissionMode).toBeUndefined();
     expect(sessionPlan(tree, node.id, 'chat', 'opencode').permissionMode).toBeUndefined();

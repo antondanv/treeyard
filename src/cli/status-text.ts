@@ -1,6 +1,7 @@
 /** `treeyard status` as text: a line per part, then what to fix, each with its command. */
 import { join } from 'node:path';
 
+import { ACCESS_LABEL } from '../agents/access.js';
 import { BRAIN_LABEL } from '../agents/launch.js';
 import { formatMemory } from '../agents/panes.js';
 import type { SkillStatus } from '../agents/skills.js';
@@ -122,6 +123,19 @@ export function statusText(s: ProjectStatus, p: Paint): string {
   });
   more(p.dim(skillsAutoLine(s.skillsAuto)));
 
+  if (s.codex) {
+    const { choice, lines: missing } = s.codex;
+    const how = choice === 'ask' ? p.dim(t('не выбрано — спросит при первом запуске')) : ACCESS_LABEL[choice];
+    // Under `sandbox` treeyard opens the way itself; otherwise config.toml has to.
+    const through =
+      choice === 'sandbox'
+        ? ''
+        : missing.length
+          ? ` ${p.dim('·')} ${warn(t('config.toml не даёт доступа к treeyard и git'))}`
+          : ` ${p.dim('·')} ${ok(t('config.toml даёт доступ к treeyard и git'))}`;
+    row('Codex', how + through);
+  }
+
   if (s.pointer) {
     const word = (state: string, via?: string[]) =>
       state === 'ok'
@@ -217,6 +231,7 @@ export function statusText(s: ProjectStatus, p: Paint): string {
     for (const problem of s.problems) {
       lines.push(`  ${warn('!')} ${problem.what}`);
       lines.push(`    ${problem.fix}${problem.or ? `   ${p.dim(t('или'))} ${problem.or}` : ''}`);
+      for (const line of problem.lines ?? []) lines.push(`      ${line}`);
     }
   }
   return lines.join('\n');

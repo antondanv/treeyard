@@ -82,6 +82,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
     system: plan.system,
     ...(plan.prompt ? { prompt: plan.prompt } : {}),
     ...(plan.permissionMode ? { permissionMode: plan.permissionMode } : {}),
+    ...(plan.extraArgs ? { extraArgs: plan.extraArgs } : {}),
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.background ? { background: true } : {}),
@@ -122,7 +123,7 @@ export async function resume(tree: Tree, id: string, ref: SessionRef): Promise<O
     brain: ref.brain,
     cwd: tree.project.dir,
     resume: ref.id,
-    ...fullAccess(ref.brain),
+    ...fullAccess(ref.brain, tree.project.dir),
     env: nodeEnv(id, tree.project.dir),
   });
   if (holderOf(tree, id)) attachSession(tree, id, { ...ref, opened: nowIso() });
@@ -136,7 +137,7 @@ export async function resumeLoose(tree: Tree, session: SessionInfo): Promise<Ope
     brain: session.brain,
     cwd: tree.project.dir,
     resume: session.id,
-    ...fullAccess(session.brain),
+    ...fullAccess(session.brain, tree.project.dir),
     env: nodeEnv(''),
   });
 }

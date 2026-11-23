@@ -213,7 +213,7 @@ export async function deliverNode(
         resume: ref.id,
         prompt: body,
         background: true,
-        ...fullAccess(ref.brain),
+        ...fullAccess(ref.brain, dir),
         env: nodeEnv(id, dir),
       });
       if (result.error || !result.ok) throw new Error(result.error?.message ?? t('фоновая сессия не продолжилась'));
@@ -224,7 +224,7 @@ export async function deliverNode(
         cwd: dir,
         resume: ref.id,
         prompt: body,
-        ...fullAccess(ref.brain),
+        ...fullAccess(ref.brain, dir),
         label: node.title,
         env: nodeEnv(id, dir),
         ...(options.size ? { width: options.size.width, height: options.size.height } : {}),

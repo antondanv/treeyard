@@ -36,7 +36,8 @@ beforeEach(() => {
   backend.sessions.mockResolvedValue([]);
   backend.closePane.mockResolvedValue(true);
   backend.setPaneSession.mockResolvedValue(true);
-  resetSettings({ ...DEFAULTS, animation: false, marquee: false });
+  // Codex's first launch asks how to start; these tests are not about that.
+  resetSettings({ ...DEFAULTS, animation: false, marquee: false, codexAccess: 'config' });
   setLang('ru');
 });
 afterEach(() => {
