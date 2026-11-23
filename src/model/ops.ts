@@ -199,6 +199,22 @@ export function attachCommit(tree: Tree, id: string, sha: string, source = t('т
   return logToNode(tree, id, t('привязан коммит {sha}', { sha: value }), source);
 }
 
+/** Several commits at once — a worktree's branch that was merged — with one journal line instead of one each. */
+export function attachCommits(
+  tree: Tree,
+  id: string,
+  shas: readonly string[],
+  why: string,
+  source = t('ты'),
+): TreeNode {
+  const node = need(tree, id);
+  const fresh = shas.map((sha) => sha.toLowerCase()).filter((sha) => /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(sha));
+  const added = [...new Set(fresh)].filter((sha) => !node.commits?.includes(sha));
+  if (!added.length) return node;
+  node.commits = [...(node.commits ?? []), ...added];
+  return logToNode(tree, id, t('{why}: привязано коммитов — {n}', { why, n: added.length }), source);
+}
+
 export function detachCommit(tree: Tree, id: string, sha: string, source = t('ты')): TreeNode {
   const node = need(tree, id);
   if (!node.commits?.includes(sha)) return node;

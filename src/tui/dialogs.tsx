@@ -769,7 +769,6 @@ function launchFields(draft: LaunchDraft, catalog: Catalog | undefined, panes: b
         const next = { ...d, brain, model: '', effort: '' };
         if (brain !== 'claude' && d.where === 'background') next.where = panes ? 'pane' : 'terminal';
         if (brain !== 'claude' && d.start === 'goal') next.start = 'do';
-        if (brain !== 'claude') next.worktree = false;
         return next;
       },
     },
@@ -810,10 +809,9 @@ function launchFields(draft: LaunchDraft, catalog: Catalog | undefined, panes: b
       label: 'Worktree',
       options: [
         { value: 'no', label: t('нет') },
-        { value: 'yes', label: t('отдельный git worktree') },
+        { value: 'yes', label: t('отдельный git worktree, ветка treeyard/<id>') },
       ],
       value: draft.worktree ? 'yes' : 'no',
-      ...(claude ? {} : { note: t('только Claude Code') }),
       set: (d, value) => ({ ...d, worktree: value === 'yes' }),
     },
   ];
@@ -862,7 +860,7 @@ export function LaunchForm(props: {
       };
       if (d.model) options.model = d.model;
       if (d.effort && !all[4]!.note) options.effort = d.effort;
-      if (claude && d.worktree) options.worktree = true;
+      if (d.worktree) options.worktree = true;
       return props.onSubmit(options);
     }
     const move = key.tab && key.shift ? -1 : key.tab || key.downArrow ? 1 : key.upArrow ? -1 : 0;

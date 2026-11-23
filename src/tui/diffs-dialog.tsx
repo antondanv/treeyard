@@ -15,6 +15,7 @@ import {
 } from '../git.js';
 import { t } from '../i18n/i18n.js';
 import type { TreeNode } from '../model/types.js';
+import { nodeCommits } from '../worktree.js';
 import { Frame, type KeyHint, useLatest } from './components/controls.js';
 import { DiffStats, layoutPatch, PatchLineView } from './diff-patch.js';
 import { shortcutKey } from './keys.js';
@@ -75,7 +76,8 @@ export function DiffsDialog(props: {
   const [revision, setRevision] = useState(0);
   const [skip, setSkip] = useState(0);
   const [more, setMore] = useState(false);
-  const refs = props.node.commits ?? [];
+  // The node's own commits and the ones its worktree's branch made.
+  const refs = nodeCommits(props.dir, props.node);
   const commitKey = refs.join('|');
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: r retries discovery after a repository is created.

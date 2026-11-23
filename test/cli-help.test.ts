@@ -44,6 +44,7 @@ const COMMANDS = [
   'uninstall',
   'context',
   'open',
+  'worktree',
   'sessions',
   'wait',
   'send',

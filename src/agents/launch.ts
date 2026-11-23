@@ -5,6 +5,7 @@
  * remembers it, so the next time you come to the node, the conversation is
  * one key away.
  */
+import { existsSync } from 'node:fs';
 import { liveSessions, type OpenResult, open, type SessionInfo, sessions, stopSession } from '@antondanv/brainyard';
 import { t } from '../i18n/i18n.js';
 import { senderNode } from '../model/mail.js';
@@ -14,6 +15,7 @@ import { attachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import { holderOf } from '../model/tree.js';
 import type { BrainId, SessionRef, StartMode, Tree } from '../model/types.js';
+import { sessionFolder, sessionPlace, type WorktreeWish, worktreeDirs, worktreeNote } from '../worktree.js';
 import { fullAccess } from './access.js';
 import { sessionPlan } from './context.js';
 
@@ -51,8 +53,11 @@ export interface LaunchOptions {
   background?: boolean;
   model?: string;
   effort?: string;
-  /** Claude Code only: work in a new git worktree. */
-  worktree?: boolean;
+  /**
+   * In the node's own git worktree (made if need be): true; in the project's folder: false; `auto` —
+   * in a worktree if one can be made; not said — in the worktree the node already has, else in the folder.
+   */
+  worktree?: WorktreeWish;
   /** In a pane next to the tree (tmux), not in this terminal. */
   pane?: boolean;
   /** A coordinator's assignment, added to the session's first message. */
@@ -73,22 +78,23 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
         id,
       }),
     );
+  const place = await sessionPlace(tree, id, options.worktree);
   const plan = sessionPlan(tree, id, options.start, options.brain, options.task, senderNode(tree));
   const result = await open({
     brain: options.brain,
-    cwd: tree.project.dir,
+    cwd: place.dir,
     // Only Claude Code takes a name; the others title a session after its first message.
     ...(options.brain === 'claude' ? { name: plan.name } : {}),
-    system: plan.system,
+    system: place.worktree ? `${plan.system}\n\n${worktreeNote(place.worktree, tree.project.dir)}` : plan.system,
     ...(plan.prompt ? { prompt: plan.prompt } : {}),
     ...(plan.permissionMode ? { permissionMode: plan.permissionMode } : {}),
     ...(plan.extraArgs ? { extraArgs: plan.extraArgs } : {}),
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.background ? { background: true } : {}),
-    ...(options.worktree ? { worktree: true } : {}),
     env: nodeEnv(id, tree.project.dir),
   });
+  if (place.warnings.length) result.warnings = [...(result.warnings ?? []), ...place.warnings];
   if (!result.sessionId) return { result };
   const ref: SessionRef = {
     brain: options.brain,
@@ -96,6 +102,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
     name: plan.name,
     started: nowIso(new Date(result.startedAt)),
     mode: options.background ? 'background' : 'terminal',
+    ...(place.worktree ? { dir: place.dir } : {}),
   };
   const how = options.background ? t('в фоне') : t('в терминале');
   if (plan.letters?.length)
@@ -107,7 +114,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
     t('новая сессия {how} ({p2})', {
       how,
       p2: plan.start === 'goal' ? '/goal' : plan.start,
-    }),
+    }) + (place.worktree ? t(' в worktree {branch}', { branch: place.worktree.branch }) : ''),
   );
   // Opening a session is starting the work.
   const current = tree.nodes.get(id);
@@ -121,7 +128,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
 export async function resume(tree: Tree, id: string, ref: SessionRef): Promise<OpenResult> {
   const result = await open({
     brain: ref.brain,
-    cwd: tree.project.dir,
+    cwd: sessionFolder(tree.project.dir, ref),
     resume: ref.id,
     ...fullAccess(ref.brain, tree.project.dir),
     env: nodeEnv(id, tree.project.dir),
@@ -135,7 +142,7 @@ export async function resumeLoose(tree: Tree, session: SessionInfo): Promise<Ope
   // No node's session: not even the one this process may have inherited.
   return open({
     brain: session.brain,
-    cwd: tree.project.dir,
+    cwd: session.cwd && existsSync(session.cwd) ? session.cwd : tree.project.dir,
     resume: session.id,
     ...fullAccess(session.brain, tree.project.dir),
     env: nodeEnv(''),
@@ -150,12 +157,20 @@ export async function liveById(): Promise<Map<string, SessionInfo>> {
 
 /** Native background sessions stop through their CLI, without removing the node's conversation. */
 export async function sleepBackground(tree: Tree, session: SessionRef | SessionInfo): Promise<void> {
-  await stopSession({ brain: session.brain, sessionId: session.id, cwd: tree.project.dir });
+  const cwd = ('dir' in session ? session.dir : undefined) ?? ('cwd' in session ? session.cwd : undefined);
+  await stopSession({ brain: session.brain, sessionId: session.id, cwd: cwd ?? tree.project.dir });
 }
 
-/** Every session of the project folder, across the CLIs, with live state. */
+/** Every session of the project folder and of its worktrees, across the CLIs, with live state. */
 export async function projectSessions(tree: Tree): Promise<SessionInfo[]> {
-  return sessions({ cwd: tree.project.dir, limit: 100 });
+  const dirs = [tree.project.dir, ...worktreeDirs(tree.project.dir)];
+  if (dirs.length === 1) return sessions({ cwd: tree.project.dir, limit: 100 });
+  const lists = await Promise.all(dirs.map((cwd) => sessions({ cwd, limit: 100 })));
+  const unique = new Map<string, SessionInfo>();
+  for (const session of lists.flat()) unique.set(`${session.brain}:${session.id}`, session);
+  return [...unique.values()]
+    .sort((a, b) => Date.parse(b.updatedAt ?? b.startedAt ?? '') - Date.parse(a.updatedAt ?? a.startedAt ?? ''))
+    .slice(0, 100);
 }
 
 export { sessionOwners } from '../model/tree.js';

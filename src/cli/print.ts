@@ -26,6 +26,7 @@ import {
 } from '../model/tree.js';
 import { ROOT, type Status, type Tree, type TreeNode } from '../model/types.js';
 import type { TreeEvent } from '../watch.js';
+import { nodeCommits, shortPath, stateText, worktreeFor, worktreeState } from '../worktree.js';
 
 export interface Paint {
   on: boolean;
@@ -213,7 +214,7 @@ export function nodeText(tree: Tree, node: TreeNode, p: Paint, options: NodeText
   const brief = options.brief === true;
   const lines: string[] = [titleLine(node, p), ...headerLines(tree, node, p, options.stale, !brief), ''];
   lines.push(...criterionLines(tree, node, p));
-  if (!brief && node.commits?.length) lines.push('', ...commitLines(node, p));
+  if (!brief && nodeCommits(tree.project.dir, node).length) lines.push('', ...commitLines(tree, node, p));
   const kids = childrenOf(tree, node.id);
   if (kids.length > 0 && brief) {
     const { done, total } = progress(tree, node.id);
@@ -241,7 +242,8 @@ function partsText(
   const sections: Record<NodePart, () => string[]> = {
     header: () => headerLines(tree, node, p, options.stale, true),
     criterion: () => criterionLines(tree, node, p),
-    commits: () => (node.commits?.length ? commitLines(node, p) : titled(t('коммиты:'), [])),
+    commits: () =>
+      nodeCommits(tree.project.dir, node).length ? commitLines(tree, node, p) : titled(t('коммиты:'), []),
     children: () =>
       childrenOf(tree, node.id).length
         ? childrenLines(tree, node, p, options.words === true)
@@ -289,6 +291,7 @@ function headerLines(tree: Tree, node: TreeNode, p: Paint, stale: Stale | undefi
   if (withPath && path.length > 1)
     lines.push(p.dim(t('путь: {p1}', { p1: [tree.project.title, ...path.map((step) => step.title)].join(' › ') })));
   if (stale) lines.push(p.dim(staleNote(stale)));
+  lines.push(...worktreeLines(tree, node, p));
   return lines;
 }
 
@@ -313,8 +316,28 @@ function criterionLines(tree: Tree, node: TreeNode, p: Paint): string[] {
   return lines;
 }
 
-function commitLines(node: TreeNode, p: Paint): string[] {
-  return [p.dim(t('коммиты:')), ...(node.commits ?? []).map((sha) => `  ${sha}`)];
+function commitLines(tree: Tree, node: TreeNode, p: Paint): string[] {
+  return [p.dim(t('коммиты:')), ...nodeCommits(tree.project.dir, node).map((sha) => `  ${sha}`)];
+}
+
+/** `show <id> --json`: the commits of the node and of its branch, and its worktree. */
+export function worktreeJson(tree: Tree, node: TreeNode): { commits?: string[]; worktree?: Record<string, string> } {
+  const commits = nodeCommits(tree.project.dir, node);
+  const wt = worktreeFor(tree.project.dir, node.id);
+  return {
+    ...(commits.length ? { commits } : {}),
+    ...(wt ? { worktree: { path: wt.dir, branch: wt.branch, base: wt.base } } : {}),
+  };
+}
+
+/** The node's worktree: where it stands, its branch and what it holds. */
+function worktreeLines(tree: Tree, node: TreeNode, p: Paint): string[] {
+  const wt = worktreeFor(tree.project.dir, node.id);
+  if (!wt) return [];
+  return [
+    `${p.dim(t('worktree:'))} ${shortPath(wt.dir)} ${p.dim(t('· ветка {branch}', { branch: wt.branch }))}`,
+    p.dim(`  ${stateText(worktreeState(tree.project.dir, wt))}`),
+  ];
 }
 
 function childrenLines(tree: Tree, node: TreeNode, p: Paint, words: boolean): string[] {
@@ -349,7 +372,7 @@ export function partsJson(
   journal = 12,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { id: node.id, title: node.title };
-  const fields = nodeFields(node);
+  const fields = nodeFields(node, undefined, tree.project.dir);
   const take = (...keys: string[]) => {
     for (const key of keys) if (fields[key] !== undefined) out[key] = fields[key];
   };
@@ -360,7 +383,7 @@ export function partsJson(
     out.path = pathBetween(tree, ROOT, node.id);
   }
   if (only.has('criterion')) take('done_when', 'check', 'waiting', 'until', 'needs', 'for');
-  if (only.has('commits')) out.commits = node.commits ?? [];
+  if (only.has('commits')) out.commits = nodeCommits(tree.project.dir, node);
   if (only.has('children')) out.children = (treeJson(tree, undefined, node.id) as { children: unknown[] }).children;
   if (only.has('sessions')) out.sessions = node.sessions;
   if (only.has('note')) out.note = description(node.body);
@@ -383,7 +406,9 @@ function letterLine(letter: Letter, p: Paint): string {
 }
 
 /** One node's fields for `--json`; `children` nests its subtree. */
-function nodeFields(node: TreeNode, stale?: StaleFn): Record<string, unknown> {
+function nodeFields(node: TreeNode, stale?: StaleFn, project?: string): Record<string, unknown> {
+  const wt = project ? worktreeFor(project, node.id) : undefined;
+  const commits = project ? nodeCommits(project, node) : (node.commits ?? []);
   return {
     id: node.id,
     title: node.title,
@@ -397,14 +422,15 @@ function nodeFields(node: TreeNode, stale?: StaleFn): Record<string, unknown> {
     ...(node.neededBy ? { for: node.neededBy } : {}),
     ...(node.sessions.length ? { sessions: node.sessions } : {}),
     ...staleJson(stale?.(node)),
-    ...(node.commits?.length ? { commits: node.commits } : {}),
+    ...(commits.length ? { commits } : {}),
+    ...(wt ? { worktree: { path: wt.dir, branch: wt.branch, base: wt.base } } : {}),
   };
 }
 
 /** For scripts and agents: the tree as nested JSON — or one branch of it, `under` a node. */
 export function treeJson(tree: Tree, stale?: StaleFn, under?: string): unknown {
   const nodeJson = (node: TreeNode): Record<string, unknown> => ({
-    ...nodeFields(node, stale),
+    ...nodeFields(node, stale, tree.project.dir),
     children: childrenOf(tree, node.id).map(nodeJson),
   });
   const branch = under && under !== ROOT ? tree.nodes.get(under) : undefined;
@@ -438,7 +464,7 @@ export function fullTreeJson(tree: Tree, stale?: StaleFn, under?: string): unkno
   const kidsOf = (id: string) =>
     childrenByOrder(tree, id).sort((a, b) => rank.indexOf(a.status) - rank.indexOf(b.status));
   const nodeJson = (node: TreeNode, _index: number, siblings: TreeNode[]): Record<string, unknown> => ({
-    ...nodeFields(node, stale),
+    ...nodeFields(node, stale, dir),
     parent: node.parent,
     position: siblings.filter((kid) => kid.status === node.status).indexOf(node),
     ...(node.created ? { created: node.created } : {}),
@@ -494,7 +520,11 @@ function clipStart(text: string, limit: number): string {
 
 /** A found node for `--json`: its fields, its parent and the titles on the way to it. */
 export function foundJson(tree: Tree, node: TreeNode, under: string = ROOT): Record<string, unknown> {
-  return { ...nodeFields(node), parent: node.parent, path: pathBetween(tree, under, node.id) };
+  return {
+    ...nodeFields(node, undefined, tree.project.dir),
+    parent: node.parent,
+    path: pathBetween(tree, under, node.id),
+  };
 }
 
 /** The `stale` field of `--json`: whole hours without a live session or a record. */
