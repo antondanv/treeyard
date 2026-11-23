@@ -1,12 +1,12 @@
 ---
 id: xvxd
 title: Мастер не видит агента по переменной
-parent: b2qk
-order: 190
+parent: 9xem
+order: 130
 status: todo
 done_when: Мастер первого запуска считает агента установленным, если его бинарь задан через BRAINYARD_<ID>_BIN, как его ищет Brainyard, а не только по PATH; тест; typecheck, тесты, lint и build проходят
 created: 2026-10-07
-updated: 2026-11-16T00:49:00+03:00
+updated: 2026-11-23T16:47:38+03:00
 ---
 
 Мастер первого запуска не видит BRAINYARD_<ID>_BIN: installed() в src/tui/init.tsx ищет только имя бинаря в PATH, а Brainyard запускает агента по переменной.
