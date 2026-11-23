@@ -7,6 +7,8 @@ import type { Paint } from './print.js';
 
 /** Long enough for a session's summary; the whole one is in `show`. */
 const ENTRY = 600;
+/** The journal entry next to the session's whole last message: a pointer, the message says the rest. */
+const ENTRY_NEXT_TO_MESSAGE = 200;
 
 function clip(text: string, limit: number): string {
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
@@ -39,17 +41,30 @@ function statusPart(sight: Sight): string {
     : STATUS_LABEL[sight.status];
 }
 
-/** A node that needs the coordinator: status, the last entry, the session and the end of its screen. */
+/**
+ * What the session said last: its message whole, from the CLI's transcript; where there is none to
+ * read, the end of the pane's screen.
+ */
+export function messageOf(session: SessionSight | undefined): { text: string; source: 'transcript' | 'screen' } | null {
+  if (session?.message) return { text: session.message, source: 'transcript' };
+  if (session?.screen?.length) return { text: session.screen.join('\n'), source: 'screen' };
+  return null;
+}
+
+/** A node that needs the coordinator: status, the last entry, the session and what it said last. */
 export function sightBlock(sight: Sight, p: Paint): string {
   const lines = [`${p.bold(`${GLYPH[sight.status]} ${sight.title}`)}  ${p.dim(sight.id)}  ${statusPart(sight)}`];
-  if (sight.entry)
+  const message = messageOf(sight.session);
+  if (sight.entry) {
+    const limit = message?.source === 'transcript' ? ENTRY_NEXT_TO_MESSAGE : ENTRY;
     lines.push(
-      `  ${p.dim([sight.entry.when, sight.entry.source].filter(Boolean).join(' · '))}  ${clip(sight.entry.text, ENTRY)}`,
+      `  ${p.dim([sight.entry.when, sight.entry.source].filter(Boolean).join(' · '))}  ${clip(sight.entry.text, limit)}`,
     );
+  }
   if (sight.session) lines.push(`  ${sessionLine(sight.session)}`);
-  if (sight.session?.screen?.length) {
-    lines.push(`  ${p.dim(t('конец экрана:'))}`);
-    for (const row of sight.session.screen) lines.push(`    ${p.dim('│')} ${row}`);
+  if (message) {
+    lines.push(`  ${p.dim(message.source === 'transcript' ? t('последнее сообщение:') : t('конец экрана:'))}`);
+    for (const row of message.text.split('\n')) lines.push(`    ${p.dim('│')} ${row}`.trimEnd());
   }
   return lines.join('\n');
 }
@@ -70,6 +85,12 @@ export function waitText(result: WaitResult, p: Paint): string {
 /** `--json`: the format grows when a field changes its meaning or goes away. */
 export const WAIT_VERSION = 1;
 
+/** The session without its message, which has a field of its own: `session.screen` stays for panes with no transcript. */
+function sessionJson(session: SessionSight): Omit<SessionSight, 'message'> {
+  const { message: _message, ...rest } = session;
+  return rest;
+}
+
 export function waitJson(result: WaitResult): unknown {
   const node = (sight: Sight) => ({
     node: sight.id,
@@ -78,7 +99,8 @@ export function waitJson(result: WaitResult): unknown {
     from: sight.from,
     reason: sight.reason ?? null,
     entry: sight.entry ? { at: sight.entry.when, who: sight.entry.source, text: sight.entry.text } : null,
-    session: sight.session ?? null,
+    session: sight.session ? sessionJson(sight.session) : null,
+    message: messageOf(sight.session),
   });
   return {
     version: WAIT_VERSION,
