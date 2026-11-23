@@ -9,6 +9,7 @@ import {
   statusSteps,
 } from '../src/model/history.js';
 import { appendJournal, description, journalEntries, replaceEntry } from '../src/model/journal.js';
+import { letterTo } from '../src/model/mail.js';
 import { addNode, attachCommit, logToNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { emptyTree, treeyardIn } from './helpers.js';
@@ -27,6 +28,9 @@ describe('what the journal says about itself', () => {
       'картинка добавлена: 001.png',
       'ждёт: X › «Y»',
       'готово. проверка прошла',
+      'письмо от «Координатор»: «ответь одним словом»',
+      'message to node «Site»: «a reply»',
+      'письмо сессии claude 1a2b3c4d: «поправь тест»',
     ])
       expect(isOwnLine(text), text).toBe(true);
     expect(isOwnLine('Сделано: тесты зелёные')).toBe(false);
@@ -60,10 +64,13 @@ describe('what the journal says about itself', () => {
   it('the history is the status changes only; the last own entry skips what treeyard wrote', () => {
     const tree = emptyTree();
     const node = addNode(tree, { title: 'Узел' }, 'агент');
+    const other = addNode(tree, { title: 'Сосед' }, 'агент');
     setStatus(tree, node.id, 'active', { source: 'агент' });
     logToNode(tree, node.id, 'первая', 'агент');
     logToNode(tree, node.id, 'чужая', 'claude');
     attachCommit(tree, node.id, SHA, 'агент');
+    // A letter the session sent is written under its name too, yet it is not its entry.
+    logToNode(tree, node.id, letterTo(other, 'нужен ключ?'), 'агент');
     setStatus(tree, node.id, 'review', { source: 'агент' });
     const body = tree.nodes.get(node.id)!.body;
     expect(statusHistory(body).map((line) => parseEntry(line).text)).toEqual([
@@ -101,6 +108,21 @@ describe('treeyard log --fix and set note=', () => {
     expect(entries).toEqual([
       `${when} · агент · итог: 4/4 теста`,
       expect.stringContaining('агент · в работе → на проверке'),
+    ]);
+  }, 40_000);
+
+  it('--fix corrects the entry before a letter the session sent, and leaves the letter as it was', async () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Узел', status: 'active' });
+    const other = addNode(tree, { title: 'Сосед' });
+    logToNode(tree, node.id, 'итог с опечаткой', 'агент');
+    logToNode(tree, node.id, letterTo(other, 'нужен ключ?'), 'агент');
+    const [summary, letter] = journalEntries(tree.nodes.get(node.id)!.body).slice(-2);
+    const res = await treeyardIn(tree.project.dir)('log', node.id, '--fix', 'итог');
+    expect(res.code).toBe(0);
+    expect(journalEntries(loadTree(tree.project.dir).nodes.get(node.id)!.body).slice(-2)).toEqual([
+      `${parseEntry(summary!).when} · агент · итог`,
+      letter,
     ]);
   }, 40_000);
 

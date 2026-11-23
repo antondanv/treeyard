@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { NotSent, type SendSources, sendToNode } from '../src/agents/send.js';
 import { parseDuration, screenTail, type WaitSources, waitFor } from '../src/agents/wait.js';
 import { journalEntries } from '../src/model/journal.js';
+import { letterFrom, letterTo } from '../src/model/mail.js';
 import { addNode, attachCommit, attachSession, logToNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import type { SessionRef, Tree } from '../src/model/types.js';
@@ -110,6 +111,20 @@ describe('treeyard wait', () => {
         session: { brain: 'claude', id: 'bg-1', state: 'idle', mode: 'background' },
       },
     ]);
+  });
+
+  it('does not take a letter for the session’s summary, its own or the coordinator’s', async () => {
+    const tree = emptyTree();
+    const node = nodeWithSession(tree, 'Фон', { id: 'bg-1' });
+    const coordinator = addNode(tree, { title: 'Координатор' });
+    logToNode(tree, node.id, 'итог: тесты 12/12', 'claude');
+    logToNode(tree, node.id, letterFrom(coordinator, 'а README поправил?'), 'агент');
+    logToNode(tree, node.id, letterTo(coordinator, 'да, поправил'), 'claude');
+    const result = await waitFor(tree.project.dir, [node.id], {
+      ...fast,
+      sources: waitSources({ live: [live('bg-1', 'idle', { state: 'done' })], panes: [] }),
+    });
+    expect(result.settled[0]?.entry).toMatchObject({ source: 'claude', text: 'итог: тесты 12/12' });
   });
 
   it('gives a fresh session time to start, then times out with it still pending', async () => {

@@ -79,6 +79,14 @@ export function isCreationLine(text: string): boolean {
   return CREATED.has(text);
 }
 
+/**
+ * The journal lines of a letter between sessions (`treeyard send`, see mail.ts). `send` writes
+ * them, not the author: the session's summary and the entry `log --fix` corrects lie elsewhere.
+ */
+export const LETTER_FROM = 'письмо от «{from}»: «{text}»';
+export const LETTER_TO = 'письмо узлу «{to}»: «{text}»';
+export const LETTER_SESSION = 'письмо сессии {brain} {short}: «{text}»';
+
 /** Lines treeyard writes by itself, keyed by their Russian text; `{x}` stands for anything. */
 const OWN = [
   'привязан коммит {sha}',
@@ -89,13 +97,16 @@ const OWN = [
   'ждёт: {link}',
   'нужен для: {link}',
   'больше не нужен для: {link}',
+  LETTER_FROM,
+  LETTER_TO,
+  LETTER_SESSION,
 ];
 const OWN_LINES = OWN.flatMap((key) => [key, EN[key] ?? key]).map(
   (template) => new RegExp(`^${literal(template).replace(/\\\{\w+\\\}/g, '.*')}$`),
 );
 const BARE = new RegExp(`^(?:${LABELS})(?:$|\\. )`);
 
-/** Written by treeyard itself — a status change, a commit, a picture, a link — not by a person or an agent. */
+/** Written by treeyard itself — a status change, a commit, a picture, a link, a letter — not by a person or an agent. */
 export function isOwnLine(text: string): boolean {
   return isCreationLine(text) || isStatusChange(text) || BARE.test(text) || OWN_LINES.some((line) => line.test(text));
 }

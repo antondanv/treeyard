@@ -9,17 +9,13 @@ import { resolve } from 'node:path';
 
 import { EN } from '../i18n/en.js';
 import { t } from '../i18n/i18n.js';
-import { parseEntry } from './history.js';
+import { LETTER_FROM as FROM, parseEntry, LETTER_SESSION as SESSION, LETTER_TO as TO } from './history.js';
 import { journalEntries } from './journal.js';
 import { NODE_VAR, PROJECT_VAR } from './notes.js';
 import type { Tree, TreeNode } from './types.js';
 
 /** The journal shows what was written; the whole text is in the session. */
 const TEXT = 300;
-
-const FROM = 'письмо от «{from}»: «{text}»';
-const TO = 'письмо узлу «{to}»: «{text}»';
-const SESSION = 'письмо сессии {brain} {short}: «{text}»';
 
 function clip(text: string): string {
   const line = text.replace(/\s+/g, ' ').trim();
