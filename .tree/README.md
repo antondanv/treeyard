@@ -44,7 +44,7 @@
     - ◎ [HEAD из worktree при --project](nodes/aehc.md)
     - ✗ [Проба wait и send: фон](nodes/mbub.md)
     - ✗ [Проба wait и send: панель](nodes/ngqk.md)
-    - ‖ [Переход на Brainyard 0.3.1](nodes/b379.md) · ждёт: выпуск Brainyard 0.3.1 с починкой env фоновых сессий — решает человек (22.11: не сейчас)
+    - ‖ [Переход на Brainyard 0.3.1](nodes/b379.md) · ждёт: выпуск Brainyard 0.3.1 с починкой env фоновых сессий (коммит 9153999) — им занимается другая сессия (человек, 23.11)
     - ○ [Почта для мультиагентной работы](nodes/5byq.md) — 0/5
       - ◎ [Письма отдельно от журнала](nodes/fasf.md)
       - ○ [Доступ Codex к treeyard и git](nodes/zwwp.md)
