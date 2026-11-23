@@ -13,6 +13,7 @@ import { loadTree } from '../model/store.js';
 import { childrenByOrder } from '../model/tree.js';
 import type { BrainId, Status, Tree, TreeNode } from '../model/types.js';
 import { watchTree } from '../watch.js';
+import { worktreeFor } from '../worktree.js';
 import type { LaunchOptions } from './launch.js';
 import { paneInProject } from './panes.js';
 import { GRACE_MS, INTERVAL_MS, look, type SessionSight, SOURCES, type WaitSources } from './wait.js';
@@ -194,9 +195,22 @@ export async function runQueue(dir: string, ids: readonly string[], options: Que
         } else {
           if (paused) emit({ type: 'resume', brain: launch.brain });
           paused = undefined;
+          // The project's folder holds one session; with the slots in parallel, every other node
+          // works in a worktree of its own — unless the person said where (--worktree, --no-worktree).
+          let mainTaken = nodes.some(
+            (other) => other.status === 'active' && !ended.has(other.id) && !worktreeFor(dir, other.id),
+          );
           for (const node of ready.slice(0, free)) {
             try {
-              const got = await sources.start(sources.load(dir), node.id, launch);
+              const own = Boolean(worktreeFor(dir, node.id));
+              const wanted = launch.worktree ?? (options.parallel > 1 && mainTaken && !own ? 'auto' : undefined);
+              const { worktree: _asked, ...rest } = launch;
+              const got = await sources.start(
+                sources.load(dir),
+                node.id,
+                wanted === undefined ? rest : { ...rest, worktree: wanted },
+              );
+              if (wanted !== true && !own) mainTaken = true;
               started++;
               from.set(node.id, 'active');
               emit({

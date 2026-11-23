@@ -41,6 +41,8 @@ export interface SessionRef {
   mode?: 'terminal' | 'background' | 'pane';
   /** `pane`: the tmux session it runs (or last ran) in. */
   pane?: string;
+  /** The folder it runs in when that is a worktree of the node, not the project's folder: the CLIs find a session by its folder. */
+  dir?: string;
 }
 
 export interface TreeNode {
@@ -95,6 +97,8 @@ export interface Project {
   start?: StartMode;
   /** Model for an agent's small jobs (steps, criterion): a cheaper one saves the subscription. */
   assistModel?: string;
+  /** A command that prepares a new worktree of a node (`npm install`); run in it before the session starts. */
+  setup?: string;
   /** YYYY-MM-DD. */
   created?: string;
   /** Markdown: how the tree is run, rules for agents, decisions. */

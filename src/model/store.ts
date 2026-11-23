@@ -161,6 +161,8 @@ export function projectFromText(text: string, dir: string, problems: string[] = 
   if (effort) project.effort = effort;
   const assistModel = str(take('assist_model'));
   if (assistModel) project.assistModel = assistModel;
+  const setup = str(take('setup'));
+  if (setup) project.setup = setup;
   const start = str(take('start'));
   if (start && (START_MODES as readonly string[]).includes(start)) project.start = start as StartMode;
   const created = dateStr(take('created'));
@@ -243,6 +245,8 @@ function sessionsFrom(value: unknown): SessionRef[] {
     if (mode === 'terminal' || mode === 'background' || mode === 'pane') ref.mode = mode;
     const pane = str(record.pane);
     if (pane) ref.pane = pane;
+    const dir = str(record.dir);
+    if (dir) ref.dir = dir;
     out.push(ref);
   }
   return out;
@@ -281,6 +285,7 @@ function sessionsData(refs: readonly SessionRef[]): Record<string, unknown>[] {
     ...(ref.opened ? { opened: ref.opened } : {}),
     ...(ref.mode ? { mode: ref.mode } : {}),
     ...(ref.pane ? { pane: ref.pane } : {}),
+    ...(ref.dir ? { dir: ref.dir } : {}),
   }));
 }
 
@@ -294,6 +299,7 @@ export function projectToText(project: Project): string {
     effort: project.effort,
     start: project.start,
     assist_model: project.assistModel,
+    setup: project.setup,
     created: project.created,
     sessions: sessionsData(project.sessions ?? []),
     ...project.extra,

@@ -1500,4 +1500,57 @@ export const EN: Record<string, string> = {
     'the queue stopped: started {started}, finished {finished}; the same command picks up the nodes at work',
   'очередь прошла: запущено {started}, закончено {finished}, не дождались {blocked}':
     'the queue is through: started {started}, finished {finished}, never started {blocked}',
+  ' в worktree {branch}': ' in worktree {branch}',
+  'выбери одно: --worktree или --no-worktree': 'choose one: --worktree or --no-worktree',
+  'свой git worktree и ветка treeyard/<id> у каждого узла':
+    'every node gets its own git worktree and branch treeyard/<id>',
+  'первый узел — в папке проекта, остальные — каждый в своём git worktree':
+    "the first node stays in the project's folder, the others get a git worktree each",
+  'в worktree узла, ветка {branch}': "in the node's worktree, branch {branch}",
+  'treeyard worktree [add|setup|rm <id>] [--json]': 'treeyard worktree [add|setup|rm <id>] [--json]',
+  'worktree у узлов нет — treeyard open <id> --worktree или treeyard worktree add <id>':
+    'no node has a worktree — treeyard open <id> --worktree or treeyard worktree add <id>',
+  'worktree заводят узлу, а не корню — {usage}': 'a worktree is made for a node, not the root — {usage}',
+  заведён: 'made',
+  'подготовлен заново': 'prepared again',
+  'скопировано файлов по .worktreeinclude: {n}': 'files copied by .worktreeinclude: {n}',
+  'у узла «{title}» нет worktree': 'node «{title}» has no worktree',
+  'закоммить и влей ветку {branch} в ветку основной папки — тогда worktree уберётся':
+    "commit and merge branch {branch} into the main folder's branch — then the worktree can be removed",
+  'не убираю worktree узла «{title}»': 'not removing the worktree of node «{title}»',
+  'в worktree открыта сессия в панели {pane} — закрой её':
+    'a session is open in this worktree, in pane {pane} — close it',
+  'worktree убран, ветка {branch} удалена': 'worktree removed, branch {branch} deleted',
+  'коммиты ветки остались у узла: {n}': "the branch's commits stay with the node: {n}",
+  'worktree:': 'worktree:',
+  '· ветка {branch}': '· branch {branch}',
+  '{why}: привязано коммитов — {n}': '{why}: commits attached — {n}',
+  'worktree: ветка {branch}': 'worktree: branch {branch}',
+  'отдельный git worktree, ветка treeyard/<id>': 'a separate git worktree, branch treeyard/<id>',
+  'подготовка worktree не прошла ({setup}): {output} — поправь и повтори: treeyard worktree setup {id}':
+    "the worktree's preparation failed ({setup}): {output} — fix it and run again: treeyard worktree setup {id}",
+  'без вывода': 'no output',
+  'worktree нужен git-репозиторий, а здесь его нет': 'a worktree needs a git repository, and there is none here',
+  'в репозитории ещё нет ни одного коммита — worktree не от чего заводить':
+    'the repository has no commits yet — a worktree has nothing to start from',
+  'папка {path} уже занята — убери её или назови другой узел':
+    'the folder {path} is taken — remove it or name another node',
+  'git worktree: {message}': 'git worktree: {message}',
+  '{file} не прочитан: {message}': '{file} could not be read: {message}',
+  '{file} назвал {n} файлов — это больше {max}, ничего не копирую; сузь шаблоны':
+    '{file} names {n} files — more than {max}, copying nothing; narrow the patterns',
+  'не скопирован {name}: {message}': 'not copied: {name}: {message}',
+  'у узла нет worktree — treeyard worktree add {id}': 'the node has no worktree — treeyard worktree add {id}',
+  'у сессии про весь проект нет worktree — она в папке проекта':
+    "a session about the whole project has no worktree — it stays in the project's folder",
+  'не закоммичено файлов: {n} ({files})': 'files not committed: {n} ({files})',
+  'не влито коммитов в ветку основной папки: {n}': "commits not merged into the main folder's branch: {n}",
+  'у узла нет worktree': 'the node has no worktree',
+  'ветка {branch} влита и убрана': 'branch {branch} merged and removed',
+  'не влито: {n}': 'not merged: {n}',
+  влито: 'merged',
+  'не закоммичено: {n}': 'not committed: {n}',
+  чисто: 'clean',
+  'ветки нет': 'no branch',
+  'сессия в папке проекта': 'the session stays in the project’s folder',
 };

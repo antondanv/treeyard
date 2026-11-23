@@ -24,7 +24,7 @@ import {
 } from '../agents/context.js';
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
-import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
+import { isPending, launchInPane, readPanes, sessionPanes } from '../agents/panes.js';
 import { LIMIT, type QueueEvent, queueNodes, queueSources, runQueue } from '../agents/queue.js';
 import { NotSent, sendToNode } from '../agents/send.js';
 import { autoInstallSkills, skillHomes } from '../agents/skills.js';
@@ -125,6 +125,22 @@ import { inlineMark, WORDMARK } from '../tui/logo.js';
 import type { Leftover } from '../uninstall.js';
 import { WATCH_VERSION, watchTree } from '../watch.js';
 import {
+  ensureWorktree,
+  insideFolder,
+  nodeCommits,
+  prepareAgain,
+  removeWorktree,
+  shortPath,
+  stateText,
+  togetherWorktrees,
+  treeOfWorktree,
+  WorktreeBusy,
+  type WorktreeWish,
+  worktreeFor,
+  worktreeState,
+  worktreesOf,
+} from '../worktree.js';
+import {
   foundJson,
   fullTreeJson,
   NODE_PARTS,
@@ -138,6 +154,7 @@ import {
   treeJson,
   treeText,
   watchLine,
+  worktreeJson,
 } from './print.js';
 import { skillLines, skillsAutoLine, statusText } from './status-text.js';
 import { waitJson, waitText } from './wait-text.js';
@@ -228,11 +245,17 @@ function commandLines(): string {
                                            сессия по узлу прямо из shell
                 [--task "…"|-]             задание сверх контекста узла: в конец первого сообщения (- — из stdin)
                 [--model <модель>] [--effort <уровень>]   только на этот запуск
-                [--worktree]               только Claude Code: в новом git worktree (остальные CLI предупредят)
+                [--worktree|--no-worktree]   в своём git worktree узла (ветка treeyard/<id>; сессии любого CLI) или в
+                                           папке проекта; без флага — в worktree узла, если он уже есть
                 [--pane|--bg --json]       для программ: JSON с id сессии (у --pane и с именем панели tmux, tmux -L brainyard)
   treeyard open <id> <id>… --bg|--pane [--task …]   несколько узлов — только с --bg или --pane: сессия в каждом по
                                            очереди, строка на узел (✓ id название · сессия <id> | панель <имя>);
-                                           не встала — ✗ и код 1; --json — массив вместо объекта
+                                           не встала — ✗ и код 1; --json — массив вместо объекта; все узлы, кроме первого,
+                                           — каждый в своём worktree, первый остаётся в папке проекта
+  treeyard worktree [add|setup|rm <id>] [--json]   worktree узлов: без слов — список (папка, ветка, коммиты, что не
+                                           закоммичено); add — завести (подготовка: setup из tree.md и копия по
+                                           .worktreeinclude); setup — подготовить заново; rm — убрать, но не пока в нём
+                                           есть незакоммиченное или невлитое; сессии в нём пишут основное дерево
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   ждать, пока узел уйдёт из «в работе» или его сессия
                                            закончит ход, будет ждать человека или закончится; печатает статус, последнюю
@@ -249,7 +272,8 @@ function commandLines(): string {
                                            когда нужные на проверке или готовы; при лимите CLI от --limit % ждёт сброса
                                            окна; строка на событие, пока все не пройдут; Ctrl+C — больше не запускать,
                                            повторный запуск подхватит узлы в работе; --brain, --start (do), --model,
-                                           --effort, --worktree, --yes — как у open
+                                           --effort, --worktree, --no-worktree, --yes — как у open; при --parallel от 2 один узел идёт в
+                                           папке проекта, остальные — каждый в своём worktree
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
                                            репозитория (открытые — узлы, закрытие — в обе стороны)
@@ -332,11 +356,17 @@ function commandLines(): string {
                                            a session for a node straight from the shell
                 [--task "…"|-]             an assignment on top of the node's context: added to the first message (- reads stdin)
                 [--model <model>] [--effort <level>]   for this launch only
-                [--worktree]               Claude Code only: in a new git worktree (other CLIs warn)
+                [--worktree|--no-worktree]   in the node's own git worktree (branch treeyard/<id>; sessions of any CLI)
+                                           or in the project's folder; without a flag — in the node's worktree if it has one
                 [--pane|--bg --json]       for programs: JSON with the session id (with --pane, the tmux pane name too, tmux -L brainyard)
   treeyard open <id> <id>… --bg|--pane [--task …]   several nodes — only with --bg or --pane: a session in each, one
                                            after another, a line per node (✓ id title · session <id> | pane <name>);
-                                           one that fails — ✗ and exit 1; --json — an array instead of an object
+                                           one that fails — ✗ and exit 1; --json — an array instead of an object; all nodes
+                                           but the first get a worktree each, the first stays in the project's folder
+  treeyard worktree [add|setup|rm <id>] [--json]   the nodes' worktrees: bare — the list (folder, branch, commits, what is
+                                           not committed); add — make one (preparation: setup from tree.md and the copy
+                                           by .worktreeinclude); setup — prepare again; rm — remove, but not while it holds
+                                           anything uncommitted or unmerged; sessions in it write the main tree
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are; ▣ — a live pane
                                            (pane in JSON)
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   wait until a node leaves «active» or its session
@@ -354,7 +384,8 @@ function commandLines(): string {
                                            review or done; with the CLI's window at --limit % it waits for the reset; a line
                                            per event until all have gone; Ctrl+C — start no more, running it again picks
                                            up the nodes at work; --brain, --start (do), --model, --effort, --worktree,
-                                           --yes — as for open
+                                           --no-worktree, --yes — as for open; from --parallel 2 one node goes in the project's folder,
+                                           the rest in a worktree each
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            a GitHub Project board (cards are nodes, columns are statuses) or a
                                            repository's issues (open ones are nodes, closing goes both ways)
@@ -363,7 +394,13 @@ function commandLines(): string {
 }
 
 /** Command words that run another command's code. */
-const COMMAND_ALIASES: Record<string, string> = { tree: 'show', skill: 'skills', images: 'image', settings: 'config' };
+const COMMAND_ALIASES: Record<string, string> = {
+  tree: 'show',
+  skill: 'skills',
+  images: 'image',
+  settings: 'config',
+  worktrees: 'worktree',
+};
 
 /** The lines of the general help that belong to one command; undefined for a word that is not a command. */
 function commandHelp(name: string): string | undefined {
@@ -500,6 +537,9 @@ async function main(argv: string[]): Promise<number> {
       return contextCommand(rest);
     case 'open':
       return openCommand(rest);
+    case 'worktree':
+    case 'worktrees':
+      return worktreeCommand(rest);
     case 'sessions':
       return sessionsCommand(rest);
     case 'github':
@@ -544,7 +584,8 @@ function parse<T extends NonNullable<Parameters<typeof parseArgs>[0]>['options']
  * a project does, so a git worktree reaches the main tree the same way.
  */
 function projectDir(folder?: string): string {
-  const dir = folder ? findProject(folderArg(folder)) : findProject();
+  // A worktree treeyard made for a node writes the main tree, not its branch's copy of `.tree/`.
+  const dir = folder ? findProject(folderArg(folder)) : (treeOfWorktree() ?? findProject());
   if (!dir) throw new UsageError(t('здесь нет дерева (.tree/) — treeyard init, чтобы посадить'));
   // So `treeyard projects` lists it.
   rememberProject(dir);
@@ -640,6 +681,15 @@ function startArg(value: string | undefined, fallback: StartMode): StartMode {
       p1: START_MODES.join(', '),
     }),
   );
+}
+
+/** `--worktree` and `--no-worktree` as the launch option: said yes, said no, or not said (the node's own worktree if it has one). */
+function worktreeOption(values: { worktree?: boolean | undefined; 'no-worktree'?: boolean | undefined }): {
+  worktree?: boolean;
+} {
+  if (values.worktree && values['no-worktree']) throw new UsageError(t('выбери одно: --worktree или --no-worktree'));
+  if (values.worktree) return { worktree: true };
+  return values['no-worktree'] ? { worktree: false } : {};
 }
 
 /** Who writes to the journal: you at a terminal, an agent when nobody is. */
@@ -828,7 +878,11 @@ async function statusCommand(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, { json: { type: 'boolean' }, project: { type: 'string' } });
   if (positionals.length) throw new UsageError(t('treeyard status [--json] [--project <папка>]'));
   const start = values.project ? folderArg(values.project) : process.cwd();
-  const status = await projectStatus(locate(start));
+  let place = locate(start);
+  // A worktree treeyard made for a node: its tree is the main one, not the branch's copy.
+  const owner = values.project ? undefined : treeOfWorktree(start);
+  if (owner && place.worktree) place = { ...place, project: owner };
+  const status = await projectStatus(place);
   process.stdout.write(values.json ? `${JSON.stringify(status, null, 2)}\n` : `${statusText(status, out)}\n`);
   return 0;
 }
@@ -1028,7 +1082,9 @@ function showCommand(args: string[]): number {
     if (values.json) {
       const keep = journalOption(values.journal).journal;
       const rows = nodes.map((node) =>
-        only ? partsJson(tree, node, only, keep) : { ...node, ...staleJson(staleOfNode(node)) },
+        only
+          ? partsJson(tree, node, only, keep)
+          : { ...node, ...worktreeJson(tree, node), ...staleJson(staleOfNode(node)) },
       );
       process.stdout.write(`${JSON.stringify(rows.length === 1 ? rows[0] : rows, null, 2)}\n`);
       return 0;
@@ -1314,6 +1370,7 @@ async function queueCommand(args: string[]): Promise<number> {
     model: { type: 'string' },
     effort: { type: 'string' },
     worktree: { type: 'boolean' },
+    'no-worktree': { type: 'boolean' },
     task: { type: 'string' },
     yes: { type: 'boolean', short: 'y' },
     json: { type: 'boolean' },
@@ -1337,7 +1394,7 @@ async function queueCommand(args: string[]): Promise<number> {
     ...(values.bg ? { background: true } : { pane: true }),
     ...(values.model ? { model: values.model } : {}),
     ...(values.effort ? { effort: values.effort } : {}),
-    ...(values.worktree ? { worktree: true } : {}),
+    ...worktreeOption(values),
     ...(task ? { task } : {}),
   };
   if (!(await chooseAccess(brain))) return 0;
@@ -2121,7 +2178,8 @@ async function diffCommand(args: string[]): Promise<number> {
     return 0;
   }
   const node = tree.nodes.get(id)!;
-  let refs = node.commits ?? [];
+  // The commits attached to the node, and the ones its worktree's branch made: no hook, no --add.
+  let refs = nodeCommits(dir, node);
   if (values.commit) {
     const commit = await repo.commit(values.commit);
     if (!refs.includes(commit.sha))
@@ -2627,6 +2685,7 @@ async function openCommand(args: string[]): Promise<number> {
     model: { type: 'string' },
     effort: { type: 'string' },
     worktree: { type: 'boolean' },
+    'no-worktree': { type: 'boolean' },
     task: { type: 'string' },
     yes: { type: 'boolean', short: 'y' },
     json: { type: 'boolean' },
@@ -2651,7 +2710,7 @@ async function openCommand(args: string[]): Promise<number> {
     ...(values.pane ? { pane: true } : {}),
     ...(values.model ? { model: values.model } : {}),
     ...(values.effort ? { effort: values.effort } : {}),
-    ...(values.worktree ? { worktree: true } : {}),
+    ...worktreeOption(values),
     ...(task ? { task } : {}),
   };
   // Rights before the confirmation, and even with --yes: --yes skips a question, it does not grant access.
@@ -2659,7 +2718,8 @@ async function openCommand(args: string[]): Promise<number> {
   if (settings().confirm && !values.yes && process.stdin.isTTY) {
     const titles = ids.map((each) => holderOf(tree, each)!.title);
     const plan = sessionPlan(tree, id, options.start, brain, task);
-    const labels = [ids.length > 1 ? t('Узлы') : t('Узел'), t('Кто'), t('Как начать'), t('Права')];
+    const labels = [ids.length > 1 ? t('Узлы') : t('Узел'), t('Кто'), t('Как начать'), t('Права'), 'Worktree'];
+    const where = worktreeRow(tree, ids, options.worktree);
     // Padded to the longest label, so the columns line up in either language.
     const width = Math.max(...labels.map((label) => label.length)) + 2;
     const row = (label: string, text: string) => `  ${err.dim(label)}${' '.repeat(width - label.length)}${text}\n`;
@@ -2675,6 +2735,7 @@ async function openCommand(args: string[]): Promise<number> {
           `${(id === ROOT ? ROOT_START_LABEL : START_LABEL)[plan.start]} — ${(id === ROOT ? ROOT_START_HINT : START_HINT)[plan.start]}`,
         ) +
         row(labels[3]!, accessText(brain, plan.permissionMode)) +
+        (where ? row(labels[4]!, where) : '') +
         '\n',
     );
     if (!(await askYes(ids.length > 1 ? t('Запустить сессии: {n}?', { n: ids.length }) : t('Запустить сессию?')))) {
@@ -2713,6 +2774,15 @@ async function openCommand(args: string[]): Promise<number> {
   return result.ok ? 0 : 1;
 }
 
+/** What the confirmation says about worktrees; nothing when the session starts in the project's folder as always. */
+function worktreeRow(tree: Tree, ids: string[], want: WorktreeWish | undefined): string | undefined {
+  if (want === false) return undefined;
+  if (want === true) return t('свой git worktree и ветка treeyard/<id> у каждого узла');
+  if (ids.length > 1) return t('первый узел — в папке проекта, остальные — каждый в своём git worktree');
+  const wt = worktreeFor(tree.project.dir, ids[0]!);
+  return wt ? t('в worktree узла, ветка {branch}', { branch: wt.branch }) : undefined;
+}
+
 const paneSize = () => ({
   width: process.stdout.columns || 100,
   height: Math.max(5, (process.stdout.rows || 30) - 6),
@@ -2747,11 +2817,12 @@ export async function openInPanes(
 ): Promise<number> {
   const rows: Record<string, unknown>[] = [];
   const size = paneSize();
+  const flags = togetherWorktrees(ids.length, options.worktree);
   let failed = 0;
-  for (const id of ids) {
+  for (const [at, id] of ids.entries()) {
     const title = holderOf(tree, id)!.title;
     try {
-      const { pane, ref, warnings } = await launchPane(tree, id, options, size);
+      const { pane, ref, warnings } = await launchPane(tree, id, withWorktree(options, flags[at]), size);
       rows.push(startedPane(id, options.brain, ref, pane, warnings));
       if (json) continue;
       for (const warning of warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
@@ -2765,6 +2836,12 @@ export async function openInPanes(
   }
   if (json) process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
   return failed ? 1 : 0;
+}
+
+/** The options of one node among several: its own worktree choice replaces the one for all of them. */
+function withWorktree(options: LaunchOptions, worktree: WorktreeWish | undefined): LaunchOptions {
+  const { worktree: _all, ...rest } = options;
+  return worktree === undefined ? rest : { ...rest, worktree };
 }
 
 /**
@@ -2790,10 +2867,11 @@ async function openInBackground(
 ): Promise<number> {
   const json = list !== null;
   const rows: Record<string, unknown>[] = [];
+  const flags = togetherWorktrees(ids.length, options.worktree);
   let failed = 0;
-  for (const id of ids) {
+  for (const [at, id] of ids.entries()) {
     const title = holderOf(tree, id)!.title;
-    const { result, ref } = await launch(tree, id, options);
+    const { result, ref } = await launch(tree, id, withWorktree(options, flags[at]));
     if (!json) for (const warning of result.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
     if (result.error || !ref) {
       failed++;
@@ -2812,6 +2890,109 @@ async function openInBackground(
   }
   if (json) process.stdout.write(`${JSON.stringify(list ? rows : rows[0], null, 2)}\n`);
   return failed ? 1 : 0;
+}
+
+/**
+ * `treeyard worktree [add|setup|rm <id>]`: the git worktrees of the nodes. Bare — the list with what
+ * each holds; `add` makes one (the branch `treeyard/<id>`, the copy by `.worktreeinclude`, the project's
+ * `setup`); `setup` prepares a standing one again; `rm` removes one, but not while it holds anything
+ * uncommitted or unmerged — treeyard has no way to throw work away.
+ */
+async function worktreeCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, { json: { type: 'boolean' } });
+  const usage = t('treeyard worktree [add|setup|rm <id>] [--json]');
+  const first = positionals[0];
+  const action = first === 'add' || first === 'setup' || first === 'rm' || first === 'list' ? first : undefined;
+  const rest = action ? positionals.slice(1) : positionals;
+  const tree = project();
+  const dir = tree.project.dir;
+  const json = values.json === true;
+  const titleOf = (id: string) => tree.nodes.get(id)?.title ?? id;
+  if (!action || action === 'list') {
+    const only = rest.map((id) => nodeArg(tree, id));
+    const list = worktreesOf(dir).filter((wt) => !only.length || only.includes(wt.id));
+    const rows = list.map((wt) => ({ wt, state: worktreeState(dir, wt) }));
+    if (json) {
+      const data = rows.map(({ wt, state }) => ({
+        node: wt.id,
+        title: titleOf(wt.id),
+        path: wt.dir,
+        branch: wt.branch,
+        base: wt.base,
+        commits: state.commits,
+        unmerged: state.unmerged,
+        dirty: state.dirty,
+      }));
+      process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+      return 0;
+    }
+    if (!rows.length) {
+      const none = t('worktree у узлов нет — treeyard open <id> --worktree или treeyard worktree add <id>');
+      process.stdout.write(`${out.dim(none)}\n`);
+      return 0;
+    }
+    for (const { wt, state } of rows)
+      process.stdout.write(
+        `${wt.id}  ${titleOf(wt.id)}\n  ${shortPath(wt.dir)} ${out.dim(`· ${wt.branch} · ${stateText(state)}`)}\n`,
+      );
+    return 0;
+  }
+  if (rest.length !== 1) throw new UsageError(usage);
+  const id = nodeArg(tree, rest[0]);
+  if (id === ROOT) throw new UsageError(t('worktree заводят узлу, а не корню — {usage}', { usage }));
+  if (action === 'add' || action === 'setup') {
+    const prepared = action === 'add' ? await ensureWorktree(tree, id) : await prepareAgain(tree, id);
+    const wt = prepared.worktree;
+    if (json) {
+      const data = {
+        node: id,
+        path: wt.dir,
+        branch: wt.branch,
+        base: wt.base,
+        created: prepared.created,
+        copied: prepared.copied,
+        warnings: prepared.warnings,
+      };
+      process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+      return 0;
+    }
+    for (const warning of prepared.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
+    const what = prepared.created ? t('заведён') : action === 'setup' ? t('подготовлен заново') : t('уже стоит');
+    process.stdout.write(
+      `${out.c('#7ee2a8', '✓')} ${id}  ${titleOf(id)} · worktree ${what}\n  ${shortPath(wt.dir)} ${out.dim(`· ${wt.branch}`)}\n`,
+    );
+    if (prepared.copied)
+      process.stdout.write(`  ${out.dim(t('скопировано файлов по .worktreeinclude: {n}', { n: prepared.copied }))}\n`);
+    return 0;
+  }
+  // rm
+  const wt = worktreeFor(dir, id);
+  if (!wt) throw new UsageError(t('у узла «{title}» нет worktree', { title: titleOf(id) }));
+  const refuse = (reasons: string[]): number => {
+    const hint = t('закоммить и влей ветку {branch} в ветку основной папки — тогда worktree уберётся', {
+      branch: wt.branch,
+    });
+    const head = t('не убираю worktree узла «{title}»', { title: titleOf(id) });
+    process.stderr.write(
+      `${err.c('#ff7b72', '✗')} ${head}\n${reasons.map((reason) => `  - ${reason}`).join('\n')}\n${err.dim(hint)}\n`,
+    );
+    return 1;
+  };
+  // A session still running there would be left without its folder.
+  const busy = (await readPanes().catch(() => [])).filter((pane) => pane.cwd && insideFolder(pane.cwd, wt.path));
+  if (busy.length)
+    return refuse(busy.map((pane) => t('в worktree открыта сессия в панели {pane} — закрой её', { pane: pane.pane })));
+  try {
+    const removed = removeWorktree(tree, id);
+    const done = t('worktree убран, ветка {branch} удалена', { branch: removed.worktree.branch });
+    process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${titleOf(id)} · ${done}\n`);
+    if (removed.attached)
+      process.stdout.write(`  ${out.dim(t('коммиты ветки остались у узла: {n}', { n: removed.attached }))}\n`);
+    return 0;
+  } catch (error) {
+    if (error instanceof WorktreeBusy) return refuse(error.reasons);
+    throw error;
+  }
 }
 
 async function sessionsCommand(args: string[]): Promise<number> {
@@ -2931,7 +3112,7 @@ const SNAKE: Record<string, string> = {
   statusOrder: 'status_order',
   antigravityAccess: 'antigravity_access',
 };
-const PROJECT_KEYS = ['brain', 'start', 'model', 'effort', 'assist_model'] as const;
+const PROJECT_KEYS = ['brain', 'start', 'model', 'effort', 'assist_model', 'setup'] as const;
 
 function configCommand(args: string[]): number {
   const [requestedKey, ...rest] = args;
@@ -2954,6 +3135,7 @@ function configCommand(args: string[]): number {
         model: p.model,
         effort: p.effort,
         assist_model: p.assistModel,
+        setup: p.setup,
       };
       for (const name of PROJECT_KEYS) process.stdout.write(`  ${name.padEnd(18)} ${values[name] ?? out.dim('—')}\n`);
     }
@@ -3032,6 +3214,7 @@ function configCommand(args: string[]): number {
     else if (key === 'start') p.start = startArg(value, 'plan');
     else if (key === 'model') p.model = value || undefined;
     else if (key === 'effort') p.effort = value || undefined;
+    else if (key === 'setup') p.setup = value || undefined;
     else p.assistModel = value || undefined;
     writeProject(p);
     process.stdout.write(`${key} = ${value || '—'}\n`);

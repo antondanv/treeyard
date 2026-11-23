@@ -23,6 +23,7 @@ import { type Stale, staleLabel, staleNote } from '../model/stale.js';
 import { ago } from '../model/time.js';
 import { childrenOf, heldBy, pathTo, progress, summarize } from '../model/tree.js';
 import { ROOT, type SessionRef, type Tree, type TreeNode } from '../model/types.js';
+import { nodeCommits, shortPath, worktreeFor } from '../worktree.js';
 import { pictureLines } from './image-view.js';
 import { liveLabel } from './rows.js';
 import { clip } from './text.js';
@@ -176,7 +177,16 @@ export function NodeDetails(props: {
       </Text>,
     );
   }
-  if (node.commits?.length) wrap(t('коммитов: {n} · V — дифы', { n: node.commits.length }), C.dim);
+  const commits = nodeCommits(tree.project.dir, node);
+  if (commits.length) wrap(t('коммитов: {n} · V — дифы', { n: commits.length }), C.dim);
+  const worktree = worktreeFor(tree.project.dir, node.id);
+  if (worktree) {
+    wrap(t('worktree: ветка {branch}', { branch: worktree.branch }), C.dim);
+    // A long path keeps its end: the node's folder is the part that tells worktrees apart.
+    const place = shortPath(worktree.dir);
+    const room = Math.max(10, inner - 2);
+    wrap(place.length > room ? `…${place.slice(place.length - room + 1)}` : place, C.faint, 2);
+  }
 
   const images = listImages(tree.project.dir, node.id);
   if (images.length > 0) {

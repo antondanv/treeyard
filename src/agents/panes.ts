@@ -30,6 +30,7 @@ import { attachSession, detachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import { holderOf, sessionHolders } from '../model/tree.js';
 import type { BrainId, SessionRef, Tree, TreeNode } from '../model/types.js';
+import { sessionFolder, sessionPlace, worktreeDirs, worktreeNote } from '../worktree.js';
 import { fullAccess } from './access.js';
 import { sessionPlan } from './context.js';
 import type { LaunchOptions } from './launch.js';
@@ -37,14 +38,20 @@ import type { LaunchOptions } from './launch.js';
 export { panesAvailable };
 
 /** tmux and the CLI may spell the same folder differently through a symlink. */
+function sameFolder(a: string, b: string): boolean {
+  if (a === b) return true;
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return resolve(a) === resolve(b);
+  }
+}
+
+/** A pane of the project: in its folder, or in the worktree of one of its nodes. */
 export function paneInProject(pane: PaneInfo, dir: string): boolean {
   if (!pane.cwd) return false;
-  if (pane.cwd === dir) return true;
-  try {
-    return realpathSync(pane.cwd) === realpathSync(dir);
-  } catch {
-    return resolve(pane.cwd) === resolve(dir);
-  }
+  const cwd = pane.cwd;
+  return sameFolder(cwd, dir) || worktreeDirs(dir).some((wt) => sameFolder(cwd, wt));
 }
 
 /** A pane as the tree sees it: what tmux says, plus memory. */
@@ -79,19 +86,19 @@ export async function launchInPane(
         id,
       }),
     );
+  const place = await sessionPlace(tree, id, options.worktree);
   const plan = sessionPlan(tree, id, options.start, options.brain, options.task, senderNode(tree));
   const started = await startPane({
     brain: options.brain,
-    cwd: tree.project.dir,
+    cwd: place.dir,
     // Only Claude Code takes a name; the others title a session after its first message.
     ...(options.brain === 'claude' ? { name: plan.name } : {}),
     label: node.title,
-    system: plan.system,
+    system: place.worktree ? `${plan.system}\n\n${worktreeNote(place.worktree, tree.project.dir)}` : plan.system,
     ...(plan.prompt ? { prompt: plan.prompt } : {}),
     ...(plan.permissionMode ? { permissionMode: plan.permissionMode } : {}),
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
-    ...(options.worktree ? { worktree: true } : {}),
     env: nodeEnv(id, tree.project.dir),
     width: size.width,
     height: size.height,
@@ -103,6 +110,7 @@ export async function launchInPane(
     started: nowIso(new Date(started.startedAt)),
     mode: 'pane',
     pane: started.pane,
+    ...(place.worktree ? { dir: place.dir } : {}),
   };
   attachSession(
     tree,
@@ -110,13 +118,13 @@ export async function launchInPane(
     ref,
     t('новая сессия в панели ({p2})', {
       p2: plan.start === 'goal' ? '/goal' : plan.start,
-    }),
+    }) + (place.worktree ? t(' в worktree {branch}', { branch: place.worktree.branch }) : ''),
   );
   const current = tree.nodes.get(id);
   if (current && (current.status === 'todo' || current.status === 'idea')) {
     setStatus(tree, id, 'active', { source: options.brain });
   }
-  return { pane: started.pane, ref, warnings: started.warnings };
+  return { pane: started.pane, ref, warnings: [...place.warnings, ...started.warnings] };
 }
 
 /**
@@ -133,14 +141,15 @@ export async function hasConversation(dir: string, brain: BrainId, id: string): 
 export async function wakeInPane(tree: Tree, nodeId: string, ref: SessionRef, size: PaneSize): Promise<string> {
   const running = paneFor(ref, await listPanes());
   if (running) return running.pane;
-  if (isPending(ref) || !(await hasConversation(tree.project.dir, ref.brain, ref.id))) {
+  const folder = sessionFolder(tree.project.dir, ref);
+  if (isPending(ref) || !(await hasConversation(folder, ref.brain, ref.id))) {
     if (holderOf(tree, nodeId)) detachSession(tree, nodeId, ref.id);
     throw new Error(t('в этой сессии не было ни одного сообщения — CLI её не сохранил; убрал из узла · o — новая'));
   }
   const node = holderOf(tree, nodeId);
   const started = await startPane({
     brain: ref.brain,
-    cwd: tree.project.dir,
+    cwd: folder,
     resume: ref.id,
     ...fullAccess(ref.brain),
     ...(node ? { label: node.title } : {}),
@@ -168,7 +177,8 @@ export async function sleepPane(tree: Tree, pane: Pane): Promise<'slept' | 'clos
   let id = pane.sessionId ?? (owner && !isPending(owner.ref) ? owner.ref.id : undefined);
   // Codex, Antigravity or OpenCode may have written it down a moment ago.
   if (!id) id = (await findPaneSession(pane))?.id;
-  const saved = Boolean(id && pane.brain && (await hasConversation(tree.project.dir, pane.brain, id)));
+  const folder = owner ? sessionFolder(tree.project.dir, owner.ref) : tree.project.dir;
+  const saved = Boolean(id && pane.brain && (await hasConversation(folder, pane.brain, id)));
   if (!(await closePane(pane.pane))) return 'failed';
   if (owner) {
     if (!saved) detachSession(tree, owner.nodeId, owner.ref.id);
@@ -268,10 +278,12 @@ export async function settlePending(tree: Tree, panes: readonly Pane[]): Promise
     const pane = panes.find((p) => p.pane === ref.pane && p.brain === ref.brain);
     let id = pane?.sessionId;
     if (!id && ref.started) {
-      let candidates = history.get(ref.brain);
+      const folder = sessionFolder(tree.project.dir, ref);
+      const key = `${ref.brain}\0${folder}`;
+      let candidates = history.get(key);
       if (!candidates) {
-        candidates = await sessions({ cwd: tree.project.dir, brains: [ref.brain], headless: true, live: false });
-        history.set(ref.brain, candidates);
+        candidates = await sessions({ cwd: folder, brains: [ref.brain], headless: true, live: false });
+        history.set(key, candidates);
       }
       // Match the earliest unclaimed conversation from this launch. In
       // particular, two launches in one folder must not both claim the newest.

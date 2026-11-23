@@ -146,7 +146,7 @@ describe('models come from the CLI, not from typing', () => {
     const form = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['o', LEFT, DOWN, DOWN, DOWN] });
     expect(form).toMatch(/Мозг\s+.*OpenCode/);
     expect(form).toMatch(/Усилие\s+в самой сессии OpenCode — ctrl\+t/);
-    expect(form).toMatch(/Worktree\s+только Claude Code/);
+    expect(form).toMatch(/Worktree\s+нет/);
     // OpenCode is not installed for the tests: no list, and the hint says what runs.
     expect(form).toContain('OpenCode не дал список моделей');
     expect(form).not.toContain('в фоне');
