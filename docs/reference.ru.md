@@ -259,6 +259,7 @@ treeyard uninstall         # убрать их отовсюду вместе с 
 | `stale_after` | через сколько часов узел «в работе» без живой сессии и без записей помечается «без сессии N ч» (по умолчанию 2); `0` — не помечать |
 | `notes` | папка с деревом, куда `treeyard note` складывает замечания из любого проекта; `off` — не собирать. В настройках (`,`) это пункт «Куда падают замечания»: путь (`~`, `.` — этот проект) или пустое значение, чтобы отключить |
 | `antigravity_access` | права Antigravity: `full` (без подтверждений), `normal` (спрашивает перед каждой командой) или `ask` (по умолчанию — спросить перед первым запуском); подробнее — «Что разрешено агентам» |
+| `codex_access` | как запускать Codex из дерева: `sandbox` (песочница + treeyard и git: workspace-write, сеть и `.git` проекта открыты), `config` (как сказано в `~/.codex/config.toml`) или `ask` (по умолчанию — спросить перед первым запуском); подробнее — «Что разрешено агентам» |
 | `skills` | ставить скиллы treeyard в Claude Code, Codex и Antigravity и держать их в версии treeyard (по умолчанию да); `off` — только вручную, `treeyard skills install` |
 
 Когда `live` включён, у узла с работающим Codex крутится спиннер, а сама сессия
@@ -298,6 +299,7 @@ treeyard config status_order done-first  # готовые сверху
 treeyard config status_order todo,review,active,waiting,idea,done,dropped  # свой порядок
 treeyard config notes ~/Projects/my-notes  # куда складывать замечания
 treeyard config antigravity_access normal  # Antigravity спрашивает перед каждой командой
+treeyard config codex_access sandbox  # Codex проходит песочницу к treeyard send и git commit
 treeyard config skills off      # скиллы только вручную: treeyard skills install
 TREEYARD_LANG=ru treeyard       # язык только на этот запуск
 ```
@@ -307,7 +309,7 @@ TREEYARD_LANG=ru treeyard       # язык только на этот запус
 | Агент | Права при запуске из дерева |
 | --- | --- |
 | Claude Code | его собственные настройки (`permissions` в `~/.claude/settings.json`); старт «план» — его режим plan: без правок, пока ты не согласишься |
-| Codex | его собственные настройки: песочница и подтверждения из `~/.codex/config.toml`; treeyard флагов не добавляет |
+| Codex | на твой выбор: **песочница + treeyard и git** — `workspace-write`, сеть и `.git` проекта открыты, остальное из `~/.codex/config.toml` — или **как в config.toml**: его песочница и подтверждения, флагов от treeyard нет |
 | OpenCode | его собственные настройки (`permission` в `opencode.json`); старт «план» — его агент plan |
 | Antigravity | на твой выбор: **полный доступ** — команды, правка и удаление файлов, сеть без подтверждений (`--dangerously-skip-permissions`) — или **обычный режим**: спрашивает перед каждой командой |
 | «Разбить на шаги», «Сформулировать «готово, когда»» | только чтение, без сети — какой бы агент ни делал |
@@ -323,6 +325,32 @@ Antigravity») или командой `treeyard config antigravity_access full|
 `treeyard open` и `treeyard init --agent` в терминале задают тот же вопрос, а без терминала
 (когда `open` вызывает агент или скрипт) останавливаются с кодом 2 и подсказывают, как
 выбрать человеку: `--yes` пропускает подтверждение, но прав не даёт.
+
+Песочница Codex по умолчанию держит закрытыми две вещи: сокет tmux (`treeyard send`,
+панели) и `.git` проекта (`git commit`) — сессия Codex из дерева не может ни написать другой
+сессии, ни закоммитить. Поэтому первый запуск Codex тоже один раз спрашивает (так же, `esc`
+ничего не запускает):
+
+- **песочница + treeyard и git** — treeyard запускает Codex с `--sandbox workspace-write`,
+  `-c sandbox_workspace_write.network_access=true` и `-c
+  sandbox_workspace_write.writable_roots=[…]` с `.git` проекта (из git worktree — `.git`
+  основного репозитория, куда уходят его коммиты). Твои `writable_roots` из config.toml
+  остаются; подтверждения, модель и всё остальное берутся из config.toml. Флаги получают
+  новая сессия, продолженная и разбуженная панель. `~/.treeyard` для Codex остаётся
+  закрытым: он пишет только в проект.
+- **как в config.toml** — без флагов; песочница такая, как в `~/.codex/config.toml`.
+
+Выбор хранится в `~/.treeyard/settings.json` (`codex_access`) и меняется в настройках (`,` →
+«Права Codex») или командой `treeyard config codex_access sandbox|config|ask`. `treeyard
+status` показывает, как запускается Codex, и, если config.toml закрывает сокет tmux или
+`.git`, а выбрана не песочница, называет строки, которые стоит добавить, — они работают для
+любого запуска Codex, не только из treeyard:
+
+```toml
+[sandbox_workspace_write]
+network_access = true
+writable_roots = ["/путь/к/проекту/.git"]
+```
 
 ## Сессии рядом с деревом
 
@@ -453,7 +481,7 @@ treeyard wait <id> <id> --timeout 10m          # координатор ждёт
 treeyard send <id> "поправь тест"               # следующая реплика той же сессии узла, а не новая сессия (- — из stdin)
 treeyard queue <id> --pane --parallel 2 --task "…"   # очередь: открытые дети узла по порядку, по две сессии, следующая — когда узел ушёл из «в работе»
 treeyard sessions                               # сессии папки во всех CLI; «без узла» — открытые мимо дерева, ▣ — живая панель (--json: pane)
-treeyard status                                 # сводка: версии, дерево, узлы, скиллы, указатель, хук, сессии, GitHub; у проблем — команда (--json)
+treeyard status                                 # сводка: версии, дерево, узлы, скиллы, путь Codex к treeyard и git, указатель, хук, сессии, GitHub; у проблем — команда (--json)
 treeyard context <id>                           # ровно то, что получит агент
 treeyard pointer                                # добавить блок о дереве в AGENTS.md / CLAUDE.md (что в нём — ниже)
 treeyard help                                   # все команды; treeyard <команда> --help — строки одной
@@ -617,6 +645,9 @@ Ctrl+C — больше не запускать; повторный запуск
 - скиллы `treeyard`, `treeyard-init` и `treeyard-coordinate` в Claude Code, Codex и Antigravity:
   стоит, устарел (какой-то файл отличается от того, что пришёл с этой версией), не стоит или нет CLI; копии в папке
   проекта (`.claude/skills`, `.agents/skills`) тоже считаются; и ставит ли их treeyard сам (настройка `skills`);
+- Codex, если он установлен или ты выбрал, как его запускать: выбор (`codex_access`) и пускает ли
+  его config.toml сессию к treeyard (сокет tmux) и к git (`.git` проекта); если нет — проблема
+  с строками для `~/.codex/config.toml` и командой `treeyard config codex_access sandbox`;
 - блок о дереве в CLAUDE.md, AGENTS.md и GEMINI.md: есть, устарел, без блока, через импорт
   (`@AGENTS.md`) или нет файла;
 - git-хук post-commit;

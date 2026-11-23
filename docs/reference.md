@@ -242,6 +242,7 @@ Settings — the `,` key (always shown in the top right corner) or `treeyard con
 | `stale_after` | hours after which an «in progress» node with no live session and no records is marked «no session N h» (default 2); `0` — off |
 | `notes` | the folder with the tree where `treeyard note` writes notes from any project; `off` — none. In `,` — “Where notes go”: a path (`~`, `.` — this project), empty — none |
 | `antigravity_access` | Antigravity's access: `full` (no confirmations), `normal` (it asks before every command) or `ask` (the default — asked before the first launch); see “What agents may do” |
+| `codex_access` | how Codex starts from the tree: `sandbox` (the sandbox + treeyard and git: workspace-write with the network and the project's `.git` open), `config` (as `~/.codex/config.toml` says) or `ask` (the default — asked before the first launch); see “What agents may do” |
 | `skills` | install treeyard's skills into Claude Code, Codex and Antigravity and keep them at its version (default on); `off` — only by hand, `treeyard skills install` |
 
 With `live` on, a working Codex shows a spinner at its node and counts among “agents
@@ -278,6 +279,7 @@ treeyard config status_order done-first  # done on top
 treeyard config status_order todo,review,active,waiting,idea,done,dropped  # your own order
 treeyard config notes ~/Projects/my-notes  # where notes go
 treeyard config antigravity_access normal  # Antigravity asks before every command
+treeyard config codex_access sandbox  # Codex gets through its sandbox to treeyard send and git commit
 treeyard config skills off      # skills only by hand: treeyard skills install
 TREEYARD_LANG=ru treeyard       # the language for one run
 ```
@@ -287,7 +289,7 @@ TREEYARD_LANG=ru treeyard       # the language for one run
 | Agent | Access from the tree |
 | --- | --- |
 | Claude Code | its own settings (`permissions` in `~/.claude/settings.json`); a “plan” start — its plan mode: no edits until you agree |
-| Codex | its own settings: the sandbox and approvals from `~/.codex/config.toml`; treeyard adds no flags |
+| Codex | your choice: the **sandbox + treeyard and git** — `workspace-write` with the network and the project's `.git` open, the rest from `~/.codex/config.toml` — or **as in config.toml**: its sandbox and approvals, no flags from treeyard |
 | OpenCode | its own settings (`permission` in `opencode.json`); a “plan” start — its plan agent |
 | Antigravity | your choice: **full access** — commands, editing and deleting files, the network with no confirmations (`--dangerously-skip-permissions`), or the **ordinary mode** — it asks before every command |
 | Break into steps, write a “done when” | read-only, no network — whichever agent does it |
@@ -302,6 +304,32 @@ full|normal|ask` (`ask` — ask again at the next launch). Until it is chosen, A
 no extra rights. `treeyard open` and `treeyard init --agent` in a terminal ask the same
 question; without a terminal (an agent or a script calling `open`) they stop with exit code
 2 and say how the person chooses — `--yes` skips the confirmation, it does not grant access.
+
+Codex's default sandbox keeps two things shut: the tmux socket (`treeyard send`, panes) and
+the project's `.git` (`git commit`) — a Codex session from the tree cannot talk to other
+sessions or commit. So the first launch of Codex asks once too (the same way, `esc` starts
+nothing):
+
+- **sandbox + treeyard and git** — treeyard starts Codex with `--sandbox workspace-write`,
+  `-c sandbox_workspace_write.network_access=true` and `-c
+  sandbox_workspace_write.writable_roots=[…]` with the project's `.git` (from a git worktree
+  — the main repository's, where its commits go). Your own `writable_roots` from
+  config.toml stay; approvals, model and everything else come from config.toml. The flags go
+  with a new session, a resumed one and a woken pane. `~/.treeyard` stays closed to Codex:
+  it writes only in the project.
+- **as in config.toml** — no flags; the sandbox is whatever `~/.codex/config.toml` says.
+
+The choice is kept in `~/.treeyard/settings.json` (`codex_access`) and changes in `,` →
+“Codex access” or with `treeyard config codex_access sandbox|config|ask`. `treeyard status`
+shows how Codex is started and, if config.toml shuts the tmux socket or `.git` and the
+choice is not the sandbox, names the lines to add — for every Codex start, not only
+treeyard's:
+
+```toml
+[sandbox_workspace_write]
+network_access = true
+writable_roots = ["/path/to/project/.git"]
+```
 
 ## Sessions next to the tree
 
@@ -431,7 +459,7 @@ treeyard wait <id> <id> --timeout 10m          # a coordinator waits: a node lef
 treeyard send <id> "fix the test"               # the next message of the node's own session, not a new session (- reads stdin)
 treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's open children in order, two sessions at a time, the next when a node leaves “active”
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
-treeyard status                                 # a summary: versions, tree, nodes, skills, pointer, hook, sessions, GitHub; a command for every problem (--json)
+treeyard status                                 # a summary: versions, tree, nodes, skills, Codex's way to treeyard and git, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
 treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md (what it says — below)
 treeyard help                                   # all the commands; treeyard <command> --help — the lines of one
@@ -604,6 +632,10 @@ node, its edit stays.
   Antigravity: installed, outdated (some file differs from what came with this version), not installed, or no CLI; copies
   in the project folder (`.claude/skills`, `.agents/skills`) count too; and whether treeyard installs
   them by itself (the `skills` setting);
+- Codex, when it is installed or you chose how to start it: the choice (`codex_access`) and
+  whether its config.toml lets a session through to treeyard (the tmux socket) and git (the project's
+  `.git`); if not, the problem comes with the lines to add to `~/.codex/config.toml` and
+  `treeyard config codex_access sandbox`;
 - the block about the tree in CLAUDE.md, AGENTS.md and GEMINI.md: in place, outdated, no block,
   via an import (`@AGENTS.md`), or no file;
 - the post-commit git hook;

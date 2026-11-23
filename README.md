@@ -194,9 +194,14 @@ treeyard import                            # the agent quietly reads the project
 
 ## What agents are allowed to do
 
-- **Claude Code**, **Codex**, **OpenCode** — what their own settings allow; treeyard adds
-  nothing. A “plan” start opens Claude Code in plan mode and OpenCode with its plan agent:
+- **Claude Code**, **OpenCode** — what their own settings allow; treeyard adds nothing. A
+  “plan” start opens Claude Code in plan mode and OpenCode with its plan agent:
   no edits until you agree.
+- **Codex**'s default sandbox keeps the tmux socket and the project's `.git` shut, so
+  `treeyard send` and `git commit` fail in its session. Before its first launch treeyard asks
+  you once: the **sandbox + treeyard and git** (workspace-write with the network and `.git`
+  open, the rest from config.toml) or **as in config.toml**. Change it later in `,`;
+  `treeyard status` names the config.toml lines if the sandbox stays shut.
 - **Antigravity** asks before every command, so before its first launch treeyard asks you
   once: **full access** (commands, files and the network with no confirmations,
   `--dangerously-skip-permissions`) or its **ordinary mode**. Change it later in `,`.
