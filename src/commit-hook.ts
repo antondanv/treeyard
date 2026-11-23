@@ -168,23 +168,49 @@ function readMoves(dir: string): Record<string, Move> {
   }
 }
 
+/** What `noteMove` did with the session's commits, for the command to say. */
+export type MoveResult =
+  /** They go to node `id` now. */
+  | { kind: 'moved'; from: string; to: string }
+  /** Back to the node the session was opened from. */
+  | { kind: 'back'; to: string }
+  /** Node `id` has a session of its own: it was handed out, the commits stay where they were. */
+  | { kind: 'kept'; at: string };
+
+/** A session of a node opened this recently means somebody works there: a coordinator's status change is not a move. */
+const OWN_SESSION_HOURS = 12;
+
 /**
  * The agent of a node's session set node `id` of the session's own tree to «в работе»: the work
  * moved there, and the session's commits follow it. The node the session was opened from moves
- * them back. Sessions without a mark (started before TREEYARD_SESSION) and other trees keep
- * binding to the opening node.
+ * them back. A node with a session of its own (one a coordinator handed out) takes nothing: a
+ * coordinator putting its child back to work does not do the child's work. Sessions without a mark
+ * (started before TREEYARD_SESSION) and other trees keep binding to the opening node.
  */
-export function noteMove(tree: Tree, id: string, env: NodeJS.ProcessEnv = process.env): void {
+export function noteMove(tree: Tree, id: string, env: NodeJS.ProcessEnv = process.env): MoveResult | undefined {
   const session = env[SESSION_VAR]?.trim();
   const from = env[NODE_VAR]?.trim();
   const project = env[PROJECT_VAR]?.trim();
-  if (!session || !from || !project || real(project) !== real(tree.project.dir)) return;
+  if (!session || !from || !project || real(project) !== real(tree.project.dir)) return undefined;
   const dir = tree.project.dir;
   const moves = readMoves(dir);
+  let result: MoveResult;
   if (id === from) {
-    if (!moves[session]) return;
+    if (!moves[session]) return undefined;
     delete moves[session];
-  } else moves[session] = { from, node: id, at: new Date().toISOString() };
+    result = { kind: 'back', to: from };
+  } else {
+    const since = Date.now() - OWN_SESSION_HOURS * 3_600_000;
+    const own = tree.nodes
+      .get(id)
+      ?.sessions.some(
+        (ref) => Math.max(Date.parse(ref.opened ?? '') || 0, Date.parse(ref.started ?? '') || 0) >= since,
+      );
+    const current = moves[session] && moves[session].from === from ? moves[session].node : from;
+    if (own) return { kind: 'kept', at: current };
+    moves[session] = { from, node: id, at: new Date().toISOString() };
+    result = { kind: 'moved', from, to: id };
+  }
   const since = Date.now() - MOVE_DAYS * 86_400_000;
   for (const [key, move] of Object.entries(moves)) if (!(Date.parse(move.at) >= since)) delete moves[key];
   try {
@@ -192,7 +218,22 @@ export function noteMove(tree: Tree, id: string, env: NodeJS.ProcessEnv = proces
     writeFileSync(movesFile(dir), `${JSON.stringify(moves, null, 2)}\n`);
   } catch {
     // The status is written already; without the move the commits just stay with the opening node.
+    return undefined;
   }
+  return result;
+}
+
+/** What the command says about a move, or nothing: «коммиты этой сессии теперь идут в «X»…». */
+export function moveText(tree: Tree, move: MoveResult | undefined): string | undefined {
+  if (!move) return undefined;
+  const title = (id: string) => tree.nodes.get(id)?.title ?? id;
+  if (move.kind === 'moved')
+    return t('коммиты этой сессии теперь привязываются к «{to}»; вернуть — set {from} status=active', {
+      to: title(move.to),
+      from: move.from,
+    });
+  if (move.kind === 'back') return t('коммиты этой сессии снова привязываются к «{to}»', { to: title(move.to) });
+  return t('у узла своя сессия — коммиты этой сессии остаются у «{at}»', { at: title(move.at) });
 }
 
 /** The node a commit of the session belongs to: where its agent moved, or the node it was opened from. */

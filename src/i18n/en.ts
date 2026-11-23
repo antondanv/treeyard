@@ -1470,4 +1470,10 @@ export const EN: Record<string, string> = {
   ПИСЬМА: 'LETTERS',
   'Письмо от сессии узла «{title}» ({id}), не от человека; ответ — treeyard send {id} "…":':
     'A message from the session of node «{title}» ({id}), not from the person; to answer — treeyard send {id} "…":',
+  // where a session's commits go
+  'коммиты этой сессии теперь привязываются к «{to}»; вернуть — set {from} status=active':
+    "this session's commits now attach to «{to}»; to undo — set {from} status=active",
+  'коммиты этой сессии снова привязываются к «{to}»': "this session's commits attach to «{to}» again",
+  'у узла своя сессия — коммиты этой сессии остаются у «{at}»':
+    "the node has a session of its own — this session's commits stay with «{at}»",
 };

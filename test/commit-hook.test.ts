@@ -7,11 +7,19 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { contextText } from '../src/agents/context.js';
-import { bindHeadCommit, hookInstalled, hookStatus, installHook, noteMove, removeHook } from '../src/commit-hook.js';
+import {
+  bindHeadCommit,
+  hookInstalled,
+  hookStatus,
+  installHook,
+  moveText,
+  noteMove,
+  removeHook,
+} from '../src/commit-hook.js';
 import { gitRepository } from '../src/git.js';
 import { setLang } from '../src/i18n/i18n.js';
 import { NODE_VAR, nodeEnv, PROJECT_VAR, SESSION_VAR } from '../src/model/notes.js';
-import { addNode, deleteNode } from '../src/model/ops.js';
+import { addNode, attachSession, deleteNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { emptyTree, tempDir } from './helpers.js';
 
@@ -238,6 +246,35 @@ describe('treeyard hook post-commit', () => {
     expect(commitsOf(dir, id)).toEqual([before, neighbour, back]);
     expect(commitsOf(dir, moved)).toEqual([there]);
     expect(existsSync(join(dir, '.tree', '.local', 'sessions.json'))).toBe(true);
+  });
+
+  it('leaves a handed-out node alone: a coordinator setting it to active does not do its work', () => {
+    const { dir, id } = project();
+    const child = addNode(loadTree(dir), { title: 'Отдан', status: 'todo' }).id;
+    attachSession(loadTree(dir), child, {
+      brain: 'claude',
+      id: 'child-session',
+      mode: 'pane',
+      started: new Date().toISOString(),
+    });
+    const env = { [NODE_VAR]: id, [PROJECT_VAR]: dir, [SESSION_VAR]: 'coordinator' };
+    const tree = loadTree(dir);
+    expect(noteMove(tree, child, env)).toEqual({ kind: 'kept', at: id });
+    expect(moveText(tree, { kind: 'kept', at: id })).toBe('у узла своя сессия — коммиты этой сессии остаются у «Узел»');
+    const mine = commit(dir);
+    expect(bindHeadCommit(env, dir)).toBe(mine);
+    expect(commitsOf(dir, id)).toEqual([mine]);
+    expect(commitsOf(dir, child)).toEqual([]);
+    // A node without a session of its own takes the work, and the command says so.
+    const free = addNode(loadTree(dir), { title: 'Свободный' }).id;
+    const moved = noteMove(loadTree(dir), free, env);
+    expect(moved).toEqual({ kind: 'moved', from: id, to: free });
+    expect(moveText(loadTree(dir), moved)).toBe(
+      `коммиты этой сессии теперь привязываются к «Свободный»; вернуть — set ${id} status=active`,
+    );
+    expect(moveText(loadTree(dir), noteMove(loadTree(dir), id, env))).toBe(
+      'коммиты этой сессии снова привязываются к «Узел»',
+    );
   });
 
   it('stays with the opening node without a session mark, for another tree and once the node is gone', () => {

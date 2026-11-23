@@ -731,7 +731,10 @@ session); the hook binds the commit to that node of that tree.
 When the session's agent moves on to another node of the same tree and sets it to active
 (`treeyard set <id> status=active` or `treeyard log <id> "…" --status active`), the session's
 commits go to that node from then on; setting the opening node to active brings them back.
-Setting several nodes to active in one command does not move the session. Moves are kept per
+Setting several nodes to active in one command does not move the session. A node with a session of
+its own opened in the last 12 hours (it was handed to another session) takes no commits: a
+coordinator that sets a child back to active is not doing the child's work. `set` and `log` say on
+stderr where the commits go now. Moves are kept per
 machine in `.tree/.local/sessions.json`; a session resumed later starts again from the node
 it was opened from, and so do sessions started before `TREEYARD_SESSION` existed.
 

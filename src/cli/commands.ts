@@ -28,7 +28,7 @@ import { isPending, launchInPane, sessionPanes } from '../agents/panes.js';
 import { NotSent, sendToNode } from '../agents/send.js';
 import { autoInstallSkills, skillHomes } from '../agents/skills.js';
 import { parseDuration, waitFor } from '../agents/wait.js';
-import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, noteMove, removeHook } from '../commit-hook.js';
+import { bindHeadCommit, HOOK_LINE, hookStatus, installHook, moveText, noteMove, removeHook } from '../commit-hook.js';
 import { CrashReported, guardCrashes } from '../crash.js';
 import { parsePatch } from '../diff.js';
 import { lineCount, linesLabel, projectDocs } from '../docs.js';
@@ -1619,7 +1619,10 @@ async function setCommand(args: string[]): Promise<number> {
     }
     // One node set to «в работе» from a node's session: the session moved there, its commits follow.
     // Several at once say nothing about where the session itself works.
-    if (status === 'active' && ids.length === 1) noteMove(tree, ids[0]!);
+    if (status === 'active' && ids.length === 1) {
+      const said = moveText(tree, noteMove(tree, ids[0]!));
+      if (said) process.stderr.write(`${err.dim(said)}\n`);
+    }
   }
   for (const id of ids) {
     const node = tree.nodes.get(id)!;
@@ -1834,7 +1837,10 @@ async function logCommand(args: string[]): Promise<number> {
       before === next.status ? STATUS_LABEL[next.status] : `${STATUS_LABEL[before]} → ${STATUS_LABEL[next.status]}`,
     );
     if (next.demoted) said.push(demotedNote(values.as));
-    if (next.status === 'active') noteMove(tree, id);
+    if (next.status === 'active') {
+      const moved = moveText(tree, noteMove(tree, id));
+      if (moved) process.stderr.write(`${err.dim(moved)}\n`);
+    }
   }
   process.stdout.write(`${said.join(' · ')}\n`);
   return 0;
