@@ -2,9 +2,21 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { PaneInfo } from '@antondanv/brainyard';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const brainyard = vi.hoisted(() => ({
+  open: vi.fn(),
+  startPane: vi.fn(),
+}));
+vi.mock('@antondanv/brainyard', async (original) => ({
+  ...(await original<typeof import('@antondanv/brainyard')>()),
+  open: brainyard.open,
+  startPane: brainyard.startPane,
+}));
+
+import { launch } from '../src/agents/launch.js';
 import { claimNotice, findOverlaps, notifyOverlaps } from '../src/agents/overlap.js';
+import { launchInPane } from '../src/agents/panes.js';
 import { type QueueEvent, type QueueSources, runQueue } from '../src/agents/queue.js';
 import { type SendSources, sendToNode } from '../src/agents/send.js';
 import { type WaitSources, waitFor } from '../src/agents/wait.js';
@@ -12,10 +24,16 @@ import { paint } from '../src/cli/print.js';
 import { overlapLines, waitJson, waitText } from '../src/cli/wait-text.js';
 import { setLang } from '../src/i18n/i18n.js';
 import { readMail } from '../src/model/mailbox.js';
-import { addNode, attachSession, setStatus } from '../src/model/ops.js';
+import { addNode, attachCommit, attachSession, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
-import type { Status, Tree } from '../src/model/types.js';
-import { ensureWorktree, type NodeWorktree, worktreeParent } from '../src/worktree.js';
+import { ROOT, type Status, type Tree } from '../src/model/types.js';
+import {
+  ensureWorktree,
+  type NodeWorktree,
+  readMainBaseline,
+  saveMainBaseline,
+  worktreeParent,
+} from '../src/worktree.js';
 import { emptyTree, treeyardIn } from './helpers.js';
 
 const git = (cwd: string, ...args: string[]) =>
@@ -288,6 +306,217 @@ describe('trial merge of node branches', () => {
     expect(findOverlaps(tree, undefined, undefined, () => null).map((o) => o.files)).toEqual([['dict.txt']]);
     // Custom ReadFiles -> skips trial merge and compares by content hash.
     expect(findOverlaps(tree, undefined, () => ['dict.txt']).map((o) => o.files)).toEqual([['dict.txt']]);
+  });
+});
+
+/** Edits a file in the main project folder; optionally commits and attaches the commit to a node. */
+function editMain(main: string, name: string, text: string, commitFor?: string): string | undefined {
+  mkdirSync(dirname(join(main, name)), { recursive: true });
+  writeFileSync(join(main, name), text);
+  if (!commitFor) return undefined;
+  git(main, 'add', name);
+  git(main, 'commit', '-q', '-m', `main edit ${name}`);
+  const sha = git(main, 'rev-parse', 'HEAD');
+  attachCommit(loadTree(main), commitFor, sha);
+  return sha;
+}
+
+/** Attaches a main-folder session to a node and optionally saves its baseline. */
+function startInMain(main: string, id: string, saveBaseline = true, started = '2026-11-24T10:00:00Z'): void {
+  if (saveBaseline) saveMainBaseline(main, id);
+  attachSession(loadTree(main), id, {
+    brain: 'claude',
+    id: `main-${id}`,
+    mode: 'pane',
+    started,
+  });
+}
+
+describe('active node in the main folder (without worktree)', () => {
+  it('detects collisions with a worktree node on uncommitted edits and attached commits', async () => {
+    const work = await project(['Сайт']);
+    const { Сайт } = work.node;
+    const bot = addNode(loadTree(work.main), { title: 'Бот', status: 'active' });
+    startInMain(work.main, bot.id);
+
+    // Uncommitted edit in main colliding with worktree's edit to the same line.
+    editMain(work.main, 'app.txt', 'один\nбот в main\nтри\n');
+    edit(Сайт!.wt, 'app.txt', 'один\nсайт в wt\nтри\n', false);
+
+    const dirtyOverlap = findOverlaps(loadTree(work.main));
+    expect(dirtyOverlap).toHaveLength(1);
+    expect(dirtyOverlap[0]!.files).toEqual(['app.txt']);
+    expect(dirtyOverlap[0]!.nodes.map((n) => n.title)).toEqual(['Бот', 'Сайт']);
+    // Filtering by either the main-folder node id or the worktree node id finds the pair.
+    expect(findOverlaps(loadTree(work.main), [bot.id])).toHaveLength(1);
+    expect(findOverlaps(loadTree(work.main), [Сайт!.id])).toHaveLength(1);
+
+    // Committing the edit in main and attaching the commit keeps the collision visible.
+    editMain(work.main, 'app.txt', 'один\nбот в main\nтри\n', bot.id);
+    const commitOverlap = findOverlaps(loadTree(work.main));
+    expect(commitOverlap).toHaveLength(1);
+    expect(commitOverlap[0]!.files).toEqual(['app.txt']);
+    expect(commitOverlap[0]!.nodes.map((n) => n.id)).toEqual([bot.id, Сайт!.id]);
+  });
+
+  it('stays quiet when main-folder node and worktree node edit different places of one file', async () => {
+    const work = await project(['Сайт']);
+    const { Сайт } = work.node;
+    const bot = addNode(loadTree(work.main), { title: 'Бот', status: 'active' });
+    startInMain(work.main, bot.id);
+    const base = readFileSync(join(work.main, 'dict.txt'), 'utf8');
+
+    // Uncommitted edits to opposite ends of dict.txt.
+    editMain(work.main, 'dict.txt', replaceLine(base, 1, 'бот 1'));
+    edit(Сайт!.wt, 'dict.txt', replaceLine(base, 20, 'сайт 20'), false);
+    expect(files(work)).toEqual([]);
+
+    // Committed edit in main + committed edit in worktree to different lines.
+    editMain(work.main, 'dict.txt', replaceLine(base, 1, 'бот 1'), bot.id);
+    edit(Сайт!.wt, 'dict.txt', replaceLine(base, 20, 'сайт 20'), true);
+    expect(files(work)).toEqual([]);
+  });
+
+  it('ignores human dirty files present in baseline before session start, but counts them if changed further', async () => {
+    const work = await project(['Сайт']);
+    const { Сайт } = work.node;
+    const bot = addNode(loadTree(work.main), { title: 'Бот', status: 'active' });
+
+    // Human edits app.txt, deletes util.txt, and leaves an untracked file BEFORE the session starts.
+    editMain(work.main, 'app.txt', 'один\nправка человека\nтри\n');
+    rmSync(join(work.main, 'util.txt'));
+    editMain(work.main, 'human.txt', 'черновик человека\n');
+
+    startInMain(work.main, bot.id, true);
+
+    // Worktree node edits the exact same files — must NOT conflict with the main node!
+    edit(Сайт!.wt, 'app.txt', 'один\nсайт\nтри\n', true);
+    edit(Сайт!.wt, 'util.txt', 'утилита сайта\n', true);
+    edit(Сайт!.wt, 'human.txt', 'черновик сайта\n', false);
+    expect(files(work)).toEqual([]);
+
+    // Even when the main node edits another file (so mainNodeTree builds a temp index),
+    // the untouched human baseline files must stay excluded from the trial merge.
+    const baseDict = readFileSync(join(work.main, 'dict.txt'), 'utf8');
+    editMain(work.main, 'dict.txt', replaceLine(baseDict, 1, 'бот 1'));
+    edit(Сайт!.wt, 'dict.txt', replaceLine(baseDict, 20, 'сайт 20'), false);
+    expect(files(work)).toEqual([]);
+
+    // Now the main node edits app.txt further (changing its sha1 compared to baseline) -> conflict detected!
+    editMain(work.main, 'app.txt', 'один\nправка человека и бота\nтри\n');
+    expect(files(work)).toEqual([['app.txt']]);
+  });
+
+  it('falls back to attached commits only when multiple active nodes share the main folder', async () => {
+    const work = await project(['Сайт']);
+    const { Сайт } = work.node;
+    const bot = addNode(loadTree(work.main), { title: 'Бот', status: 'active' });
+    const admin = addNode(loadTree(work.main), { title: 'Админка', status: 'active' });
+    startInMain(work.main, bot.id);
+    startInMain(work.main, admin.id);
+
+    // Uncommitted dirt in main cannot be attributed to either node -> no false conflict.
+    editMain(work.main, 'app.txt', 'один\nобщая грязь\nтри\n');
+    edit(Сайт!.wt, 'app.txt', 'один\nсайт\nтри\n', true);
+    expect(files(work)).toEqual([]);
+
+    // Attached commit of Бот in main IS attributed only to Бот, not to Админка.
+    editMain(work.main, 'util.txt', 'утилита бота\n', bot.id);
+    edit(Сайт!.wt, 'util.txt', 'утилита сайта\n', true);
+    const found = findOverlaps(loadTree(work.main));
+    expect(found).toHaveLength(1);
+    expect(found[0]!.nodes.map((n) => n.title)).toEqual(['Бот', 'Сайт']);
+    expect(found[0]!.files).toEqual(['util.txt']);
+  });
+
+  it('handles delete/modify and untracked add/add without altering the main git index, and ignores inactive or pre-branch commits', async () => {
+    const work = await project(['Сайт']);
+    const { Сайт } = work.node;
+    const bot = addNode(loadTree(work.main), { title: 'Бот', status: 'active' });
+    // Pre-branch commit (already in Сайт's history) must not trigger an overlap.
+    attachCommit(loadTree(work.main), bot.id, git(work.main, 'rev-parse', 'HEAD'));
+    startInMain(work.main, bot.id);
+
+    // Staged file + deleted file + untracked file in main.
+    editMain(work.main, 'staged.txt', 'в индексе\n');
+    git(work.main, 'add', 'staged.txt');
+    rmSync(join(work.main, 'util.txt'));
+    editMain(work.main, 'fresh.txt', 'бот\n');
+    edit(Сайт!.wt, 'util.txt', 'сайт\n', false);
+    edit(Сайт!.wt, 'fresh.txt', 'сайт\n', false);
+
+    const before = {
+      status: git(work.main, 'status', '--porcelain=v1', '--untracked-files=all'),
+      cached: git(work.main, 'diff', '--cached'),
+    };
+    expect(files(work)).toEqual([['fresh.txt', 'util.txt']]);
+    expect({
+      status: git(work.main, 'status', '--porcelain=v1', '--untracked-files=all'),
+      cached: git(work.main, 'diff', '--cached'),
+    }).toEqual(before);
+
+    // A main-folder node in `review` is no longer active in main.
+    setNode(work, bot.id, 'review');
+    expect(files(work)).toEqual([]);
+  });
+
+  it('saves the main-folder baseline when launching a session in main (launch and launchInPane), and skips worktrees and root', async () => {
+    const work = await project(['Сайт']);
+    const bot = addNode(loadTree(work.main), { title: 'Бот', status: 'todo' });
+    const admin = addNode(loadTree(work.main), { title: 'Админка', status: 'todo' });
+
+    // Human dirty files before launches (including a deleted file and a .tree/ change).
+    editMain(work.main, 'app.txt', 'один\nгрязь человека\nтри\n');
+    rmSync(join(work.main, 'util.txt'));
+    editMain(work.main, 'untracked.txt', 'новый\n');
+    const expectedHead = git(work.main, 'rev-parse', 'HEAD');
+
+    brainyard.open.mockResolvedValue({
+      ok: true,
+      sessionId: 'sess-bot',
+      startedAt: new Date().toISOString(),
+      warnings: [],
+    });
+    brainyard.startPane.mockResolvedValue({
+      pane: 'pane-admin',
+      sessionId: 'sess-admin',
+      startedAt: new Date().toISOString(),
+      warnings: [],
+    });
+
+    await launch(loadTree(work.main), bot.id, { brain: 'claude', start: 'do', background: true });
+    const botBase = readMainBaseline(work.main, bot.id);
+    expect(botBase).toBeDefined();
+    expect(botBase!.head).toBe(expectedHead);
+    expect(Object.keys(botBase!.dirty).sort()).toEqual(['app.txt', 'untracked.txt', 'util.txt']);
+    expect(botBase!.dirty['util.txt']).toBeNull();
+    expect(typeof botBase!.dirty['app.txt']).toBe('string');
+    expect(typeof botBase!.dirty['untracked.txt']).toBe('string');
+    // `.tree/` files are never stored in baseline.
+    expect(Object.keys(botBase!.dirty).some((f) => f.startsWith('.tree/'))).toBe(false);
+
+    await launchInPane(
+      loadTree(work.main),
+      admin.id,
+      { brain: 'claude', start: 'do', pane: true },
+      { width: 80, height: 24 },
+    );
+    const adminBase = readMainBaseline(work.main, admin.id);
+    expect(adminBase).toBeDefined();
+    expect(adminBase!.head).toBe(expectedHead);
+    expect(adminBase!.dirty).toEqual(botBase!.dirty);
+
+    // Launching in a worktree or for root must NOT write a main baseline.
+    await launchInPane(
+      loadTree(work.main),
+      work.node.Сайт!.id,
+      { brain: 'claude', start: 'do', pane: true, worktree: true },
+      { width: 80, height: 24 },
+    );
+    expect(readMainBaseline(work.main, work.node.Сайт!.id)).toBeUndefined();
+
+    await launch(loadTree(work.main), ROOT, { brain: 'claude', start: 'chat' });
+    expect(readMainBaseline(work.main, ROOT)).toBeUndefined();
   });
 });
 
