@@ -1,5 +1,5 @@
 import type { PaneInfo, SessionInfo } from '@antondanv/brainyard';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   type AnswerSources,
@@ -11,6 +11,7 @@ import {
 } from '../src/agents/reply.js';
 import { type SendSources, sendToNode } from '../src/agents/send.js';
 import { type WaitSources, waitFor } from '../src/agents/wait.js';
+import { setLang } from '../src/i18n/i18n.js';
 import { journalEntries } from '../src/model/journal.js';
 import { mailOf } from '../src/model/mail.js';
 import { addLetter, letterByNumber, markDelivered } from '../src/model/mailbox.js';
@@ -20,6 +21,8 @@ import type { Tree } from '../src/model/types.js';
 import { emptyTree } from './helpers.js';
 
 const minute = () => new Date(Date.now() - 60_000).toISOString();
+
+afterEach(() => setLang('ru'));
 
 /** A node «в работе» whose session runs in pane `claude-<id>`. */
 function paneNode(tree: Tree, title: string) {
@@ -312,6 +315,51 @@ describe('the person’s answer to a question in a dialog', () => {
     world.screens[name] = ['❯ 1. красный', '  2. зелёный'];
     await expect(answerQuestion(tree, node.id, 'бирюзовый', { sources: send })).rejects.toThrow(
       /нет такого варианта.*1\. красный · 2\. зелёный/,
+    );
+    expect(typed).toEqual([]);
+  });
+
+  it('refuses to answer startup dialogs of folder trust or external CLAUDE.md imports, pointing to tmux attach', async () => {
+    const tree = emptyTree();
+    const claudeNode = paneNode(tree, 'Доверие');
+    const claudePane = `claude-${claudeNode.id}`;
+    const codexNode = addNode(tree, { title: 'Codex', status: 'active' });
+    attachSession(tree, codexNode.id, {
+      brain: 'codex',
+      id: 'pane:codex-trust',
+      mode: 'pane',
+      pane: 'codex-trust',
+      started: minute(),
+      opened: minute(),
+    });
+    const world: World = {
+      live: [],
+      panes: [
+        pane(claudePane, `s-${claudeNode.id}`),
+        { pane: 'codex-trust', brain: 'codex', attached: false, width: 100, height: 30 },
+      ],
+      screens: {
+        [claudePane]: ['Do you trust the files in this folder?', '❯ 1. Yes, I trust this folder', '  2. No, exit'],
+        'codex-trust': ['Do you trust the contents of this directory?', '› 1. Yes, continue', '  2. No, quit'],
+      },
+    };
+    const { send, typed } = sources(world);
+
+    await expect(answerQuestion(tree, claudeNode.id, '1', { sources: send })).rejects.toThrow(
+      new RegExp(`ждёт разрешения \\(доверие к папке\\).*tmux -L brainyard attach -t ${claudePane}`),
+    );
+    world.screens[claudePane] = [
+      'Allow external CLAUDE.md file imports?',
+      '❯ 1. Yes, allow external imports',
+      '  2. No, disable external imports',
+    ];
+    await expect(answerQuestion(tree, claudeNode.id, '1', { sources: send })).rejects.toThrow(
+      new RegExp(`ждёт разрешения \\(внешние импорты CLAUDE\\.md\\).*tmux -L brainyard attach -t ${claudePane}`),
+    );
+
+    setLang('en');
+    await expect(answerQuestion(tree, codexNode.id, '1', { sources: send })).rejects.toThrow(
+      /waits for a permission \(folder trust\) — only the person gives it: tmux -L brainyard attach -t codex-trust/,
     );
     expect(typed).toEqual([]);
   });

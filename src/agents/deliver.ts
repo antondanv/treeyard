@@ -16,6 +16,7 @@
 import { spawn } from 'node:child_process';
 
 import {
+  capturePane,
   findPaneSession,
   listPanes,
   liveSessions,
@@ -63,6 +64,8 @@ export interface DeliverSources {
   paneSession?(pane: PaneInfo): Promise<string | undefined>;
   /** Adds the idle state of panes whose CLI lists only busy sessions (Codex, Antigravity). */
   idle?(panes: readonly PaneInfo[], live: ReadonlyMap<string, SessionInfo>): Promise<ReadonlyMap<string, SessionInfo>>;
+  /** Reads a pane's screen to spot startup dialogs before the CLI reports its session. */
+  capture?(pane: string): Promise<{ lines: string[] } | undefined>;
   type(pane: string, data: string): Promise<void>;
   startPane: typeof startPane;
   open: typeof open;
@@ -77,6 +80,7 @@ export const DELIVER_SOURCES: DeliverSources = {
   panes: () => listPanes(),
   paneSession: async (pane) => (await findPaneSession(pane))?.id,
   idle: (panes, live) => withPaneIdle(panes, live),
+  capture: (pane) => capturePane(pane),
   type: (pane, data) => sendToPane(pane, data),
   startPane,
   open,

@@ -62,7 +62,13 @@ export function sightBlock(sight: Sight, p: Paint): string {
       `  ${p.dim([sight.entry.when, sight.entry.source].filter(Boolean).join(' · '))}  ${clip(sight.entry.text, limit)}`,
     );
   }
-  if (sight.session) lines.push(`  ${sessionLine(sight.session)}`);
+  if (sight.session) {
+    lines.push(`  ${sessionLine(sight.session)}`);
+    if (sight.session.state === 'waiting' && sight.session.pane)
+      lines.push(
+        `  ${p.dim(t('ответить в панели: tmux -L brainyard attach -t {pane}', { pane: sight.session.pane }))}`,
+      );
+  }
   if (message) {
     lines.push(`  ${p.dim(message.source === 'transcript' ? t('последнее сообщение:') : t('конец экрана:'))}`);
     for (const row of message.text.split('\n')) lines.push(`    ${p.dim('│')} ${row}`.trimEnd());
