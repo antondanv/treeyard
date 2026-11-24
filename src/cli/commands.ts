@@ -37,6 +37,7 @@ import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '..
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { isPending, launchInPane, readPanes, sessionPanes } from '../agents/panes.js';
 import { LIMIT, type QueueEvent, queueNodes, queueSources, runQueue } from '../agents/queue.js';
+import { answerQuestion, NotAnswered, waitReply } from '../agents/reply.js';
 import { NotSent, sendToNode } from '../agents/send.js';
 import { autoInstallSkills, skillHomes } from '../agents/skills.js';
 import { parseDuration, waitFor } from '../agents/wait.js';
@@ -159,7 +160,7 @@ import {
   worktreeJson,
 } from './print.js';
 import { skillLines, skillsAutoLine, statusText } from './status-text.js';
-import { waitJson, waitText } from './wait-text.js';
+import { sightBlock, waitJson, waitText } from './wait-text.js';
 
 const require = createRequire(import.meta.url);
 const VERSION = (require('../../package.json') as { version: string }).version;
@@ -263,12 +264,18 @@ function commandLines(): string {
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   ждать, пока узел уйдёт из «в работе» или его сессия
                                            закончит ход, будет ждать человека или закончится; печатает статус, последнюю
                                            запись журнала и сессию (у панели — конец экрана); --all — пока все узлы;
-                                           время вышло — код 124; узел уже не в работе — ответ сразу
+                                           время вышло — код 124; узел уже не в работе — ответ сразу; письмо узлу твоей
+                                           сессии (координатора) — тоже возврат, с письмом целиком
   treeyard send <id> "<текст>"|- [--json]   письмо следующей репликой той же сессии узла, а не новой сессии: сначала
                                            в ящик (номер), потом свободной панели — вставкой, уснувшей — пробуждением,
                                            фоновой Claude Code — продолжением; занятой, ждущей человека, открытой в его
                                            терминале и узлу без сессии — в очереди: доставит treeyard сам (первой сессии
-                                           узла — в первом сообщении); вывод — номер и статус; строка — в журнал узла
+                                           узла — в первом сообщении); вывод — номер и статус; строка — в журнал узла;
+                                           --wait [--timeout 10m] — дождаться ответа (письма от узла тебе) и напечатать его,
+                                           а без ответа — конец хода сессии и её экран; код 124 — время вышло
+  treeyard send <id> --answer "<вариант>|<текст>"   ответ человека на вопрос в диалоге сессии узла (панель):
+                                           номер или слова варианта, иначе текст — в строку своего ответа; разрешения
+                                           не трогает — их даёт только человек
   treeyard deliver [--once]                доставить ждущие письма; обычно запускается сам из send
   treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   очередь узлов:
                                            у одного узла с детьми — его открытые дети по порядку, иначе — как названы;
@@ -382,13 +389,19 @@ function commandLines(): string {
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   wait until a node leaves «active» or its session
                                            ends its turn, waits for the person or ends; prints the status, the last journal
                                            entry and the session (for a pane, the end of its screen); --all — until every
-                                           node does; out of time — exit code 124; a node no longer active — at once
+                                           node does; out of time — exit code 124; a node no longer active — at once; a
+                                           message to your session's node (the coordinator's) — it returns too, whole
   treeyard send <id> "<text>"|- [--json]   a message as the next one of the node's own session, not a new session: into
                                            the mailbox first (a number), then typed into an idle pane, waking a sleeping
                                            one, resuming a Claude Code background one; for a busy one, one waiting for the
                                            person, one open in their terminal and a node with no session — queued: treeyard
                                            delivers it by itself (a node's first session gets it in its first message);
-                                           prints the number and the state; a line in the node's journal
+                                           prints the number and the state; a line in the node's journal; --wait
+                                           [--timeout 10m] — wait for the answer (a message from the node to you) and print
+                                           it, or, with none, the end of the session's turn and its screen; 124 — out of time
+  treeyard send <id> --answer "<choice>|<text>"   the person's answer to a question in the dialog of the node's
+                                           session (a pane): a choice's number or words, otherwise a text into the row of
+                                           one's own answer; never a permission — only the person gives those
   treeyard deliver [--once]                deliver the waiting messages; send usually starts it by itself
   treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   a queue of nodes:
                                            one node with children — its open children in order, otherwise as named; at
@@ -1322,9 +1335,12 @@ async function waitCommand(args: string[]): Promise<number> {
     timeoutMs = parseDuration(values.timeout);
     if (timeoutMs === undefined) throw new UsageError(t('--timeout — секунды или 90s, 10m, 1h'));
   }
+  // The coordinator's own node: letters its sessions write to it end the wait.
+  const inbox = senderNode(tree)?.id;
   const result = await waitFor(tree.project.dir, ids, {
     ...(values.all ? { all: true } : {}),
     ...(timeoutMs ? { timeoutMs } : {}),
+    ...(inbox ? { inbox } : {}),
   });
   if (values.json) {
     process.stdout.write(`${JSON.stringify(waitJson(result), null, 2)}\n`);
@@ -1347,12 +1363,27 @@ async function sendCommand(args: string[]): Promise<number> {
     json: { type: 'boolean' },
     project: { type: 'string' },
     as: { type: 'string' },
+    wait: { type: 'boolean' },
+    timeout: { type: 'string' },
+    answer: { type: 'string' },
   });
-  const usage = t('treeyard send <id> "<текст>"|- [--json]');
-  if (positionals.length < 2) throw new UsageError(usage);
+  const usage = t(
+    'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--json] · treeyard send <id> --answer "<вариант>|<текст>"',
+  );
   const tree = project(values.project);
+  if (values.answer !== undefined) {
+    if (positionals.length !== 1 || values.wait) throw new UsageError(usage);
+    return answerCommand(tree, nodeArg(tree, positionals[0]), values.answer, values.json === true, sourceOf(values.as));
+  }
+  if (positionals.length < 2) throw new UsageError(usage);
   const id = nodeArg(tree, positionals[0]);
   if (id === ROOT) throw new UsageError(t('корню не пишут — назови узел: {usage}', { usage }));
+  let timeoutMs: number | undefined;
+  if (values.timeout !== undefined) {
+    if (!values.wait) throw new UsageError(t('--timeout — только с --wait: {usage}', { usage }));
+    timeoutMs = parseDuration(values.timeout);
+    if (timeoutMs === undefined) throw new UsageError(t('--timeout — секунды или 90s, 10m, 1h'));
+  }
   const raw = positionals.slice(1).join(' ');
   const text = (raw === '-' ? await textFrom('-') : raw).trim();
   if (!text) throw new UsageError(usage);
@@ -1370,27 +1401,51 @@ async function sendCommand(args: string[]): Promise<number> {
     process.stderr.write(`${err.c('#ff7b72', '✗')} ${error.message}\n`);
     return 1;
   }
+  const replied = values.wait
+    ? await waitReply(tree.project.dir, sent.letter, timeoutMs ? { timeoutMs } : {})
+    : undefined;
   if (values.json) {
+    const letter = replied?.letter ?? sent.letter;
     process.stdout.write(
       `${JSON.stringify(
         {
           node: id,
           sent: true,
-          letter: sent.letter.n,
-          state: sent.letter.state,
-          how: sent.how ?? null,
-          held: sent.held ?? null,
-          heldFor: sent.heldFor ?? null,
+          letter: letter.n,
+          state: letter.state,
+          how: letter.delivered?.how ?? sent.how ?? null,
+          held: letter.state === 'queued' ? (letter.held ?? sent.held ?? null) : null,
+          heldFor: letter.state === 'queued' ? (letter.heldFor ?? null) : null,
           brain: sent.ref?.brain ?? null,
           id: sent.ref?.id ?? null,
           pane: sent.pane ?? null,
           warnings: sent.warnings,
+          ...(replied
+            ? {
+                reply: replied.reply
+                  ? {
+                      n: replied.reply.n,
+                      from: replied.reply.from ?? null,
+                      text: replied.reply.text,
+                      at: replied.reply.at,
+                    }
+                  : null,
+                session: replied.sight
+                  ? (
+                      waitJson({ settled: [replied.sight], pending: [], letters: [], timedOut: false }) as {
+                        settled: unknown[];
+                      }
+                    ).settled[0]
+                  : null,
+                timedOut: replied.timedOut,
+              }
+            : {}),
         },
         null,
         2,
       )}\n`,
     );
-    return 0;
+    return replied?.timedOut ? 124 : 0;
   }
   for (const warning of sent.warnings) process.stderr.write(`${err.c('#ffcf70', '!')} ${warning}\n`);
   const title = tree.nodes.get(id)!.title;
@@ -1404,27 +1459,85 @@ async function sendCommand(args: string[]): Promise<number> {
     process.stdout.write(
       `${out.c('#7ee2a8', '✓')} ${id}  ${title} · ${t('письмо №{n} доставлено: {how}', { n: sent.letter.n, how })}\n`,
     );
-    return 0;
-  }
-  const why = letterState({ state: 'queued', held: sent.held, ...(sent.heldFor ? { heldFor: sent.heldFor } : {}) });
-  process.stdout.write(`${out.c('#ffcf70', '✉')} ${id}  ${title} · ${t('письмо №{n}', { n: sent.letter.n })} ${why}\n`);
-  // Where the person answers what the session waits for; the letter goes after that.
-  if (sent.held === 'waiting' && sent.ref)
+  } else {
+    const why = letterState({ state: 'queued', held: sent.held, ...(sent.heldFor ? { heldFor: sent.heldFor } : {}) });
     process.stdout.write(
-      `  ${out.dim(
-        sent.ref.mode === 'pane' && sent.pane
-          ? t('ответить ей: tmux -L brainyard attach -t {pane}', { pane: sent.pane })
-          : sent.ref.mode === 'pane' && sent.ref.pane
+      `${out.c('#ffcf70', '✉')} ${id}  ${title} · ${t('письмо №{n}', { n: sent.letter.n })} ${why}\n`,
+    );
+    // Where the person answers what the session waits for; the letter goes after that.
+    if (sent.held === 'waiting' && sent.ref)
+      process.stdout.write(
+        `  ${out.dim(
+          sent.ref.mode === 'pane' && sent.ref.pane
             ? t('ответить ей: tmux -L brainyard attach -t {pane}', { pane: sent.ref.pane })
             : t('ответить ей: claude attach {id}', { id: sent.ref.id.slice(0, 8) }),
-      )}\n`,
-    );
-  if (sent.held === 'none')
-    process.stdout.write(`  ${out.dim(t('начать её: treeyard open {id} --bg|--pane --task "…"', { id }))}\n`);
-  else
+        )}\n`,
+      );
+    if (sent.held === 'none')
+      process.stdout.write(`  ${out.dim(t('начать её: treeyard open {id} --bg|--pane --task "…"', { id }))}\n`);
+    else if (!replied)
+      process.stdout.write(
+        `  ${out.dim(t('доставит treeyard сам; посмотреть — treeyard show {id} --only mail', { id }))}\n`,
+      );
+  }
+  if (!replied) return 0;
+  if (replied.reply) {
+    const answers = replied.reply.replyTo ? ` · ${t('ответ на №{n}', { n: replied.reply.replyTo })}` : '';
     process.stdout.write(
-      `  ${out.dim(t('доставит treeyard сам; посмотреть — treeyard show {id} --only mail', { id }))}\n`,
+      `\n${out.bold(`✉ ${t('письмо №{n}', { n: replied.reply.n })}`)} ${t('от «{title}»', { title })}${out.dim(answers)}\n`,
     );
+    for (const row of replied.reply.text.split('\n')) process.stdout.write(`  ${row}\n`);
+    return 0;
+  }
+  if (replied.sight) {
+    process.stdout.write(`\n${t('ответа нет:')}\n${sightBlock(replied.sight, out)}\n`);
+    return 0;
+  }
+  process.stderr.write(
+    `${err.c('#ffcf70', '!')} ${t('время вышло ({timeout}) — ответа нет; письмо №{n}: {state}', {
+      timeout: values.timeout ?? '',
+      n: replied.letter.n,
+      state: letterState(replied.letter),
+    })}\n`,
+  );
+  return 124;
+}
+
+/** `treeyard send <id> --answer "…"`: the person's answer to a question the node's session asks in a dialog. */
+async function answerCommand(
+  tree: Tree,
+  id: string,
+  answer: string,
+  json: boolean,
+  source: string | undefined,
+): Promise<number> {
+  if (id === ROOT) throw new UsageError(t('корню не пишут — назови узел'));
+  if (!answer.trim()) throw new UsageError(t('--answer — номер варианта, его слова или свой текст'));
+  let answered: Awaited<ReturnType<typeof answerQuestion>>;
+  try {
+    answered = await answerQuestion(tree, id, answer, source ? { source } : {});
+  } catch (error) {
+    if (!(error instanceof NotAnswered)) throw error;
+    if (json) process.stdout.write(`${JSON.stringify({ node: id, answered: false, error: error.message }, null, 2)}\n`);
+    process.stderr.write(`${err.c('#ff7b72', '✗')} ${error.message}\n`);
+    return 1;
+  }
+  if (json) {
+    process.stdout.write(
+      `${JSON.stringify({ node: id, answered: true, option: answered.option.n, label: answered.option.label, text: answered.text ?? null, pane: answered.pane, screen: answered.screen }, null, 2)}\n`,
+    );
+    return 0;
+  }
+  const what = answered.text
+    ? t('«{text}» в «{label}»', { text: answered.text, label: answered.option.label })
+    : `${answered.option.n}. ${answered.option.label}`;
+  process.stdout.write(
+    `${out.c('#7ee2a8', '✓')} ${id}  ${tree.nodes.get(id)!.title} · ${t('ответ передан: {what}', { what })}\n`,
+  );
+  if (answered.screen.length) {
+    process.stdout.write(`  ${out.dim(t('конец экрана:'))}\n`);
+    for (const row of answered.screen) process.stdout.write(`    ${out.dim('│')} ${row}\n`);
+  }
   return 0;
 }
 

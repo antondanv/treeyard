@@ -8,7 +8,7 @@ import { parseEntry, statusHistory, statusSteps } from '../model/history.js';
 import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
-import { type Letter, letterPeer, letterState, mailOf } from '../model/mail.js';
+import { answers, type Letter, letterPeer, letterState, mailOf } from '../model/mail.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { type Stale, staleLabel, staleNote } from '../model/stale.js';
@@ -402,7 +402,7 @@ function letterLine(letter: Letter, p: Paint): string {
   // The whole letter, as the mailbox keeps it: its lines under the first one.
   const text = letter.text.replace(/\n/g, '\n      ');
   const state = letterState(letter);
-  return `${letter.direction === 'out' ? '→' : '←'} ${p.dim(letter.at)}  ${n}${letterPeer(letter)}: «${text}»${state ? p.dim(` · ${state}`) : ''}`;
+  return `${letter.direction === 'out' ? '→' : '←'} ${p.dim(letter.at)}  ${n}${letterPeer(letter)}${answers(letter)}: «${text}»${state ? p.dim(` · ${state}`) : ''}`;
 }
 
 /** One node's fields for `--json`; `children` nests its subtree. */

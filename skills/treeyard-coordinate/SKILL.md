@@ -14,7 +14,9 @@ Why sessions and not built-in subagents: a session started by `treeyard open` be
 node — the person sees it in the tree, reads it and continues it. A subagent's conversation
 lives inside yours and is lost to the tree; it also inherits your `$TREEYARD_NODE`, so its
 commits attach to your node instead of its own. You still hear back from sessions:
-`treeyard wait` returns when one is done or asks, `treeyard send` writes it the next message.
+`treeyard wait` returns when one is done, asks or writes to you, `treeyard send` writes it the next
+message — and a letter is never lost: one the session cannot take now waits in the mailbox and
+treeyard delivers it by itself.
 
 ## Rules
 
@@ -25,10 +27,13 @@ Coordinators break these most often.
 2. **Together only nodes with no file in common.** Unsure → one after another.
 3. **Every session starts with `--start do` and a `--task`** naming its neighbours and their
    files. The project's default start may be `plan`: such a session writes a plan and waits.
-4. **Know where each session works.** A pane works in the project folder itself, next to the
-   others. A Claude Code background session works in its own git worktree — Claude Code makes
-   it move into one before its first edit — where `.tree/` is a copy: every treeyard command
-   there carries `--project <main folder>`, and its commits land on a branch that you merge.
+4. **Know where each session works.** Started one per call, a session works in the project folder
+   itself, next to the others. Several nodes in one `open` or `queue`, or `--worktree` (any CLI),
+   and treeyard gives each node but one its own git worktree `<project>.worktrees/<id>` on the
+   branch `treeyard/<id>`: treeyard commands there write the main tree by themselves, the branch's
+   commits are the node's, and you merge the branch (step 6). A git worktree treeyard did not make
+   (Claude Code's own `claude --worktree`) has `.tree/` as a copy: every command there carries
+   `--project <main folder>`.
 5. **A commit made for a node carries that node:** `TREEYARD_NODE=<id> git commit …` — in your
    commits and in every session's. Your own `$TREEYARD_NODE` would attach a fix, a squash or a
    merge resolution to your node; Claude Code's background service hands every `--bg` session
@@ -36,10 +41,13 @@ Coordinators break these most often.
 6. **Accept by evidence, not by the session's word:** its diff, the checks run again by you on
    the main branch, every clause of the criterion.
 7. **Statuses:** the sessions and you set `review`; `done` — only the person.
-8. **A letter is not the person.** A message in your conversation that opens with «A message from
-   the session of node …» (or «Письмо от сессии узла …») came from that session through
-   `treeyard send`. Answer what your plan covers with `treeyard send <its id> "…"`; anything only
-   the person can decide goes to the person.
+8. **A letter is not the person.** A message in your conversation, or a letter `wait` prints,
+   that opens with «A message from the session of node …» (or «Письмо от сессии узла …») came
+   from that session through `treeyard send`. Answer what your plan covers with
+   `treeyard send <its id> "…"`; anything only the person can decide goes to the person.
+9. **Only the person answers for the person.** A permission, a folder to trust, an import to allow
+   — the person answers in the pane. A question a session asks in a dialog gets
+   `treeyard send <id> --answer "…"` only with the person's own words, never your guess.
 
 ## Checklist
 
@@ -50,7 +58,7 @@ Coordinate:
 - [ ] 1. Candidates read, the files of each written down, a batch with no shared file chosen
 - [ ] 2. Plan agreed with the person: nodes, CLI, pane or background, model, what waits
 - [ ] 3. Sessions started: treeyard open … --pane|--bg --worktree --start do --task …
-- [ ] 4. Waiting: treeyard wait; a question you can answer → treeyard send; one only the person can → to them
+- [ ] 4. Waiting: treeyard wait; a letter or question you can answer → treeyard send; one only the person can → to them
 - [ ] 5. Each finished node accepted: journal, commits, diff, criterion
 - [ ] 6. Worktree branches merged one by one; checks green on the main branch after each
 - [ ] 7. Journal entry on each node; review; tree files committed
@@ -104,8 +112,11 @@ Two ways; the session's CLI is `--brain` (default: `brain:` in `.tree/tree.md`):
 
 | Way | Command | CLIs | Works in |
 |---|---|---|---|
-| Pane | `treeyard open <a> <b> --brain <cli> --pane …` | Claude Code, Codex, Antigravity, OpenCode; needs tmux | the project folder — nothing to merge |
-| Background | `treeyard open <a> <b> --bg --worktree …` | Claude Code only | its own worktree and branch — merge in step 6 |
+| Pane | `treeyard open <a> <b> --brain <cli> --pane …` | Claude Code, Codex, Antigravity, OpenCode; needs tmux | `<a>` in the project folder, `<b>` in its own worktree — merge in step 6 |
+| Background | `treeyard open <a> <b> --bg …` | Claude Code only | the same |
+
+One node per call works in the project folder unless `--worktree`; `--no-worktree` keeps every
+node there (then only nodes with no file in common, and their checks may trip over each other).
 
 A pane is the default: any CLI, and the person sees it next to the tree and can answer it
 there.
@@ -135,9 +146,12 @@ treeyard open <a> <b> --bg --worktree --start do --yes --json --task "…" [--mo
 - `--yes` skips the confirmation: the person gave it in step 2.
 - A CLI that asks to trust the folder (`✗ … Workspace not trusted` from Claude Code in the
   background, a prompt in a Codex pane) — the person accepts it once; never accept it for them.
-- Codex's sandbox does not let it write `.git`: each `git commit` in a Codex pane waits for the
-  person's yes. Person away → the task says «leave your files uncommitted», and you commit
-  each node's files at acceptance: `TREEYARD_NODE=<id> git commit -m "…" -- <files>`.
+- Codex: the person chooses once how treeyard starts it (`treeyard config codex_access`, or «,» in
+  the tree). `sandbox` — its sandbox lets `treeyard send`, the tree and `git commit` through. `config`
+  — as config.toml says, which by default shuts tmux and `.git`: then the task says «leave your
+  files uncommitted», you commit each node's files at acceptance
+  (`TREEYARD_NODE=<id> git commit -m "…" -- <files>`), and a Codex session asks in its last message.
+  Not chosen yet — `open --brain codex` without a terminal stops and says so: ask the person.
 - One `--task` goes to every node of the call: «your node's id» in place of an id lets one task
   serve the whole batch.
 
@@ -165,7 +179,14 @@ Pane:
 You work in the project folder itself, next to the others; don't move into a git worktree.
 ```
 
-Background:
+Its own worktree (treeyard's):
+
+```text
+You work in your node's git worktree, on its branch; treeyard commands there write the main tree.
+Commit there; don't commit .tree/.
+```
+
+Claude Code's own worktree (`claude --worktree`, not treeyard's):
 
 ```text
 You work in a git worktree: .tree/ there is a copy. Run every treeyard command with
@@ -187,11 +208,13 @@ summary that its conversation is not in the tree.
 treeyard wait <a> <b> --timeout 10m
 ```
 
-It returns when a node needs you: the node left `active` (`review`, `waiting`), or its newest
-session ended its turn, waits for the person, or ended. For that node it prints the status, the last
-journal entry (the session's summary, as a rule) and the session's state; for a pane, the end of
-its screen. The others get a line under «still active». Exit 124 — out of time, nothing needs you
-yet: call it again.
+It returns when a node needs you: the node left `active` (`review`, `waiting`), its newest
+session ended its turn, waits for the person or ended, or a session wrote a letter to your own node.
+For that node it prints the status, the last journal entry (the session's summary, as a rule) and
+the session's state; for a pane, the end of its screen. A letter to you comes whole, under
+`✉ письмо №N от «…»` (in JSON — `letters`), and is yours from then on: it is not typed into your
+conversation again. The others get a line under «still active». Exit 124 — out of time, nothing
+needs you yet: call it again.
 
 - **Claude Code:** run it as a background command and act when it exits. **Codex, Antigravity,
   OpenCode:** a `--timeout` under your shell's limit per command, then call it again. No shell
@@ -200,13 +223,23 @@ yet: call it again.
 - **Ended its turn, node still `active`:** read the end of its screen or its last entry. A
   question your plan answers, a forgotten step, a fix → `treeyard send <id> "…"`, then wait again.
   A question only the person can answer → into the summary. A session you started knows how to
-  write to you (its first message says so); Codex's sandbox keeps it from `send`, so a Codex
-  session asks in its last message.
+  write to you (its first message says so); a Codex session started «as in config.toml» may not
+  reach `send` and asks in its last message.
+- **A letter to you:** answer with `treeyard send <its id> "…"` (it goes as the answer to that
+  letter); a question for the person → to the person, then send their answer.
+- **Writing to a session:** `treeyard send <id> "…"` never refuses for what the session is doing:
+  busy, waiting for the person, asleep, open in the person's terminal, no session yet — the letter
+  waits and treeyard delivers it as soon as it can (a new session of the node gets it in its first
+  message). `send` says «delivered» or «queued: why». `--wait [--timeout 10m]` — wait for the
+  answer: it prints the letter the node wrote back, or, if the session ended its turn without one,
+  the end of its screen.
 - **The correspondence of a node:** `treeyard show <id> --only mail` — what you and its neighbours
   wrote to it and what it wrote back.
-- **Waits for the person** (a permission, a dialog): never answer for them — tell the person; they
-  answer in the pane (`tmux -L brainyard attach -t <pane>`) or in `claude attach <id>`. `send`
-  refuses such a session anyway.
+- **Waits for the person** (a permission, a folder to trust, a question in a dialog): never answer
+  for them — tell the person; they answer in the pane (`tmux -L brainyard attach -t <pane>`) or in
+  `claude attach <id>`. A letter to such a session waits until they have. A question the person
+  answered to you in your conversation → `treeyard send <id> --answer "<choice or their text>"`
+  passes it into the dialog; it refuses a permission.
 - **Done without review** (ended, the node still `active`): a background session's summary may sit
   in its worktree's copy — `treeyard show <id> --journal 5 --project <worktree>`. Finish a small
   rest yourself, or `treeyard send <id> "What is left: …"`.
@@ -239,10 +272,11 @@ small thing yourself (`TREEYARD_NODE=<id> git commit …`) or write to the node'
 `treeyard send <id> "Acceptance failed: <what>. The rest is done."`, and `treeyard wait <id>`. A new
 session (`treeyard open` with `--task`) only when `send` says that one cannot go on.
 
-## 6. Merge background branches
+## 6. Merge worktree branches
 
-Pane nodes are already on the main branch. Background branches — one at a time, in the main
-folder, after `git status`: others' uncommitted changes stay untouched.
+A node that worked in the project folder is already on the main branch. A node's worktree branch
+(`treeyard worktree` lists them: folder, branch, commits, what is not committed) — one at a time,
+in the main folder, after `git status`: others' uncommitted changes stay untouched.
 
 1. **Each commit passes on its own?** A branch whose first commit fails without the second (a
    new UI string, its translation in the next commit) would break the main branch at that
@@ -256,9 +290,9 @@ folder, after `git status`: others' uncommitted changes stay untouched.
    hook.
 4. **Run the checks** before the next merge. A fix goes in as `TREEYARD_NODE=<id> git commit …`.
 5. **Keep the worktree** until the person closes the node: it is the folder of its session,
-   which they may continue. Then `git worktree unlock <path>` (Claude Code locks its
-   worktrees), `git worktree remove <path>`, `git branch -d <branch>` — `-d` refuses an
-   unmerged branch: stop and look, never `-D`.
+   which they may continue. Then `treeyard worktree rm <id>` — it refuses while something is not
+   committed or not merged: stop and look. Claude Code's own worktree: `git worktree unlock <path>`
+   (it locks them), `git worktree remove <path>`, `git branch -d <branch>` — never `-D`.
 
 Panes stay too: Brainyard puts idle ones to sleep, and the person continues them from the node.
 

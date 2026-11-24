@@ -130,10 +130,12 @@ describe('letters between the sessions of nodes', () => {
     const plan = sessionPlan(tree, child.id, 'do', 'claude', 'без платных вызовов', coordinator);
     expect(plan.prompt).toContain('Задание к узлу:\nбез платных вызовов\n\nТебя запустила сессия узла «Координатор»');
     expect(plan.prompt).toContain(`send ${coordinator.id} "…"\`, затем закончи ход`);
-    // Codex's sandbox keeps it away from tmux: its question is its last message.
+    // Codex in its own sandbox may not reach the tree: if send fails, the question is its last message.
     const codex = sessionPlan(tree, child.id, 'do', 'codex', undefined, coordinator).prompt!;
-    expect(codex).toContain('задай последним сообщением и закончи ход');
-    expect(codex).not.toContain(' send ');
+    expect(codex).toContain(`send ${coordinator.id} "…"\`, затем закончи ход`);
+    expect(codex).toContain('Команда упала (песочница) — задай вопрос последним сообщением и закончи ход');
+    // Letters wait for a busy coordinator: none is lost.
+    expect(plan.prompt).toContain('письмо не пропадёт, ответ придёт следующим сообщением');
     // Its own node, or no coordinator at all, adds nothing.
     expect(sessionPlan(tree, child.id, 'do', 'claude', undefined, child).prompt).not.toContain('Тебя запустила');
     expect(sessionPlan(tree, child.id, 'do', 'claude').prompt).not.toContain('Задание к узлу');

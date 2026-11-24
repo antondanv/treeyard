@@ -459,6 +459,8 @@ treeyard open <id> --bg --task - < task.txt     # a long assignment with quotes 
 treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a session in each, a line per node
 treeyard wait <id> <id> --timeout 10m          # a coordinator waits: a node left “active”, its session ended its turn or waits for the person (--all — every one; --json)
 treeyard send <id> "fix the test"               # the next message of the node's own session, not a new session (- reads stdin); can't take it now — queued, treeyard delivers it
+treeyard send <id> "which port?" --wait --timeout 10m   # a message and its answer (or the end of the turn without one)
+treeyard send <id> --answer "2"                  # the person's answer to a question in the session's dialog (a choice or a text)
 treeyard deliver --once                          # one delivery pass over waiting messages (the deliverer usually starts by itself)
 treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's open children in order, two sessions at a time, the next when a node leaves “active”
 treeyard worktree                               # the nodes' worktrees: folder, branch, commits, what is not committed (add | setup | rm <id>)
@@ -569,9 +571,14 @@ active:”. A change of the tree wakes the command at once; the sessions are ask
 seconds, through Brainyard. A session just started or just written to gets half a minute unless the
 command has seen it at work: a CLI says “idle” at its start before its turn begins. `--all` — wait
 for every node; `--timeout 10m` (or `90`, `90s`, `1h`) — how long to wait, after which the exit code
-is 124 with the same lines; without it — as long as it takes. `--json` —
-`{"version": 1, "timedOut", "settled", "pending"}`, each node with `node`, `title`, `status`, `from`
-(the status when the wait began), `reason` (`status`, `waiting`, `idle`, `gone` or `null`), `entry`
+is 124 with the same lines; without it — as long as it takes. A message to your session's node
+(the coordinator's: `TREEYARD_NODE` of this tree) waiting while you are busy waiting ends the
+command too: it is printed whole under `✉ message #N from «…»` with how to answer, and counts as
+delivered — it never comes into your conversation again. `--json` —
+`{"version": 1, "timedOut", "letters", "settled", "pending"}`; `letters` — `{n, from, title, who, text,
+at, replyTo}`; each node with `node`, `title`, `status`, `from`
+(the status when the wait began), `reason` (`status`, `waiting`, `idle`, `gone`, `letter` — its
+session wrote to you — or `null`), `entry`
 (`{at, who, text}`) and `session` (`{brain, id, mode, state, waitingFor, pane, screen}`). Claude
 Code runs `wait` in the background and hears when it ends; a CLI without background commands calls
 it with a `--timeout` under its own limit per command.
@@ -608,6 +615,21 @@ following line. Exit code 0 either way; 1 — only when there is no such node. `
 text reads stdin; `--json` — `{"node", "sent": true, "letter": 12, "state": "queued"|"delivered",
 "how": "typed"|"woke"|"resumed"|null, "held": "busy"|"waiting"|"terminal"|"starting"|"none"|null,
 "heldFor", "brain", "id", "pane", "warnings"}`.
+
+`--wait` — wait for the answer: the answer is the next message from the receiver's node to the
+sender's (marked “answers #N”); the command prints it whole and hands it to you instead of typing it
+into your conversation later. If the session got the message and ended its turn without one, waits
+for the person or ended, it prints “no answer:” and its state with the end of its screen, as `wait`
+does. `--timeout 10m` — how long to wait, after which the exit code is 124. With `--json` — also
+`reply` (`{n, from, text, at}` or `null`), `session` (as a node in `wait --json`) and `timedOut`.
+
+`treeyard send <id> --answer "…"` passes the person's answer to a question the node's session asks
+in a dialog (Claude Code: “input needed”, Codex: “input”) in a pane: a choice's number or words —
+picked with the arrows and Enter, any other text — into the row of one's own answer (“Type
+something”, “Other”) and Enter. The node's journal gets `the person's answer in the dialog: «…»`. A
+permission, a folder to trust and anything that is not a question — refused with exit code 1: only
+the person gives those, in the pane. A session that does not wait on a question, is not in a pane or
+shows no choices — refused too.
 
 A message written by a node's session (the command knows its node by `TREEYARD_NODE` of this tree)
 is correspondence between two nodes: the receiver's journal gets `message #12 from «Coordinator»:

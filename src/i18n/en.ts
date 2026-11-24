@@ -1529,6 +1529,31 @@ export const EN: Record<string, string> = {
   'доставит treeyard сам; посмотреть — treeyard show {id} --only mail':
     'treeyard delivers it by itself; to look — treeyard show {id} --only mail',
   'treeyard deliver [--once] [--project <папка>]': 'treeyard deliver [--once] [--project <folder>]',
+  'сессия узла {id} не ждёт ответа на вопрос — обычное письмо: treeyard send {id} "…"':
+    'the session of node {id} is not waiting for an answer to a question — a plain message: treeyard send {id} "…"',
+  'сессия ждёт человека не в панели — ответить можно только в ней: claude attach {short}':
+    'the session waits for the person outside a pane — it can only be answered there: claude attach {short}',
+  'сессия ждёт разрешения ({why}) — его даёт только человек: tmux -L brainyard attach -t {pane}':
+    'the session waits for a permission ({why}) — only the person gives it: tmux -L brainyard attach -t {pane}',
+  'не вижу вариантов вопроса на экране панели {pane} — ответь в ней сам':
+    'no choices of the question on the screen of pane {pane} — answer it there yourself',
+  'нет такого варианта, а своего текста вопрос не принимает: {choices}':
+    'no such choice, and the question takes no text of its own: {choices}',
+  'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--json] · treeyard send <id> --answer "<вариант>|<текст>"':
+    'treeyard send <id> "<text>"|- [--wait [--timeout 10m]] [--json] · treeyard send <id> --answer "<choice>|<text>"',
+  '--timeout — только с --wait: {usage}': '--timeout — only with --wait: {usage}',
+  'ответ на №{n}': 'answers #{n}',
+  'от «{title}»': 'from «{title}»',
+  'ответа нет:': 'no answer:',
+  'время вышло ({timeout}) — ответа нет; письмо №{n}: {state}':
+    'out of time ({timeout}) — no answer; message #{n}: {state}',
+  'корню не пишут — назови узел': 'nobody writes to the root — name a node',
+  '--answer — номер варианта, его слова или свой текст':
+    '--answer — the number of a choice, its words or a text of your own',
+  '«{text}» в «{label}»': '«{text}» into «{label}»',
+  'ответ передан: {what}': 'answer passed on: {what}',
+  'ответ человека в диалог: «{text}»': "the person's answer in the dialog: «{text}»",
+  'ответ — treeyard send {id} "…"': 'to answer — treeyard send {id} "…"',
   'от {who} в сессию {session}': 'from {who} to session {session}',
   'письма:': 'letters:',
   ПИСЬМА: 'LETTERS',

@@ -18,6 +18,7 @@ import {
 
 import { type Entry, isOwnLine, parseEntry } from '../model/history.js';
 import { journalEntries } from '../model/journal.js';
+import { type MailItem, markDelivered, queuedFor, withMailLock } from '../model/mailbox.js';
 import { loadTree } from '../model/store.js';
 import type { SessionRef, Status, Tree, TreeNode } from '../model/types.js';
 import { watchTree } from '../watch.js';
@@ -27,8 +28,8 @@ import { isPending, paneFor, paneInProject } from './panes.js';
 /** What a session is doing, as its CLI tells it; `gone` — its process ended (a pane asleep, a finished background run). */
 export type SessionState = 'busy' | 'waiting' | 'idle' | 'gone' | 'unknown';
 
-/** Why a node needs the coordinator now. */
-export type Reason = 'status' | 'waiting' | 'idle' | 'gone';
+/** Why a node needs the coordinator now; `letter` — its session wrote to the coordinator's node. */
+export type Reason = 'status' | 'waiting' | 'idle' | 'gone' | 'letter';
 
 export interface SessionSight {
   brain: SessionRef['brain'];
@@ -57,9 +58,14 @@ export interface Sight {
   reason?: Reason;
 }
 
+/** A letter to the coordinator's node, with the title of the node whose session wrote it. */
+export type InboxLetter = MailItem & { fromTitle?: string };
+
 export interface WaitResult {
   settled: Sight[];
   pending: Sight[];
+  /** Letters to the coordinator's own node that waited for it: whole, handed over by this wait. */
+  letters: InboxLetter[];
   timedOut: boolean;
 }
 
@@ -94,6 +100,11 @@ export interface WaitOptions {
   all?: boolean;
   /** Give up after this long; 0 or none — never. */
   timeoutMs?: number;
+  /**
+   * The coordinator's own node: a letter to it that waits (its session is busy waiting) ends the
+   * wait and is handed over here, whole.
+   */
+  inbox?: string;
   /** How often the sessions are asked. */
   intervalMs?: number;
   /**
@@ -187,8 +198,10 @@ export function reasonOf(
   now: number,
   graceMs: number,
   worked = false,
+  /** False — only the session counts: `send --wait` asks a node that may sit in review. */
+  statusMatters = true,
 ): Reason | undefined {
-  if (node.status !== 'active') return 'status';
+  if (statusMatters && node.status !== 'active') return 'status';
   if (!session || !ref) return undefined;
   if (session.state === 'waiting') return 'waiting';
   if (session.state !== 'idle' && session.state !== 'gone') return undefined;
@@ -206,6 +219,7 @@ export async function look(
   sources: WaitSources,
   /** Sessions seen at work during this wait; grows as it looks. */
   worked: Set<string> = new Set(),
+  statusMatters = true,
 ): Promise<Sight[]> {
   const tree = sources.load(dir);
   const nodes = ids.map((id) => tree.nodes.get(id)).filter((node): node is TreeNode => Boolean(node));
@@ -226,7 +240,7 @@ export async function look(
     if (entry) sight.entry = entry;
     if (session) sight.session = session;
     if (ref && session?.state === 'busy') worked.add(ref.id);
-    const reason = reasonOf(node, session, ref, now, graceMs, Boolean(ref && worked.has(ref.id)));
+    const reason = reasonOf(node, session, ref, now, graceMs, Boolean(ref && worked.has(ref.id)), statusMatters);
     if (reason) sight.reason = reason;
     // The screen says what the journal does not yet: the question, or the answer it ended with.
     if (session?.pane && reason && reason !== 'gone') {
@@ -266,11 +280,31 @@ export async function waitFor(dir: string, ids: readonly string[], options: Wait
   try {
     for (;;) {
       const sights = await look(dir, ids, from, grace, sources, worked);
+      // A letter to the coordinator is a question for it: it ends the wait, whatever the nodes do.
+      const tree = options.inbox ? sources.load(dir) : undefined;
+      const letters: InboxLetter[] = (options.inbox ? queuedFor(dir, options.inbox) : []).map((letter) => {
+        const title = letter.from ? tree?.nodes.get(letter.from)?.title : undefined;
+        return title ? { ...letter, fromTitle: title } : letter;
+      });
+      if (letters.length) {
+        await withMailLock(
+          dir,
+          async () =>
+            void markDelivered(
+              dir,
+              letters.map((letter) => letter.n),
+              'wait',
+            ),
+        );
+        for (const sight of sights)
+          if (!sight.reason && letters.some((letter) => letter.from === sight.id)) sight.reason = 'letter';
+      }
       const settled = sights.filter((sight) => sight.reason);
       const pending = sights.filter((sight) => !sight.reason);
-      if (settled.length && (!options.all || pending.length === 0)) return { settled, pending, timedOut: false };
+      if (letters.length || (settled.length && (!options.all || pending.length === 0)))
+        return { settled, pending, letters, timedOut: false };
       const left = deadline - sources.now();
-      if (left <= 0) return { settled, pending, timedOut: true };
+      if (left <= 0) return { settled, pending, letters: [], timedOut: true };
       await new Promise<void>((done) => {
         const timer = setTimeout(done, Math.min(interval, left));
         wake = () => {

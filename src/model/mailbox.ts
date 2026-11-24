@@ -57,6 +57,8 @@ export interface MailItem {
   held?: Hold;
   /** `waiting`: what the session waits for, as its CLI says. */
   heldFor?: string;
+  /** The letter this one answers: the last one the addressee's node wrote to the sender's before it. */
+  replyTo?: number;
   delivered?: {
     at: string;
     how: Delivery;

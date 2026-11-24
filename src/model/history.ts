@@ -86,6 +86,8 @@ export function isCreationLine(text: string): boolean {
 export const LETTER_FROM = 'письмо №{n} от «{from}»: «{text}»';
 export const LETTER_TO = 'письмо №{n} узлу «{to}»: «{text}»';
 export const LETTER_SESSION = 'письмо №{n} сессии {brain} {short}: «{text}»';
+/** The person's answer to a question a session asked in a dialog, passed on by `send --answer`. */
+export const LETTER_ANSWER = 'ответ человека в диалог: «{text}»';
 /** A letter from a shell to a node with no session yet: its first session gets it. */
 export const LETTER_SHELL = 'письмо №{n}: «{text}»';
 /** The same lines before letters had numbers: older journals keep them. */
@@ -107,6 +109,7 @@ const OWN = [
   LETTER_TO,
   LETTER_SESSION,
   LETTER_SHELL,
+  LETTER_ANSWER,
   OLD_LETTER_FROM,
   OLD_LETTER_TO,
   OLD_LETTER_SESSION,

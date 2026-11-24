@@ -31,7 +31,7 @@ import { today } from '../model/time.js';
 import { actionable, childrenOf, pathTo, progress, summarize, waitingNodes } from '../model/tree.js';
 import { type BrainId, ROOT, type StartMode, type Tree, type TreeNode } from '../model/types.js';
 import { loadSettings } from '../settings.js';
-import { fullAccess } from './access.js';
+import { accessOf, fullAccess } from './access.js';
 
 export interface SessionPlan {
   /** The session's name: in Claude Code's `/resume`, agent view and the terminal title. */
@@ -97,14 +97,15 @@ function withTask(plan: SessionPlan, task?: string): SessionPlan {
 function coordinatorLine(coordinator: TreeNode, brain: BrainId): string {
   const self = selfCommand();
   const title = `«${coordinator.title}» (${coordinator.id})`;
-  if (brain === 'codex')
+  // Codex in its own sandbox («как в config.toml») may not reach the tree: the question is its last message.
+  if (brain === 'codex' && accessOf('codex') !== 'sandbox')
     return pick({
-      ru: `Тебя запустила сессия узла ${title} и ждёт тебя через \`${self} wait\`. Вопрос, на который ответит только она, — задай последним сообщением и закончи ход: ответ придёт следующим сообщением.`,
-      en: `The session of node ${title} started you and waits for you with \`${self} wait\`. A question only it can answer — ask it as your last message and end your turn: the answer comes as your next message.`,
+      ru: `Тебя запустила сессия узла ${title} и ждёт тебя через \`${self} wait\`. Вопрос, на который ответит только она, — \`${self} send ${coordinator.id} "…"\`, затем закончи ход: ответ придёт следующим сообщением. Команда упала (песочница) — задай вопрос последним сообщением и закончи ход.`,
+      en: `The session of node ${title} started you and waits for you with \`${self} wait\`. A question only it can answer — \`${self} send ${coordinator.id} "…"\`, then end your turn: the answer comes as your next message. The command failed (the sandbox) — ask it as your last message and end your turn.`,
     });
   return pick({
-    ru: `Тебя запустила сессия узла ${title}. Появится вопрос, на который ответит только она, — \`${self} send ${coordinator.id} "…"\`, затем закончи ход: ответ придёт следующим сообщением. Письмо не ушло — задай вопрос последним сообщением и закончи ход.`,
-    en: `The session of node ${title} started you. A question only it can answer — \`${self} send ${coordinator.id} "…"\`, then end your turn: the answer comes as your next message. The letter did not go — ask it as your last message and end your turn.`,
+    ru: `Тебя запустила сессия узла ${title}. Появится вопрос, на который ответит только она, — \`${self} send ${coordinator.id} "…"\`, затем закончи ход: письмо не пропадёт, ответ придёт следующим сообщением.`,
+    en: `The session of node ${title} started you. A question only it can answer — \`${self} send ${coordinator.id} "…"\`, then end your turn: the letter is not lost, and the answer comes as your next message.`,
   });
 }
 
@@ -272,7 +273,7 @@ const TEXT = {
     coordinator:
       'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом (--bg — только Claude Code; Codex, Antigravity и OpenCode — --brain <имя> --pane вместо --bg)',
     follow:
-      'дождаться розданных узлов, а не опрашивать show и git log: вернётся, когда узел уйдёт из «в работе» или его сессия закончит ход или станет ждать человека, и напечатает итог; `send <id> "…"` — дописать той же сессии следующую реплику, а не открывать новую',
+      'дождаться розданных узлов, а не опрашивать show и git log: вернётся, когда узел уйдёт из «в работе», его сессия закончит ход или станет ждать человека, или тебе придёт письмо, и напечатает итог или письмо целиком; `send <id> "…"` — дописать той же сессии следующую реплику, а не открывать новую (занята — письмо в очереди, дойдёт само; `--wait` — дождаться ответа); вопрос в её диалоге — `send <id> --answer "…"` только с ответом человека',
     setMany: 'одно изменение нескольким узлам сразу (after= ставит их подряд), а не цикл',
     diffWhat:
       'после коммита привяжи его к узлу (HEAD, ветка или SHA), чтобы человек мог посмотреть диф; без --add — просмотр. Привязывай только коммиты с работой по этому узлу',
@@ -345,7 +346,7 @@ const TEXT = {
     coordinator:
       'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent (--bg is Claude Code only; for Codex, Antigravity and OpenCode use --brain <name> --pane instead of --bg)',
     follow:
-      'wait for the nodes handed out instead of polling show and git log: it returns when a node leaves «active» or its session ends its turn or waits for the person, and prints the summary; `send <id> "…"` — write the same session its next message instead of opening a new one',
+      'wait for the nodes handed out instead of polling show and git log: it returns when a node leaves «active», its session ends its turn or waits for the person, or a letter comes to you, and prints the summary or the whole letter; `send <id> "…"` — write the same session its next message instead of opening a new one (busy — the letter is queued and gets there by itself; `--wait` — wait for the answer); a question in its dialog — `send <id> --answer "…"` only with the person\'s answer',
     setMany: 'the same change to several nodes at once (after= puts them one after another), not a loop',
     diffWhat:
       'after committing, attach it to the node (HEAD, a branch or a SHA) so the person can inspect the patch; without --add — view. Attach only commits with work on this node',
@@ -570,7 +571,7 @@ const ROOT_TEXT = {
     commit: 'закоммитить файлы дерева этих узлов, README и tree.md (chore(tree): …) — вместо `git add .tree/…` руками',
     open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом (--bg — только Claude Code; Codex, Antigravity и OpenCode — --brain <имя> --pane вместо --bg)',
     follow:
-      'дождаться розданных узлов, а не опрашивать show и git log: вернётся, когда узел уйдёт из «в работе» или его сессия закончит ход или станет ждать человека, и напечатает итог; `send <id> "…"` — дописать той же сессии следующую реплику, а не открывать новую',
+      'дождаться розданных узлов, а не опрашивать show и git log: вернётся, когда узел уйдёт из «в работе», его сессия закончит ход или станет ждать человека, или тебе придёт письмо, и напечатает итог или письмо целиком; `send <id> "…"` — дописать той же сессии следующую реплику, а не открывать новую (занята — письмо в очереди, дойдёт само; `--wait` — дождаться ответа); вопрос в её диалоге — `send <id> --answer "…"` только с ответом человека',
     doneWhen: 'готово, когда',
     more: 'ещё',
     stale: '## В работе, но без живой сессии',
@@ -643,7 +644,7 @@ const ROOT_TEXT = {
       'commit the tree files of these nodes, README and tree.md (chore(tree): …) — instead of `git add .tree/…` by hand',
     open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent (--bg is Claude Code only; for Codex, Antigravity and OpenCode use --brain <name> --pane instead of --bg)',
     follow:
-      'wait for the nodes handed out instead of polling show and git log: it returns when a node leaves «active» or its session ends its turn or waits for the person, and prints the summary; `send <id> "…"` — write the same session its next message instead of opening a new one',
+      'wait for the nodes handed out instead of polling show and git log: it returns when a node leaves «active», its session ends its turn or waits for the person, or a letter comes to you, and prints the summary or the whole letter; `send <id> "…"` — write the same session its next message instead of opening a new one (busy — the letter is queued and gets there by itself; `--wait` — wait for the answer); a question in its dialog — `send <id> --answer "…"` only with the person\'s answer',
     doneWhen: 'done when',
     more: 'more',
     stale: '## In progress, but no live session',

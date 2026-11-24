@@ -1,5 +1,5 @@
 /** `treeyard wait` as text: a block per node that needs the coordinator, a line per node still at work. */
-import type { SessionSight, SessionState, Sight, WaitResult } from '../agents/wait.js';
+import type { InboxLetter, SessionSight, SessionState, Sight, WaitResult } from '../agents/wait.js';
 import { t } from '../i18n/i18n.js';
 import { STATUS_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
@@ -60,8 +60,23 @@ export function pendingLine(sight: Sight, p: Paint): string {
   return `${GLYPH[sight.status]} ${sight.title}  ${p.dim(sight.id)}  ${STATUS_LABEL[sight.status]}${p.dim(session)}`;
 }
 
+/** A letter to the coordinator's node, whole: who wrote it and how to answer. */
+export function inboxBlock(letter: InboxLetter, p: Paint): string {
+  const who = letter.from
+    ? `${t('от «{title}»', { title: letter.fromTitle ?? letter.from })}  ${p.dim(letter.from)}`
+    : t('от {who}', { who: letter.who || '?' });
+  const answers = letter.replyTo ? ` · ${t('ответ на №{n}', { n: letter.replyTo })}` : '';
+  const lines = [`${p.bold(`✉ ${t('письмо №{n}', { n: letter.n })}`)} ${who}${p.dim(answers)}`];
+  for (const row of letter.text.split('\n')) lines.push(`  ${row}`);
+  if (letter.from) lines.push(`  ${p.dim(t('ответ — treeyard send {id} "…"', { id: letter.from }))}`);
+  return lines.join('\n');
+}
+
 export function waitText(result: WaitResult, p: Paint): string {
-  const parts = result.settled.map((sight) => sightBlock(sight, p));
+  const parts = [
+    ...result.letters.map((letter) => inboxBlock(letter, p)),
+    ...result.settled.filter((sight) => sight.reason !== 'letter').map((sight) => sightBlock(sight, p)),
+  ];
   if (result.pending.length)
     parts.push([p.dim(t('ещё в работе:')), ...result.pending.map((sight) => pendingLine(sight, p))].join('\n'));
   return `${parts.join('\n\n')}\n`;
@@ -83,6 +98,15 @@ export function waitJson(result: WaitResult): unknown {
   return {
     version: WAIT_VERSION,
     timedOut: result.timedOut,
+    letters: result.letters.map((letter) => ({
+      n: letter.n,
+      from: letter.from ?? null,
+      title: letter.fromTitle ?? null,
+      who: letter.who ?? null,
+      text: letter.text,
+      at: letter.at,
+      replyTo: letter.replyTo ?? null,
+    })),
     settled: result.settled.map(node),
     pending: result.pending.map(node),
   };

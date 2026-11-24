@@ -94,6 +94,8 @@ export interface Letter {
   held?: Hold;
   heldFor?: string;
   how?: Delivery;
+  /** The letter this one answers. */
+  replyTo?: number;
 }
 
 const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -151,6 +153,7 @@ function withItem(letter: Letter, item: MailItem): Letter {
   if (item.held) out.held = item.held;
   if (item.heldFor) out.heldFor = item.heldFor;
   if (item.delivered) out.how = item.delivered.how;
+  if (item.replyTo) out.replyTo = item.replyTo;
   return out;
 }
 
@@ -260,5 +263,10 @@ export function letterState(letter: Pick<Letter, 'state' | 'held' | 'heldFor' | 
 /** `← №12 от «Бот»: «текст»` — the arrow says the direction: ← got, → sent. */
 export function letterText(letter: Letter): string {
   const n = letter.n === undefined ? '' : `${t('№{n}', { n: letter.n })} `;
-  return `${letter.direction === 'out' ? '→' : '←'} ${n}${letterPeer(letter)}: «${letter.text}»`;
+  return `${letter.direction === 'out' ? '→' : '←'} ${n}${letterPeer(letter)}${answers(letter)}: «${letter.text}»`;
+}
+
+/** ` (ответ на №12)` for an answer; nothing otherwise. */
+export function answers(letter: Pick<Letter, 'replyTo'>): string {
+  return letter.replyTo ? ` (${t('ответ на №{n}', { n: letter.replyTo })})` : '';
 }

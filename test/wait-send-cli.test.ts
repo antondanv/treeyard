@@ -183,3 +183,33 @@ describe('treeyard send from the shell', () => {
     ).toHaveLength(1);
   }, 60_000);
 });
+
+describe('answers between the sessions of two nodes, from the shell', () => {
+  it('send --wait prints the answer, and wait of the coordinator returns with a letter to its node', async () => {
+    const tree = emptyTree();
+    const dir = tree.project.dir;
+    const coordinator = addNode(tree, { title: 'Координатор', status: 'active' });
+    const site = addNode(tree, { title: 'Сайт', status: 'active' });
+    const as = (node: string) => treeyardIn(dir, { TREEYARD_NODE: node, TREEYARD_PROJECT: dir });
+    const asked = as(coordinator.id)('send', site.id, 'какой порт?', '--wait', '--timeout', '25s');
+    await new Promise((done) => setTimeout(done, 3000));
+    const back = await as(site.id)('send', coordinator.id, '8080\nи 8443 для https');
+    expect(back.code, back.stderr).toBe(0);
+    const res = await asked;
+    expect(res.code, res.stderr).toBe(0);
+    expect(res.stdout).toContain('письмо №1 в очереди: у узла нет сессии — письмо получит первая');
+    expect(res.stdout).toMatch(/✉ письмо №2 от «Сайт» · ответ на №1\n {2}8080\n {2}и 8443 для https\n/);
+
+    // Now the coordinator waits for the node, and the node writes to it instead of ending.
+    const waiting = as(coordinator.id)('wait', site.id, '--timeout', '25s', '--json');
+    await new Promise((done) => setTimeout(done, 3000));
+    await as(site.id)('send', coordinator.id, 'нужен ключ API');
+    const woke = await waiting;
+    expect(woke.code, woke.stderr).toBe(0);
+    expect(JSON.parse(woke.stdout)).toMatchObject({
+      timedOut: false,
+      letters: [{ n: 3, from: site.id, title: 'Сайт', text: 'нужен ключ API', replyTo: null }],
+      settled: [{ node: site.id, reason: 'letter' }],
+    });
+  }, 60_000);
+});

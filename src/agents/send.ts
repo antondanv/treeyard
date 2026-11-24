@@ -9,7 +9,15 @@
  */
 import { t } from '../i18n/i18n.js';
 import { letterFrom, letterFromShell, letterHeading, letterTo, letterToSession } from '../model/mail.js';
-import { addLetter, type Delivery, type Hold, letterByNumber, type MailItem, withMailLock } from '../model/mailbox.js';
+import {
+  addLetter,
+  type Delivery,
+  type Hold,
+  letterByNumber,
+  type MailItem,
+  readMail,
+  withMailLock,
+} from '../model/mailbox.js';
 import { logToNode } from '../model/ops.js';
 import { holderOf } from '../model/tree.js';
 import type { SessionRef, Tree, TreeNode } from '../model/types.js';
@@ -70,9 +78,15 @@ export async function sendToNode(tree: Tree, id: string, text: string, options: 
   const dir = tree.project.dir;
   const sender = options.sender && options.sender.id !== id ? tree.nodes.get(options.sender.id) : undefined;
   const ref = newestSession(node);
+  // Writing back to a node that wrote to this one is answering its last letter, unless answered already.
+  const mail = sender ? readMail(dir) : [];
+  const last = mail.filter((item) => item.from === id && item.to === sender?.id).at(-1);
+  const asked =
+    last && !mail.some((item) => item.from === sender?.id && item.to === id && item.n > last.n) ? last : undefined;
   const letter = addLetter(dir, {
     to: id,
     ...(sender ? { from: sender.id } : {}),
+    ...(asked ? { replyTo: asked.n } : {}),
     ...(options.source ? { who: options.source } : {}),
     text,
   });
