@@ -92,7 +92,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.background ? { background: true } : {}),
-    env: nodeEnv(id, tree.project.dir),
+    env: nodeEnv(id, tree.project.dir, options.brain),
   });
   if (place.warnings.length) result.warnings = [...(result.warnings ?? []), ...place.warnings];
   if (!result.sessionId) return { result };
@@ -131,7 +131,7 @@ export async function resume(tree: Tree, id: string, ref: SessionRef): Promise<O
     cwd: sessionFolder(tree.project.dir, ref),
     resume: ref.id,
     ...fullAccess(ref.brain, tree.project.dir),
-    env: nodeEnv(id, tree.project.dir),
+    env: nodeEnv(id, tree.project.dir, ref.brain),
   });
   if (holderOf(tree, id)) attachSession(tree, id, { ...ref, opened: nowIso() });
   return result;

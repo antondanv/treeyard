@@ -394,6 +394,12 @@ describe('the agent context', () => {
     expect(nodeEnv('k3f9', '/p/tree')).toMatchObject({ [NODE_VAR]: 'k3f9', [PROJECT_VAR]: '/p/tree' });
     expect(nodeEnv('k3f9')).not.toHaveProperty(PROJECT_VAR);
     expect(nodeEnv('', '/p/tree')).not.toHaveProperty(PROJECT_VAR);
+    // The session's CLI writes under its own name, never as the person at a terminal.
+    expect(nodeEnv('k3f9', '/p/tree', 'antigravity')).toMatchObject({ TREEYARD_AS: 'antigravity' });
+    expect(nodeEnv('k3f9', '/p/tree')).not.toHaveProperty('TREEYARD_AS');
+    // OpenCode would update itself mid-session and ask to restart over the input.
+    expect(nodeEnv('k3f9', '/p/tree', 'opencode')).toMatchObject({ OPENCODE_DISABLE_AUTOUPDATE: '1' });
+    expect(nodeEnv('k3f9', '/p/tree', 'codex')).not.toHaveProperty('OPENCODE_DISABLE_AUTOUPDATE');
     // Each launch is its own session, even from the same node.
     const one = nodeEnv('k3f9', '/p/tree')[SESSION_VAR];
     expect(one).toMatch(/^[0-9a-f-]{36}$/);

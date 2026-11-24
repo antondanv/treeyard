@@ -598,7 +598,8 @@ once if the session can take it, otherwise by itself as soon as it can:
 
 - a live pane whose turn is over — typed as a paste and Enter;
 - a sleeping pane — the same conversation resumed in a new pane (`--resume`) with the message as
-  its first one;
+  its first one; OpenCode wakes without it (its interface loses a text given at its start), and the
+  message is typed in once it is ready;
 - a Claude Code background session — resumed in the background (one that ended its turn is stopped
   first);
 - a busy session, one waiting for the person (a permission, a question in a dialog — keys would
@@ -951,7 +952,11 @@ treeyard hook remove     # remove only that block (the file too, if nothing else
 The hook is one quiet line: it does nothing, and never fails a commit, when `treeyard` is
 not on `PATH`. Every session from a node gets `TREEYARD_NODE` (the node),
 `TREEYARD_PROJECT` (the folder of its tree) and `TREEYARD_SESSION` (this launch of the
-session); the hook binds the commit to that node of that tree.
+session); the hook binds the commit to that node of that tree. Also `TREEYARD_AS` — its CLI: it
+writes to the journal under that name, and its commands never count as the person's, even when it
+runs them in a terminal (Antigravity does) — it cannot set “done”. OpenCode sessions from the tree
+start without self-update (`OPENCODE_DISABLE_AUTOUPDATE`): the “restart after the update” window in
+the middle of work swallowed input and messages.
 
 When the session's agent moves on to another node of the same tree and sets it to active
 (`treeyard set <id> status=active` or `treeyard log <id> "…" --status active`), the session's

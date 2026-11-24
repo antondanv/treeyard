@@ -426,6 +426,39 @@ describe('treeyard send', () => {
     ]);
   });
 
+  it('wakes a sleeping OpenCode pane without the letter, and types it once the CLI is ready', async () => {
+    const tree = emptyTree();
+    const node = nodeWithSession(tree, 'Спит OpenCode', {
+      id: 'ses_9',
+      brain: 'opencode',
+      mode: 'pane',
+      pane: 'opencode-old',
+    });
+    const world: World = { live: [], panes: [] };
+    const { sources, calls } = sendSources(world);
+    const sent = await sendToNode(tree, node.id, 'продолжай', { sources, spawn: () => undefined });
+    // OpenCode's TUI loses a prompt given at its start: it wakes bare, the letter waits.
+    expect(sent).toMatchObject({ held: 'starting', letter: { state: 'queued' } });
+    expect(calls.panes).toHaveLength(1);
+    expect(calls.panes[0]).toMatchObject({
+      brain: 'opencode',
+      resume: 'ses_9',
+      env: { OPENCODE_DISABLE_AUTOUPDATE: '1' },
+    });
+    expect(calls.panes[0]).not.toHaveProperty('prompt');
+    expect(loadTree(tree.project.dir).nodes.get(node.id)!.sessions).toMatchObject([
+      { pane: 'claude-new', mode: 'pane' },
+    ]);
+    // OpenCode says nothing of an idle session: once it has had time to start, the letter goes in typed.
+    world.panes = [pane('claude-new', { brain: 'opencode', sessionId: 'ses_9' })];
+    const later = { ...sources, now: () => Date.now() + 60_000 };
+    await deliverAll(tree.project.dir, { sources: later });
+    expect(calls.typed).toEqual([
+      ['claude-new', '\u001b[200~продолжай\u001b[201~'],
+      ['claude-new', '\r'],
+    ]);
+  });
+
   it('keeps letters to a node without a session and to a session open in the person’s terminal', async () => {
     const tree = emptyTree();
     const bare = addNode(tree, { title: 'Пусто', status: 'active' });

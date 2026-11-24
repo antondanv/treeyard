@@ -43,7 +43,7 @@ import {
   takeFile,
   withMailLock,
 } from '../model/mailbox.js';
-import { NODE_VAR, nodeEnv, PROJECT_VAR, SESSION_VAR } from '../model/notes.js';
+import { AS_VAR, NODE_VAR, nodeEnv, PROJECT_VAR, SESSION_VAR } from '../model/notes.js';
 import { attachSession } from '../model/ops.js';
 import { loadTree } from '../model/store.js';
 import { nowIso } from '../model/time.js';
@@ -157,6 +157,14 @@ export function routeOf(
   return { kind: 'wake' };
 }
 
+/**
+ * Whether the CLI takes a letter as the first message of a resumed session. OpenCode's TUI loses
+ * one given at its start (probe 24.11): it wakes without it, and the letter is typed once it is ready.
+ */
+export function carriesWakePrompt(brain: string): boolean {
+  return brain !== 'opencode';
+}
+
 export function shortId(ref: SessionRef): string {
   return isPending(ref) ? (ref.pane ?? ref.id) : ref.id.slice(0, 8);
 }
@@ -217,27 +225,38 @@ export async function deliverNode(
         prompt: body,
         background: true,
         ...fullAccess(ref.brain, dir),
-        env: nodeEnv(id, dir),
+        env: nodeEnv(id, dir, ref.brain),
       });
       if (result.error || !result.ok) throw new Error(result.error?.message ?? t('фоновая сессия не продолжилась'));
       Object.assign(attempt, { how: 'resumed', warnings: result.warnings });
     } else {
+      const carries = carriesWakePrompt(ref.brain);
       const started = await sources.startPane({
         brain: ref.brain,
         cwd: folder,
         resume: ref.id,
-        prompt: body,
+        ...(carries ? { prompt: body } : {}),
         ...fullAccess(ref.brain, dir),
         label: node.title,
-        env: nodeEnv(id, dir),
+        env: nodeEnv(id, dir, ref.brain),
         ...(options.size ? { width: options.size.width, height: options.size.height } : {}),
       });
       Object.assign(attempt, {
-        how: 'woke',
         pane: started.pane,
         ref: { ...ref, mode: 'pane', pane: started.pane },
         warnings: started.warnings,
       });
+      if (carries) attempt.how = 'woke';
+      else {
+        // Awake without the letters: they wait until the CLI is ready, then go in typed.
+        const found = node.sessions.find((s) => s.brain === ref.brain && s.id === ref.id);
+        if (found) {
+          Object.assign(found, { mode: 'pane', pane: started.pane });
+          attachSession(tree, id, { ...found, opened: nowIso() });
+        }
+        markHeld(dir, numbers, 'starting');
+        return { ...attempt, held: 'starting' };
+      }
     }
   } catch (error) {
     attempt.error = error instanceof Error ? error.message : String(error);
@@ -374,6 +393,7 @@ export function spawnDeliverer(dir: string): void {
     NODE_VAR,
     PROJECT_VAR,
     SESSION_VAR,
+    AS_VAR,
     'CLAUDECODE',
     'CLAUDE_CODE_SESSION_ID',
     'CLAUDE_CODE_ENTRYPOINT',

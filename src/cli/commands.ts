@@ -761,8 +761,11 @@ function sourceOf(given: string | undefined): string {
  * terminal; `--as claude` names the agent but does not make it a person.
  */
 function byPerson(given: string | undefined): boolean {
+  const as = process.env.TREEYARD_AS?.trim();
+  // A session treeyard started names its CLI: its terminal (Antigravity runs commands in one) is no person.
+  if (!given?.trim() && as && !/^(ты|you)$/i.test(as)) return false;
   if (process.stdin.isTTY) return true;
-  return /^(ты|you)$/i.test(given?.trim() ?? process.env.TREEYARD_AS ?? '');
+  return /^(ты|you)$/i.test(given?.trim() ?? as ?? '');
 }
 
 // ── TUI ─────────────────────────────────────────────────────────────────────

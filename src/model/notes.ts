@@ -47,16 +47,24 @@ export const PROJECT_VAR = 'TREEYARD_PROJECT';
  */
 export const SESSION_VAR = 'TREEYARD_SESSION';
 
+/** Who writes, for the journal: a session treeyard started names its CLI here. */
+export const AS_VAR = 'TREEYARD_AS';
+
 /**
- * The env of a session started from a node: its id, tree and own mark, and without the NODE_ENV
- * Treeyard set for itself. A session of no node (empty id) has no tree to bind commits to either.
+ * The env of a session started from a node: its id, tree and own mark, its CLI as the author of
+ * what it writes (Antigravity runs commands in a terminal, which would otherwise read as the person
+ * at the keyboard), and without the NODE_ENV Treeyard set for itself. A session of no node (empty
+ * id) has no tree to bind commits to either.
  */
-export function nodeEnv(id: string, project?: string): EnvOverrides {
+export function nodeEnv(id: string, project?: string, brain?: string): EnvOverrides {
   const env: EnvOverrides = { [NODE_VAR]: id };
   if (id && project) {
     env[PROJECT_VAR] = project;
     env[SESSION_VAR] = randomUUID();
   }
+  if (brain) env[AS_VAR] = brain;
+  // OpenCode updates itself mid-session and asks to restart over the input: a letter typed then is lost.
+  if (brain === 'opencode') env.OPENCODE_DISABLE_AUTOUPDATE = '1';
   if (ownNodeEnv()) env.NODE_ENV = undefined;
   return env;
 }

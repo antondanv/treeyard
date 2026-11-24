@@ -101,7 +101,7 @@ export async function launchInPane(
     ...(plan.extraArgs ? { extraArgs: plan.extraArgs } : {}),
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
-    env: nodeEnv(id, tree.project.dir),
+    env: nodeEnv(id, tree.project.dir, options.brain),
     width: size.width,
     height: size.height,
   });
@@ -160,7 +160,7 @@ export async function wakeInPane(tree: Tree, nodeId: string, ref: SessionRef, si
     resume: ref.id,
     ...fullAccess(ref.brain, tree.project.dir),
     ...(node ? { label: node.title } : {}),
-    env: nodeEnv(nodeId, tree.project.dir),
+    env: nodeEnv(nodeId, tree.project.dir, ref.brain),
     width: size.width,
     height: size.height,
   });
