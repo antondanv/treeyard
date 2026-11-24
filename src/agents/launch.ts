@@ -14,8 +14,15 @@ import { nodeEnv } from '../model/notes.js';
 import { attachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import { holderOf } from '../model/tree.js';
-import type { BrainId, SessionRef, StartMode, Tree } from '../model/types.js';
-import { sessionFolder, sessionPlace, type WorktreeWish, worktreeDirs, worktreeNote } from '../worktree.js';
+import { type BrainId, ROOT, type SessionRef, type StartMode, type Tree } from '../model/types.js';
+import {
+  saveMainBaseline,
+  sessionFolder,
+  sessionPlace,
+  type WorktreeWish,
+  worktreeDirs,
+  worktreeNote,
+} from '../worktree.js';
 import { fullAccess } from './access.js';
 import { sessionPlan } from './context.js';
 
@@ -79,6 +86,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
       }),
     );
   const place = await sessionPlace(tree, id, options.worktree);
+  if (!place.worktree && id !== ROOT) saveMainBaseline(tree.project.dir, id);
   const plan = sessionPlan(tree, id, options.start, options.brain, options.task, senderNode(tree));
   const result = await open({
     brain: options.brain,

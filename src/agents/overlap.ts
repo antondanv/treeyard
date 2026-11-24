@@ -1,13 +1,15 @@
 /**
  * Two nodes at work that collide in a merge find out only when the second branch is merged. This
  * checks earlier, from git: what each node's worktree committed on its branch and what it has not
- * committed yet (`changedFiles`), and for pairs touching the same files runs a trial three-way
- * merge (`git merge-tree --write-tree`, no checkout, with uncommitted edits snapshotted via a
- * temporary index) so edits to different places of one file stay quiet. Where changes genuinely
- * collide, the pair is told — to the coordinator in `wait` and `queue`, and to both sessions in
- * one letter, once per pair and file.
+ * committed yet (`changedFiles`), plus active nodes working in the main folder without a worktree
+ * (by their attached commits ahead of the other worktree and new/changed uncommitted edits since
+ * their session-start baseline, so prior human edits stay out). For pairs touching the same files
+ * it runs a trial three-way merge (`git merge-tree --write-tree`, no checkout, with uncommitted
+ * edits snapshotted via a temporary index) so edits to different places of one file stay quiet.
+ * Where changes genuinely collide, the pair is told — to the coordinator in `wait` and `queue`,
+ * and to both sessions in one letter, once per pair and file.
  *
- * Identical content in both worktrees (a settings file copied into every worktree, a deletion both
+ * Identical content in both checkouts (a settings file copied into every worktree, a deletion both
  * made) and the tree's own files (`.tree/`, merged by treeyard's merge driver) do not count. If
  * `git merge-tree --write-tree` is unavailable or fails unexpectedly (or a test supplies a custom
  * `ReadFiles`), it falls back to comparing the shared files by content hash.
@@ -19,10 +21,19 @@ import { join } from 'node:path';
 import { t } from '../i18n/i18n.js';
 import { TREE_DIR } from '../model/store.js';
 import { nowIso } from '../model/time.js';
-import type { Status, Tree, TreeNode } from '../model/types.js';
+import type { SessionRef, Status, Tree, TreeNode } from '../model/types.js';
 import {
   changedFiles,
+  commitChangedFiles,
+  commitsAheadOf,
+  headOf,
+  mainDirtyFiles,
+  mainNodeTree,
   type NodeWorktree,
+  readMainBaseline,
+  repoRoot,
+  resolveCommit,
+  sameFolder,
   trialMergeConflicts,
   type WorktreeTree,
   worktreesOf,
@@ -65,6 +76,21 @@ function content(wt: NodeWorktree, file: string): string | null {
 
 const ref = (node: TreeNode): OverlapNode => ({ id: node.id, title: node.title, status: node.status });
 
+function newestSession(node: TreeNode): SessionRef | undefined {
+  if (!node.sessions.length) return undefined;
+  return [...node.sessions].sort((a, b) => (b.opened ?? b.started ?? '').localeCompare(a.opened ?? a.started ?? ''))[0];
+}
+
+function worksInMainFolder(node: TreeNode, project: string): boolean {
+  if (node.status !== 'active') return false;
+  const latest = newestSession(node);
+  return Boolean(latest && (!latest.dir || sameFolder(latest.dir, project)));
+}
+
+type Participant =
+  | { kind: 'worktree'; node: TreeNode; wt: NodeWorktree }
+  | { kind: 'main'; node: TreeNode; root: string; ownDirty: string[]; wt: NodeWorktree };
+
 function pairConflicts(
   project: string,
   a: NodeWorktree,
@@ -101,37 +127,121 @@ export function findOverlaps(
   merge?: TrialMerge,
 ): Overlap[] {
   const project = tree.project.dir;
-  const open: { wt: NodeWorktree; node: TreeNode }[] = [];
+  const open: Participant[] = [];
+  const worktreeIds = new Set<string>();
   for (const wt of worktreesOf(project)) {
+    worktreeIds.add(wt.id);
     const node = tree.nodes.get(wt.id);
-    if (node && OPEN.includes(node.status)) open.push({ wt, node });
+    if (node && OPEN.includes(node.status)) open.push({ kind: 'worktree', wt, node });
   }
+  // No worktree nodes open means nothing can merge against a worktree branch.
+  if (!open.length) return [];
+
+  const mainCandidates = [...tree.nodes.values()].filter(
+    (node) => !worktreeIds.has(node.id) && worksInMainFolder(node, project),
+  );
+  if (mainCandidates.length) {
+    const root = repoRoot(project);
+    const mainHead = root ? headOf(root) : null;
+    if (root && mainHead) {
+      // With more than one active node in the main folder, uncommitted dirt cannot be attributed to one node.
+      const singleMain = mainCandidates.length === 1;
+      for (const node of mainCandidates) {
+        const baseline = readMainBaseline(project, node.id);
+        const ownDirty = singleMain ? mainDirtyFiles(project, root, node.id) : [];
+        const wt: NodeWorktree = {
+          id: node.id,
+          branch: 'HEAD',
+          path: root,
+          dir: project,
+          base: baseline?.head ?? mainHead,
+          created: baseline?.at ?? '',
+          prepared: true,
+        };
+        open.push({ kind: 'main', node, root, ownDirty, wt });
+      }
+    }
+  }
+
   // By title, so the same two nodes read the same way every time; ids are the tie-break.
   open.sort((a, b) => a.node.title.localeCompare(b.node.title) || (a.node.id < b.node.id ? -1 : 1));
   const wanted = ids ? new Set(ids) : undefined;
   if (open.length < 2 || (wanted && !open.some((each) => wanted.has(each.node.id)))) return [];
-  const files = new Map(
-    open.map((each) => [each.node.id, new Set(read(project, each.wt).filter((f) => !treeFile(f)))]),
-  );
+
+  const wtFiles = new Map<string, Set<string>>();
+  for (const each of open) {
+    if (each.kind === 'worktree') {
+      wtFiles.set(each.node.id, new Set(read(project, each.wt).filter((f) => !treeFile(f))));
+    }
+  }
+
+  const resolvedCommits = new Map<string, string | null>();
+  const commitFilesCache = new Map<string, string[]>();
+  const wtHeads = new Map<string, string | null>();
+  const aheadCache = new Map<string, Set<string>>();
+
+  const mainFilesAgainst = (main: Extract<Participant, { kind: 'main' }>, wt: NodeWorktree): Set<string> => {
+    const out = new Set<string>(main.ownDirty);
+    if (!main.node.commits?.length) return out;
+    if (!wtHeads.has(wt.id)) wtHeads.set(wt.id, headOf(wt.path));
+    const wtHead = wtHeads.get(wt.id);
+    if (!wtHead) return out;
+    if (!aheadCache.has(wtHead)) aheadCache.set(wtHead, commitsAheadOf(main.root, wtHead));
+    const ahead = aheadCache.get(wtHead)!;
+    for (const raw of main.node.commits) {
+      if (!resolvedCommits.has(raw)) resolvedCommits.set(raw, resolveCommit(main.root, raw));
+      const oid = resolvedCommits.get(raw);
+      if (!oid || !ahead.has(oid)) continue;
+      if (!commitFilesCache.has(oid)) commitFilesCache.set(oid, commitChangedFiles(main.root, oid));
+      for (const file of commitFilesCache.get(oid)!) out.add(file);
+    }
+    return out;
+  };
+
   const useTrialMerge = merge !== undefined || read === changedFiles;
   const snapshots = new Map<string, WorktreeTree | null>();
-  const snapshot = (wt: NodeWorktree): WorktreeTree | null => {
-    if (!snapshots.has(wt.id)) snapshots.set(wt.id, worktreeTree(wt));
-    return snapshots.get(wt.id)!;
+  const snapshot = (each: Participant): WorktreeTree | null => {
+    if (!snapshots.has(each.node.id)) {
+      snapshots.set(
+        each.node.id,
+        each.kind === 'worktree' ? worktreeTree(each.wt) : mainNodeTree(each.root, each.ownDirty),
+      );
+    }
+    return snapshots.get(each.node.id)!;
   };
+  const byId = new Map(open.map((each) => [each.node.id, each]));
   const tryMerge: TrialMerge =
     merge ??
     ((proj, a, b) => {
-      const treeA = snapshot(a);
-      const treeB = snapshot(b);
+      const partA = byId.get(a.id);
+      const partB = byId.get(b.id);
+      const treeA = partA ? snapshot(partA) : null;
+      const treeB = partB ? snapshot(partB) : null;
       return treeA && treeB ? trialMergeConflicts(proj, treeA, treeB) : null;
     });
+
   const out: Overlap[] = [];
   for (const [at, a] of open.entries())
     for (const b of open.slice(at + 1)) {
+      if (a.kind === 'main' && b.kind === 'main') continue;
       if (wanted && !wanted.has(a.node.id) && !wanted.has(b.node.id)) continue;
-      const other = files.get(b.node.id)!;
-      const candidates = [...files.get(a.node.id)!].filter((file) => other.has(file)).sort();
+      let filesA: Set<string>;
+      let filesB: Set<string>;
+      if (a.kind === 'worktree' && b.kind === 'worktree') {
+        filesA = wtFiles.get(a.node.id)!;
+        filesB = wtFiles.get(b.node.id)!;
+      } else if (a.kind === 'main' && b.kind === 'worktree') {
+        filesA =
+          read === changedFiles ? mainFilesAgainst(a, b.wt) : new Set(read(project, a.wt).filter((f) => !treeFile(f)));
+        filesB = wtFiles.get(b.node.id)!;
+      } else {
+        // a is worktree, b is main
+        const m = b as Extract<Participant, { kind: 'main' }>;
+        filesA = wtFiles.get(a.node.id)!;
+        filesB =
+          read === changedFiles ? mainFilesAgainst(m, a.wt) : new Set(read(project, m.wt).filter((f) => !treeFile(f)));
+      }
+      const candidates = [...filesA].filter((file) => filesB.has(file)).sort();
       if (!candidates.length) continue;
       const conflicted = useTrialMerge ? pairConflicts(project, a.wt, b.wt, candidates, tryMerge) : null;
       const shared = conflicted ?? candidates.filter((file) => content(a.wt, file) !== content(b.wt, file));

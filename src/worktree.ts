@@ -14,6 +14,7 @@
  * not in the main folder's branch is not removed.
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   copyFileSync,
   existsSync,
@@ -123,6 +124,17 @@ function real(path: string): string {
 export function insideFolder(path: string, folder: string): boolean {
   const [a, b] = [real(path), real(folder)];
   return a === b || a.startsWith(b + sep);
+}
+
+/** Whether two paths point to the same folder (handling symlinks like `/var` vs `/private/var`). */
+export function sameFolder(a: string, b: string): boolean {
+  return a === b || real(a) === real(b);
+}
+
+/** Top-level folder of the git repository containing `dir`, or `undefined` outside git. */
+export function repoRoot(dir: string): string | undefined {
+  const top = git(dir, ['rev-parse', '--show-toplevel']);
+  return top.ok && top.out.trim() ? top.out.trim() : undefined;
 }
 
 // ── The registry ────────────────────────────────────────────────────────────
@@ -581,6 +593,138 @@ export function changedFiles(project: string, wt: NodeWorktree): string[] {
 
 const OID = /^[0-9a-f]{40,64}$/;
 
+const treeFile = (file: string) => /(^|\/)\.tree\//.test(file);
+
+function fileSha1(root: string, file: string): string | null {
+  try {
+    return createHash('sha1')
+      .update(readFileSync(join(root, file)))
+      .digest('hex');
+  } catch {
+    return null;
+  }
+}
+
+function statusDirty(cwd: string): string[] | null {
+  const status = git(cwd, ['status', '--porcelain=v1', '--untracked-files=all', '--no-renames', '-z']);
+  if (!status.ok) return null;
+  return status.out
+    .split('\0')
+    .filter(Boolean)
+    .filter((entry) => /^[ MADRCU?!]{2} /.test(entry))
+    .map((entry) => entry.slice(3))
+    .filter((file) => !treeFile(file));
+}
+
+/** Current HEAD commit OID in `dir`, or `null` if none (outside git or unborn branch). */
+export function headOf(dir: string): string | null {
+  const run = git(dir, ['rev-parse', '--verify', '--quiet', 'HEAD']);
+  const oid = run.out.trim();
+  return run.ok && OID.test(oid) ? oid : null;
+}
+
+/** Resolves a commit SHA or ref to its full OID, or `null` if unknown. */
+export function resolveCommit(root: string, ref: string): string | null {
+  const run = git(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+  const oid = run.out.trim();
+  return run.ok && OID.test(oid) ? oid : null;
+}
+
+/** Full commit OIDs reachable from `HEAD` that `baseRef` does not have yet. */
+export function commitsAheadOf(root: string, baseRef: string): Set<string> {
+  const run = git(root, ['rev-list', `${baseRef}..HEAD`]);
+  if (!run.ok) return new Set();
+  return new Set(
+    run.out
+      .split('\n')
+      .map((sha) => sha.trim())
+      .filter((sha) => OID.test(sha)),
+  );
+}
+
+/** Files touched by a single commit (paths from the repository root, excluding `.tree/`). */
+export function commitChangedFiles(root: string, oid: string): string[] {
+  const run = git(root, [
+    'diff-tree',
+    '--no-commit-id',
+    '--name-only',
+    '--no-renames',
+    '-r',
+    '-m',
+    '--root',
+    '-z',
+    oid,
+  ]);
+  if (!run.ok) return [];
+  return [...new Set(run.out.split('\0').filter((file) => file && !treeFile(file)))].sort();
+}
+
+/** Snapshot of the main folder at session start: separates a main-folder node's own edits from prior human dirt. */
+export interface MainBaseline {
+  head: string;
+  /** Dirty files at session start (repo-root-relative, no `.tree/`): sha1 on disk, or `null` when deleted. */
+  dirty: Record<string, string | null>;
+  at: string;
+}
+
+function mainBaselinePath(project: string, id: string): string {
+  return join(project, TREE_DIR, '.local', 'main-baseline', `${id}.json`);
+}
+
+/**
+ * Saves a snapshot of the main folder's HEAD and dirty files (excluding `.tree/`) when a node starts
+ * a session without its own worktree. Returns `null` outside a git repository or without commits.
+ */
+export function saveMainBaseline(project: string, id: string): MainBaseline | null {
+  const root = repoRoot(project);
+  if (!root) return null;
+  const head = headOf(root);
+  if (!head) return null;
+  const dirtyList = statusDirty(root);
+  if (!dirtyList) return null;
+  const dirty: Record<string, string | null> = {};
+  for (const file of dirtyList) dirty[file] = fileSha1(root, file);
+  const baseline: MainBaseline = { head, dirty, at: nowIso() };
+  const file = mainBaselinePath(project, id);
+  mkdirSync(dirname(file), { recursive: true });
+  const temp = `${file}.${process.pid}.tmp`;
+  writeFileSync(temp, `${JSON.stringify(baseline, null, 2)}\n`);
+  renameSync(temp, file);
+  return baseline;
+}
+
+/** Reads the main-folder baseline saved when node `id` started its session; undefined if none. */
+export function readMainBaseline(project: string, id: string): MainBaseline | undefined {
+  try {
+    const raw = JSON.parse(readFileSync(mainBaselinePath(project, id), 'utf8')) as Partial<MainBaseline>;
+    if (typeof raw?.head !== 'string' || !OID.test(raw.head) || typeof raw.dirty !== 'object' || !raw.dirty)
+      return undefined;
+    const dirty: Record<string, string | null> = {};
+    for (const [path, sha] of Object.entries(raw.dirty)) {
+      if (typeof sha === 'string' || sha === null) dirty[path] = sha;
+    }
+    return { head: raw.head, dirty, at: typeof raw.at === 'string' ? raw.at : '' };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Uncommitted files in the main folder that are new or changed compared to the node's session-start
+ * baseline (by content sha1; without a baseline, every current dirty file). Excludes `.tree/`.
+ */
+export function mainDirtyFiles(project: string, root: string, id: string): string[] {
+  const dirty = statusDirty(root);
+  if (!dirty?.length) return [];
+  const baseline = readMainBaseline(project, id);
+  if (!baseline) return [...new Set(dirty)].sort();
+  const out: string[] = [];
+  for (const file of dirty) {
+    if (!Object.hasOwn(baseline.dirty, file) || fileSha1(root, file) !== baseline.dirty[file]) out.push(file);
+  }
+  return [...new Set(out)].sort();
+}
+
 /** A worktree's HEAD and the tree of its current files (HEAD itself when clean, or a snapshot tree with uncommitted edits). */
 export interface WorktreeTree {
   head: string;
@@ -592,17 +736,10 @@ export interface WorktreeTree {
  * including untracked and deleted files) without touching its real git index or working tree.
  */
 export function worktreeTree(wt: NodeWorktree): WorktreeTree | null {
-  const headRun = git(wt.path, ['rev-parse', '--verify', '--quiet', 'HEAD']);
-  const head = headRun.out.trim();
-  if (!headRun.ok || !OID.test(head)) return null;
-  const status = git(wt.path, ['status', '--porcelain=v1', '--untracked-files=all', '--no-renames', '-z']);
-  if (!status.ok) return null;
-  const dirty = status.out
-    .split('\0')
-    .filter(Boolean)
-    .filter((entry) => /^[ MADRCU?!]{2} /.test(entry))
-    .map((entry) => entry.slice(3))
-    .filter((file) => !/(^|\/)\.tree\//.test(file));
+  const head = headOf(wt.path);
+  if (!head) return null;
+  const dirty = statusDirty(wt.path);
+  if (!dirty) return null;
   if (!dirty.length) return { head, tree: head };
   const tempDir = mkdtempSync(join(tmpdir(), 'treeyard-merge-'));
   const env = { GIT_INDEX_FILE: join(tempDir, 'index') };
@@ -610,6 +747,53 @@ export function worktreeTree(wt: NodeWorktree): WorktreeTree | null {
     if (!git(wt.path, ['read-tree', 'HEAD'], 30_000, env).ok) return null;
     if (!git(wt.path, ['add', '-A'], 30_000, env).ok) return null;
     const written = git(wt.path, ['write-tree'], 30_000, env);
+    const tree = written.out.trim();
+    return written.ok && OID.test(tree) ? { head, tree } : null;
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Builds a tree-ish for a node working in the main folder: `HEAD` plus only the uncommitted files
+ * attributed to this node (never prior baseline-dirty files of the person and never `.tree/`),
+ * using a temporary index so the real working tree and index stay untouched.
+ */
+export function mainNodeTree(root: string, ownDirty: readonly string[]): WorktreeTree | null {
+  const head = headOf(root);
+  if (!head) return null;
+  const files = ownDirty.filter((file) => !treeFile(file));
+  if (!files.length) return { head, tree: head };
+  const tempDir = mkdtempSync(join(tmpdir(), 'treeyard-merge-'));
+  const env = { GIT_INDEX_FILE: join(tempDir, 'index') };
+  try {
+    if (!git(root, ['read-tree', 'HEAD'], 30_000, env).ok) return null;
+    const existing: string[] = [];
+    const missing: string[] = [];
+    for (const file of files) {
+      try {
+        lstatSync(join(root, file));
+        existing.push(file);
+      } catch {
+        missing.push(file);
+      }
+    }
+    const chunkSize = 200;
+    for (let at = 0; at < existing.length; at += chunkSize) {
+      if (!git(root, ['add', '--', ...existing.slice(at, at + chunkSize)], 30_000, env).ok) return null;
+    }
+    for (let at = 0; at < missing.length; at += chunkSize) {
+      if (
+        !git(
+          root,
+          ['rm', '--cached', '--ignore-unmatch', '--quiet', '--', ...missing.slice(at, at + chunkSize)],
+          30_000,
+          env,
+        ).ok
+      )
+        return null;
+    }
+    const written = git(root, ['write-tree'], 30_000, env);
     const tree = written.out.trim();
     return written.ok && OID.test(tree) ? { head, tree } : null;
   } finally {

@@ -30,8 +30,8 @@ import { nodeEnv } from '../model/notes.js';
 import { attachSession, detachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import { holderOf, sessionHolders } from '../model/tree.js';
-import type { BrainId, SessionRef, Tree, TreeNode } from '../model/types.js';
-import { sessionFolder, sessionPlace, worktreeDirs, worktreeNote } from '../worktree.js';
+import { type BrainId, ROOT, type SessionRef, type Tree, type TreeNode } from '../model/types.js';
+import { saveMainBaseline, sessionFolder, sessionPlace, worktreeDirs, worktreeNote } from '../worktree.js';
 import { fullAccess } from './access.js';
 import { sessionPlan } from './context.js';
 import type { LaunchOptions } from './launch.js';
@@ -88,6 +88,7 @@ export async function launchInPane(
       }),
     );
   const place = await sessionPlace(tree, id, options.worktree);
+  if (!place.worktree && id !== ROOT) saveMainBaseline(tree.project.dir, id);
   const plan = sessionPlan(tree, id, options.start, options.brain, options.task, senderNode(tree));
   const started = await startPane({
     brain: options.brain,
