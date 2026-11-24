@@ -139,6 +139,7 @@ function projectRecord(project: Project): Record<string, unknown> {
     effort: project.effort,
     start: project.start,
     assist_model: project.assistModel,
+    mail_limit: project.mailLimit,
     created: project.created,
     sessions: project.sessions,
     body: project.body,

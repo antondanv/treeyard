@@ -31,6 +31,7 @@ import {
   spawnDeliverer,
 } from './deliver.js';
 import type { PaneSize } from './panes.js';
+import { type PingPong, pingPong } from './pingpong.js';
 import { newestSession, observe } from './wait.js';
 
 export { letterHeading };
@@ -55,6 +56,31 @@ export interface Sent {
 /** Why a message was not sent; the CLI prints it and exits 1. */
 export class NotSent extends Error {}
 
+/** The brake (pingpong.ts): the pair went round in a circle, so the next letter waits for a decision. */
+export class PingPongStop extends NotSent {
+  constructor(
+    message: string,
+    readonly stop: PingPong,
+  ) {
+    super(message);
+  }
+}
+
+/** What the sender is told: why nothing was sent and what to do — the way out is a person or a coordinator, not `--force`. */
+function stopText(tree: Tree, stop: PingPong): string {
+  const title = (id: string) => tree.nodes.get(id)?.title ?? id;
+  return [
+    t(
+      'письмо не отправлено: у «{from}» и «{to}» писем подряд — {letters} (предел {limit}), а записи в журнал, смены статуса или коммита ни у одного из них за это время не было — похоже, сессии переписываются по кругу',
+      { from: title(stop.from), to: title(stop.to), letters: stop.letters, limit: stop.limit },
+    ),
+    t(
+      'Спроси координатора или человека, как быть; сделал своё дело — запиши его в журнал (treeyard log), счёт начнётся заново.',
+    ),
+    t('Координатор или человек велел продолжать — то же письмо с --force.'),
+  ].join('\n  ');
+}
+
 /** What send uses of Brainyard; tests put their own. */
 export type SendSources = DeliverSources;
 export const SEND_SOURCES: SendSources = DELIVER_SOURCES;
@@ -68,6 +94,10 @@ export interface SendOptions {
   sources?: SendSources;
   /** Starts the deliverer for a letter that waits; tests put their own. */
   spawn?: (dir: string) => void;
+  /** Send past the brake on letters going round in a circle: someone who decides said to go on. */
+  force?: boolean;
+  /** The brake's way to tell when a node last committed; tests put their own. */
+  commitAt?: (project: string, id: string) => number | undefined;
 }
 
 /** Writes `text` to node `id`: into the mailbox, and to its newest session as soon as it can take it. */
@@ -77,6 +107,11 @@ export async function sendToNode(tree: Tree, id: string, text: string, options: 
   if (!node) throw new NotSent(t('нет узла {id}', { id }));
   const dir = tree.project.dir;
   const sender = options.sender && options.sender.id !== id ? tree.nodes.get(options.sender.id) : undefined;
+  // Two sessions answering each other for ever: stop before the letter is even written. A letter from a shell has no sender.
+  if (sender && !options.force) {
+    const stop = pingPong(tree, sender.id, id, options.commitAt ? { commitAt: options.commitAt } : {});
+    if (stop) throw new PingPongStop(stopText(tree, stop), stop);
+  }
   const ref = newestSession(node);
   // Writing back to a node that wrote to this one is answering its last letter, unless answered already.
   const mail = sender ? readMail(dir) : [];

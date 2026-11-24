@@ -99,6 +99,8 @@ export interface Project {
   assistModel?: string;
   /** A command that prepares a new worktree of a node (`npm install`); run in it before the session starts. */
   setup?: string;
+  /** Letters two nodes may exchange in a row, neither doing anything else (`mail_limit`); 0 — no brake; none — the default. */
+  mailLimit?: number;
   /** YYYY-MM-DD. */
   created?: string;
   /** Markdown: how the tree is run, rules for agents, decisions. */

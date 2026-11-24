@@ -36,9 +36,10 @@ import { type Attempt, deliverAll, ensureDeliverer, runDeliverer } from '../agen
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
 import { isPending, launchInPane, readPanes, sessionPanes } from '../agents/panes.js';
+import { DEFAULT_MAIL_LIMIT } from '../agents/pingpong.js';
 import { LIMIT, type QueueEvent, queueNodes, queueSources, runQueue } from '../agents/queue.js';
 import { answerQuestion, NotAnswered, waitReply } from '../agents/reply.js';
-import { NotSent, sendToNode } from '../agents/send.js';
+import { NotSent, PingPongStop, sendToNode } from '../agents/send.js';
 import { autoInstallSkills, skillHomes } from '../agents/skills.js';
 import {
   deliverMidTurn,
@@ -278,13 +279,18 @@ function commandLines(): string {
                                            «message»); --all — пока все узлы; время вышло — код 124; узел уже не в
                                            работе — ответ сразу; письмо узлу твоей сессии (координатора) — тоже возврат,
                                            с письмом целиком
-  treeyard send <id> "<текст>"|- [--json]   письмо следующей репликой той же сессии узла, а не новой сессии: сначала
+  treeyard send <id> "<текст>"|- [--force] [--json]   письмо следующей репликой той же сессии узла, а не новой сессии: сначала
                                            в ящик (номер), потом свободной панели — вставкой, уснувшей — пробуждением,
                                            фоновой Claude Code — продолжением; занятой, ждущей человека, открытой в его
                                            терминале и узлу без сессии — в очереди: доставит treeyard сам (первой сессии
                                            узла — в первом сообщении); вывод — номер и статус; строка — в журнал узла;
                                            --wait [--timeout 10m] — дождаться ответа (письма от узла тебе) и напечатать его,
-                                           а без ответа — конец хода сессии и её экран; код 124 — время вышло
+                                           а без ответа — конец хода сессии и её экран; код 124 — время вышло;
+                                           тормоз: между двумя узлами уже ушло mail_limit писем подряд (6; treeyard
+                                           config mail_limit N|off), а у них не было записи в журнал не-письмом, смены
+                                           статуса или коммита — следующее не уходит, код 1, в --json reason "ping-pong";
+                                           спроси координатора или человека; велели продолжать — --force; письма из
+                                           shell без узла не тормозятся
   treeyard send <id> --answer "<вариант>|<текст>"   ответ человека на вопрос в диалоге сессии узла (панель):
                                            номер или слова варианта, иначе текст — в строку своего ответа; разрешения
                                            не трогает — их даёт только человек
@@ -408,14 +414,19 @@ function commandLines(): string {
                                            field «message» in --json); --all — until every node does; out of time — exit
                                            code 124; a node no longer active — at once; a message to your session's node
                                            (the coordinator's) — it returns too, whole
-  treeyard send <id> "<text>"|- [--json]   a message as the next one of the node's own session, not a new session: into
+  treeyard send <id> "<text>"|- [--force] [--json]   a message as the next one of the node's own session, not a new session: into
                                            the mailbox first (a number), then typed into an idle pane, waking a sleeping
                                            one, resuming a Claude Code background one; for a busy one, one waiting for the
                                            person, one open in their terminal and a node with no session — queued: treeyard
                                            delivers it by itself (a node's first session gets it in its first message);
                                            prints the number and the state; a line in the node's journal; --wait
                                            [--timeout 10m] — wait for the answer (a message from the node to you) and print
-                                           it, or, with none, the end of the session's turn and its screen; 124 — out of time
+                                           it, or, with none, the end of the session's turn and its screen; 124 — out of time;
+                                           the brake: mail_limit messages in a row have gone between two nodes (6; treeyard
+                                           config mail_limit N|off) and neither wrote a journal entry that is not a message,
+                                           changed a status or committed — the next one is not sent, exit 1, "ping-pong" as
+                                           the reason in --json; ask the coordinator or the person; told to go on — --force;
+                                           messages from a shell outside the nodes are not braked
   treeyard send <id> --answer "<choice>|<text>"   the person's answer to a question in the dialog of the node's
                                            session (a pane): a choice's number or words, otherwise a text into the row of
                                            one's own answer; never a permission — only the person gives those
@@ -1385,9 +1396,10 @@ async function sendCommand(args: string[]): Promise<number> {
     wait: { type: 'boolean' },
     timeout: { type: 'string' },
     answer: { type: 'string' },
+    force: { type: 'boolean' },
   });
   const usage = t(
-    'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--json] · treeyard send <id> --answer "<вариант>|<текст>"',
+    'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--force] [--json] · treeyard send <id> --answer "<вариант>|<текст>"',
   );
   const tree = project(values.project);
   if (values.answer !== undefined) {
@@ -1412,11 +1424,31 @@ async function sendCommand(args: string[]): Promise<number> {
       size: paneSize(),
       source: sourceOf(values.as),
       sender: senderNode(tree),
+      ...(values.force ? { force: true } : {}),
     });
   } catch (error) {
     if (!(error instanceof NotSent)) throw error;
     if (values.json)
-      process.stdout.write(`${JSON.stringify({ node: id, sent: false, error: error.message }, null, 2)}\n`);
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            node: id,
+            sent: false,
+            error: error.message,
+            // The brake on letters going round in a circle: why, and how far it went.
+            ...(error instanceof PingPongStop
+              ? {
+                  reason: 'ping-pong',
+                  from: error.stop.from,
+                  letters: error.stop.letters,
+                  limit: error.stop.limit,
+                }
+              : {}),
+          },
+          null,
+          2,
+        )}\n`,
+      );
     process.stderr.write(`${err.c('#ff7b72', '✗')} ${error.message}\n`);
     return 1;
   }
@@ -3411,7 +3443,13 @@ const SNAKE: Record<string, string> = {
   antigravityAccess: 'antigravity_access',
   codexAccess: 'codex_access',
 };
-const PROJECT_KEYS = ['brain', 'start', 'model', 'effort', 'assist_model', 'setup'] as const;
+const PROJECT_KEYS = ['brain', 'start', 'model', 'effort', 'assist_model', 'setup', 'mail_limit'] as const;
+
+/** The project's `mail_limit` as `config` shows it: the number, `off`, or the default marked as one. */
+function mailLimitShown(limit: number | undefined): string {
+  if (limit === 0) return 'off';
+  return limit === undefined ? `${DEFAULT_MAIL_LIMIT} ${out.dim(`(${t('по умолчанию')})`)}` : String(limit);
+}
 
 function configCommand(args: string[]): number {
   const [requestedKey, ...rest] = args;
@@ -3436,6 +3474,7 @@ function configCommand(args: string[]): number {
         effort: p.effort,
         assist_model: p.assistModel,
         setup: p.setup,
+        mail_limit: mailLimitShown(p.mailLimit),
       };
       for (const name of PROJECT_KEYS) process.stdout.write(`  ${name.padEnd(18)} ${values[name] ?? out.dim('—')}\n`);
     }
@@ -3517,9 +3556,19 @@ function configCommand(args: string[]): number {
     else if (key === 'model') p.model = value || undefined;
     else if (key === 'effort') p.effort = value || undefined;
     else if (key === 'setup') p.setup = value || undefined;
-    else p.assistModel = value || undefined;
+    else if (key === 'mail_limit') {
+      // No value — what it is now; `default` — the default again; off — no brake on letters going round in a circle.
+      if (!value) {
+        process.stdout.write(`${mailLimitShown(p.mailLimit)}\n`);
+        return 0;
+      }
+      const n = /^(off|none)$/i.test(value) ? 0 : /^default$/i.test(value) ? undefined : Number(value);
+      if (n !== undefined && (!Number.isInteger(n) || n < 0))
+        throw new UsageError(t('{key}: число писем подряд, off — без тормоза, default — как по умолчанию', { key }));
+      p.mailLimit = n;
+    } else p.assistModel = value || undefined;
     writeProject(p);
-    process.stdout.write(`${key} = ${value || '—'}\n`);
+    process.stdout.write(`${key} = ${key === 'mail_limit' ? mailLimitShown(p.mailLimit) : value || '—'}\n`);
     return 0;
   }
   throw new UsageError(t('нет такой настройки «{key}» — treeyard config', { key }));
