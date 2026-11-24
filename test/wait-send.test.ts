@@ -563,6 +563,43 @@ describe('treeyard wait', () => {
     expect(enText).toContain('waits for the person: folder trust');
     expect(enText).toContain('answer in the pane: tmux -L brainyard attach -t codex-trust');
   });
+
+  it('spots an Antigravity folder-trust dialog even when its live status already says busy', async () => {
+    const tree = emptyTree();
+    const agy = nodeWithSession(tree, 'Доверие Antigravity busy', {
+      id: 'agy-1',
+      brain: 'antigravity',
+      mode: 'pane',
+      pane: 'agy-busy-trust',
+      started: ago(500),
+      opened: ago(500),
+    });
+    const sources = waitSources({
+      live: [{ ...live('agy-1', 'busy'), brain: 'antigravity' }],
+      panes: [pane('agy-busy-trust', { brain: 'antigravity', sessionId: 'agy-1' })],
+      screens: {
+        'agy-busy-trust': [
+          'Accessing workspace:',
+          '/tmp/project',
+          'Do you trust the contents of this project?',
+          'Antigravity CLI requires permission to read, edit, and execute files here.',
+          '> Yes, I trust this folder',
+          '  No, exit',
+          '  ↑/↓ Navigate · enter Confirm',
+          '                                           auto · Gemini 4 Carbon · high',
+        ],
+      },
+    });
+    const res = await waitFor(tree.project.dir, [agy.id], { ...fast, sources });
+    expect(res.timedOut).toBe(false);
+    expect(res.settled).toMatchObject([
+      {
+        id: agy.id,
+        reason: 'waiting',
+        session: { brain: 'antigravity', state: 'waiting', waitingFor: 'доверие к папке', pane: 'agy-busy-trust' },
+      },
+    ]);
+  });
 });
 
 /** Brainyard as send sees it, recording every call. */

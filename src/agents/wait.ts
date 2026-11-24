@@ -194,11 +194,12 @@ export async function observe(dir: string, sources: ObserveSources): Promise<Wor
   const paneScreens = new Map<string, readonly string[]>();
   if (sources.capture) {
     const capture = sources.capture;
-    const silent = named.filter(
-      (pane) =>
-        (!pane.brain || pane.brain === 'claude' || pane.brain === 'codex' || pane.brain === 'antigravity') &&
-        (!pane.sessionId || !states.get(pane.sessionId)?.live?.status),
-    );
+    const silent = named.filter((pane) => {
+      if (pane.brain && pane.brain !== 'claude' && pane.brain !== 'codex' && pane.brain !== 'antigravity') return false;
+      const status = pane.sessionId ? states.get(pane.sessionId)?.live?.status : undefined;
+      // Antigravity writes a RUNNING summary before the person answers its workspace-trust prompt.
+      return !status || (pane.brain === 'antigravity' && status !== 'waiting' && status !== 'idle');
+    });
     await Promise.all(
       silent.map(async (pane) => {
         const screen = await capture(pane.pane).catch(() => undefined);
@@ -221,7 +222,10 @@ export function sessionSight(ref: SessionRef, world: World): SessionSight {
   if (ref.mode) sight.mode = ref.mode;
   if (pane) sight.pane = pane.pane;
   const status = info?.live?.status;
-  const dialog = !status && pane ? world.paneDialogs?.get(pane.pane) : undefined;
+  const dialog =
+    pane && (!status || (ref.brain === 'antigravity' && status !== 'waiting' && status !== 'idle'))
+      ? world.paneDialogs?.get(pane.pane)
+      : undefined;
   if (status === 'waiting') {
     sight.state = 'waiting';
     if (info?.live?.waitingFor) sight.waitingFor = info.live.waitingFor;
