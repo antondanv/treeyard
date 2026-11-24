@@ -236,7 +236,9 @@ export function letterPeer(letter: Letter): string {
 export const HOLD_TEXT: Record<Hold, string> = labels(() => ({
   busy: t('сессия занята — придёт, когда она закончит ход'),
   waiting: t('сессия ждёт человека — придёт, когда он ответит'),
-  terminal: t('сессия открыта в терминале человека — придёт, когда её закроют'),
+  terminal: t(
+    'сессия открыта в терминале человека. В Claude Code с хуком письмо придёт с очередным запросом, иначе — после закрытия сессии',
+  ),
   starting: t('сессия ещё запускается — придёт через несколько секунд'),
   none: t('у узла нет сессии — письмо получит первая'),
 }));
@@ -249,6 +251,7 @@ export const DELIVERY_TEXT: Record<Delivery, string> = labels(() => ({
   first: t('в первом сообщении новой сессии'),
   wait: t('показано в treeyard wait'),
   turn: t('посреди хода'),
+  prompt: t('вместе с запросом'),
 }));
 
 /** `в очереди: сессия занята — …` or `доставлено: набрано в панели`; nothing without the mailbox. */

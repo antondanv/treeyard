@@ -37,7 +37,9 @@ export type Delivery =
   /** `treeyard wait` of the addressee's own session printed it. */
   | 'wait'
   /** The session was at work: its Claude Code hook (agents/turn-hook.ts) handed it over between two tool calls. */
-  | 'turn';
+  | 'turn'
+  /** Claude Code's UserPromptSubmit hook handed it over with a prompt. */
+  | 'prompt';
 
 /** Why a letter still waits. */
 export type Hold =
@@ -45,7 +47,7 @@ export type Hold =
   | 'busy'
   /** A permission or a question for the person is open: keys typed now would answer it. */
   | 'waiting'
-  /** Open in the person's own terminal: nothing to type into until it is closed. */
+  /** Open in the person's own terminal: the deliverer cannot type into it. */
   | 'terminal'
   /** The CLI has just started and has not said what it is doing yet. */
   | 'starting'
@@ -85,8 +87,8 @@ export function mailDir(dir: string): string {
 }
 
 /**
- * The inbox flag of a node: a file that exists while letters wait for it. A tool-call hook runs
- * before every tool call of every session and must cost next to nothing when there is no letter:
+ * The inbox flag of a node: a file that exists while letters wait for it. The mail hooks run on
+ * every prompt and successful tool call and must cost next to nothing when there is no letter:
  * the shell line of the hook only tests this file (`[ -e … ]`) and starts treeyard when it is
  * there. A hint, not the truth — the letters are: a stale flag is dropped by the hook that finds
  * nothing behind it, a missing one is raised again by the deliverer's next pass.

@@ -27,8 +27,10 @@ export const EN: Record<string, string> = {
   'у тебя': 'yours',
   'поставить — treeyard hook claude install (только для проекта) или с --user (для всех проектов)':
     'to put it in — treeyard hook claude install (this project only) or with --user (every project)',
-  'сессии Claude Code из узлов получат письма посреди хода; уже запущенные — после перезапуска. Убрать — treeyard hook claude remove{p1}':
-    'Claude Code sessions of nodes will get letters in the middle of a turn; ones already running — after a restart. To take it out — treeyard hook claude remove{p1}',
+  'обновить хук в {file} — treeyard hook claude install{p1}':
+    'to update the hook in {file}, run treeyard hook claude install{p1}',
+  'сессии Claude Code из узлов получат письма вместе с запросом и посреди хода. Убрать оба хука — treeyard hook claude remove{p1}':
+    'Claude Code sessions started from nodes will receive letters alongside a prompt and during a turn. To remove both hooks, run treeyard hook claude remove{p1}',
   'хук Claude Code для писем': 'the Claude Code hook for letters',
   '{file} — не JSON-объект: хук поставь сам или поправь файл':
     '{file} is not a JSON object: put the hook in yourself or fix the file',
@@ -38,9 +40,12 @@ export const EN: Record<string, string> = {
     'A letter came while you were working — take it into account in this work:',
   'Пока ты работал, пришли письма — учти их в этой работе:':
     'Letters came while you were working — take them into account in this work:',
+  'Вместе с запросом пришло письмо для этой сессии.': 'A letter for this session arrived alongside the prompt.',
+  'Вместе с запросом пришли письма для этой сессии.': 'Letters for this session arrived alongside the prompt.',
   'хук писем': 'letter hook',
   'не стоит · treeyard hook claude install': 'not installed · treeyard hook claude install',
   'посреди хода': 'in the middle of a turn',
+  'вместе с запросом': 'alongside the prompt',
   'укажи SHA коммита (от 4 шестнадцатеричных символов)': 'give a commit SHA (at least 4 hexadecimal characters)',
   'укажи коммит: SHA, HEAD, ветку или тег': 'give a commit: a SHA, HEAD, a branch or a tag',
   'коммит {sha} не найден или ссылка неоднозначна': 'commit {sha} was not found or the ref is ambiguous',
@@ -1535,8 +1540,8 @@ export const EN: Record<string, string> = {
   '№{n}': '#{n}',
   'сессия занята — придёт, когда она закончит ход': 'the session is busy — it arrives when its turn is over',
   'сессия ждёт человека — придёт, когда он ответит': 'the session waits for the person — it arrives once they answer',
-  'сессия открыта в терминале человека — придёт, когда её закроют':
-    "the session is open in the person's terminal — it arrives once it is closed",
+  'сессия открыта в терминале человека. В Claude Code с хуком письмо придёт с очередным запросом, иначе — после закрытия сессии':
+    "the session is open in the person's terminal. In Claude Code with the hook, the letter arrives with the next prompt. Otherwise it arrives after the session closes",
   'сессия ещё запускается — придёт через несколько секунд':
     'the session is still starting — it arrives in a few seconds',
   'у узла нет сессии — письмо получит первая': 'the node has no session — its first one gets the message',

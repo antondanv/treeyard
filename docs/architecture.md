@@ -119,14 +119,16 @@
   `runDeliverer` — `treeyard deliver`, один на проект, отдельный процесс от `send` (`spawnDeliverer`),
   проходы раз в 3 с, пока есть что доставить; `ensureDeliverer` перезапускает его из `send`, `wait` и
   TUI. Новая сессия узла получает ждущие письма в первом сообщении (`sessionPlan` → `letters`).
-- `turn-hook.ts` — письма занятой сессии посреди хода: хук `PostToolUse` Claude Code
-  (`treeyard hook claude install` — в `.claude/settings.local.json` проекта, с `--user` — в настройки
-  Claude Code; `remove`, `status`, строка в `treeyard status` и в `uninstall`). Строка хука — только
-  builtin'ы shell: без флага `inbox/<узел>` не запускается ничего; с флагом `treeyard hook claude mail`
-  читает stdin Claude Code, под замком ящика берёт письма узла (`TREEYARD_NODE`), печатает их как
-  `additionalContext` и только потом помечает «посреди хода» (`turn`) — в тот же замок, что и
-  доставщик, поэтому письмо не приходит дважды. Субагентам и длинным письмам (> 9000 символов) не
-  отдаёт: они идут обычным путём. Хуки Codex (нужно одобрение человека, `/hooks`), Antigravity
+- `turn-hook.ts` — доставка писем через два хука Claude Code. `UserPromptSubmit` добавляет письма
+  к очередному запросу, в том числе в терминале человека (`prompt`). `PostToolUse` добавляет письма
+  посреди хода (`turn`). `treeyard hook claude install` ставит оба в `.claude/settings.local.json`
+  проекта или в настройки Claude Code с `--user`. `status` подсказывает, где обновить старую
+  установку, `remove` и `uninstall` убирают обе записи. Строка хука проверяет флаг `inbox/<узел>`
+  средствами shell. При наличии флага `treeyard hook claude mail` читает `hook_event_name` из stdin
+  и печатает письма узла (`TREEYARD_NODE`) в `hookSpecificOutput.additionalContext`. Хук помечает
+  письма доставленными после вывода. Он использует тот же замок ящика, что и доставщик. Для
+  субагентов хук ничего не выдаёт. Письма, которые не укладываются в лимит контекста, остаются
+  в ящике для обычной доставки. Хуки Codex (нужно одобрение человека, `/hooks`), Antigravity
   (`PreInvocation` в `.agents/hooks.json`) и плагины OpenCode — отдельные узлы-идеи.
 - `skills.ts` — скиллы из `skills/` (`treeyard`, `treeyard-init`, `treeyard-coordinate`): где их ищет каждый CLI (свой
   дом и папка проекта), стоит ли свежая копия, установка папкой целиком; `autoInstallSkills` — сама

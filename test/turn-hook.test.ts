@@ -87,6 +87,7 @@ describe('the hook in Claude Code settings', () => {
       permissions: { allow: ['Bash(npm test)'] },
       hooks: {
         PostToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: 'prettier --write' }] }],
+        UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'echo prompt' }] }],
         Stop: [{ hooks: [{ type: 'command', command: 'say done' }] }],
       },
     };
@@ -98,6 +99,10 @@ describe('the hook in Claude Code settings', () => {
     expect(settings.hooks.PostToolUse).toEqual([
       mine.hooks.PostToolUse[0],
       { matcher: '*', hooks: [{ type: 'command', command: HOOK_COMMAND, timeout: 10 }] },
+    ]);
+    expect(settings.hooks.UserPromptSubmit).toEqual([
+      mine.hooks.UserPromptSubmit[0],
+      { hooks: [{ type: 'command', command: HOOK_COMMAND, timeout: 10 }] },
     ]);
     expect(mailHookInstalled(file)).toBe(true);
   });
@@ -118,24 +123,35 @@ describe('the hook in Claude Code settings', () => {
     expect(JSON.parse(readFileSync(file, 'utf8')).hooks.PostToolUse[0].hooks[0].command).toBe(HOOK_COMMAND);
   });
 
-  it('comes out alone: others’ hooks and settings stay, an empty file goes', () => {
+  it('removes both Treeyard hooks and deletes an empty settings file', () => {
     const dir = tempDir();
     const file = claudeSettingsFile('project', dir);
     installMailHook('project', dir);
     expect(removeMailHook('project', dir)).toEqual({ kind: 'removed', file });
     expect(existsSync(file)).toBe(false);
     expect(removeMailHook('project', dir).kind).toBe('absent');
+  });
 
-    mkdirSync(join(dir, '.claude'), { recursive: true });
-    writeFileSync(
-      file,
-      JSON.stringify({ model: 'opus', hooks: { PostToolUse: [{ hooks: [{ type: 'command', command: 'echo 1' }] }] } }),
-    );
+  it('preserves other settings and hooks in the same groups on removal', () => {
+    const dir = tempDir();
+    const file = claudeSettingsFile('project', dir);
     installMailHook('project', dir);
+    const settings = JSON.parse(readFileSync(file, 'utf8'));
+    settings.model = 'opus';
+    const toolHook = { type: 'command', command: 'echo tool' };
+    const promptHook = { type: 'command', command: 'echo prompt' };
+    settings.hooks.PostToolUse[0].hooks.push(toolHook);
+    settings.hooks.UserPromptSubmit[0].hooks.unshift(promptHook);
+    settings.hooks.UserPromptSubmit.push({ hooks: [] });
+    writeFileSync(file, JSON.stringify(settings));
+
     removeMailHook('project', dir);
     expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
       model: 'opus',
-      hooks: { PostToolUse: [{ hooks: [{ type: 'command', command: 'echo 1' }] }] },
+      hooks: {
+        PostToolUse: [{ matcher: '*', hooks: [toolHook] }],
+        UserPromptSubmit: [{ hooks: [promptHook] }, { hooks: [] }],
+      },
     });
   });
 
@@ -143,7 +159,13 @@ describe('the hook in Claude Code settings', () => {
     const dir = tempDir();
     const file = claudeSettingsFile('project', dir);
     mkdirSync(join(dir, '.claude'));
-    for (const text of ['{ "hooks": ', '[]', '{"hooks": []}', '{"hooks": {"PostToolUse": {}}}']) {
+    for (const text of [
+      '{ "hooks": ',
+      '[]',
+      '{"hooks": []}',
+      '{"hooks": {"PostToolUse": {}}}',
+      '{"hooks": {"UserPromptSubmit": {}}}',
+    ]) {
       writeFileSync(file, text);
       expect(() => installMailHook('project', dir)).toThrow();
       expect(readFileSync(file, 'utf8')).toBe(text);
@@ -187,7 +209,7 @@ describe('the hook in Claude Code settings', () => {
   });
 });
 
-describe('letters between two tool calls', () => {
+describe('letters delivered by the Claude Code hooks', () => {
   it('reach the model as context of the turn, and are marked «посреди хода»', async () => {
     const { dir, site, boss, env } = project();
     addLetter(dir, { to: site.id, from: boss.id, who: 'claude', text: 'поправь заголовок' });
@@ -206,6 +228,31 @@ describe('letters between two tool calls', () => {
     expect(letter.delivered).toMatchObject({ how: 'turn', session: 'claude 1a2b3c4d' });
     expect(letterState({ state: 'delivered', how: 'turn' })).toBe('доставлено: посреди хода');
     expect(existsSync(flag(dir, site.id))).toBe(false);
+  });
+
+  it('hands terminal mail over with the prompt and records how it arrived', async () => {
+    const { dir, site, boss, env } = project();
+    addLetter(dir, { to: site.id, from: boss.id, who: 'codex', text: 'проверь сборку', held: 'terminal' });
+    expect(letterState({ state: 'queued', held: 'terminal' })).toContain('письмо придёт с очередным запросом');
+
+    const { printed, emit } = capture();
+    const input = { session_id: '1a2b3c4d-0000', hook_event_name: 'UserPromptSubmit' };
+    expect(await deliverMidTurn(env, input, { emit })).toEqual([1]);
+    expect(printed).toHaveLength(1);
+    expect(JSON.parse(printed[0]!)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: `Вместе с запросом пришло письмо для этой сессии.\nПисьмо от сессии узла «Координатор» (${boss.id}), не от человека; ответ — treeyard send ${boss.id} "…":\nпроверь сборку`,
+      },
+    });
+    const letter = letterByNumber(dir, 1)!;
+    expect(letter.state).toBe('delivered');
+    expect(letter.held).toBeUndefined();
+    expect(letter.delivered).toMatchObject({ how: 'prompt', session: 'claude 1a2b3c4d' });
+    expect(letterState({ state: letter.state, how: letter.delivered!.how })).toBe('доставлено: вместе с запросом');
+    expect(existsSync(flag(dir, site.id))).toBe(false);
+    expect(await deliverMidTurn(env, { hook_event_name: 'PostToolUse' }, { emit })).toEqual([]);
+    expect(printed).toHaveLength(1);
   });
 
   it('do not come a second time', async () => {
@@ -251,6 +298,13 @@ describe('letters between two tool calls', () => {
       expect(JSON.parse(printed[0]!).hookSpecificOutput.additionalContext).toMatch(
         /^A letter came while you were working — take it into account in this work:\nA message from the session of node/,
       );
+      addLetter(dir, { to: site.id, text: 'one' });
+      addLetter(dir, { to: site.id, text: 'two' });
+      await deliverMidTurn(env, { hook_event_name: 'UserPromptSubmit' }, { emit });
+      expect(JSON.parse(printed[1]!).hookSpecificOutput.additionalContext).toBe(
+        'Letters for this session arrived alongside the prompt.\none\n\ntwo',
+      );
+      expect(letterState({ state: 'delivered', how: 'prompt' })).toBe('delivered: alongside the prompt');
     } finally {
       setLang('ru');
     }
@@ -265,6 +319,7 @@ describe('letters between two tool calls', () => {
     expect(await deliverMidTurn({}, {}, { emit })).toEqual([]);
     expect(await deliverMidTurn({ [NODE_VAR]: boss.id, [PROJECT_VAR]: dir }, {}, { emit })).toEqual([]);
     expect(await deliverMidTurn({ [NODE_VAR]: site.id }, {}, { emit })).toEqual([]);
+    expect(await deliverMidTurn(env, { hook_event_name: 'Stop' }, { emit })).toEqual([]);
     expect(printed).toEqual([]);
     expect(queuedFor(dir, site.id)).toHaveLength(1);
   });
@@ -405,19 +460,22 @@ describe('the shell line of the hook', () => {
     expect(lost).toEqual({ code: 0, stdout: '', stderr: '' });
   });
 
-  it('hands the letter over through the real command, once', async () => {
+  it.each([
+    { event: 'PostToolUse', payload: { tool_name: 'Bash' }, how: 'turn' },
+    { event: 'UserPromptSubmit', payload: { prompt: 'продолжай работу' }, how: 'prompt' },
+  ])('hands the letter over through the real command on $event, once', async ({ event, payload, how }) => {
     const { env, dir, site, boss } = project();
     const { real } = shims();
     addLetter(dir, { to: site.id, from: boss.id, who: 'claude', text: 'сначала тесты' });
-    const input = JSON.stringify({ session_id: 'feedface-1111', hook_event_name: 'PostToolUse', tool_name: 'Bash' });
+    const input = JSON.stringify({ session_id: 'feedface-1111', hook_event_name: event, ...payload });
     const first = await runHook(sessionEnv(env), real, input);
     expect(first.code).toBe(0);
     expect(first.stderr).toBe('');
     const out = JSON.parse(first.stdout);
-    expect(out.hookSpecificOutput.hookEventName).toBe('PostToolUse');
+    expect(out.hookSpecificOutput.hookEventName).toBe(event);
     expect(out.hookSpecificOutput.additionalContext).toContain('сначала тесты');
-    // The mailbox says how it came; the flag is gone, so the next tool call costs nothing.
-    expect(letterByNumber(dir, 1)?.delivered).toMatchObject({ how: 'turn', session: 'claude feedface' });
+    // The mailbox says how it came; the flag is gone, so the next event costs nothing.
+    expect(letterByNumber(dir, 1)?.delivered).toMatchObject({ how, session: 'claude feedface' });
     expect(existsSync(flag(dir, site.id))).toBe(false);
     const second = await runHook(sessionEnv(env), real, input);
     expect(second).toEqual({ code: 0, stdout: '', stderr: '' });
@@ -461,6 +519,27 @@ describe('treeyard hook claude', () => {
     expect((await sh('hook', 'claude', 'remove')).stdout).toContain('хука нет');
   });
 
+  it('reports and updates an existing PostToolUse-only installation', async () => {
+    const dir = tempDir();
+    const own = tempDir('treeyard-claude-');
+    const sh = treeyardIn(dir, { CLAUDE_CONFIG_DIR: own });
+    expect((await sh('init', '--template', 'directions', '--goal', 'всё работает')).code).toBe(0);
+    const file = claudeSettingsFile('project', dir);
+    mkdirSync(join(dir, '.claude'), { recursive: true });
+    const tool = { matcher: '*', hooks: [{ type: 'command', command: HOOK_COMMAND, timeout: 10 }] };
+    writeFileSync(file, JSON.stringify({ hooks: { PostToolUse: [tool] } }));
+
+    const before = await sh('hook', 'claude', 'status');
+    expect(before.stdout).toMatch(/в проекте: обновить хук.*treeyard hook claude install/);
+    expect((await sh('hook', 'claude', 'install')).stdout).toContain('хук обновлён');
+    expect(JSON.parse(readFileSync(file, 'utf8')).hooks).toEqual({
+      PostToolUse: [tool],
+      UserPromptSubmit: [{ hooks: tool.hooks }],
+    });
+    expect((await sh('hook', 'claude', 'status')).stdout).toContain('в проекте: хук стоит');
+    expect((await sh('hook', 'claude', 'install')).stdout).toContain('хук уже стоит');
+  });
+
   it('touches the person’s own settings only with --user', async () => {
     const dir = tempDir();
     const own = tempDir('treeyard-claude-');
@@ -485,11 +564,12 @@ describe('treeyard hook claude', () => {
     expect(bad.stderr).toContain('treeyard hook claude install | remove | status [--user]');
     const help = await sh('hook', '--help');
     expect(help.stdout).toContain('treeyard hook claude install|remove|status [--user]');
+    expect(help.stdout).toContain('UserPromptSubmit — вместе с запросом, PostToolUse — посреди хода');
     const en = await treeyardIn(dir, { TREEYARD_LANG: 'en' })('hook', '--help');
-    expect(en.stdout).toContain('Claude Code hook: a letter for a busy node session arrives between');
+    expect(en.stdout).toContain('UserPromptSubmit delivers with the prompt, PostToolUse during the turn');
   });
 
-  it('comes out with `treeyard uninstall`', async () => {
+  it('removes a full project installation and a legacy user installation with `treeyard uninstall`', async () => {
     const dir = tempDir();
     const own = tempDir('treeyard-claude-');
     const home = tempDir('treeyard-home-');
@@ -499,9 +579,22 @@ describe('treeyard hook claude', () => {
     await sh('hook', 'claude', 'install');
     const file = join(dir, '.claude', 'settings.local.json');
     writeFileSync(file, readFileSync(file, 'utf8').replace('{', '{"model":"opus",'));
+    const legacy = join(own, 'settings.json');
+    writeFileSync(
+      legacy,
+      JSON.stringify({
+        hooks: { PostToolUse: [{ hooks: [{ type: 'command', command: HOOK_COMMAND, timeout: 10 }] }] },
+      }),
+    );
+    expect((await sh('hook', 'claude', 'status')).stdout).toMatch(
+      /у тебя: обновить хук.*treeyard hook claude install --user/,
+    );
     expect((await sh('uninstall', '--dry-run')).stdout).toContain('хук Claude Code для писем');
+    expect(existsSync(legacy)).toBe(true);
     const done = await sh('uninstall');
+    expect(done.code).toBe(0);
     expect(done.stdout).toContain('хук Claude Code для писем');
     expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ model: 'opus' });
+    expect(existsSync(legacy)).toBe(false);
   });
 });
