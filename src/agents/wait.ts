@@ -197,8 +197,8 @@ export async function observe(dir: string, sources: ObserveSources): Promise<Wor
     const silent = named.filter((pane) => {
       if (pane.brain && pane.brain !== 'claude' && pane.brain !== 'codex' && pane.brain !== 'antigravity') return false;
       const status = pane.sessionId ? states.get(pane.sessionId)?.live?.status : undefined;
-      // Antigravity writes a RUNNING summary before the person answers its workspace-trust prompt.
-      return !status || (pane.brain === 'antigravity' && status !== 'waiting' && status !== 'idle');
+      // Antigravity writes a summary (RUNNING or IDLE) before the person answers its workspace-trust prompt.
+      return !status || (pane.brain === 'antigravity' && status !== 'waiting');
     });
     await Promise.all(
       silent.map(async (pane) => {
@@ -223,7 +223,7 @@ export function sessionSight(ref: SessionRef, world: World): SessionSight {
   if (pane) sight.pane = pane.pane;
   const status = info?.live?.status;
   const dialog =
-    pane && (!status || (ref.brain === 'antigravity' && status !== 'waiting' && status !== 'idle'))
+    pane && (!status || (ref.brain === 'antigravity' && status !== 'waiting'))
       ? world.paneDialogs?.get(pane.pane)
       : undefined;
   if (status === 'waiting') {

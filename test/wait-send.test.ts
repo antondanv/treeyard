@@ -564,9 +564,9 @@ describe('treeyard wait', () => {
     expect(enText).toContain('answer in the pane: tmux -L brainyard attach -t codex-trust');
   });
 
-  it('spots an Antigravity folder-trust dialog even when its live status already says busy', async () => {
+  it('spots an Antigravity folder-trust dialog even when its live status already says busy or idle', async () => {
     const tree = emptyTree();
-    const agy = nodeWithSession(tree, 'Доверие Antigravity busy', {
+    const agyBusy = nodeWithSession(tree, 'Доверие Antigravity busy', {
       id: 'agy-1',
       brain: 'antigravity',
       mode: 'pane',
@@ -574,29 +574,50 @@ describe('treeyard wait', () => {
       started: ago(500),
       opened: ago(500),
     });
+    const agyIdle = nodeWithSession(tree, 'Доверие Antigravity idle', {
+      id: 'agy-2',
+      brain: 'antigravity',
+      mode: 'pane',
+      pane: 'agy-idle-trust',
+      started: ago(60_000),
+      opened: ago(60_000),
+    });
+    const trustScreen = [
+      'Accessing workspace:',
+      '/tmp/project',
+      'Do you trust the contents of this project?',
+      'Antigravity CLI requires permission to read, edit, and execute files here.',
+      '> Yes, I trust this folder',
+      '  No, exit',
+      '  ↑/↓ Navigate · enter Confirm',
+      '                                           auto · Gemini 4 Carbon · high',
+    ];
     const sources = waitSources({
-      live: [{ ...live('agy-1', 'busy'), brain: 'antigravity' }],
-      panes: [pane('agy-busy-trust', { brain: 'antigravity', sessionId: 'agy-1' })],
+      live: [
+        { ...live('agy-1', 'busy'), brain: 'antigravity' },
+        { ...live('agy-2', 'idle'), brain: 'antigravity' },
+      ],
+      panes: [
+        pane('agy-busy-trust', { brain: 'antigravity', sessionId: 'agy-1' }),
+        pane('agy-idle-trust', { brain: 'antigravity', sessionId: 'agy-2' }),
+      ],
       screens: {
-        'agy-busy-trust': [
-          'Accessing workspace:',
-          '/tmp/project',
-          'Do you trust the contents of this project?',
-          'Antigravity CLI requires permission to read, edit, and execute files here.',
-          '> Yes, I trust this folder',
-          '  No, exit',
-          '  ↑/↓ Navigate · enter Confirm',
-          '                                           auto · Gemini 4 Carbon · high',
-        ],
+        'agy-busy-trust': trustScreen,
+        'agy-idle-trust': trustScreen,
       },
     });
-    const res = await waitFor(tree.project.dir, [agy.id], { ...fast, sources });
+    const res = await waitFor(tree.project.dir, [agyBusy.id, agyIdle.id], { ...fast, all: true, sources });
     expect(res.timedOut).toBe(false);
     expect(res.settled).toMatchObject([
       {
-        id: agy.id,
+        id: agyBusy.id,
         reason: 'waiting',
         session: { brain: 'antigravity', state: 'waiting', waitingFor: 'доверие к папке', pane: 'agy-busy-trust' },
+      },
+      {
+        id: agyIdle.id,
+        reason: 'waiting',
+        session: { brain: 'antigravity', state: 'waiting', waitingFor: 'доверие к папке', pane: 'agy-idle-trust' },
       },
     ]);
   });
