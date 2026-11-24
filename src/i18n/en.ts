@@ -1560,8 +1560,17 @@ export const EN: Record<string, string> = {
     'no choices of the question on the screen of pane {pane} — answer it there yourself',
   'нет такого варианта, а своего текста вопрос не принимает: {choices}':
     'no such choice, and the question takes no text of its own: {choices}',
-  'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--json] · treeyard send <id> --answer "<вариант>|<текст>"':
-    'treeyard send <id> "<text>"|- [--wait [--timeout 10m]] [--json] · treeyard send <id> --answer "<choice>|<text>"',
+  'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--force] [--json] · treeyard send <id> --answer "<вариант>|<текст>"':
+    'treeyard send <id> "<text>"|- [--wait [--timeout 10m]] [--force] [--json] · treeyard send <id> --answer "<choice>|<text>"',
+  'письмо не отправлено: у «{from}» и «{to}» писем подряд — {letters} (предел {limit}), а записи в журнал, смены статуса или коммита ни у одного из них за это время не было — похоже, сессии переписываются по кругу':
+    'message not sent: «{from}» and «{to}» have {letters} messages in a row (the limit is {limit}), and neither has written a journal entry, changed a status or committed since — the sessions look to be going round in a circle',
+  'Спроси координатора или человека, как быть; сделал своё дело — запиши его в журнал (treeyard log), счёт начнётся заново.':
+    'Ask the coordinator or the person what to do; or do your own work and write it into the journal (treeyard log) — the count starts again.',
+  'Координатор или человек велел продолжать — то же письмо с --force.':
+    'The coordinator or the person said to go on — the same message with --force.',
+  'tree.md: mail_limit — целое число, 0 — без тормоза': 'tree.md: mail_limit — a whole number, 0 — no brake',
+  '{key}: число писем подряд, off — без тормоза, default — как по умолчанию':
+    '{key}: how many messages in a row, off — no brake, default — as by default',
   '--timeout — только с --wait: {usage}': '--timeout — only with --wait: {usage}',
   'ответ на №{n}': 'answers #{n}',
   'от «{title}»': 'from «{title}»',

@@ -163,6 +163,9 @@ export function projectFromText(text: string, dir: string, problems: string[] = 
   if (assistModel) project.assistModel = assistModel;
   const setup = str(take('setup'));
   if (setup) project.setup = setup;
+  const mailLimit = take('mail_limit');
+  if (typeof mailLimit === 'number' && Number.isInteger(mailLimit) && mailLimit >= 0) project.mailLimit = mailLimit;
+  else if (mailLimit != null) problems.push(t('tree.md: mail_limit — целое число, 0 — без тормоза'));
   const start = str(take('start'));
   if (start && (START_MODES as readonly string[]).includes(start)) project.start = start as StartMode;
   const created = dateStr(take('created'));
@@ -300,6 +303,7 @@ export function projectToText(project: Project): string {
     start: project.start,
     assist_model: project.assistModel,
     setup: project.setup,
+    mail_limit: project.mailLimit,
     created: project.created,
     sessions: sessionsData(project.sessions ?? []),
     ...project.extra,

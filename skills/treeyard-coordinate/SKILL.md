@@ -235,6 +235,11 @@ needs you yet: call it again.
   message). `send` says «delivered» or «queued: why». `--wait [--timeout 10m]` — wait for the
   answer: it prints the letter the node wrote back, or, if the session ended its turn without one,
   the end of its screen.
+- **The brake:** `mail_limit` (6) letters in a row between two nodes, with no journal entry, status
+  change or commit on either since, and `send` refuses (exit 1; `--json` — `reason: "ping-pong"`):
+  the pair is going round in a circle. Don't answer it with `--force`. Find what the two are stuck
+  on and decide it yourself, or ask the person; the node writes what it did into its journal and
+  the count starts again. `--force` only when the person said to go on.
 - **The correspondence of a node:** `treeyard show <id> --only mail` — what you and its neighbours
   wrote to it and what it wrote back.
 - **Waits for the person** (a permission, a folder to trust, a question in a dialog): never answer
