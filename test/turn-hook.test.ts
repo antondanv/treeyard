@@ -486,10 +486,12 @@ describe('treeyard hook claude', () => {
   it('puts the hook in, shows it in status and takes it out', async () => {
     const dir = tempDir();
     const own = tempDir('treeyard-claude-');
-    const sh = treeyardIn(dir, { CLAUDE_CONFIG_DIR: own });
+    const codexOwn = tempDir('treeyard-codex-');
+    const sh = treeyardIn(dir, { CLAUDE_CONFIG_DIR: own, CODEX_HOME: codexOwn });
     expect((await sh('init', '--template', 'directions', '--goal', 'всё работает')).code).toBe(0);
     // The tree's folder by its real path (/private/var on macOS).
-    const file = join(realpathSync(dir), '.claude', 'settings.local.json');
+    const real = realpathSync(dir);
+    const file = join(real, '.claude', 'settings.local.json');
 
     let status = await sh('hook', 'claude', 'status');
     expect(status.code).toBe(0);
@@ -510,8 +512,10 @@ describe('treeyard hook claude', () => {
     expect(text).toMatch(/хук писем\s+Claude Code стоит\s+в проекте/);
     const json = JSON.parse((await sh('status', '--json')).stdout);
     expect(json.mailHook).toEqual([
-      { scope: 'project', file, installed: true },
-      { scope: 'user', file: join(own, 'settings.json'), installed: false },
+      { brain: 'claude', scope: 'project', file, installed: true },
+      { brain: 'claude', scope: 'user', file: join(own, 'settings.json'), installed: false },
+      { brain: 'codex', scope: 'project', file: join(real, '.codex', 'hooks.json'), installed: false },
+      { brain: 'codex', scope: 'user', file: join(codexOwn, 'hooks.json'), installed: false },
     ]);
 
     expect((await sh('hook', 'claude', 'remove')).stdout).toContain('хук убран');

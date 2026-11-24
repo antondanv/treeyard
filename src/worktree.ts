@@ -315,7 +315,7 @@ export async function ensureWorktree(tree: Tree, id: string): Promise<Prepared> 
   if (!wt) {
     wt = makeWorktree(project, id);
     created = true;
-    copied = copyIncluded(project, wt, warnings) + copyClaudeLocal(project, wt);
+    copied = copyIncluded(project, wt, warnings) + copyLocalHooks(project, wt);
   }
   if (!wt.prepared) {
     const setup = tree.project.setup;
@@ -382,22 +382,31 @@ function markPrepared(project: string, wt: NodeWorktree): NodeWorktree {
   return { ...wt, prepared: true };
 }
 
+const LOCAL_HOOK_FILES = [
+  ['.claude', 'settings.local.json'],
+  ['.codex', 'hooks.json'],
+] as const;
+
 /**
- * Claude Code's own settings for this project (`.claude/settings.local.json`: the mail hook, the
- * person's permissions) go to the node's worktree too: it is the same project, and Claude Code
- * reads them from the folder the session runs in. Git does not see the file in either.
+ * Project-local settings and mail hooks (`.claude/settings.local.json`, `.codex/hooks.json`) go to
+ * the node's worktree too: it is the same project, and Claude Code and Codex read them from the
+ * folder the session runs in. Tracked or already-present files in the worktree are left alone.
  */
-function copyClaudeLocal(project: string, wt: NodeWorktree): number {
-  const from = join(project, '.claude', 'settings.local.json');
-  const to = join(wt.path, '.claude', 'settings.local.json');
-  if (!existsSync(from) || existsSync(to)) return 0;
-  try {
-    mkdirSync(dirname(to), { recursive: true });
-    copyFileSync(from, to);
-    return 1;
-  } catch {
-    return 0;
+function copyLocalHooks(project: string, wt: NodeWorktree): number {
+  let copied = 0;
+  for (const parts of LOCAL_HOOK_FILES) {
+    const from = join(project, ...parts);
+    const to = join(wt.path, ...parts);
+    if (!existsSync(from) || existsSync(to)) continue;
+    try {
+      mkdirSync(dirname(to), { recursive: true });
+      copyFileSync(from, to);
+      copied++;
+    } catch {
+      // Only a convenience.
+    }
   }
+  return copied;
 }
 
 /** `.worktreeinclude`: untracked files of the main folder that match its patterns go to the new worktree. */
@@ -481,7 +490,7 @@ export async function prepareAgain(tree: Tree, id: string): Promise<Prepared> {
   const wt = worktreeFor(project, id);
   if (!wt) throw new Error(t('у узла нет worktree — treeyard worktree add {id}', { id }));
   const warnings: string[] = [];
-  const copied = copyIncluded(project, wt, warnings);
+  const copied = copyIncluded(project, wt, warnings) + copyLocalHooks(project, wt);
   markUnprepared(project, id);
   return { ...(await ensureWorktree(tree, id)), created: false, copied, warnings };
 }

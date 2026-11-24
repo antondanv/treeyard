@@ -8,8 +8,9 @@
 import { existsSync, lstatSync, readdirSync, rmdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { allMailHookPlaces, type CodexScope, removeCodexMailHook } from './agents/codex-hook.js';
 import { PROJECT_SKILLS, shippedSkills, skillHomes, skillsRoot } from './agents/skills.js';
-import { type ClaudeScope, mailHookPlaces, removeMailHook } from './agents/turn-hook.js';
+import { type ClaudeScope, removeMailHook } from './agents/turn-hook.js';
 import { hookInstalled, hookPlace, removeHook } from './commit-hook.js';
 import { crashFolder } from './crash.js';
 import { t } from './i18n/i18n.js';
@@ -17,6 +18,7 @@ import { driverCommand, gitConfigFile, removeMergeDriver } from './merge-driver.
 import type { BrainId } from './model/types.js';
 import { projectsPath, seenProjects } from './projects.js';
 import { homeFolder, settingsPath } from './settings.js';
+import { worktreeDirs } from './worktree.js';
 
 export type Leftover =
   /** A skill folder (or a link to one): `brain` — in that CLI's personal folder; none — in the project. */
@@ -25,6 +27,8 @@ export type Leftover =
   | { kind: 'hook'; path: string; manual: boolean; folder: string }
   /** The Claude Code hook for letters in a project's `.claude/settings.local.json` or in the person's own settings. */
   | { kind: 'claude-hook'; path: string; scope: ClaudeScope; folder: string }
+  /** The Codex hook for letters in a project's `.codex/hooks.json` or in `$CODEX_HOME/hooks.json`. */
+  | { kind: 'codex-hook'; path: string; scope: CodexScope; folder: string }
   /** The overview's merge driver in a repository's config (`.tree/.gitattributes` stays with the tree). */
   | { kind: 'merge'; path: string; folder: string }
   /** settings.json or projects.json in treeyard's home folder. */
@@ -83,11 +87,17 @@ export function leftovers(options: UninstallOptions): Leftover[] {
     seen.add(place.file);
     out.push({ kind: 'hook', path: place.file, manual: place.tracked, folder });
   }
-  for (const folder of folders)
-    for (const place of mailHookPlaces(folder, env)) {
+  const mailFolders = [...folders, ...folders.flatMap((folder) => worktreeDirs(folder))];
+  for (const folder of mailFolders)
+    for (const place of allMailHookPlaces(folder, env)) {
       if (!place.installed || seen.has(place.file)) continue;
       seen.add(place.file);
-      out.push({ kind: 'claude-hook', path: place.file, scope: place.scope, folder });
+      out.push({
+        kind: place.brain === 'codex' ? 'codex-hook' : 'claude-hook',
+        path: place.file,
+        scope: place.scope,
+        folder,
+      });
     }
   for (const folder of folders) {
     const file = driverCommand(folder) === undefined ? undefined : gitConfigFile(folder);
@@ -130,6 +140,9 @@ export function uninstall(options: UninstallOptions): Removed[] {
       } else if (item.kind === 'claude-hook') {
         // Only our entry: the rest of Claude Code's settings is the person's.
         removeMailHook(item.scope, item.folder, env);
+      } else if (item.kind === 'codex-hook') {
+        // Only our entry: the rest of Codex's hooks.json is the person's.
+        removeCodexMailHook(item.scope, item.folder, env);
       } else if (item.kind === 'merge') {
         if (!removeMergeDriver(item.folder)) throw new Error(t('git config не убрал драйвер'));
       } else {
