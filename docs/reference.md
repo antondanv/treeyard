@@ -259,6 +259,7 @@ permission request also looks like work, not “waits for you”.
 | `model`, `effort` | the sessions' model and effort — picked from the list the CLI itself gives |
 | `assist_model` | the model for “break into steps” and the criterion — can be a cheaper one |
 | `setup` | a command that prepares a new [worktree of a node](#git-worktrees-of-nodes): `npm install`, a build…; `treeyard config setup "npm ci"` |
+| `mail_limit` | how many messages two nodes may exchange in a row before [the brake](#agents-and-the-tree) stops the next one (6 by default); `treeyard config mail_limit 10`, `off` — no brake, `default` — back to 6 |
 
 Models don't need typing in: treeyard asks the CLIs for them (`codex debug models`, `agy
 models`, `opencode models` — the models of the providers connected to OpenCode; for Claude
@@ -460,6 +461,7 @@ treeyard open <id> <id> <id> --bg --task "…"   # three nodes in one command: a
 treeyard wait <id> <id> --timeout 10m          # a coordinator waits: a node left “active”, its session ended its turn or waits for the person (--all — every one; --json)
 treeyard send <id> "fix the test"               # the next message of the node's own session, not a new session (- reads stdin); can't take it now — queued, treeyard delivers it
 treeyard send <id> "which port?" --wait --timeout 10m   # a message and its answer (or the end of the turn without one)
+treeyard send <id> "go on" --force               # past the brake on messages going round in a circle — only when the coordinator or the person said to
 treeyard send <id> --answer "2"                  # the person's answer to a question in the session's dialog (a choice or a text)
 treeyard deliver --once                          # one delivery pass over waiting messages (the deliverer usually starts by itself)
 treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's open children in order, two sessions at a time, the next when a node leaves “active”
@@ -618,10 +620,23 @@ begins.
 
 `send` prints the number and the state: `message #12 delivered: typed into its pane` or `message
 #12 queued: the session is busy — it arrives when its turn is over`, and what happens next on the
-following line. Exit code 0 either way; 1 — only when there is no such node. `-` instead of the
+following line. Exit code 0 either way; 1 — there is no such node, or the brake below stopped it. `-` instead of the
 text reads stdin; `--json` — `{"node", "sent": true, "letter": 12, "state": "queued"|"delivered",
 "how": "typed"|"woke"|"resumed"|null, "held": "busy"|"waiting"|"terminal"|"starting"|"none"|null,
 "heldFor", "brain", "id", "pane", "warnings"}`.
+
+**The brake on messages going round in a circle.** Two sessions answering each other for ever burn
+the subscription's limits and move nothing. When `mail_limit` messages (6 by default, `treeyard config
+mail_limit N`, `off` — no brake) have gone between two nodes, one way or the other, and since the
+first of them neither node has written a journal entry that is not a message, changed a status or
+committed (a commit of the node's worktree branch counts with no hook and no `--add`), the next
+`treeyard send` between them sends nothing. It prints why and what to do — ask the coordinator or the
+person; write what has been done into the journal (`treeyard log`) and the count starts again; told to
+go on — the same message with `--force` — and exits 1; with `--json`: `{"node", "sent": false,
+"error", "reason": "ping-pong", "from", "letters", "limit"}`. The count is per pair, the letters of
+other pairs do not enter it, `--force` lets one message through, and a message from a shell outside
+the nodes' sessions (a person) is never braked and never counted. The journals' timestamps are
+whole minutes: a message in the minute of an entry is not counted against the pair.
 
 `--wait` — wait for the answer: the answer is the next message from the receiver's node to the
 sender's (marked “answers #N”); the command prints it whole and hands it to you instead of typing it
