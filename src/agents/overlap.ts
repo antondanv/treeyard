@@ -1,13 +1,16 @@
 /**
- * Two nodes at work that change one file will meet in a merge conflict — and they find out only
- * when the second branch is merged. This reads it earlier, from git: what each node's worktree
- * committed on its branch and what it has not committed yet (`changedFiles`), and where the two
- * sets meet, the pair is told — to the coordinator in `wait` and `queue`, and to both sessions in
+ * Two nodes at work that collide in a merge find out only when the second branch is merged. This
+ * checks earlier, from git: what each node's worktree committed on its branch and what it has not
+ * committed yet (`changedFiles`), and for pairs touching the same files runs a trial three-way
+ * merge (`git merge-tree --write-tree`, no checkout, with uncommitted edits snapshotted via a
+ * temporary index) so edits to different places of one file stay quiet. Where changes genuinely
+ * collide, the pair is told — to the coordinator in `wait` and `queue`, and to both sessions in
  * one letter, once per pair and file.
  *
- * A file the two changed to the same content is no conflict (a settings file copied into every
- * worktree, a deletion both made), and the tree's own files (`.tree/`) are merged by treeyard's
- * merge driver: neither counts.
+ * Identical content in both worktrees (a settings file copied into every worktree, a deletion both
+ * made) and the tree's own files (`.tree/`, merged by treeyard's merge driver) do not count. If
+ * `git merge-tree --write-tree` is unavailable or fails unexpectedly (or a test supplies a custom
+ * `ReadFiles`), it falls back to comparing the shared files by content hash.
  */
 import { createHash } from 'node:crypto';
 import { closeSync, mkdirSync, openSync, readFileSync, unlinkSync, writeSync } from 'node:fs';
@@ -17,7 +20,14 @@ import { t } from '../i18n/i18n.js';
 import { TREE_DIR } from '../model/store.js';
 import { nowIso } from '../model/time.js';
 import type { Status, Tree, TreeNode } from '../model/types.js';
-import { changedFiles, type NodeWorktree, worktreesOf } from '../worktree.js';
+import {
+  changedFiles,
+  type NodeWorktree,
+  trialMergeConflicts,
+  type WorktreeTree,
+  worktreesOf,
+  worktreeTree,
+} from '../worktree.js';
 
 export interface OverlapNode {
   id: string;
@@ -37,6 +47,9 @@ const OPEN: readonly Status[] = ['active', 'review'];
 /** Reads a node's changed files; tests put their own. */
 export type ReadFiles = (project: string, wt: NodeWorktree) => string[];
 
+/** Runs a trial merge of two worktrees; returns conflicting paths, or `null` to fall back to file hashes. */
+export type TrialMerge = (project: string, a: NodeWorktree, b: NodeWorktree) => string[] | null;
+
 const treeFile = (file: string) => /(^|\/)\.tree\//.test(file);
 
 /** What a file is in a worktree now; none — it is not there. */
@@ -52,11 +65,41 @@ function content(wt: NodeWorktree, file: string): string | null {
 
 const ref = (node: TreeNode): OverlapNode => ({ id: node.id, title: node.title, status: node.status });
 
+function pairConflicts(
+  project: string,
+  a: NodeWorktree,
+  b: NodeWorktree,
+  candidates: readonly string[],
+  tryMerge: TrialMerge,
+): string[] | null {
+  const merged = tryMerge(project, a, b);
+  if (merged === null) return null;
+  const candidateSet = new Set(candidates);
+  const out = new Set<string>();
+  for (const raw of merged) {
+    if (treeFile(raw)) continue;
+    if (candidateSet.has(raw)) {
+      out.add(raw);
+      continue;
+    }
+    // File/directory conflicts may append `~<oid>` or `~HEAD` to the colliding path.
+    const base = raw.replace(/~[^/]+$/, '');
+    if (candidateSet.has(base)) out.add(base);
+  }
+  return [...out].sort();
+}
+
 /**
- * The pairs of nodes that change one file, by title. `ids` — only the pairs where at least one of them is
- * named (what the coordinator hands out or waits for); none — every pair of the project.
+ * The pairs of nodes whose changes collide in a trial merge, by title. `ids` — only the pairs
+ * where at least one of them is named (what the coordinator hands out or waits for); none — every
+ * pair of the project.
  */
-export function findOverlaps(tree: Tree, ids?: readonly string[], read: ReadFiles = changedFiles): Overlap[] {
+export function findOverlaps(
+  tree: Tree,
+  ids?: readonly string[],
+  read: ReadFiles = changedFiles,
+  merge?: TrialMerge,
+): Overlap[] {
   const project = tree.project.dir;
   const open: { wt: NodeWorktree; node: TreeNode }[] = [];
   for (const wt of worktreesOf(project)) {
@@ -70,14 +113,28 @@ export function findOverlaps(tree: Tree, ids?: readonly string[], read: ReadFile
   const files = new Map(
     open.map((each) => [each.node.id, new Set(read(project, each.wt).filter((f) => !treeFile(f)))]),
   );
+  const useTrialMerge = merge !== undefined || read === changedFiles;
+  const snapshots = new Map<string, WorktreeTree | null>();
+  const snapshot = (wt: NodeWorktree): WorktreeTree | null => {
+    if (!snapshots.has(wt.id)) snapshots.set(wt.id, worktreeTree(wt));
+    return snapshots.get(wt.id)!;
+  };
+  const tryMerge: TrialMerge =
+    merge ??
+    ((proj, a, b) => {
+      const treeA = snapshot(a);
+      const treeB = snapshot(b);
+      return treeA && treeB ? trialMergeConflicts(proj, treeA, treeB) : null;
+    });
   const out: Overlap[] = [];
   for (const [at, a] of open.entries())
     for (const b of open.slice(at + 1)) {
       if (wanted && !wanted.has(a.node.id) && !wanted.has(b.node.id)) continue;
       const other = files.get(b.node.id)!;
-      const shared = [...files.get(a.node.id)!]
-        .filter((file) => other.has(file) && content(a.wt, file) !== content(b.wt, file))
-        .sort();
+      const candidates = [...files.get(a.node.id)!].filter((file) => other.has(file)).sort();
+      if (!candidates.length) continue;
+      const conflicted = useTrialMerge ? pairConflicts(project, a.wt, b.wt, candidates, tryMerge) : null;
+      const shared = conflicted ?? candidates.filter((file) => content(a.wt, file) !== content(b.wt, file));
       if (shared.length) out.push({ nodes: [ref(a.node), ref(b.node)], files: shared });
     }
   return out;

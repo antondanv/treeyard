@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { PaneInfo } from '@antondanv/brainyard';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -52,6 +52,7 @@ async function project(titles: string[], status: Status = 'active'): Promise<Wor
   const nodes = titles.map((title) => addNode(tree, { title, status }));
   writeFileSync(join(main, 'app.txt'), 'один\nдва\nтри\n');
   writeFileSync(join(main, 'util.txt'), 'утилита\n');
+  writeFileSync(join(main, 'dict.txt'), `${Array.from({ length: 20 }, (_, i) => `строка ${i + 1}`).join('\n')}\n`);
   writeFileSync(join(main, '.gitignore'), '.tree/.local/\n');
   git(main, 'init', '-q', '-b', 'main');
   git(main, 'add', '-A');
@@ -168,6 +169,125 @@ describe('files that two nodes both change', () => {
     const work = await project(['Бот']);
     edit(work.node.Бот!.wt, 'app.txt', 'бот\n');
     expect(files(work)).toEqual([]);
+  });
+});
+
+/** Replaces one 1-based line in a multi-line string. */
+function replaceLine(text: string, line: number, value: string): string {
+  const parts = text.split('\n');
+  parts[line - 1] = value;
+  return parts.join('\n');
+}
+
+describe('trial merge of node branches', () => {
+  it('stays quiet when two nodes edit different places of one file — committed, dirty, or mixed', async () => {
+    const work = await project(['Бот', 'Сайт']);
+    const { Бот, Сайт } = work.node;
+    const base = readFileSync(join(work.main, 'dict.txt'), 'utf8');
+
+    // Both committed, different parts of the same file.
+    const bot1 = replaceLine(base, 1, 'бот 1');
+    const site1 = replaceLine(base, 20, 'сайт 20');
+    edit(Бот!.wt, 'dict.txt', bot1, true);
+    edit(Сайт!.wt, 'dict.txt', site1, true);
+    expect(files(work)).toEqual([]);
+
+    // One branch committed, the other has uncommitted edits elsewhere in the file.
+    const bot2 = replaceLine(bot1, 2, 'бот 2');
+    const site2 = replaceLine(site1, 19, 'сайт 19');
+    edit(Бот!.wt, 'dict.txt', bot2, true);
+    edit(Сайт!.wt, 'dict.txt', site2, false);
+    expect(files(work)).toEqual([]);
+
+    // Both dirty, still in different places.
+    edit(Бот!.wt, 'dict.txt', replaceLine(bot2, 3, 'бот 3'), false);
+    edit(Сайт!.wt, 'dict.txt', replaceLine(site2, 18, 'сайт 18'), false);
+    expect(files(work)).toEqual([]);
+  });
+
+  it('signals only the files that actually collide: same-place edits, add/add, and modify/delete', async () => {
+    const work = await project(['Бот', 'Сайт']);
+    const { Бот, Сайт } = work.node;
+    const base = readFileSync(join(work.main, 'dict.txt'), 'utf8');
+
+    // Clean edits to different places of dict.txt — must NOT be reported.
+    edit(Бот!.wt, 'dict.txt', replaceLine(base, 1, 'бот 1'), true);
+    edit(Сайт!.wt, 'dict.txt', replaceLine(base, 20, 'сайт 20'), false);
+
+    // Same place committed.
+    edit(Бот!.wt, 'app.txt', 'один\nбот\nтри\n', true);
+    edit(Сайт!.wt, 'app.txt', 'один\nсайт\nтри\n', true);
+
+    // Modify vs delete (uncommitted).
+    edit(Бот!.wt, 'util.txt', 'утилита бота\n', false);
+    rmSync(join(Сайт!.wt.path, 'util.txt'));
+
+    // Untracked new file with different text in both worktrees.
+    edit(Бот!.wt, 'fresh.txt', 'новый от бота\n', false);
+    edit(Сайт!.wt, 'fresh.txt', 'новый от сайта\n', false);
+
+    // Same place, both dirty.
+    edit(Бот!.wt, 'dirty-clash.txt', 'общий черновик А\n', false);
+    edit(Сайт!.wt, 'dirty-clash.txt', 'общий черновик Б\n', false);
+
+    expect(files(work)).toEqual([['app.txt', 'dirty-clash.txt', 'fresh.txt', 'util.txt']]);
+  });
+
+  it('ignores identical edits in both branches and conflicts inside .tree/', async () => {
+    const work = await project(['Бот', 'Сайт']);
+    const { Бот, Сайт } = work.node;
+    const base = readFileSync(join(work.main, 'dict.txt'), 'utf8');
+    const same = replaceLine(base, 10, 'одинаковая правка');
+    edit(Бот!.wt, 'dict.txt', same, true);
+    edit(Сайт!.wt, 'dict.txt', same, false);
+    edit(Бот!.wt, '.tree/README.md', 'версия бота\n', true);
+    edit(Сайт!.wt, '.tree/README.md', 'версия сайта\n', false);
+    expect(files(work)).toEqual([]);
+  });
+
+  it('does not alter either worktree or its git index', async () => {
+    const work = await project(['Бот', 'Сайт']);
+    const { Бот, Сайт } = work.node;
+    const base = readFileSync(join(work.main, 'dict.txt'), 'utf8');
+
+    // Stage one file, leave another modified unstaged, and leave an untracked file in each worktree.
+    edit(Бот!.wt, 'staged-bot.txt', 'в индексе бота\n', false);
+    git(Бот!.wt.path, 'add', 'staged-bot.txt');
+    edit(Бот!.wt, 'dict.txt', replaceLine(base, 1, 'бот 1'), false);
+    edit(Бот!.wt, 'untracked-bot.txt', 'новый бота\n', false);
+
+    edit(Сайт!.wt, 'staged-site.txt', 'в индексе сайта\n', false);
+    git(Сайт!.wt.path, 'add', 'staged-site.txt');
+    edit(Сайт!.wt, 'dict.txt', replaceLine(base, 1, 'сайт 1'), false);
+    edit(Сайт!.wt, 'untracked-site.txt', 'новый сайта\n', false);
+
+    const snapshot = (wt: NodeWorktree) => ({
+      head: git(wt.path, 'rev-parse', 'HEAD'),
+      status: git(wt.path, 'status', '--porcelain=v1', '--untracked-files=all'),
+      cached: git(wt.path, 'diff', '--cached'),
+      unstaged: git(wt.path, 'diff'),
+      dict: readFileSync(join(wt.path, 'dict.txt'), 'utf8'),
+    });
+    const before = { bot: snapshot(Бот!.wt), site: snapshot(Сайт!.wt) };
+
+    expect(files(work)).toEqual([['dict.txt']]);
+
+    expect({ bot: snapshot(Бот!.wt), site: snapshot(Сайт!.wt) }).toEqual(before);
+  });
+
+  it('falls back to file-hash comparison when trial merge fails or a custom reader is passed', async () => {
+    const work = await project(['Бот', 'Сайт']);
+    const { Бот, Сайт } = work.node;
+    const base = readFileSync(join(work.main, 'dict.txt'), 'utf8');
+    edit(Бот!.wt, 'dict.txt', replaceLine(base, 1, 'бот 1'), true);
+    edit(Сайт!.wt, 'dict.txt', replaceLine(base, 20, 'сайт 20'), true);
+
+    const tree = loadTree(work.main);
+    expect(findOverlaps(tree)).toEqual([]);
+    // Unavailable git merge-tree (returns null) -> falls back to sha1 comparison.
+    expect(findOverlaps(tree, undefined, undefined, () => null).map((o) => o.files)).toEqual([['dict.txt']]);
+    // Custom ReadFiles -> skips trial merge and compares by content hash.
+    expect(findOverlaps(tree, undefined, () => ['dict.txt']).map((o) => o.files)).toEqual([['dict.txt']]);
   });
 });
 

@@ -19,15 +19,17 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readlinkSync,
   realpathSync,
   renameSync,
+  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 
 import { pick, t } from './i18n/i18n.js';
@@ -81,27 +83,33 @@ export interface NodeWorktree {
 
 interface Git {
   ok: boolean;
+  status: number | null;
   out: string;
   err: string;
 }
 
 /** Variables git sets for its hooks would redirect any git command to the repository being committed to. */
-function gitEnv(): NodeJS.ProcessEnv {
+function gitEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0' };
   for (const key of Object.keys(env))
     if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|PREFIX|COMMON_DIR)$/.test(key)) delete env[key];
-  return env;
+  return extra ? { ...env, ...extra } : env;
 }
 
-function git(cwd: string, args: string[], timeout = 30_000): Git {
+function git(cwd: string, args: string[], timeout = 30_000, extraEnv?: NodeJS.ProcessEnv): Git {
   const run = spawnSync('git', ['--no-pager', ...args], {
     cwd,
-    env: gitEnv(),
+    env: gitEnv(extraEnv),
     encoding: 'utf8',
     timeout,
     maxBuffer: 64 * 1024 * 1024,
   });
-  return { ok: run.status === 0, out: run.stdout ?? '', err: (run.stderr ?? run.error?.message ?? '').trim() };
+  return {
+    ok: run.status === 0,
+    status: run.status,
+    out: run.stdout ?? '',
+    err: (run.stderr ?? run.error?.message ?? '').trim(),
+  };
 }
 
 function real(path: string): string {
@@ -569,6 +577,77 @@ export function changedFiles(project: string, wt: NodeWorktree): string[] {
     .filter((entry) => /^[ MADRCU?!]{2} /.test(entry))
     .map((entry) => entry.slice(3));
   return [...new Set([...(committed.ok ? names(committed) : []), ...dirty])].sort();
+}
+
+const OID = /^[0-9a-f]{40,64}$/;
+
+/** A worktree's HEAD and the tree of its current files (HEAD itself when clean, or a snapshot tree with uncommitted edits). */
+export interface WorktreeTree {
+  head: string;
+  tree: string;
+}
+
+/**
+ * Builds a tree-ish representing the worktree as it stands on disk (committed + uncommitted edits,
+ * including untracked and deleted files) without touching its real git index or working tree.
+ */
+export function worktreeTree(wt: NodeWorktree): WorktreeTree | null {
+  const headRun = git(wt.path, ['rev-parse', '--verify', '--quiet', 'HEAD']);
+  const head = headRun.out.trim();
+  if (!headRun.ok || !OID.test(head)) return null;
+  const status = git(wt.path, ['status', '--porcelain=v1', '--untracked-files=all', '--no-renames', '-z']);
+  if (!status.ok) return null;
+  const dirty = status.out
+    .split('\0')
+    .filter(Boolean)
+    .filter((entry) => /^[ MADRCU?!]{2} /.test(entry))
+    .map((entry) => entry.slice(3))
+    .filter((file) => !/(^|\/)\.tree\//.test(file));
+  if (!dirty.length) return { head, tree: head };
+  const tempDir = mkdtempSync(join(tmpdir(), 'treeyard-merge-'));
+  const env = { GIT_INDEX_FILE: join(tempDir, 'index') };
+  try {
+    if (!git(wt.path, ['read-tree', 'HEAD'], 30_000, env).ok) return null;
+    if (!git(wt.path, ['add', '-A'], 30_000, env).ok) return null;
+    const written = git(wt.path, ['write-tree'], 30_000, env);
+    const tree = written.out.trim();
+    return written.ok && OID.test(tree) ? { head, tree } : null;
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Runs a trial three-way merge of two worktree snapshots (`git merge-tree --write-tree`, no checkout,
+ * no changes to either working tree or index). Returns the conflicting paths (empty on a clean merge),
+ * or `null` if git could not perform the trial merge (old git, missing merge-base, unexpected error).
+ */
+export function trialMergeConflicts(project: string, a: WorktreeTree, b: WorktreeTree): string[] | null {
+  const baseRun = git(project, ['merge-base', a.head, b.head]);
+  const base = baseRun.out.trim();
+  if (!baseRun.ok || !OID.test(base)) return null;
+  const merged = git(project, [
+    'merge-tree',
+    '--write-tree',
+    '--name-only',
+    '--no-messages',
+    '-z',
+    `--merge-base=${base}`,
+    a.tree,
+    b.tree,
+  ]);
+  if (merged.status === 0) return [];
+  if (merged.status !== 1) return null;
+  // Exit 1 is a real conflict only when stdout begins with the merged tree OID; otherwise it is an error.
+  const parts = merged.out.split('\0');
+  if (!OID.test(parts[0] ?? '')) return null;
+  const files: string[] = [];
+  for (let at = 1; at < parts.length; at++) {
+    const file = parts[at];
+    if (!file) break;
+    files.push(file);
+  }
+  return [...new Set(files)].sort();
 }
 
 const commitsCache = new Map<string, { at: number; shas: string[] }>();
