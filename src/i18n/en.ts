@@ -1576,8 +1576,29 @@ export const EN: Record<string, string> = {
     'no choices of the question on the screen of pane {pane} — answer it there yourself',
   'нет такого варианта, а своего текста вопрос не принимает: {choices}':
     'no such choice, and the question takes no text of its own: {choices}',
+  'сессия узла {id} не ждёт разрешения': 'the session of node {id} is not waiting for a permission',
+  'сессия ждёт человека не в панели — подтвердить можно только в ней: claude attach {short}':
+    'the session waits for the person outside a pane — it can only be confirmed there: claude attach {short}',
+  'сессия ждёт ответа на вопрос ({why}), а не разрешения — используй treeyard send {id} --answer "…"':
+    'the session waits for an answer to a question ({why}), not a permission — use treeyard send {id} --answer "…"',
+  'не вижу диалога разрешения на экране панели {pane} — проверь в ней сам: tmux -L brainyard attach -t {pane}':
+    'no permission dialog on the screen of pane {pane} — check it there yourself: tmux -L brainyard attach -t {pane}',
+  'нет такого варианта разрешения: {choices}': 'no such permission choice: {choices}',
+  'не нашёл утвердительного варианта на экране панели {pane}: {choices}':
+    'no affirmative choice found on the screen of pane {pane}: {choices}',
+  'разрешение подтверждено: {what}': 'permission approved: {what}',
+  'разрешение отклонено: {what}': 'permission rejected: {what}',
   'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--force] [--json] · treeyard send <id> --answer "<вариант>|<текст>"':
     'treeyard send <id> "<text>"|- [--wait [--timeout 10m]] [--force] [--json] · treeyard send <id> --answer "<choice>|<text>"',
+  'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--force] [--json] · treeyard send <id> --answer "<вариант>|<текст>" · treeyard send <id> --approve [пункт] --as ты | --reject --as ты':
+    'treeyard send <id> "<text>"|- [--wait [--timeout 10m]] [--force] [--json] · treeyard send <id> --answer "<choice>|<text>" · treeyard send <id> --approve [choice] --as you | --reject --as you',
+  'выбери одно: --answer, --approve или --reject': 'choose one: --answer, --approve or --reject',
+  '--approve и --reject не сочетаются с --wait, --timeout и --force':
+    '--approve and --reject cannot be combined with --wait, --timeout or --force',
+  'разрешения даёт только человек («{as}» — не человек) — по прямой просьбе человека добавь --as ты или ответь в панели: tmux -L brainyard attach':
+    'only the person gives permissions («{as}» is not a person) — at the person’s direct request add --as you, or answer in the pane: tmux -L brainyard attach',
+  'разрешения даёт только человек — по прямой просьбе человека добавь --as ты или ответь в панели: tmux -L brainyard attach':
+    'only the person gives permissions — at the person’s direct request add --as you, or answer in the pane: tmux -L brainyard attach',
   'письмо не отправлено: у «{from}» и «{to}» писем подряд — {letters} (предел {limit}), а записи в журнал, смены статуса или коммита ни у одного из них за это время не было — похоже, сессии переписываются по кругу':
     'message not sent: «{from}» and «{to}» have {letters} messages in a row (the limit is {limit}), and neither has written a journal entry, changed a status or committed since — the sessions look to be going round in a circle',
   'Спроси координатора или человека, как быть; сделал своё дело — запиши его в журнал (treeyard log), счёт начнётся заново.':

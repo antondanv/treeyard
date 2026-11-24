@@ -7,11 +7,14 @@ import {
   dialogOptions,
   isQuestion,
   NotAnswered,
+  permissionOptions,
+  resolvePermission,
   waitReply,
 } from '../src/agents/reply.js';
 import { type SendSources, sendToNode } from '../src/agents/send.js';
 import { type WaitSources, waitFor } from '../src/agents/wait.js';
 import { setLang } from '../src/i18n/i18n.js';
+import { isOwnLine, parseEntry } from '../src/model/history.js';
 import { journalEntries } from '../src/model/journal.js';
 import { mailOf } from '../src/model/mail.js';
 import { addLetter, letterByNumber, markDelivered } from '../src/model/mailbox.js';
@@ -361,6 +364,236 @@ describe('the person’s answer to a question in a dialog', () => {
     await expect(answerQuestion(tree, codexNode.id, '1', { sources: send })).rejects.toThrow(
       /waits for a permission \(folder trust\) — only the person gives it: tmux -L brainyard attach -t codex-trust/,
     );
+    expect(typed).toEqual([]);
+  });
+});
+
+const CODEX_PERMISSION = [
+  'Would you like to run the following command?',
+  '  npm test',
+  '› 1. Yes, proceed (y)',
+  "  2. Yes, and don't ask again for commands that start with `npm test` (p)",
+  '  3. No, and tell Codex what to do differently (esc)',
+  'Enter to confirm · Esc to cancel',
+];
+
+const ANTIGRAVITY_TRUST = [
+  'Quick safety check: is this a project you created or one you trust?',
+  '> Yes, I trust this folder',
+  '  No, exit',
+  'Use arrow keys to navigate, Enter to select',
+];
+
+describe('approving and rejecting permissions from the CLI', () => {
+  it('reads numbered and unnumbered permission dialogs, and ignores ordinary terminal output', () => {
+    expect(permissionOptions(CODEX_PERMISSION)).toEqual([
+      { n: 1, label: 'Yes, proceed (y)', selected: true, free: false },
+      {
+        n: 2,
+        label: "Yes, and don't ask again for commands that start with `npm test` (p)",
+        selected: false,
+        free: false,
+      },
+      { n: 3, label: 'No, and tell Codex what to do differently (esc)', selected: false, free: false },
+    ]);
+
+    expect(permissionOptions(ANTIGRAVITY_TRUST)).toEqual([
+      { n: 1, label: 'Yes, I trust this folder', selected: true, free: false },
+      { n: 2, label: 'No, exit', selected: false, free: false },
+    ]);
+
+    expect(
+      permissionOptions([
+        '╭──────────────────────────────────────╮',
+        '│ Do you trust the files in this folder? │',
+        '│   Yes, I trust this folder           │',
+        '│ > No, exit                           │',
+        '╰──────────────────────────────────────╯',
+      ]),
+    ).toEqual([
+      { n: 1, label: 'Yes, I trust this folder', selected: false, free: false },
+      { n: 2, label: 'No, exit', selected: true, free: false },
+    ]);
+
+    // Non-dialog screens never pass as a permission prompt.
+    expect(permissionOptions(['> git status', '  On branch main', '  nothing to commit'])).toEqual([]);
+    expect(permissionOptions(['Running tests...', 'All 12 tests passed.'])).toEqual([]);
+    expect(permissionOptions(['❯ 1. Yes', '  2. No', '⏺ Already answered and moved on.'])).toEqual([]);
+  });
+
+  it('approves a numbered Codex/Claude permission dialog by default, by number, or by text', async () => {
+    const tree = emptyTree();
+    const node = paneNode(tree, 'Разрешение');
+    const name = `claude-${node.id}`;
+    const world: World = {
+      live: [live(`s-${node.id}`, 'waiting', { waitingFor: 'approve Bash' })],
+      panes: [pane(name, `s-${node.id}`)],
+      screens: { [name]: CODEX_PERMISSION },
+    };
+    const { send, typed } = sources(world);
+
+    // Default --approve selects the 1st affirmative option.
+    const first = await resolvePermission(tree, node.id, 'approve', { sources: send, source: 'ты' });
+    expect(first).toMatchObject({
+      decision: 'approve',
+      key: 'enter',
+      waitingFor: 'approve Bash',
+      option: { n: 1, label: 'Yes, proceed (y)' },
+    });
+    expect(typed).toEqual([[name, '\r']]);
+    const entry = journalEntries(loadTree(tree.project.dir).nodes.get(node.id)!.body).at(-1)!;
+    expect(entry).toMatch(/ · ты · разрешение подтверждено: approve Bash — «1\. Yes, proceed \(y\)»$/);
+    expect(isOwnLine(parseEntry(entry).text)).toBe(true);
+
+    // --approve 2 moves down once and presses Enter.
+    typed.length = 0;
+    const second = await resolvePermission(loadTree(tree.project.dir), node.id, 'approve', {
+      choice: '2',
+      sources: send,
+      source: 'ты',
+    });
+    expect(second.option).toMatchObject({ n: 2 });
+    expect(typed).toEqual([
+      [name, '\u001b[B'],
+      [name, '\r'],
+    ]);
+
+    // --approve "Yes, proceed" matches by unique substring.
+    typed.length = 0;
+    const byWords = await resolvePermission(loadTree(tree.project.dir), node.id, 'approve', {
+      choice: 'Yes, proceed',
+      sources: send,
+      source: 'ты',
+    });
+    expect(byWords.option).toMatchObject({ n: 1, label: 'Yes, proceed (y)' });
+    expect(typed).toEqual([[name, '\r']]);
+  });
+
+  it('approves an unnumbered Antigravity folder-trust dialog and logs it in either language', async () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Antigravity', status: 'active' });
+    attachSession(tree, node.id, {
+      brain: 'antigravity',
+      id: 'pane:agy-trust',
+      mode: 'pane',
+      pane: 'agy-trust',
+      started: minute(),
+      opened: minute(),
+    });
+    const world: World = {
+      live: [],
+      panes: [{ pane: 'agy-trust', brain: 'antigravity', attached: false, width: 100, height: 30 }],
+      screens: { 'agy-trust': ANTIGRAVITY_TRUST },
+    };
+    const { send, typed } = sources(world);
+
+    const res = await resolvePermission(tree, node.id, 'approve', { sources: send, source: 'ты' });
+    expect(res).toMatchObject({
+      decision: 'approve',
+      key: 'enter',
+      waitingFor: 'доверие к папке',
+      option: { n: 1, label: 'Yes, I trust this folder' },
+    });
+    expect(typed).toEqual([[`agy-trust`, '\r']]);
+    expect(journalEntries(loadTree(tree.project.dir).nodes.get(node.id)!.body).at(-1)).toMatch(
+      / · ты · разрешение подтверждено: доверие к папке — «1\. Yes, I trust this folder»$/,
+    );
+
+    // Works in English too.
+    setLang('en');
+    typed.length = 0;
+    const en = await resolvePermission(loadTree(tree.project.dir), node.id, 'approve', {
+      sources: send,
+      source: 'you',
+    });
+    expect(en.waitingFor).toBe('folder trust');
+    const enEntry = journalEntries(loadTree(tree.project.dir).nodes.get(node.id)!.body).at(-1)!;
+    expect(enEntry).toMatch(/ · you · permission approved: folder trust — «1\. Yes, I trust this folder»$/);
+    expect(isOwnLine(parseEntry(enEntry).text)).toBe(true);
+  });
+
+  it('rejects by picking the negative option, or presses Escape when no negative choice is listed', async () => {
+    const tree = emptyTree();
+    const node = paneNode(tree, 'Отказ');
+    const name = `claude-${node.id}`;
+    const world: World = {
+      live: [live(`s-${node.id}`, 'waiting', { waitingFor: 'approve Bash' })],
+      panes: [pane(name, `s-${node.id}`)],
+      screens: { [name]: CODEX_PERMISSION },
+    };
+    const { send, typed } = sources(world);
+
+    const rejected = await resolvePermission(tree, node.id, 'reject', { sources: send, source: 'ты' });
+    expect(rejected).toMatchObject({
+      decision: 'reject',
+      key: 'enter',
+      option: { n: 3, label: 'No, and tell Codex what to do differently (esc)' },
+    });
+    expect(typed).toEqual([
+      [name, '\u001b[B'],
+      [name, '\u001b[B'],
+      [name, '\r'],
+    ]);
+    const rejEntry = journalEntries(loadTree(tree.project.dir).nodes.get(node.id)!.body).at(-1)!;
+    expect(rejEntry).toMatch(/ · ты · разрешение отклонено: approve Bash — «3\. No, and tell Codex/);
+    expect(isOwnLine(parseEntry(rejEntry).text)).toBe(true);
+
+    // No negative option listed: falls back to Escape.
+    typed.length = 0;
+    world.screens[name] = ['Allow tool call?', '❯ 1. Allow once', '  2. Allow for this session', 'Esc to cancel'];
+    const escaped = await resolvePermission(loadTree(tree.project.dir), node.id, 'reject', {
+      sources: send,
+      source: 'ты',
+    });
+    expect(escaped).toMatchObject({ decision: 'reject', key: 'escape' });
+    expect(escaped.option).toBeUndefined();
+    expect(typed).toEqual([[name, '\u001b']]);
+    expect(journalEntries(loadTree(tree.project.dir).nodes.get(node.id)!.body).at(-1)).toMatch(
+      / · ты · разрешение отклонено: approve Bash — Esc$/,
+    );
+  });
+
+  it('refuses on a question dialog, an empty/non-dialog screen, a non-waiting session, or an unknown choice', async () => {
+    const tree = emptyTree();
+    const node = paneNode(tree, 'Защита');
+    const name = `claude-${node.id}`;
+    const world: World = {
+      live: [live(`s-${node.id}`, 'waiting', { waitingFor: 'input needed' })],
+      panes: [pane(name, `s-${node.id}`)],
+      screens: { [name]: QUESTION },
+    };
+    const { send, typed } = sources(world);
+
+    await expect(resolvePermission(tree, node.id, 'approve', { sources: send, source: 'ты' })).rejects.toThrow(
+      new RegExp(`ждёт ответа на вопрос.*treeyard send ${node.id} --answer`),
+    );
+
+    world.live = [live(`s-${node.id}`, 'waiting', { waitingFor: 'approve Bash' })];
+    world.screens[name] = ['Working on files...'];
+    await expect(resolvePermission(tree, node.id, 'approve', { sources: send, source: 'ты' })).rejects.toThrow(
+      /не вижу диалога разрешения на экране панели/,
+    );
+    await expect(resolvePermission(tree, node.id, 'reject', { sources: send, source: 'ты' })).rejects.toThrow(
+      /не вижу диалога разрешения на экране панели/,
+    );
+
+    world.screens[name] = CODEX_PERMISSION;
+    await expect(
+      resolvePermission(tree, node.id, 'approve', { choice: '9', sources: send, source: 'ты' }),
+    ).rejects.toThrow(/нет такого варианта разрешения/);
+
+    world.live = [live(`s-${node.id}`, 'busy')];
+    await expect(resolvePermission(tree, node.id, 'approve', { sources: send, source: 'ты' })).rejects.toThrow(
+      /не ждёт разрешения/,
+    );
+
+    // Waiting outside a pane.
+    world.live = [live(`s-${node.id}`, 'waiting', { waitingFor: 'approve Bash' })];
+    world.panes = [];
+    await expect(resolvePermission(tree, node.id, 'approve', { sources: send, source: 'ты' })).rejects.toThrow(
+      /не в панели.*claude attach/,
+    );
+
     expect(typed).toEqual([]);
   });
 });

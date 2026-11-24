@@ -38,7 +38,14 @@ import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners
 import { isPending, launchInPane, readPanes, sessionPanes } from '../agents/panes.js';
 import { DEFAULT_MAIL_LIMIT } from '../agents/pingpong.js';
 import { LIMIT, type QueueEvent, queueNodes, queueSources, runQueue } from '../agents/queue.js';
-import { answerQuestion, NotAnswered, waitReply } from '../agents/reply.js';
+import {
+  answerQuestion,
+  NotAnswered,
+  type PermissionDecision,
+  permissionSummary,
+  resolvePermission,
+  waitReply,
+} from '../agents/reply.js';
 import { NotSent, PingPongStop, sendToNode } from '../agents/send.js';
 import { autoInstallSkills, skillHomes } from '../agents/skills.js';
 import {
@@ -298,7 +305,11 @@ function commandLines(): string {
                                            shell без узла не тормозятся
   treeyard send <id> --answer "<вариант>|<текст>"   ответ человека на вопрос в диалоге сессии узла (панель):
                                            номер или слова варианта, иначе текст — в строку своего ответа; разрешения
-                                           не трогает — их даёт только человек
+                                           не трогает — для них --approve / --reject с --as ты
+  treeyard send <id> --approve [пункт] --as ты | --reject --as ты [--json]
+                                           подтвердить или отклонить диалог разрешения (или доверия к папке / импортов)
+                                           в панели — только по прямой просьбе человека; без --as ты отказывает,
+                                           проверяет диалог на экране и пишет в журнал узла, что подтверждено/отклонено
   treeyard deliver [--once]                доставить ждущие письма; обычно запускается сам из send
   treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   очередь узлов:
                                            у одного узла с детьми — его открытые дети по порядку, иначе — как названы;
@@ -441,7 +452,11 @@ function commandLines(): string {
                                            messages from a shell outside the nodes are not braked
   treeyard send <id> --answer "<choice>|<text>"   the person's answer to a question in the dialog of the node's
                                            session (a pane): a choice's number or words, otherwise a text into the row of
-                                           one's own answer; never a permission — only the person gives those
+                                           one's own answer; never a permission — use --approve / --reject with --as you
+  treeyard send <id> --approve [choice] --as you | --reject --as you [--json]
+                                           confirm or decline a permission (or folder trust / imports) dialog in a pane —
+                                           only at the person's direct request; refuses without --as you, checks the
+                                           dialog on the screen and logs in the node's journal what was approved/rejected
   treeyard deliver [--once]                deliver the waiting messages; send usually starts it by itself
   treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   a queue of nodes:
                                            one node with children — its open children in order, otherwise as named; at
@@ -775,11 +790,13 @@ function sourceOf(given: string | undefined): string {
  * terminal; `--as claude` names the agent but does not make it a person.
  */
 function byPerson(given: string | undefined): boolean {
+  const explicit = given?.trim();
+  if (explicit) return /^(ты|you)$/i.test(explicit);
   const as = process.env.TREEYARD_AS?.trim();
   // A session treeyard started names its CLI: its terminal (Antigravity runs commands in one) is no person.
-  if (!given?.trim() && as && !/^(ты|you)$/i.test(as)) return false;
+  if (as && !/^(ты|you)$/i.test(as)) return false;
   if (process.stdin.isTTY) return true;
-  return /^(ты|you)$/i.test(given?.trim() ?? as ?? '');
+  return /^(ты|you)$/i.test(as ?? '');
 }
 
 // ── TUI ─────────────────────────────────────────────────────────────────────
@@ -1413,15 +1430,37 @@ async function sendCommand(args: string[]): Promise<number> {
     wait: { type: 'boolean' },
     timeout: { type: 'string' },
     answer: { type: 'string' },
+    approve: { type: 'boolean' },
+    reject: { type: 'boolean' },
     force: { type: 'boolean' },
   });
   const usage = t(
-    'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--force] [--json] · treeyard send <id> --answer "<вариант>|<текст>"',
+    'treeyard send <id> "<текст>"|- [--wait [--timeout 10m]] [--force] [--json] · treeyard send <id> --answer "<вариант>|<текст>" · treeyard send <id> --approve [пункт] --as ты | --reject --as ты',
   );
+  const dialogModes = [values.answer !== undefined, values.approve === true, values.reject === true].filter(
+    Boolean,
+  ).length;
+  if (dialogModes > 1) throw new UsageError(t('выбери одно: --answer, --approve или --reject'));
+  if ((values.approve || values.reject) && (values.wait || values.timeout !== undefined || values.force))
+    throw new UsageError(t('--approve и --reject не сочетаются с --wait, --timeout и --force'));
   const tree = project(values.project);
   if (values.answer !== undefined) {
-    if (positionals.length !== 1 || values.wait) throw new UsageError(usage);
+    if (positionals.length !== 1 || values.wait || values.timeout !== undefined || values.force)
+      throw new UsageError(usage);
     return answerCommand(tree, nodeArg(tree, positionals[0]), values.answer, values.json === true, sourceOf(values.as));
+  }
+  if (values.approve || values.reject) {
+    if (!positionals.length) throw new UsageError(usage);
+    if (values.reject && positionals.length > 1) throw new UsageError(usage);
+    const choice = values.approve ? positionals.slice(1).join(' ').trim() || undefined : undefined;
+    return permissionCommand(
+      tree,
+      nodeArg(tree, positionals[0]),
+      values.approve ? 'approve' : 'reject',
+      choice,
+      values.json === true,
+      values.as,
+    );
   }
   if (positionals.length < 2) throw new UsageError(usage);
   const id = nodeArg(tree, positionals[0]);
@@ -1604,6 +1643,79 @@ async function answerCommand(
   if (answered.screen.length) {
     process.stdout.write(`  ${out.dim(t('конец экрана:'))}\n`);
     for (const row of answered.screen) process.stdout.write(`    ${out.dim('│')} ${row}\n`);
+  }
+  return 0;
+}
+
+/** `treeyard send <id> --approve [choice] --as ты` / `--reject --as ты`: confirm or decline a permission dialog. */
+async function permissionCommand(
+  tree: Tree,
+  id: string,
+  decision: PermissionDecision,
+  choice: string | undefined,
+  json: boolean,
+  as: string | undefined,
+): Promise<number> {
+  if (id === ROOT) throw new UsageError(t('корню не пишут — назови узел'));
+  if (!byPerson(as)) {
+    const given = as?.trim();
+    const message = given
+      ? t(
+          'разрешения даёт только человек («{as}» — не человек) — по прямой просьбе человека добавь --as ты или ответь в панели: tmux -L brainyard attach',
+          { as: given },
+        )
+      : t(
+          'разрешения даёт только человек — по прямой просьбе человека добавь --as ты или ответь в панели: tmux -L brainyard attach',
+        );
+    if (json)
+      process.stdout.write(`${JSON.stringify({ node: id, resolved: false, decision, error: message }, null, 2)}\n`);
+    process.stderr.write(`${err.c('#ff7b72', '✗')} ${message}\n`);
+    return 1;
+  }
+  let resolved: Awaited<ReturnType<typeof resolvePermission>>;
+  try {
+    resolved = await resolvePermission(tree, id, decision, {
+      ...(choice ? { choice } : {}),
+      source: sourceOf(as),
+    });
+  } catch (error) {
+    if (!(error instanceof NotAnswered)) throw error;
+    if (json)
+      process.stdout.write(
+        `${JSON.stringify({ node: id, resolved: false, decision, error: error.message }, null, 2)}\n`,
+      );
+    process.stderr.write(`${err.c('#ff7b72', '✗')} ${error.message}\n`);
+    return 1;
+  }
+  if (json) {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          node: id,
+          resolved: true,
+          decision: resolved.decision,
+          option: resolved.option?.n ?? null,
+          label: resolved.option?.label ?? null,
+          key: resolved.key,
+          waitingFor: resolved.waitingFor ?? null,
+          pane: resolved.pane,
+          screen: resolved.screen,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return 0;
+  }
+  const what = permissionSummary(resolved);
+  const label =
+    decision === 'approve'
+      ? t('разрешение подтверждено: {what}', { what })
+      : t('разрешение отклонено: {what}', { what });
+  process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${tree.nodes.get(id)!.title} · ${label}\n`);
+  if (resolved.screen.length) {
+    process.stdout.write(`  ${out.dim(t('конец экрана:'))}\n`);
+    for (const row of resolved.screen) process.stdout.write(`    ${out.dim('│')} ${row}\n`);
   }
   return 0;
 }

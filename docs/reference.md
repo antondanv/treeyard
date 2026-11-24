@@ -464,6 +464,8 @@ treeyard send <id> "fix the test"               # the next message of the node's
 treeyard send <id> "which port?" --wait --timeout 10m   # a message and its answer (or the end of the turn without one)
 treeyard send <id> "go on" --force               # past the brake on messages going round in a circle — only when the coordinator or the person said to
 treeyard send <id> --answer "2"                  # the person's answer to a question in the session's dialog (a choice or a text)
+treeyard send <id> --approve [2] --as you        # confirm a permission or startup dialog in the pane (only at the person's direct request)
+treeyard send <id> --reject --as you             # decline a permission or startup dialog in the pane (only at the person's direct request)
 treeyard deliver --once                          # one delivery pass over waiting messages (the deliverer usually starts by itself)
 treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's open children in order, two sessions at a time, the next when a node leaves “active”
 treeyard worktree                               # the nodes' worktrees: folder, branch, commits, what is not committed (add | setup | rm <id>)
@@ -681,9 +683,24 @@ in a dialog (Claude Code: “input needed”, Codex: “input”) in a pane: a c
 picked with the arrows and Enter, any other text — into the row of one's own answer (“Type
 something”, “Other”) and Enter. The node's journal gets `the person's answer in the dialog: «…»`. A
 permission, a startup dialog (trusting the folder, external `CLAUDE.md` imports) and anything that
-is not a question — refused with exit code 1 and `tmux -L brainyard attach -t <pane>`: only
-the person gives those, in the pane. A session that does not wait on a question, is not in a pane or
-shows no choices — refused too.
+is not a question — refused with exit code 1 and `tmux -L brainyard attach -t <pane>`: use
+`--approve` / `--reject` with `--as you` at the person's direct request, or answer in the pane. A
+session that does not wait on a question, is not in a pane or shows no choices — refused too.
+
+`treeyard send <id> --approve [choice] --as you` and `treeyard send <id> --reject --as you` confirm
+or decline a permission dialog or a startup dialog (trusting the folder, external `CLAUDE.md`
+imports) in the node's live pane — only when the person directly asks for it, just like
+`status=done --as you`. Without `--as you` (or `--as ты` in Russian; a person at their own terminal
+needs no flag), an agent gets exit code 1. The command checks that the session is waiting on a
+permission or startup dialog (for a question it points to `--answer`) and reads the choices off the
+pane's screen — both numbered (`1. Yes, proceed`) and unnumbered arrow lists (`> Yes, I trust this
+folder` / `  No, exit`). If no dialog is visible on the screen it refuses instead of sending a blind
+Enter. Without a choice, `--approve` picks the first affirmative option; with a number or words
+(`--approve 2`, `--approve "Yes, proceed"`) it moves to that option and presses Enter. `--reject`
+picks a negative option (`No`, `Cancel`, `Exit`, `Don't`) or presses Escape when none is listed. The
+node's journal gets `permission approved: …` or `permission rejected: …` with the reason and chosen
+option, and stdout prints the result and the end of the screen (with `--json`: `node`, `resolved`,
+`decision`, `option`, `label`, `key`, `waitingFor`, `pane`, `screen`).
 
 A message written by a node's session (the command knows its node by `TREEYARD_NODE` of this tree)
 is correspondence between two nodes: the receiver's journal gets `message #12 from «Coordinator»:

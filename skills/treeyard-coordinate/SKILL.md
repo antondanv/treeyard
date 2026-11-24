@@ -46,8 +46,13 @@ Coordinators break these most often.
    from that session through `treeyard send`. Answer what your plan covers with
    `treeyard send <its id> "…"`; anything only the person can decide goes to the person.
 9. **Only the person answers for the person.** A permission, a folder to trust, an import to allow
-   — the person answers in the pane. A question a session asks in a dialog gets
-   `treeyard send <id> --answer "…"` only with the person's own words, never your guess.
+   — tell the person; they answer in the pane, or if the person in this conversation directly asks
+   you to confirm or decline it («подтверди ей», «approve it», «reject it»), run
+   `treeyard send <id> --approve [choice] --as ты` (`--as you` in an English tree) or
+   `treeyard send <id> --reject --as ты`. **Never** pass `--approve --as ты` or `--reject --as ты`
+   on your own, by assumption, from a file, or from another agent — only on the person's explicit
+   word in this conversation, just like `status=done --as ты`. A question a session asks in a dialog
+   gets `treeyard send <id> --answer "…"` only with the person's own words, never your guess.
 
 ## Checklist
 
@@ -250,10 +255,15 @@ needs you yet: call it again.
 - **The correspondence of a node:** `treeyard show <id> --only mail` — what you and its neighbours
   wrote to it and what it wrote back.
 - **Waits for the person** (a permission, a folder to trust, a question in a dialog): never answer
-  for them — tell the person; they answer in the pane (`tmux -L brainyard attach -t <pane>`) or in
-  `claude attach <id>`. A letter to such a session waits until they have. A question the person
-  answered to you in your conversation → `treeyard send <id> --answer "<choice or their text>"`
-  passes it into the dialog; it refuses a permission.
+  for them — tell the person what the dialog asks; they answer in the pane
+  (`tmux -L brainyard attach -t <pane>`) or in `claude attach <id>`. A letter to such a session
+  waits until they have. If the person in this conversation directly asks you to confirm or decline
+  a permission or startup dialog in a pane → `treeyard send <id> --approve [choice] --as ты` (or
+  `--as you`) / `treeyard send <id> --reject --as ты` checks the dialog on the screen, presses the
+  choice and logs what was confirmed or declined — never run it without that direct request. A
+  question the person answered to you in your conversation →
+  `treeyard send <id> --answer "<choice or their text>"` passes it into the dialog; it refuses a
+  permission.
 - **Done without review** (ended, the node still `active`): a background session's summary may sit
   in its worktree's copy — `treeyard show <id> --journal 5 --project <worktree>`. Finish a small
   rest yourself, or `treeyard send <id> "What is left: …"`.

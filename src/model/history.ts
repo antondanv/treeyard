@@ -88,6 +88,9 @@ export const LETTER_TO = 'письмо №{n} узлу «{to}»: «{text}»';
 export const LETTER_SESSION = 'письмо №{n} сессии {brain} {short}: «{text}»';
 /** The person's answer to a question a session asked in a dialog, passed on by `send --answer`. */
 export const LETTER_ANSWER = 'ответ человека в диалог: «{text}»';
+/** A permission or startup dialog approved or rejected at the person's word (`send --approve` / `--reject`). */
+export const LETTER_APPROVE = 'разрешение подтверждено: {what}';
+export const LETTER_REJECT = 'разрешение отклонено: {what}';
 /** A letter from a shell to a node with no session yet: its first session gets it. */
 export const LETTER_SHELL = 'письмо №{n}: «{text}»';
 /** The same lines before letters had numbers: older journals keep them. */
@@ -110,6 +113,8 @@ const OWN = [
   LETTER_SESSION,
   LETTER_SHELL,
   LETTER_ANSWER,
+  LETTER_APPROVE,
+  LETTER_REJECT,
   OLD_LETTER_FROM,
   OLD_LETTER_TO,
   OLD_LETTER_SESSION,

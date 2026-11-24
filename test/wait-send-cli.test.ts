@@ -213,3 +213,81 @@ describe('answers between the sessions of two nodes, from the shell', () => {
     });
   }, 60_000);
 });
+
+describe('treeyard send --approve / --reject from the shell', () => {
+  it('refuses without --as ты/--as you (and with an agent --as or TREEYARD_AS), in text and JSON', async () => {
+    const { tree, sh } = setup();
+    const node = addNode(tree, { title: 'Разрешение', status: 'active' });
+
+    const bare = await sh('send', node.id, '--approve');
+    expect(bare.code).toBe(1);
+    expect(bare.stderr).toContain('разрешения даёт только человек');
+    expect(bare.stderr).toContain('--as ты');
+
+    const bareReject = await sh('send', node.id, '--reject', '--json');
+    expect(bareReject.code).toBe(1);
+    expect(JSON.parse(bareReject.stdout)).toMatchObject({
+      node: node.id,
+      resolved: false,
+      decision: 'reject',
+    });
+
+    const asAgent = await sh('send', node.id, '--approve', '--as', 'claude');
+    expect(asAgent.code).toBe(1);
+    expect(asAgent.stderr).toContain('«claude» — не человек');
+
+    const envAgent = await treeyardIn(tree.project.dir, { TREEYARD_AS: 'antigravity' })('send', node.id, '--approve');
+    expect(envAgent.code).toBe(1);
+    expect(envAgent.stderr).toContain('разрешения даёт только человек');
+
+    const en = await treeyardIn(tree.project.dir, { TREEYARD_LANG: 'en' })('send', node.id, '--approve');
+    expect(en.code).toBe(1);
+    expect(en.stderr).toContain('only the person gives permissions');
+    expect(en.stderr).toContain('--as you');
+  }, 40_000);
+
+  it('checks mutual exclusivity of --approve, --reject, --answer, --wait, --timeout, --force', async () => {
+    const { tree, sh } = setup();
+    const node = addNode(tree, { title: 'Флаги', status: 'active' });
+
+    const cases: [string[], RegExp][] = [
+      [['send', node.id, '--approve', '--reject', '--as', 'ты'], /выбери одно: --answer, --approve или --reject/],
+      [['send', node.id, '--approve', '--answer', '1', '--as', 'ты'], /выбери одно: --answer, --approve или --reject/],
+      [['send', node.id, '--approve', '--wait', '--as', 'ты'], /не сочетаются с --wait, --timeout и --force/],
+      [['send', node.id, '--reject', '--timeout', '5s', '--as', 'ты'], /не сочетаются с --wait, --timeout и --force/],
+      [['send', node.id, '--approve', '--force', '--as', 'ты'], /не сочетаются с --wait, --timeout и --force/],
+      [['send', node.id, '--reject', '2', '--as', 'ты'], /treeyard send/],
+    ];
+    for (const [args, pattern] of cases) {
+      const res = await sh(...args);
+      expect(res.code, args.join(' ')).toBe(2);
+      expect(res.stderr, args.join(' ')).toMatch(pattern);
+    }
+  }, 40_000);
+
+  it('passes the person check with --as ты/--as you and reports when the node is not waiting for permission', async () => {
+    const { tree, sh } = setup();
+    const node = addNode(tree, { title: 'Ожидание', status: 'active' });
+
+    const res = await sh('send', node.id, '--approve', '2', '--as', 'ты', '--json');
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain(`сессия узла ${node.id} не ждёт разрешения`);
+    expect(JSON.parse(res.stdout)).toMatchObject({
+      node: node.id,
+      resolved: false,
+      decision: 'approve',
+    });
+
+    const en = await treeyardIn(tree.project.dir, { TREEYARD_LANG: 'en' })('send', node.id, '--reject', '--as', 'you');
+    expect(en.code).toBe(1);
+    expect(en.stderr).toContain(`the session of node ${node.id} is not waiting for a permission`);
+
+    const helpRu = await sh('send', '--help');
+    expect(helpRu.code).toBe(0);
+    expect(helpRu.stdout).toContain('--approve [пункт] --as ты | --reject --as ты');
+
+    const helpEn = await treeyardIn(tree.project.dir, { TREEYARD_LANG: 'en' })('send', '--help');
+    expect(helpEn.code).toBe(0);
+    expect(helpEn.stdout).toContain('--approve [choice] --as you | --reject --as you');
+  }, 40_000);
+});
