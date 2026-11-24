@@ -22,6 +22,7 @@ import { type MailItem, markDelivered, queuedFor, withMailLock } from '../model/
 import { loadTree } from '../model/store.js';
 import type { SessionRef, Status, Tree, TreeNode } from '../model/types.js';
 import { watchTree } from '../watch.js';
+import { lastMessage } from './last-message.js';
 import { withPaneIdle } from './pane-idle.js';
 import { isPending, paneFor, paneInProject } from './panes.js';
 
@@ -41,7 +42,9 @@ export interface SessionSight {
   waitingFor?: string;
   /** The live pane it runs in. */
   pane?: string;
-  /** The end of the pane's screen, plain text: the question or the last answer. */
+  /** The last message the session wrote, whole, from its CLI's transcript: the question or the summary. */
+  message?: string;
+  /** The end of the pane's screen, plain text; only when there is no transcript to take the message from. */
   screen?: string[];
 }
 
@@ -77,6 +80,8 @@ export interface WaitSources {
   /** The session a Codex, Antigravity or OpenCode pane started. */
   paneSession(pane: PaneInfo): Promise<string | undefined>;
   capture(pane: string): Promise<PaneScreen | undefined>;
+  /** The last message of a session, whole, from the CLI's transcript; none — the screen stands in. */
+  message?(brain: SessionRef['brain'], id: string): Promise<string | undefined>;
   /** Adds the idle state of panes whose CLI lists only busy sessions (Codex, Antigravity). */
   idle(panes: readonly PaneInfo[], live: ReadonlyMap<string, SessionInfo>): Promise<ReadonlyMap<string, SessionInfo>>;
   watch(dir: string, wake: () => void): { stop(): void };
@@ -90,6 +95,7 @@ export const SOURCES: WaitSources = {
   panes: () => listPanes(),
   paneSession: async (pane) => (await findPaneSession(pane))?.id,
   capture: (pane) => capturePane(pane),
+  message: lastMessage,
   idle: (panes, live) => withPaneIdle(panes, live),
   watch: (dir, wake) => watchTree(dir, wake),
   now: () => Date.now(),
@@ -242,10 +248,18 @@ export async function look(
     if (ref && session?.state === 'busy') worked.add(ref.id);
     const reason = reasonOf(node, session, ref, now, graceMs, Boolean(ref && worked.has(ref.id)), statusMatters);
     if (reason) sight.reason = reason;
-    // The screen says what the journal does not yet: the question, or the answer it ended with.
-    if (session?.pane && reason && reason !== 'gone') {
-      const screen = await sources.capture(session.pane).catch(() => undefined);
-      if (screen) session.screen = screenTail(screen.lines);
+    if (session && reason) {
+      // The transcript says what the journal does not yet — the question, or the answer the session
+      // ended with — and says it whole; the end of the screen only stands in for a missing one.
+      const message =
+        session.id && sources.message
+          ? await sources.message(session.brain, session.id).catch(() => undefined)
+          : undefined;
+      if (message) session.message = message;
+      else if (session.pane && reason !== 'gone') {
+        const screen = await sources.capture(session.pane).catch(() => undefined);
+        if (screen) session.screen = screenTail(screen.lines);
+      }
     }
     sights.push(sight);
   }

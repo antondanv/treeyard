@@ -1514,6 +1514,7 @@ export const EN: Record<string, string> = {
   'без id': 'no id',
   сессия: 'session',
   'конец экрана:': 'end of the screen:',
+  'последнее сообщение:': 'the last message:',
   'ещё в работе:': 'still active:',
   // letters between the sessions of nodes
   'письмо от «{from}»: «{text}»': 'message from «{from}»: «{text}»',

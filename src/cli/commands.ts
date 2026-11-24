@@ -273,9 +273,11 @@ function commandLines(): string {
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   ждать, пока узел уйдёт из «в работе» или его сессия
                                            закончит ход, будет ждать человека или закончится; печатает статус, последнюю
-                                           запись журнала и сессию (у панели — конец экрана); --all — пока все узлы;
-                                           время вышло — код 124; узел уже не в работе — ответ сразу; письмо узлу твоей
-                                           сессии (координатора) — тоже возврат, с письмом целиком
+                                           запись журнала, сессию и её последнее сообщение целиком — вопрос или итог
+                                           из стенограммы CLI (нет стенограммы — конец экрана панели; в --json поле
+                                           «message»); --all — пока все узлы; время вышло — код 124; узел уже не в
+                                           работе — ответ сразу; письмо узлу твоей сессии (координатора) — тоже возврат,
+                                           с письмом целиком
   treeyard send <id> "<текст>"|- [--json]   письмо следующей репликой той же сессии узла, а не новой сессии: сначала
                                            в ящик (номер), потом свободной панели — вставкой, уснувшей — пробуждением,
                                            фоновой Claude Code — продолжением; занятой, ждущей человека, открытой в его
@@ -401,9 +403,11 @@ function commandLines(): string {
                                            (pane in JSON)
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   wait until a node leaves «active» or its session
                                            ends its turn, waits for the person or ends; prints the status, the last journal
-                                           entry and the session (for a pane, the end of its screen); --all — until every
-                                           node does; out of time — exit code 124; a node no longer active — at once; a
-                                           message to your session's node (the coordinator's) — it returns too, whole
+                                           entry, the session and its last message whole — a question or a summary from
+                                           the CLI's transcript (no transcript — the end of the pane's screen; the
+                                           field «message» in --json); --all — until every node does; out of time — exit
+                                           code 124; a node no longer active — at once; a message to your session's node
+                                           (the coordinator's) — it returns too, whole
   treeyard send <id> "<text>"|- [--json]   a message as the next one of the node's own session, not a new session: into
                                            the mailbox first (a number), then typed into an idle pane, waking a sleeping
                                            one, resuming a Claude Code background one; for a busy one, one waiting for the

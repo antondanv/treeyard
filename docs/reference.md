@@ -565,9 +565,12 @@ it: the node left “active” (to review, waiting, done), or its newest session
 waits for the person (a permission, a question in a dialog) or ended (its pane went to sleep, its
 background run is over). A node no longer active answers at once. For such a node it prints
 the status (`active → in review`), the last journal entry written by a person or an agent
-(the session's summary, as a rule) and the session's state; for a session in a pane, the end of its
-screen too — the question or the last answer. Nodes still at work get a line each under “still
-active:”. A change of the tree wakes the command at once; the sessions are asked every three
+(the session's summary, as a rule), the session's state and the last message the session wrote,
+whole, however long: the question it ended its turn with, or its summary. The message comes from
+the CLI's own transcript, read through Brainyard (Claude Code, Codex, OpenCode — where Brainyard
+can read the CLI's store); where there is no transcript to read, a session in a pane shows the end
+of its screen instead (twelve rows with something on them), and a short pointer replaces the long
+journal entry next to a whole message. Nodes still at work get a line each under “still active:”. A change of the tree wakes the command at once; the sessions are asked every three
 seconds, through Brainyard. A session just started or just written to gets half a minute unless the
 command has seen it at work: a CLI says “idle” at its start before its turn begins. `--all` — wait
 for every node; `--timeout 10m` (or `90`, `90s`, `1h`) — how long to wait, after which the exit code
@@ -576,10 +579,12 @@ is 124 with the same lines; without it — as long as it takes. A message to you
 command too: it is printed whole under `✉ message #N from «…»` with how to answer, and counts as
 delivered — it never comes into your conversation again. `--json` —
 `{"version": 1, "timedOut", "letters", "settled", "pending"}`; `letters` — `{n, from, title, who, text,
-at, replyTo}`; each node with `node`, `title`, `status`, `from`
-(the status when the wait began), `reason` (`status`, `waiting`, `idle`, `gone`, `letter` — its
-session wrote to you — or `null`), `entry`
-(`{at, who, text}`) and `session` (`{brain, id, mode, state, waitingFor, pane, screen}`). Claude
+at, replyTo}`; each node with `node`, `title`, `status`, `from` (the status when the wait began),
+`reason` (`status`, `waiting`, `idle`, `gone`, `letter` — its session wrote to you — or `null`),
+`entry` (`{at, who, text}`), `message` (the session's last message, `{text, source:
+"transcript"|"screen"}`, or `null` — `screen` when there was no transcript to read, the text is then
+the end of the pane's screen) and `session` (`{brain, id, mode, state, waitingFor, pane, screen}`;
+`screen` only for a session without a transcript message). Claude
 Code runs `wait` in the background and hears when it ends; a CLI without background commands calls
 it with a `--timeout` under its own limit per command.
 
@@ -651,7 +656,7 @@ A session started by another node's session (`treeyard open` from a coordinator'
 in its first message how to answer: a question — `treeyard send <coordinator's node> "…"`, then the
 end of its turn; the answer comes as its next message. Codex's sandbox keeps a session away from the
 tmux socket, so a Codex session asks its question as its last message and ends its turn — `treeyard
-wait` shows it at the end of the screen. `wait` learns that a Codex session in a pane ended its turn
+wait` shows that message (whole, from Codex's rollout; the end of the screen where the rollout cannot be read). `wait` learns that a Codex session in a pane ended its turn
 from Codex's own rollout: idle Codex sessions are not on the list of live ones.
 
 `treeyard queue <id…> --pane|--bg` keeps a queue of nodes instead of the coordinator's chat. One
