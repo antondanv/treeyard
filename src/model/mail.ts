@@ -248,6 +248,7 @@ export const DELIVERY_TEXT: Record<Delivery, string> = labels(() => ({
   resumed: t('фоновая сессия продолжена с ним'),
   first: t('в первом сообщении новой сессии'),
   wait: t('показано в treeyard wait'),
+  turn: t('посреди хода'),
 }));
 
 /** `в очереди: сессия занята — …` or `доставлено: набрано в панели`; nothing without the mailbox. */

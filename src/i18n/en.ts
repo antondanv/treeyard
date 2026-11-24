@@ -21,6 +21,26 @@ export const EN: Record<string, string> = {
   'хук уже стоит: {file}': 'the hook is already in place: {file}',
   'хук убран: {file}': 'hook removed: {file}',
   'хука нет: {file}': 'no hook: {file}',
+  'хук обновлён: {file}': 'hook updated: {file}',
+  'treeyard hook claude install | remove | status [--user]': 'treeyard hook claude install | remove | status [--user]',
+  'в проекте': 'in the project',
+  'у тебя': 'yours',
+  'поставить — treeyard hook claude install (только для проекта) или с --user (для всех проектов)':
+    'to put it in — treeyard hook claude install (this project only) or with --user (every project)',
+  'сессии Claude Code из узлов получат письма посреди хода; уже запущенные — после перезапуска. Убрать — treeyard hook claude remove{p1}':
+    'Claude Code sessions of nodes will get letters in the middle of a turn; ones already running — after a restart. To take it out — treeyard hook claude remove{p1}',
+  'хук Claude Code для писем': 'the Claude Code hook for letters',
+  '{file} — не JSON-объект: хук поставь сам или поправь файл':
+    '{file} is not a JSON object: put the hook in yourself or fix the file',
+  '{file}: раздел hooks не в том виде, что читает Claude Code — поправь файл сам':
+    '{file}: the hooks section is not in the form Claude Code reads — fix the file yourself',
+  'Пока ты работал, пришло письмо — учти его в этой работе:':
+    'A letter came while you were working — take it into account in this work:',
+  'Пока ты работал, пришли письма — учти их в этой работе:':
+    'Letters came while you were working — take them into account in this work:',
+  'хук писем': 'letter hook',
+  'не стоит · treeyard hook claude install': 'not installed · treeyard hook claude install',
+  'посреди хода': 'in the middle of a turn',
   'укажи SHA коммита (от 4 шестнадцатеричных символов)': 'give a commit SHA (at least 4 hexadecimal characters)',
   'укажи коммит: SHA, HEAD, ветку или тег': 'give a commit: a SHA, HEAD, a branch or a tag',
   'коммит {sha} не найден или ссылка неоднозначна': 'commit {sha} was not found or the ref is ambiguous',
