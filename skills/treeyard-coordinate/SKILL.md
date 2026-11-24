@@ -211,7 +211,8 @@ treeyard wait <a> <b> --timeout 10m
 It returns when a node needs you: the node left `active` (`review`, `waiting`), its newest
 session ended its turn, waits for the person or ended, or a session wrote a letter to your own node.
 For that node it prints the status, the last journal entry (the session's summary, as a rule) and
-the session's state; for a pane, the end of its screen. A letter to you comes whole, under
+the session's state with its last message whole (from the CLI's transcript; where there is none,
+the end of the pane's screen). A letter to you comes whole, under
 `✉ письмо №N от «…»` (in JSON — `letters`), and is yours from then on: it is not typed into your
 conversation again. The others get a line under «still active». Exit 124 — out of time, nothing
 needs you yet: call it again.
@@ -220,7 +221,8 @@ needs you yet: call it again.
   OpenCode:** a `--timeout` under your shell's limit per command, then call it again. No shell
   loops around treeyard, no pipes out of it.
 - **Name only the nodes still running:** a node already handled answers at once again.
-- **Ended its turn, node still `active`:** read the end of its screen or its last entry. A
+- **Ended its turn, node still `active`:** read its last message (or the end of its screen) and its
+  last entry. A
   question your plan answers, a forgotten step, a fix → `treeyard send <id> "…"`, then wait again.
   A question only the person can answer → into the summary. A session you started knows how to
   write to you (its first message says so); a Codex session started «as in config.toml» may not
