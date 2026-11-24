@@ -596,11 +596,18 @@ Code runs `wait` in the background and hears when it ends; a CLI without backgro
 it with a `--timeout` under its own limit per command.
 
 Nodes handed out in parallel should touch different files — `wait` and `queue` check that instead of
-guessing. They read every node of the project that has a worktree and is at work or in review: the
-files its branch committed since it parted from the main folder's branch (`HEAD...treeyard/<id>`)
-and the files not committed yet in its worktree. Where the files of two nodes meet, `wait` prints
+guessing. They read every node of the project that has a worktree and is at work or in review (the
+files its branch committed since it parted from the main folder's branch, `HEAD...treeyard/<id>`,
+and the files not committed yet in its worktree) as well as an active node running without a
+worktree in the main folder (its attached commits plus uncommitted edits beyond the baseline taken
+when its session started, so the person's own edits are left out). Where two nodes touch the same
+files, treeyard runs an in-memory trial three-way merge (`git merge-tree --write-tree`, with
+uncommitted edits snapshotted via a temporary index, without touching working trees) so edits to
+different places of one file stay quiet. Where changes genuinely collide, `wait` prints
 `⚠ «A» and «B» edit the same file: path` after the nodes (a line per file, five at most, the rest
-counted); `queue` prints the same line as an event (`--json`: `{"type": "overlap", "a", "aTitle",
+counted) — and returns at once on the first new collision (remembered in `.tree/.local/wait-seen/`,
+so the next `wait` does not wake again for the same collision until a new one appears); `queue`
+prints the same line as an event (`--json`: `{"type": "overlap", "a", "aTitle",
 "b", "bTitle", "files"}`); `wait --json` has `conflicts` — `[{"nodes": [{"node", "title",
 "status"}, …], "files": […]}]`, empty when there are none. A pair counts when at least one of its
 nodes is named in the command. A file that is the same in both worktrees (a settings file copied
