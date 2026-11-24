@@ -285,7 +285,7 @@ export async function ensureWorktree(tree: Tree, id: string): Promise<Prepared> 
   if (!wt) {
     wt = makeWorktree(project, id);
     created = true;
-    copied = copyIncluded(project, wt, warnings);
+    copied = copyIncluded(project, wt, warnings) + copyClaudeLocal(project, wt);
   }
   if (!wt.prepared) {
     const setup = tree.project.setup;
@@ -350,6 +350,24 @@ function markPrepared(project: string, wt: NodeWorktree): NodeWorktree {
     writeRegistry(project, registry);
   }
   return { ...wt, prepared: true };
+}
+
+/**
+ * Claude Code's own settings for this project (`.claude/settings.local.json`: the mail hook, the
+ * person's permissions) go to the node's worktree too: it is the same project, and Claude Code
+ * reads them from the folder the session runs in. Git does not see the file in either.
+ */
+function copyClaudeLocal(project: string, wt: NodeWorktree): number {
+  const from = join(project, '.claude', 'settings.local.json');
+  const to = join(wt.path, '.claude', 'settings.local.json');
+  if (!existsSync(from) || existsSync(to)) return 0;
+  try {
+    mkdirSync(dirname(to), { recursive: true });
+    copyFileSync(from, to);
+    return 1;
+  } catch {
+    return 0;
+  }
 }
 
 /** `.worktreeinclude`: untracked files of the main folder that match its patterns go to the new worktree. */

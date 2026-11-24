@@ -113,6 +113,15 @@ describe('a worktree of a node', () => {
     expect(readFileSync(join(wt, '.env'), 'utf8')).toBe('KEY=2\n');
   });
 
+  it('takes Claude Code’s own settings of the project along: the mail hook works in the worktree too', async () => {
+    const { tree, main, a } = repo();
+    mkdirSync(join(main, '.claude'));
+    writeFileSync(join(main, '.claude', 'settings.local.json'), '{"hooks":{}}\n');
+    const made = await ensureWorktree(tree, a);
+    expect(made.copied).toBe(1);
+    expect(readFileSync(join(made.worktree.path, '.claude', 'settings.local.json'), 'utf8')).toBe('{"hooks":{}}\n');
+  });
+
   it('runs the project setup in it; a setup that fails stops the launch and runs again next time', async () => {
     const { tree, a } = repo();
     tree.project.setup = 'echo ready > setup.txt && pwd > where.txt';

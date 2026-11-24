@@ -700,6 +700,7 @@ alike: treeyard makes the worktree itself, not the CLI.
 - **Preparation.** The files of the main folder that git does not track and that
   `.worktreeinclude` (patterns as in `.gitignore`, in the repository's root) names — `.env`, local
   keys — are copied to a new worktree; a tracked file or one that is already there is left alone.
+  Claude Code's settings of the project, `.claude/settings.local.json`, are copied too.
   The project's `setup` command (`treeyard config setup "npm ci"`, key `setup` in `.tree/tree.md`) runs
   in the new worktree before the session starts. A setup that fails stops the launch and says why; the
   worktree stays, and `treeyard worktree setup <id>` or the next launch runs it again.
@@ -895,9 +896,11 @@ treeyard hook claude remove      # take out our entry only; the rest of the file
   `treeyard` is started. Any other Claude Code session — your own, in the same project — is not touched.
 - **A running session does not see a new hook**: Claude Code reads its hooks at start. Sessions
   started or resumed after `install` have it.
-- **A session in a git worktree** has no `.claude/settings.local.json` of the project: the file is
-  not in git, so the worktree does not get it. For those sessions use `--user` (the hook still
-  works only for sessions with `TREEYARD_NODE`).
+- **A session in a git worktree**: a [worktree of a node](#git-worktrees-of-nodes) treeyard makes
+  gets a copy of the project's `.claude/settings.local.json`, hook included (one made before the
+  hook was installed — `treeyard hook claude install` there, or `--user`). Any other git worktree has
+  no such file: the file is not in git. For those sessions use `--user` (the hook still works only
+  for sessions with `TREEYARD_NODE`).
 - **A subagent** of the session (the Agent tool) gets nothing: the message is for the session itself.
 - **Long messages** stay in the mailbox: Claude Code keeps 10 000 characters of a hook's context, and
   treeyard never cuts a message; one that does not fit goes the usual way (into the pane after the
