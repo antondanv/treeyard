@@ -209,7 +209,8 @@ treeyard wait <a> <b> --timeout 10m
 ```
 
 It returns when a node needs you: the node left `active` (`review`, `waiting`), its newest
-session ended its turn, waits for the person or ended, or a session wrote a letter to your own node.
+session ended its turn, waits for the person or ended, a session wrote a letter to your own node,
+or a first new file conflict between nodes appeared.
 For that node it prints the status, the last journal entry (the session's summary, as a rule) and
 the session's state with its last message whole (from the CLI's transcript; where there is none,
 the end of the pane's screen). A letter to you comes whole, under
@@ -227,11 +228,12 @@ needs you yet: call it again.
   A question only the person can answer → into the summary. A session you started knows how to
   write to you (its first message says so); a Codex session started «as in config.toml» may not
   reach `send` and asks in its last message.
-- **Two nodes in one file:** `wait` (and `queue`) print `⚠ «A» and «B» edit the same file: path`
-  (in a Russian tree `«A» и «B» правят один файл: path`) from the nodes' branch commits and
-  uncommitted edits in their worktrees (`--json`: `conflicts`), and treeyard writes to both sessions
-  once per pair and file. Hand out nothing else that touches that file; merge one branch first, the
-  other node catches up after.
+- **Two nodes in one file:** the first new file conflict wakes `treeyard wait` at once, even while the
+  nodes are still at work, with `⚠ «A» and «B» edit the same file: path` (in a Russian tree
+  `«A» и «B» правят один файл: path`), the nodes still active under «still active», and in `--json` —
+  `conflicts`. A repeat wait on the already shown conflict will not wake again until a new conflicting
+  file appears or a node settles. Treeyard also writes to both sessions once per pair and file. Hand
+  out nothing else that touches that file; merge one branch first, the other node catches up after.
 - **A letter to you:** answer with `treeyard send <its id> "…"` (it goes as the answer to that
   letter); a question for the person → to the person, then send their answer.
 - **Writing to a session:** `treeyard send <id> "…"` never refuses for what the session is doing:

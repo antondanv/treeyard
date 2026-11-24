@@ -23,7 +23,7 @@ import { loadTree } from '../model/store.js';
 import type { SessionRef, Status, Tree, TreeNode } from '../model/types.js';
 import { watchTree } from '../watch.js';
 import { lastMessage } from './last-message.js';
-import { findOverlaps, notifyOverlaps, type Overlap } from './overlap.js';
+import { findOverlaps, hasNewConflicts, markConflictsSeen, notifyOverlaps, type Overlap } from './overlap.js';
 import { paneDialog, type StartupDialog, startupWaitingFor } from './pane-dialog.js';
 import { withPaneIdle } from './pane-idle.js';
 import { isPending, paneFor, paneInProject } from './panes.js';
@@ -398,18 +398,22 @@ export async function waitFor(dir: string, ids: readonly string[], options: Wait
       }
       const settled = sights.filter((sight) => sight.reason);
       const pending = sights.filter((sight) => !sight.reason);
-      const done = letters.length > 0 || (settled.length > 0 && (!options.all || pending.length === 0));
+      const normalDone = letters.length > 0 || (settled.length > 0 && (!options.all || pending.length === 0));
       const left = deadline - sources.now();
       // The sessions are told as soon as two nodes meet in a file; the answer carries what is true now.
-      const conflicts = await lookOverlaps(
-        dir,
-        ids,
-        sources,
-        overlapLook,
-        done || left <= 0 ? OVERLAP_FRESH_MS : OVERLAP_EVERY_MS,
-      );
-      if (done) return { settled, pending, letters, conflicts, timedOut: false };
-      if (left <= 0) return { settled, pending, letters: [], conflicts, timedOut: true };
+      const maxAge = normalDone || left <= 0 ? OVERLAP_FRESH_MS : OVERLAP_EVERY_MS;
+      const effectiveMaxAge = options.intervalMs !== undefined ? Math.min(maxAge, options.intervalMs) : maxAge;
+      const conflicts = await lookOverlaps(dir, ids, sources, overlapLook, effectiveMaxAge);
+      const newConflicts = hasNewConflicts(dir, conflicts, options.inbox);
+      const done = normalDone || newConflicts;
+      if (done) {
+        if (conflicts.length) markConflictsSeen(dir, conflicts, options.inbox);
+        return { settled, pending, letters, conflicts, timedOut: false };
+      }
+      if (left <= 0) {
+        if (conflicts.length) markConflictsSeen(dir, conflicts, options.inbox);
+        return { settled, pending, letters: [], conflicts, timedOut: true };
+      }
       await new Promise<void>((done) => {
         const timer = setTimeout(done, Math.min(interval, left));
         wake = () => {

@@ -625,6 +625,7 @@ describe('treeyard wait', () => {
       id: 's-1',
       mode: 'background',
       started: '2026-11-20T10:00:00Z',
+      opened: '2026-11-20T10:00:00Z',
     });
     edit(Бот!.wt, 'app.txt', 'один\nбот\nтри\n');
     edit(Сайт!.wt, 'app.txt', 'один\nдва\nсайт\n', false);
@@ -634,7 +635,7 @@ describe('treeyard wait', () => {
       timeoutMs: 60,
       sources: waitSources(),
     });
-    expect(first.timedOut || first.settled.length > 0).toBe(true);
+    expect(first.timedOut || first.settled.length > 0 || Boolean(first.conflicts?.length)).toBe(true);
     expect(first.conflicts).toMatchObject([{ files: ['app.txt'] }]);
     expect(first.conflicts![0]!.nodes.map((node) => node.id).sort()).toEqual([Бот!.id, Сайт!.id].sort());
 
@@ -700,6 +701,75 @@ describe('treeyard wait', () => {
     expect(lines[0]).toBe('«А» и «Б» правят один файл: src/f0.ts');
     expect(lines[5]).toBe('… и ещё 3');
   });
+
+  it('wakes on first new file conflict while nodes are active, does not wake on repeat, and wakes again on another file', async () => {
+    const work = await project(['Бот', 'Сайт']);
+    const { Бот, Сайт } = work.node;
+    edit(Бот!.wt, 'app.txt', 'один\nбот\nтри\n');
+    edit(Сайт!.wt, 'app.txt', 'один\nдва\nсайт\n', false);
+
+    // 1. First new conflict: wakes immediately despite active nodes, timedOut: false.
+    const first = await waitFor(work.main, [Бот!.id, Сайт!.id], {
+      intervalMs: 5,
+      timeoutMs: 500,
+      sources: waitSources(),
+    });
+    expect(first.timedOut).toBe(false);
+    expect(first.settled).toEqual([]);
+    expect(first.pending.map((s) => s.id).sort()).toEqual([Бот!.id, Сайт!.id].sort());
+    expect(first.conflicts).toMatchObject([{ files: ['app.txt'] }]);
+
+    // Output formatting: clean warning + pending nodes.
+    const plain = paint({ isTTY: false } as NodeJS.WriteStream);
+    const text = waitText(first, plain);
+    expect(text).toContain('⚠ «Бот» и «Сайт» правят один файл: app.txt');
+    expect(text).toContain('ещё в работе:\n');
+    expect(text).toContain(`◐ Бот  ${Бот!.id}  в работе`);
+    expect(text).toContain(`◐ Сайт  ${Сайт!.id}  в работе`);
+
+    // JSON format
+    const json = waitJson(first) as {
+      timedOut: boolean;
+      settled: unknown[];
+      pending: { node: string }[];
+      conflicts: { files: string[] }[];
+    };
+    expect(json.timedOut).toBe(false);
+    expect(json.settled).toEqual([]);
+    expect(json.pending.map((p) => p.node).sort()).toEqual([Бот!.id, Сайт!.id].sort());
+    expect(json.conflicts).toMatchObject([{ files: ['app.txt'] }]);
+
+    // 2. Repeat wait with the same seen conflict: does NOT wake immediately, times out.
+    const second = await waitFor(work.main, [Бот!.id, Сайт!.id], {
+      intervalMs: 5,
+      timeoutMs: 50,
+      sources: waitSources(),
+    });
+    expect(second.timedOut).toBe(true);
+    expect(second.settled).toEqual([]);
+    expect(second.conflicts).toMatchObject([{ files: ['app.txt'] }]);
+
+    // 3. Second new conflicting file added: wakes immediately again.
+    edit(Бот!.wt, 'util.txt', 'утилита бота\n');
+    edit(Сайт!.wt, 'util.txt', 'утилита сайта\n', false);
+
+    const third = await waitFor(work.main, [Бот!.id, Сайт!.id], {
+      intervalMs: 5,
+      timeoutMs: 500,
+      sources: waitSources(),
+    });
+    expect(third.timedOut).toBe(false);
+    expect(third.settled).toEqual([]);
+    expect(third.conflicts).toMatchObject([{ files: ['app.txt', 'util.txt'] }]);
+
+    // 4. Repeat after second conflict is also seen: does NOT wake immediately.
+    const fourth = await waitFor(work.main, [Бот!.id, Сайт!.id], {
+      intervalMs: 5,
+      timeoutMs: 50,
+      sources: waitSources(),
+    });
+    expect(fourth.timedOut).toBe(true);
+  });
 });
 
 describe('treeyard queue', () => {
@@ -758,5 +828,31 @@ describe('treeyard wait in a shell', () => {
     // One node alone is read against the node beside it: the same pair.
     expect((await sh('wait', Бот!.id)).stdout).toContain('правят один файл: app.txt');
     expect(existsSync(join(work.main, '.tree', '.local', 'conflicts'))).toBe(false);
+  }, 60_000);
+
+  it('wakes immediately on new conflict with active nodes, times out on repeat, and wakes on new conflicting file', async () => {
+    const work = await project(['Бот', 'Сайт']);
+    const { Бот, Сайт } = work.node;
+    edit(Бот!.wt, 'app.txt', 'один\nбот\nтри\n');
+    edit(Сайт!.wt, 'app.txt', 'один\nдва\nсайт\n', false);
+    const sh = treeyardIn(work.main);
+
+    // 1. First wait wakes immediately with code 0 on the new conflict.
+    const first = await sh('wait', Бот!.id, Сайт!.id, '--timeout', '5s');
+    expect(first.code).toBe(0);
+    expect(first.stdout).toContain('«Бот» и «Сайт» правят один файл: app.txt');
+    expect(first.stdout).toContain('ещё в работе:');
+
+    // 2. Repeat wait: conflict already seen, times out with code 124.
+    const repeat = await sh('wait', Бот!.id, Сайт!.id, '--timeout', '1s');
+    expect(repeat.code).toBe(124);
+
+    // 3. New conflicting file: wakes immediately again with code 0.
+    edit(Бот!.wt, 'util.txt', 'утилита бота\n');
+    edit(Сайт!.wt, 'util.txt', 'утилита сайта\n', false);
+    const third = await sh('wait', Бот!.id, Сайт!.id, '--timeout', '5s');
+    expect(third.code).toBe(0);
+    expect(third.stdout).toContain('«Бот» и «Сайт» правят один файл: app.txt');
+    expect(third.stdout).toContain('«Бот» и «Сайт» правят один файл: util.txt');
   }, 60_000);
 });

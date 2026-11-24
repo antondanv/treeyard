@@ -15,7 +15,7 @@
  * `ReadFiles`), it falls back to comparing the shared files by content hash.
  */
 import { createHash } from 'node:crypto';
-import { closeSync, mkdirSync, openSync, readFileSync, unlinkSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { t } from '../i18n/i18n.js';
@@ -307,6 +307,79 @@ function releaseNotice(project: string, pair: readonly [string, string], file: s
   try {
     unlinkSync(claimPath(project, pair, file));
   } catch {}
+}
+
+function seenDir(project: string): string {
+  return join(project, TREE_DIR, '.local', 'wait-seen');
+}
+
+function seenPath(project: string, pair: readonly [string, string], file: string, coordinator?: string): string {
+  const [a, b] = [...pair].sort();
+  const fileHash = createHash('sha1').update(file).digest('hex').slice(0, 16);
+  const prefix = coordinator ? `${coordinator}-` : '';
+  return join(seenDir(project), `${prefix}${a}-${b}-${fileHash}.json`);
+}
+
+/**
+ * Whether a conflict between two nodes on a file has already woken or been shown to the coordinator.
+ * A coordinator sees its own record, or the project-wide one if none was set.
+ */
+export function isConflictSeen(
+  project: string,
+  pair: readonly [string, string],
+  file: string,
+  coordinator?: string,
+): boolean {
+  if (coordinator && existsSync(seenPath(project, pair, file, coordinator))) return true;
+  return existsSync(seenPath(project, pair, file));
+}
+
+/**
+ * Records that the conflict between two nodes on a file has been shown to the coordinator.
+ */
+export function markConflictSeen(
+  project: string,
+  pair: readonly [string, string],
+  file: string,
+  coordinator?: string,
+): void {
+  mkdirSync(seenDir(project), { recursive: true });
+  try {
+    const fd = openSync(seenPath(project, pair, file, coordinator), 'w');
+    try {
+      writeSync(
+        fd,
+        `${JSON.stringify({ coordinator: coordinator ?? null, nodes: [...pair].sort(), file, at: nowIso() }, null, 2)}\n`,
+      );
+    } finally {
+      closeSync(fd);
+    }
+  } catch {}
+}
+
+/**
+ * True if any pair and file in the conflicts list has not yet been shown to the coordinator.
+ */
+export function hasNewConflicts(project: string, conflicts: readonly Overlap[], coordinator?: string): boolean {
+  for (const overlap of conflicts) {
+    const [a, b] = overlap.nodes;
+    for (const file of overlap.files) {
+      if (!isConflictSeen(project, [a.id, b.id], file, coordinator)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Marks every pair and file in the conflicts list as shown to the coordinator.
+ */
+export function markConflictsSeen(project: string, conflicts: readonly Overlap[], coordinator?: string): void {
+  for (const overlap of conflicts) {
+    const [a, b] = overlap.nodes;
+    for (const file of overlap.files) {
+      markConflictSeen(project, [a.id, b.id], file, coordinator);
+    }
+  }
 }
 
 export interface Notice {
