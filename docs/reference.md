@@ -588,6 +588,23 @@ the end of the pane's screen) and `session` (`{brain, id, mode, state, waitingFo
 Code runs `wait` in the background and hears when it ends; a CLI without background commands calls
 it with a `--timeout` under its own limit per command.
 
+Nodes handed out in parallel should touch different files — `wait` and `queue` check that instead of
+guessing. They read every node of the project that has a worktree and is at work or in review: the
+files its branch committed since it parted from the main folder's branch (`HEAD...treeyard/<id>`)
+and the files not committed yet in its worktree. Where the files of two nodes meet, `wait` prints
+`⚠ «A» and «B» edit the same file: path` after the nodes (a line per file, five at most, the rest
+counted); `queue` prints the same line as an event (`--json`: `{"type": "overlap", "a", "aTitle",
+"b", "bTitle", "files"}`); `wait --json` has `conflicts` — `[{"nodes": [{"node", "title",
+"status"}, …], "files": […]}]`, empty when there are none. A pair counts when at least one of its
+nodes is named in the command. A file that is the same in both worktrees (a settings file copied
+into each, a deletion both made) and the tree's own `.tree/` files do not count; a branch that
+was merged has nothing left to meet. The worktrees are read while waiting every 15 seconds and once
+more before the answer. The first time a file shows up for a pair, a letter goes to the sessions of
+both nodes — once per pair and file, remembered in `.tree/.local/conflicts/` — written by treeyard,
+not by a person: who the other node is, which files, and `treeyard send <it> "…"` to agree on who
+changes what. A node in review is not written to (its session is not woken); the one at work is.
+The letters go through the mailbox like any `send`.
+
 `treeyard send <id> "…"` writes the next message to the node's newest session — the same
 conversation going on, not a new session that would read it all again. A message is never lost or
 refused for what the receiver is doing: it goes whole into the project's mailbox first
@@ -669,7 +686,8 @@ until they are in review or done. Before a start the queue looks at the CLI's su
 (Brainyard's `usage()`, only what the CLI saved itself, no model call) and with one filled to
 `--limit` (90%) starts nothing new until it resets. A line per event: `▶` started, `✓` left
 “active”, `■` the session ended while the node is active, `?` ended its turn or waits for the
-person, `‖` a limit or a node that never got its `needs`, `✗` did not start (no retry); `--json` —
+person, `‖` a limit or a node that never got its `needs`, `⚠` two nodes change one file (see
+`wait`), `✗` did not start (no retry); `--json` —
 a JSON line per event with `at`. The queue ends when all have gone (exit 0) or the rest will never
 get their `needs` (exit 1). Ctrl+C — start no more; the same command again picks up the nodes at
 work. The start is `do` by default; `--brain`, `--start`, `--model`, `--effort`, `--worktree`,
