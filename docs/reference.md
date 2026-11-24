@@ -425,7 +425,8 @@ treeyard find "rounding|cents"                  # search every node, done ones t
 treeyard add "Show the product to a person" --who human --parent <id>
 treeyard add "Quiet exit on EPIPE" --parent <id> --done-when "…" --note "details"   # a title is the gist in 2–6 words; past 60 characters add still adds the node but hints at --note and set <id> title=
 treeyard add "Fix the help" --parent <id> --after <id>     # right after a sibling, like set after= (no --parent — under its parent; default — last)
-treeyard add --parent <id> --from-json - < nodes.json      # several nodes at once (an error adds none); prints their ids
+treeyard add "Idea from worktree" --parent <id> --status idea --project ../main   # add to another folder's tree (without --for — a regular node, not a shared one)
+treeyard add --parent <id> --from-json - < nodes.json      # several nodes at once (an error adds none); prints their ids (--project works too)
 treeyard set <id> after=<sibling id>|first|last # the place among siblings; with parent=<id> — in a new parent
 treeyard set <a> <b> <c> status=todo            # several nodes: the same change to each (after=<id> puts them one after another); an error changes none
 treeyard set <id> status=waiting waiting="no server" until="a VPS is up"
@@ -435,7 +436,7 @@ treeyard log <id> "what is done; what is left"
 treeyard log <id> "summary, evidence" --status review --commit HEAD   # closing in one command: the entry, the status and the commits (--commit a b, --commit a,b)
 treeyard log <id> --fix "corrected text"        # replace your own last entry (its time stays; status changes and commits are not touched)
 treeyard set <id> note="…"                      # the node's description; the journal stays as it is
-treeyard log <id> "…" --project ../main         # from a git worktree: write to the main tree (show takes it too)
+treeyard log <id> "…" --project ../main         # from a git worktree: write to the main tree (show, find, add, set and diff take it too)
 treeyard note "the help doesn't fit the screen" # a note about treeyard itself — into “Notes”
 treeyard rm <id>                                # delete a node added by mistake; one with a journal, children, sessions or commits is closed instead: status=dropped
 treeyard decide "SQLite, not Postgres: one user" # a dated line in «Decisions» of .tree/tree.md; without text — the list (--json)
@@ -478,12 +479,13 @@ Statuses in commands are the key (`review`), the word in either language (`in re
 works too. Off a terminal every line of the tree carries its status as a word after the id —
 an agent never has to read or type `◐ ◎ ○`.
 
-`treeyard add --parent <id> --from-json <file|->` takes an array of nodes:
-`[{"title": "…", "done_when": "…", "note": "…", "who": "agent", "status": "todo", "check": "…",
-"key": "api", "needs": ["api", "k3f9", "../api#y79a"], "children": […]}]`. Only `title` is
-required; `key` names a node inside the batch for the `needs` of the others; `--status` and
+`treeyard add [--parent <id>] [--project <dir>] --from-json <file|->` takes an array of nodes:
+`[{"title": "…", "parent": "<id>", "done_when": "…", "note": "…", "who": "agent", "status": "todo",
+"check": "…", "key": "api", "needs": ["api", "k3f9", "../api#y79a"], "children": […]}]`. Only `title`
+is required; top-level nodes may set their own `parent` (id, prefix or `root`), overriding
+`--parent`; `key` names a node inside the batch for the `needs` of the others; `--status` and
 `--who` on the command line fill in what a node doesn't say. The whole batch is checked first:
-an unknown field, status or ref adds no node at all.
+an unknown field, parent, status or ref adds no node at all.
 
 `treeyard show --json --all` is the whole tree for a program (Treeyard Web): nothing left to
 parse in the markdown of `.tree/`. Without `--all`, `--json` stays short: a node's fields and its
@@ -727,11 +729,13 @@ alike: treeyard makes the worktree itself, not the CLI.
   session in the project's folder and give every other node a worktree. A folder without git, or a
   repository without a commit, makes no worktrees and the nodes stay together, as they did.
   `--worktree` gives one to every node, `--no-worktree` to none. The confirmation says which.
-- **Commands from inside write the main tree.** The session's `treeyard log`, `set`, `show`… from a
-  worktree treeyard made go to the main tree, not to the branch's copy of `.tree/` — no
-  `--project` needed. (A git worktree treeyard did not make, such as Claude Code's own, is left as
-  it was.) The session's first message says where it stands and that the branch is merged by the
-  coordinator or the person.
+- **Commands from inside write the main tree.** The session's `treeyard log`, `add`, `set`, `show`…
+  from a worktree treeyard made — or from any git worktree of the repository when `TREEYARD_PROJECT`
+  points at its main tree (as in a session opened from a node that moved into Claude Code's own
+  worktree) — go to the main tree, not to the branch's copy of `.tree/`, with no `--project` needed.
+  (Another git worktree without `TREEYARD_PROJECT` keeps its own `.tree/`, and still takes
+  `--project <main folder>`.) The session's first message says where it stands and that the branch is
+  merged by the coordinator or the person.
 - **Commits are the node's by themselves.** What the branch made since it started shows in the node
   (`treeyard show <id>`, the card, `V` in the tree) and in `treeyard diff <id>` — no
   [hook](#commit-hook) and no `--add`. When the branch is merged and the worktree removed, its

@@ -102,4 +102,60 @@ describe('add --from-json', () => {
     expect(res.stdout.replace(/\w{4} {2}/g, 'id  ')).toBe('id  Проба\n  id  Внутри\n');
     expect(childrenOf(loadTree(tree.project.dir), parent.id).map((node) => node.title)).toEqual(['Проба']);
   }, 40_000);
+
+  it('allows per-node parent in JSON (id, prefix or root), rejects parent in children and atomic errors', async () => {
+    const tree = emptyTree();
+    const first = addNode(tree, { title: 'Первая' });
+    const second = addNode(tree, { title: 'Вторая' });
+    const sh = treeyardIn(tree.project.dir);
+
+    const ok = await withStdin(
+      tree.project.dir,
+      JSON.stringify([
+        { title: 'По умолчанию' },
+        { title: 'Во второй', parent: second.id.slice(0, 3), children: [{ title: 'Ребёнок' }] },
+        { title: 'Наверх', parent: 'root' },
+      ]),
+      'add',
+      '--parent',
+      first.id,
+      '--status',
+      'idea',
+      '--from-json',
+      '-',
+    );
+    expect(ok.code, ok.stderr).toBe(0);
+    const reread = loadTree(tree.project.dir);
+    const byTitle = (title: string) => [...reread.nodes.values()].find((node) => node.title === title)!;
+    expect(byTitle('По умолчанию').parent).toBe(first.id);
+    expect(byTitle('Во второй').parent).toBe(second.id);
+    expect(byTitle('Ребёнок').parent).toBe(byTitle('Во второй').id);
+    expect(byTitle('Наверх').parent).toBe('root');
+
+    const before = reread.nodes.size;
+    // Unknown parent in a batch adds no node at all.
+    const missing = await withStdin(
+      tree.project.dir,
+      JSON.stringify([{ title: 'Хороший' }, { title: 'Плохой', parent: 'zzzz' }]),
+      'add',
+      '--from-json',
+      '-',
+    );
+    expect(missing.code).toBe(2);
+    expect(missing.stderr).toContain('parent «zzzz»');
+    expect(loadTree(tree.project.dir).nodes.size).toBe(before);
+
+    // parent inside children is rejected at parse time.
+    expect(() => parseBatch(JSON.stringify([{ title: 'A', children: [{ title: 'B', parent: first.id }] }]))).toThrow(
+      BatchError,
+    );
+
+    // Flags not supported by --from-json fail honestly instead of claiming to be JSON fields.
+    const withFor = await sh('add', '--from-json', '-', '--for', first.id);
+    expect(withFor.code).toBe(2);
+    expect(withFor.stderr).toContain('не работает с --for');
+    const withAfter = await sh('add', '--from-json', '-', '--after', first.id);
+    expect(withAfter.code).toBe(2);
+    expect(withAfter.stderr).toContain('не работает с --after');
+  }, 60_000);
 });

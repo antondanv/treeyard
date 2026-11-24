@@ -273,11 +273,16 @@ export const EN: Record<string, string> = {
   '{where}: key «{key}» уже занят': '{where}: key «{key}» is taken already',
   '{where}: needs — строка или массив строк': '{where}: needs is a string or an array of strings',
   '{where}: children — массив узлов': '{where}: children is an array of nodes',
+  '{where}: у узла внутри children свой родитель — убери parent':
+    '{where}: a node inside children already has its parent — drop parent',
+  '«{title}»: parent «{parent}» подходит к нескольким узлам': '«{title}»: parent «{parent}» matches several nodes',
+  '«{title}»: parent «{parent}» — нет такого узла в дереве': '«{title}»: parent «{parent}» — no such node in the tree',
   '«{title}»: узел не может ждать сам себя': '«{title}»: a node cannot wait for itself',
   '«{title}»: needs «{ref}» — нет такого key в JSON и узла в дереве':
     '«{title}»: needs «{ref}» — no such key in the JSON and no such node in the tree',
   '--from-json: названия — в JSON, без названия в команде':
     '--from-json: titles go in the JSON, not on the command line',
+  '--from-json не работает с --{name}': '--from-json does not take --{name}',
   '--from-json: --{name} задаётся в JSON у каждого узла': '--from-json: --{name} is given in the JSON for each node',
   'укажи узлы, чьи файлы коммитить: treeyard commit <id>…':
     'name the nodes whose files to commit: treeyard commit <id>…',
@@ -985,8 +990,6 @@ export const EN: Record<string, string> = {
   'Откуда: {from}': 'From: {from}',
   '--for связывает с узлом другого проекта: добавь --project ../Проект':
     '--for links to a node of another project: add --project ../Project',
-  '--project нужен вместе с --for <id> — узлом, который ждёт эту работу':
-    '--project goes with --for <id> — the node that waits for this work',
   '--after {id}: это узел другого родителя, не {parent} — укажи брата или убери --parent':
     '--after {id}: that node has another parent, not {parent} — give a sibling or drop --parent',
   '{p1} --after {id}: у брата статус «{sibling}», у нового узла — «{status}»; он встал на ближайшее место в группе «{status}»\n':

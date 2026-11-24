@@ -12,6 +12,8 @@ import { ROOT, type Status, type Tree, type TreeNode, WHO, type Who } from './ty
 
 export interface BatchNode {
   title: string;
+  /** Top-level node's parent id (or `root`); overrides `--parent` for this item. */
+  parent?: string;
   status?: Status;
   who?: Who;
   doneWhen?: string;
@@ -26,7 +28,20 @@ export interface BatchNode {
   children: BatchNode[];
 }
 
-const KEYS = ['title', 'status', 'who', 'done_when', 'check', 'note', 'waiting', 'until', 'needs', 'key', 'children'];
+const KEYS = [
+  'title',
+  'parent',
+  'status',
+  'who',
+  'done_when',
+  'check',
+  'note',
+  'waiting',
+  'until',
+  'needs',
+  'key',
+  'children',
+];
 
 export class BatchError extends Error {}
 
@@ -42,7 +57,7 @@ export function parseBatch(text: string): BatchNode[] {
   if (!Array.isArray(list) || list.length === 0)
     throw new BatchError(t('нужен массив узлов: [{"title": "…", "done_when": "…"}]'));
   const keys = new Set<string>();
-  const read = (value: unknown, where: string): BatchNode => {
+  const read = (value: unknown, where: string, nested: boolean): BatchNode => {
     if (!value || typeof value !== 'object' || Array.isArray(value))
       throw new BatchError(t('{where}: узел — это объект с title', { where }));
     const raw = value as Record<string, unknown>;
@@ -61,6 +76,12 @@ export function parseBatch(text: string): BatchNode[] {
     if (!title) throw new BatchError(t('{where}: нет title', { where }));
     const label = `${where} «${title}»`;
     const node: BatchNode = { title, needs: [], children: [] };
+    const parent = text('parent');
+    if (parent) {
+      if (nested)
+        throw new BatchError(t('{where}: у узла внутри children свой родитель — убери parent', { where: label }));
+      node.parent = parent;
+    }
     const status = text('status');
     if (status) {
       const parsed = parseStatus(status);
@@ -102,18 +123,31 @@ export function parseBatch(text: string): BatchNode[] {
     const children = record.children;
     if (children !== undefined && children !== null) {
       if (!Array.isArray(children)) throw new BatchError(t('{where}: children — массив узлов', { where: label }));
-      node.children = children.map((child, i) => read(child, `${label} › ${i + 1}`));
+      node.children = children.map((child, i) => read(child, `${label} › ${i + 1}`, true));
     }
     return node;
   };
-  return list.map((item, i) => read(item, `#${i + 1}`));
+  return list.map((item, i) => read(item, `#${i + 1}`, false));
+}
+
+function resolveBatchParent(tree: Tree, title: string, parent: string): string {
+  if (parent === ROOT) return ROOT;
+  if (tree.nodes.has(parent)) return parent;
+  const matches = [...tree.nodes.keys()].filter((known) => known.startsWith(parent));
+  if (matches.length === 1) return matches[0]!;
+  throw new BatchError(
+    matches.length > 1
+      ? t('«{title}»: parent «{parent}» подходит к нескольким узлам', { title, parent })
+      : t('«{title}»: parent «{parent}» — нет такого узла в дереве', { title, parent }),
+  );
 }
 
 /**
- * Every ref of the batch, checked against the batch's keys and the tree before anything is
- * written: a key, an id (a unique prefix is enough) of this tree, or a node of another project.
+ * Every ref and per-node parent of the batch, checked against the batch's keys and the tree before
+ * anything is written: a key, an id (a unique prefix is enough) of this tree, or another project's.
  */
 export function resolveBatchRefs(tree: Tree, batch: readonly BatchNode[]): Map<string, string> {
+  for (const node of batch) if (node.parent) resolveBatchParent(tree, node.title, node.parent);
   const keys = new Set<string>();
   const walk = (list: readonly BatchNode[], visit: (node: BatchNode) => void) => {
     for (const node of list) {
@@ -187,7 +221,8 @@ export function plantBatch(
       walk(item.children, node.id, depth + 1);
     }
   };
-  walk(batch, parent || ROOT, 0);
+  const fallback = parent || ROOT;
+  for (const item of batch) walk([item], item.parent ? resolveBatchParent(tree, item.title, item.parent) : fallback, 0);
   for (const { id, needs } of waits)
     setNeeds(
       tree,

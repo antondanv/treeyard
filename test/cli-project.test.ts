@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import { journalEntries } from '../src/model/journal.js';
-import { NODE_VAR } from '../src/model/notes.js';
+import { NODE_VAR, PROJECT_VAR, SESSION_VAR } from '../src/model/notes.js';
 import { addNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { createTree, getTemplate } from '../src/templates/templates.js';
@@ -21,6 +21,8 @@ const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
 function shell(cwd: string) {
   const env: NodeJS.ProcessEnv = { ...process.env, TREEYARD_HOME: tempDir('treeyard-home-'), NO_COLOR: '1' };
   delete env[NODE_VAR];
+  delete env[PROJECT_VAR];
+  delete env[SESSION_VAR];
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.FORCE_COLOR;
   return (...args: string[]) =>
@@ -87,4 +89,47 @@ describe('--project of log and show', () => {
     expect(empty.code).toBe(2);
     expect(empty.stderr).toContain('здесь нет дерева');
   }, 40_000);
+
+  it('add and add --from-json write into another folder’s tree without --for, and set works there too', async () => {
+    const { main, elsewhere, id } = plant();
+    const sh = shell(elsewhere);
+
+    const added = await sh('add', 'Идея из другой папки', '--parent', id, '--status', 'idea', '--project', main);
+    expect(added.code, added.stderr).toBe(0);
+    const ideaId = added.stdout.trim();
+    expect(loadTree(main).nodes.get(ideaId)).toMatchObject({
+      title: 'Идея из другой папки',
+      parent: id,
+      status: 'idea',
+    });
+
+    // Passing --project pointing to the current project works without --for too.
+    const same = await shell(main)('add', 'Идея в себя', '--status', 'idea', '--project', main);
+    expect(same.code, same.stderr).toBe(0);
+    expect(loadTree(main).nodes.get(same.stdout.trim())?.parent).toBe('root');
+
+    // add --from-json takes --project and per-node parent.
+    const batchFile = join(elsewhere, 'ideas.json');
+    writeFileSync(
+      batchFile,
+      JSON.stringify([
+        { title: 'Пакетная под узлом', parent: id, status: 'idea' },
+        { title: 'Пакетная в корне', status: 'idea' },
+      ]),
+    );
+    const batch = await sh('add', '--from-json', batchFile, '--project', main);
+    expect(batch.code, batch.stderr).toBe(0);
+    const reread = loadTree(main);
+    const byTitle = (title: string) => [...reread.nodes.values()].find((node) => node.title === title);
+    expect(byTitle('Пакетная под узлом')).toMatchObject({ parent: id, status: 'idea' });
+    expect(byTitle('Пакетная в корне')).toMatchObject({ parent: 'root', status: 'idea' });
+
+    // set --project works from a folder without a tree and when pointing to the same tree.
+    const updated = await sh('set', ideaId, 'status=todo', '--project', main);
+    expect(updated.code, updated.stderr).toBe(0);
+    expect(loadTree(main).nodes.get(ideaId)?.status).toBe('todo');
+    const sameSet = await shell(main)('set', ideaId, 'status=review', '--project', main);
+    expect(sameSet.code, sameSet.stderr).toBe(0);
+    expect(loadTree(main).nodes.get(ideaId)?.status).toBe('review');
+  }, 60_000);
 });

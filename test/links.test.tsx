@@ -328,6 +328,9 @@ describe('treeyard add --project --for', () => {
     mkdirSync(join(root, 'Empty'));
     const sh = treeyardIn(here.project.dir);
     expect((await sh('add', 'Y', '--for', waiter.id)).code).not.toBe(0);
+    const same = await sh('add', 'Y', '--project', '.', '--for', waiter.id);
+    expect(same.code).not.toBe(0);
+    expect(same.stderr).toContain('этот же проект');
     const empty = await sh('add', 'Y', '--project', '../Empty', '--for', waiter.id);
     expect(empty.code).not.toBe(0);
     expect(empty.stderr).toContain('нет дерева');

@@ -26,7 +26,7 @@ import {
   worktreeState,
   worktreesOf,
 } from '../src/worktree.js';
-import { emptyTree, tempDir, treeyardIn } from './helpers.js';
+import { emptyTree, tempDir, treeyardIn, withStdin } from './helpers.js';
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', args, {
@@ -242,11 +242,68 @@ describe('where a command or a session lands', () => {
     const { main, a } = repo();
     const plain = join(tempDir(), 'plain');
     git(main, 'worktree', 'add', '-q', '-b', 'side', plain);
-    expect(treeOfWorktree(plain)).toBeUndefined();
+    expect(treeOfWorktree(plain, {})).toBeUndefined();
     const log = await treeyardIn(plain)('log', a, 'в копию ветки');
     expect(log.code, log.stderr).toBe(0);
     expect(loadTree(plain).nodes.get(a)!.body).toContain('в копию ветки');
     expect(loadTree(main).nodes.get(a)!.body).not.toContain('в копию ветки');
+
+    // With --project <main>, add writes directly into the main tree and leaves the branch copy alone.
+    const added = await treeyardIn(plain)('add', 'Идея с флагом', '--parent', a, '--status', 'idea', '--project', main);
+    expect(added.code, added.stderr).toBe(0);
+    const ideaId = added.stdout.trim();
+    expect(loadTree(main).nodes.get(ideaId)).toMatchObject({ title: 'Идея с флагом', parent: a, status: 'idea' });
+    expect(loadTree(plain).nodes.has(ideaId)).toBe(false);
+  }, 60_000);
+
+  it('redirects a git worktree to the main tree when TREEYARD_PROJECT names it, and never hijacks other folders', async () => {
+    const { main, a } = repo();
+    const plain = join(tempDir(), 'plain');
+    git(main, 'worktree', 'add', '-q', '-b', 'side', plain);
+    const sub = join(plain, 'sub');
+    mkdirSync(sub);
+
+    // TREEYARD_PROJECT matching this repo's main tree resolves to main from root or a subfolder.
+    expect(treeOfWorktree(plain, { TREEYARD_PROJECT: main })).toBe(realpathSync(main));
+    expect(treeOfWorktree(sub, { TREEYARD_PROJECT: main })).toBe(realpathSync(main));
+    // A different repository in TREEYARD_PROJECT must never hijack this worktree.
+    const other = repo();
+    expect(treeOfWorktree(plain, { TREEYARD_PROJECT: other.main })).toBeUndefined();
+    // Outside a git worktree (a plain folder or another project), TREEYARD_PROJECT does not redirect.
+    expect(treeOfWorktree(other.main, { TREEYARD_PROJECT: main })).toBeUndefined();
+    expect(treeOfWorktree(tempDir(), { TREEYARD_PROJECT: main })).toBeUndefined();
+
+    // Commands in a non-treeyard worktree with TREEYARD_PROJECT write to the main tree, not the branch copy.
+    const cli = treeyardIn(plain, { TREEYARD_PROJECT: main });
+    const added = await cli('add', 'Идея через env', '--parent', a, '--status', 'idea');
+    expect(added.code, added.stderr).toBe(0);
+    const ideaId = added.stdout.trim();
+    expect(loadTree(main).nodes.get(ideaId)).toMatchObject({ title: 'Идея через env', parent: a, status: 'idea' });
+    expect(loadTree(plain).nodes.has(ideaId)).toBe(false);
+
+    // Passing --project <main> on top of TREEYARD_PROJECT works too (set does not refuse the same tree).
+    const set = await cli('set', ideaId, 'status=todo', '--project', main);
+    expect(set.code, set.stderr).toBe(0);
+    expect(loadTree(main).nodes.get(ideaId)?.status).toBe('todo');
+
+    // add --from-json writes to the main tree when --project is passed from the worktree.
+    const batch = await withStdin(
+      plain,
+      JSON.stringify([{ title: 'Из JSON в основное', parent: a, status: 'idea' }]),
+      'add',
+      '--from-json',
+      '-',
+      '--project',
+      main,
+    );
+    expect(batch.code, batch.stderr).toBe(0);
+    expect([...loadTree(main).nodes.values()].some((node) => node.title === 'Из JSON в основное')).toBe(true);
+    expect([...loadTree(plain).nodes.values()].some((node) => node.title === 'Из JSON в основное')).toBe(false);
+
+    // In another folder with no tree, TREEYARD_PROJECT must not hijack commands.
+    const nowhere = await treeyardIn(tempDir(), { TREEYARD_PROJECT: main })('show');
+    expect(nowhere.code).toBe(2);
+    expect(nowhere.stderr).toContain('здесь нет дерева');
   }, 60_000);
 
   it('its folder is the project’s: panes and sessions there belong to the project, a session finds its folder by its ref', async () => {

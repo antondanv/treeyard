@@ -27,9 +27,11 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 
 import { pick, t } from './i18n/i18n.js';
+import { PROJECT_VAR } from './model/notes.js';
 import { attachCommits } from './model/ops.js';
 import { findProject, TREE_DIR } from './model/store.js';
 import { nowIso } from './model/time.js';
@@ -228,11 +230,13 @@ export function sessionFolder(project: string, ref: Pick<SessionRef, 'dir'>): st
 }
 
 /**
- * The main tree for a command run inside a worktree treeyard made: it writes there, not to the
- * branch's own copy of `.tree/`. Undefined for any other folder, including other git worktrees
- * (Claude Code's own, a person's): their `.tree/` is theirs.
+ * The main tree for a command run inside a linked git worktree: one treeyard made, or one whose
+ * main checkout holds the tree named in `TREEYARD_PROJECT` (a session opened from a node that
+ * moved into Claude Code's own worktree, or a helper given `TREEYARD_PROJECT`). Commands write to
+ * the main tree, not the branch's copy of `.tree/`. Undefined for any other folder, including a
+ * person's own git worktree without `TREEYARD_PROJECT` or a different repository.
  */
-export function treeOfWorktree(cwd: string = process.cwd()): string | undefined {
+export function treeOfWorktree(cwd: string = process.cwd(), env: NodeJS.ProcessEnv = process.env): string | undefined {
   for (let at = resolve(cwd); ; ) {
     const dotGit = join(at, '.git');
     try {
@@ -243,8 +247,14 @@ export function treeOfWorktree(cwd: string = process.cwd()): string | undefined 
       if (basename(common) !== '.git') return undefined;
       const main = dirname(common);
       const project = findProject(join(main, relative(real(at), real(cwd))));
-      if (!project || !insideFolder(project, main)) return undefined;
-      return worktreesOf(project).some((wt) => real(wt.path) === real(at)) ? project : undefined;
+      if (project && insideFolder(project, main) && worktreesOf(project).some((wt) => real(wt.path) === real(at)))
+        return project;
+      const fromEnv = env[PROJECT_VAR]?.trim();
+      if (!fromEnv) return undefined;
+      const envPath = resolve(cwd, fromEnv.replace(/^~(?=$|\/)/, homedir()));
+      const envDir = existsSync(envPath) ? findProject(envPath) : undefined;
+      if (!envDir || !insideFolder(envDir, main)) return undefined;
+      return project && real(envDir) === real(project) ? project : real(envDir);
     } catch {
       // No `.git` here: look further up.
     }
