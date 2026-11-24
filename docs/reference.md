@@ -628,8 +628,8 @@ once if the session can take it, otherwise by itself as soon as it can:
   dialog of trusting the folder or external `CLAUDE.md` imports — keys would
   land in it) and one open in the person's terminal — the message waits: for the end of the turn,
   for the person's answer in the pane (`tmux -L brainyard attach -t <pane>`) or in `claude attach`,
-  or for the terminal to be closed so the session can wake in a pane. With the Claude Code hooks
-  below, the session can also receive the message alongside the person's next prompt or between
+  or for the terminal to be closed so the session can wake in a pane. With the Claude Code and Codex
+  hooks below, the session can also receive the message alongside the person's next prompt or between
   tool calls during a turn;
 - a node with no session — the message waits for its first one: `treeyard open` and a start from
   the tree put every waiting message into its first message.
@@ -748,7 +748,8 @@ alike: treeyard makes the worktree itself, not the CLI.
 - **Preparation.** The files of the main folder that git does not track and that
   `.worktreeinclude` (patterns as in `.gitignore`, in the repository's root) names — `.env`, local
   keys — are copied to a new worktree; a tracked file or one that is already there is left alone.
-  Claude Code's settings of the project, `.claude/settings.local.json`, are copied too.
+  Claude Code's settings of the project, `.claude/settings.local.json`, and Codex's `.codex/hooks.json`
+  are copied too.
   The project's `setup` command (`treeyard config setup "npm ci"`, key `setup` in `.tree/tree.md`) runs
   in the new worktree before the session starts. A setup that fails stops the launch and says why; the
   worktree stays, and `treeyard worktree setup <id>` or the next launch runs it again.
@@ -794,7 +795,7 @@ node, its edit stays.
 - the block about the tree in CLAUDE.md, AGENTS.md and GEMINI.md: in place, outdated, no block,
   via an import (`@AGENTS.md`), or no file;
 - the post-commit git hook;
-- the Claude Code hook for letters: in the project's settings or yours, or not installed;
+- the Claude Code and Codex hooks for letters: in the project's settings or yours, or not installed;
 - the folder's live sessions in every CLI and its tmux panes — with the nodes they belong to;
 - the GitHub link: the board, issues, `gh`, and statuses that have not reached GitHub yet.
 
@@ -919,48 +920,58 @@ treeyard diff <id> --project ../X --add HEAD    # attach to the tree of another 
 they run in when it is a git worktree of the same repository: from a session's worktree `HEAD` is
 its branch's commit, with `--project <main folder>` too. From another repository — in the tree's.
 
-#### Messages alongside a prompt and during a turn in Claude Code
+#### Messages alongside a prompt and during a turn in Claude Code and Codex
 
-Treeyard installs two Claude Code hooks. `UserPromptSubmit` adds waiting messages as
-`additionalContext` alongside the submitted prompt, including in a session open in your terminal.
-`PostToolUse` adds the same context after a tool call, during the current turn. Both hooks use the
-usual sender and reply line for messages from other nodes. The mailbox reports “delivered: alongside
-the prompt” or “delivered: in the middle of a turn” and sends each message once.
+Treeyard installs two hooks in Claude Code and in Codex (0.172+). `UserPromptSubmit` adds waiting
+messages as `additionalContext` alongside the submitted prompt, including in a session open in your
+terminal. `PostToolUse` adds the same context after a tool call, during the current turn. Both hooks
+use the usual sender and reply line for messages from other nodes. The mailbox reports “delivered:
+alongside the prompt” or “delivered: in the middle of a turn” and sends each message once.
 
 ```sh
-treeyard hook claude install     # install or update both hooks in the project's .claude/settings.local.json
+treeyard hook claude install           # install or update both hooks in the project's .claude/settings.local.json
 treeyard hook claude install --user    # or into Claude Code's own settings, for every project
-treeyard hook claude status      # show both scopes and report an installation that needs updating
-treeyard hook claude remove      # remove Treeyard's two entries (use --user for your own settings)
+treeyard hook claude status            # show both scopes and report an installation that needs updating
+treeyard hook claude remove            # remove Treeyard's two entries (use --user for your own settings)
+
+treeyard hook codex install            # install or update both hooks in the project's .codex/hooks.json
+treeyard hook codex install --user     # or into ~/.codex/hooks.json ($CODEX_HOME), for every project and worktree
+treeyard hook codex status             # show both scopes and report an installation that needs updating
+treeyard hook codex remove             # remove Treeyard's two entries (use --user for your own settings)
 ```
 
-`treeyard status` has a “letter hook” row. If you installed `PostToolUse` before, rerun
-`install` in the same scope to add `UserPromptSubmit`. `remove` and `uninstall` preserve other
-settings and delete the settings file if it becomes empty.
+`treeyard status` has a “letter hook” row for Claude Code and Codex. If you installed `PostToolUse`
+before, rerun `install` in the same scope to add `UserPromptSubmit`. `remove` and `uninstall`
+preserve other settings and delete the file if it becomes empty; project files stay out of `git status`
+through `.git/info/exclude`.
 
+- **Trusting the hook in Codex.** Codex asks you to review any new or changed hook once — in the
+  “Hooks need review” prompt when a session starts or via `/hooks` inside an open session — and stores
+  its hash per file in `config.toml`; trusted hooks run outside Codex's sandbox. With `--user`
+  (`~/.codex/hooks.json`) you trust it once for every project and every git worktree.
 - **Only sessions started from a node.** The hook's shell line starts with
   `[ -n "$TREEYARD_NODE" ]` and then tests the node's inbox flag
   (`.tree/.local/mail/inbox/<node>`, which exists while messages wait for it): without a message the
   line is three shell tests, about 0.3 ms over an empty `sh -c` (3.0 against 2.7 ms), and no
-  `treeyard` is started. Any other Claude Code session — your own, in the same project — is not touched.
-- **An already running session** may need a restart if Claude Code has yet to load the changes.
+  `treeyard` is started. Any other Claude Code or Codex session — your own, in the same project — is
+  not touched.
+- **An already running session** may need a restart (or `/hooks` in Codex) if the CLI has yet to load
+  the changes.
 - **A session in a git worktree**: a [worktree of a node](#git-worktrees-of-nodes) treeyard makes
-  gets a copy of the project's `.claude/settings.local.json`, hook included (one made before the
-  hook was installed — `treeyard hook claude install` there, or `--user`). Any other git worktree has
-  no such file: the file is not in git. For those sessions use `--user` (the hook still works only
-  for sessions with `TREEYARD_NODE`).
-- **A subagent** of the session (the Agent tool) gets nothing: the message is for the session itself.
-- **Long messages** stay in the mailbox: Claude Code keeps 10 000 characters of a hook's context, and
-  treeyard never cuts a message; one that does not fit goes the usual way (into the pane after the
-  turn, or into the first message of a new session).
+  gets a copy of the project's `.claude/settings.local.json` and `.codex/hooks.json`, hooks included
+  (one made before the hook was installed — `treeyard worktree setup <id>`, `install` there, or
+  `--user`). Any other git worktree has no such files: they are not in git. For those sessions use
+  `--user` (the hook still works only for sessions with `TREEYARD_NODE`).
+- **A subagent** of the session gets nothing: the message is for the session itself.
+- **Long messages** stay in the mailbox: the hook keeps letters under 9 000 characters and never cuts
+  a message; one that does not fit goes the usual way (into the pane after the turn, or into the first
+  message of a new session).
 - The hooks leave the prompt and tool calls running if `treeyard` is missing from `PATH` or the
   mailbox is busy. The messages stay queued for the next delivery attempt. The hooks wait up to
   two seconds for the mailbox lock.
-- **The other CLIs**, by their documentation. Codex has hooks of the same shape (`PostToolUse` `additionalContext`), but
-  every non-managed hook must be reviewed by the person (`/hooks`) before it runs, so treeyard
-  cannot put one in silently. Antigravity has `hooks.json` and can add a system message before a
-  model request (`PreInvocation`), not after a tool call. OpenCode has no command hooks, only
-  plugins in code. For them messages still come after the turn.
+- **The other CLIs**, by their documentation. Antigravity has `hooks.json` and can add a system
+  message before a model request (`PreInvocation`), not after a tool call. OpenCode has no command
+  hooks, only plugins in code. For them messages still come after the turn.
 
 #### Commit hook
 
@@ -1197,8 +1208,9 @@ pipe (`treeyard show | head`) is not a crash: treeyard exits quietly.
   project treeyard has seen (`treeyard projects`); the hook's own lines stay, a file that held
   nothing but the block is deleted. Hooks inside the repository (husky and the like) are not
   edited; the command says where to take the line out;
-- Treeyard's `PostToolUse` and `UserPromptSubmit` hooks for Claude Code mail (`treeyard hook claude`),
-  in the same projects and in Claude Code's own settings;
+- Treeyard's `PostToolUse` and `UserPromptSubmit` hooks for Claude Code and Codex mail
+  (`treeyard hook claude`, `treeyard hook codex`), in the same projects (and their node worktrees)
+  and in Claude Code's and Codex's own settings;
 - the overview's merge driver `merge.treeyard` from `.git/config`, in the same places;
   `.tree/.gitattributes` stays with the tree;
 - with `--settings` — also the settings, the list of projects and the crash logs in

@@ -13,10 +13,11 @@ import { join, relative, resolve, sep } from 'node:path';
 import { VERSION as BRAINYARD_VERSION, liveSessions, type SessionInfo } from '@antondanv/brainyard';
 
 import { configLines, reach, readSandbox } from './agents/codex-config.js';
+import { allMailHookPlaces } from './agents/codex-hook.js';
 import { BRAIN_LABEL } from './agents/launch.js';
 import { type Pane, paneFor, paneInProject, readPanes } from './agents/panes.js';
 import { type SkillStatus, skillStates } from './agents/skills.js';
-import { type MailHookPlace, mailHookPlaces } from './agents/turn-hook.js';
+import type { MailHookPlace } from './agents/turn-hook.js';
 import { HOOK_LINE, hookInstalled, hookPlace } from './commit-hook.js';
 import {
   boardOf,
@@ -226,7 +227,7 @@ export interface ProjectStatus {
   codex?: CodexStatus;
   pointer?: PointerStatus[];
   hook?: HookInfo;
-  /** The Claude Code hook that hands letters to a busy session: in the project's settings and in the person's. */
+  /** The Claude Code and Codex hooks that hand letters to a session: in the project and in the person's settings. */
   mailHook?: MailHookPlace[];
   sessions?: LiveSession[];
   panes?: PaneSummary[];
@@ -385,7 +386,7 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     ...(codex ? { codex } : {}),
     pointer: pointerStates(place.folder),
     hook: hookInfo(place.folder),
-    mailHook: mailHookPlaces(tree.project.dir, env),
+    mailHook: allMailHookPlaces(tree.project.dir, env),
     sessions,
     panes: paneList,
     github,

@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { installCodexMailHook } from '../src/agents/codex-hook.js';
+import { installMailHook } from '../src/agents/turn-hook.js';
 import { addNode, attachCommits } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import type { Tree } from '../src/model/types.js';
@@ -113,13 +115,23 @@ describe('a worktree of a node', () => {
     expect(readFileSync(join(wt, '.env'), 'utf8')).toBe('KEY=2\n');
   });
 
-  it('takes Claude Code’s own settings of the project along: the mail hook works in the worktree too', async () => {
+  it('takes Claude Code’s own settings and Codex’s mail hook of the project along to a new or re-prepared worktree', async () => {
     const { tree, main, a } = repo();
-    mkdirSync(join(main, '.claude'));
-    writeFileSync(join(main, '.claude', 'settings.local.json'), '{"hooks":{}}\n');
+    installMailHook('project', main);
     const made = await ensureWorktree(tree, a);
     expect(made.copied).toBe(1);
-    expect(readFileSync(join(made.worktree.path, '.claude', 'settings.local.json'), 'utf8')).toBe('{"hooks":{}}\n');
+    expect(readFileSync(join(made.worktree.path, '.claude', 'settings.local.json'), 'utf8')).toBe(
+      readFileSync(join(main, '.claude', 'settings.local.json'), 'utf8'),
+    );
+
+    // A Codex hook installed later reaches an existing worktree via `prepareAgain` and stays out of git status.
+    installCodexMailHook('project', main);
+    const refreshed = await prepareAgain(tree, a);
+    expect(refreshed.copied).toBe(1);
+    expect(readFileSync(join(made.worktree.path, '.codex', 'hooks.json'), 'utf8')).toBe(
+      readFileSync(join(main, '.codex', 'hooks.json'), 'utf8'),
+    );
+    expect(worktreeState(main, made.worktree).dirty).toEqual([]);
   });
 
   it('runs the project setup in it; a setup that fails stops the launch and runs again next time', async () => {

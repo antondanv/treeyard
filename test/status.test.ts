@@ -110,6 +110,8 @@ describe('treeyard status', () => {
     expect(text).toContain('Antigravity  нет CLI');
     expect(text).toContain('указатель  CLAUDE.md через AGENTS.md · AGENTS.md без блока · GEMINI.md нет файла');
     expect(text).toContain('git-хук    не стоит');
+    expect(text).toContain('хук писем  Claude Code не стоит · treeyard hook claude install');
+    expect(text).toContain('           Codex       не стоит · treeyard hook codex install');
     expect(text).toContain('сессии     живых нет · панелей нет');
     expect(text).toContain('GitHub     не подключено');
     expect(text).toContain('Что исправить · 3');

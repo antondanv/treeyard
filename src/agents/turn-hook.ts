@@ -1,17 +1,19 @@
 /**
- * Letters for a Claude Code session, handed over with a prompt or between tool calls.
+ * Letters handed to a running session with a prompt or between tool calls, and the Claude Code
+ * hooks that use this delivery path.
  *
  * The deliverer (deliver.ts) waits for the end of a busy session's turn: a letter sent in the
  * middle of a long turn is read after it. It also cannot type into the person's own terminal.
- * Claude Code can read `additionalContext` from PostToolUse within a turn, or from UserPromptSubmit
- * alongside the submitted prompt. Both hooks take the node's letters from the mailbox and mark
- * them delivered after printing them for the model.
+ * CLIs with lifecycle hooks or plugins can read letters earlier:
+ * - `deliverHookMail` is the shared mailbox step for any CLI (Claude Code, Codex, and future
+ *   Antigravity / OpenCode hooks or plugins): under the mailbox lock it takes the node's fitting
+ *   letters, hands the formatted block to the CLI, and marks them delivered once emitted.
+ * - Claude Code and Codex share the same JSON hook shape (`PostToolUse` and `UserPromptSubmit`
+ *   with `hookSpecificOutput.additionalContext`), driven by `JsonHookSpec` and `deliverMidTurn`.
  *
- * - The hook is a shell line that tests the node's inbox flag (mailbox.ts) first and starts treeyard
- *   only when a letter waits: without letters, it costs a `[ -e … ]` on each event.
+ * - The shell line tests the node's inbox flag (mailbox.ts) first and starts treeyard only when a
+ *   letter waits: without letters, it costs a `[ -e … ]` on each event.
  * - It touches only sessions started from a node (`TREEYARD_NODE`), never others.
- * - Both live in the project's `.claude/settings.local.json` (git does not see it) unless the person
- *   asks for `--user`; `treeyard hook claude remove` takes them out and leaves the rest of the file.
  */
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeSync } from 'node:fs';
@@ -23,28 +25,35 @@ import { letterBody } from '../model/mail.js';
 import { INBOX, lowerFlag, markDelivered, queuedFor, withMailLock } from '../model/mailbox.js';
 import { NODE_VAR, PROJECT_VAR } from '../model/notes.js';
 import { atomicWrite, loadTree } from '../model/store.js';
+import type { BrainId } from '../model/types.js';
 
 /** What `treeyard hook claude mail` is called by: the settings entry is ours when its command has this. */
-const MARKER = 'treeyard hook claude mail';
+const CLAUDE_MARKER = 'treeyard hook claude mail';
 
 /**
- * The hook's command. Everything before `treeyard` is shell builtins: no process starts unless a
- * letter waits for this very node. Silent and always successful — a failing hook must never
- * stop a prompt or tool call (exit 2 would) or fill the session's screen.
+ * Builds the shell command a CLI hook runs. Everything before `treeyard` is shell builtins: no
+ * process starts unless a letter waits for this very node. Silent and always successful — a
+ * failing hook must never stop a prompt or tool call (exit 2 would) or fill the session's screen.
  */
-export const HOOK_COMMAND =
-  `[ -n "$${NODE_VAR}" ] && [ -e "$${PROJECT_VAR}/.tree/.local/mail/${INBOX}/$${NODE_VAR}" ]` +
-  ` && command -v treeyard >/dev/null 2>&1 && ${MARKER} 2>/dev/null; exit 0`;
+export function hookShellCommand(marker: string): string {
+  return (
+    `[ -n "$${NODE_VAR}" ] && [ -e "$${PROJECT_VAR}/.tree/.local/mail/${INBOX}/$${NODE_VAR}" ]` +
+    ` && command -v treeyard >/dev/null 2>&1 && ${marker} 2>/dev/null; exit 0`
+  );
+}
 
-const TOOL_EVENT = 'PostToolUse';
-const PROMPT_EVENT = 'UserPromptSubmit';
+export const HOOK_COMMAND = hookShellCommand(CLAUDE_MARKER);
+
+export const TOOL_EVENT = 'PostToolUse';
+export const PROMPT_EVENT = 'UserPromptSubmit';
 const EVENTS = [TOOL_EVENT, PROMPT_EVENT] as const;
-type HookEvent = (typeof EVENTS)[number];
 
-/** Seconds Claude Code lets the hook run. */
-const TIMEOUT = 10;
+/** Seconds the CLI lets the hook run. */
+export const HOOK_TIMEOUT = 10;
 
-export type ClaudeScope = 'project' | 'user';
+export type HookScope = 'project' | 'user';
+export type ClaudeScope = HookScope;
+export type MailHookBrain = 'claude' | 'codex';
 
 /** Claude Code's settings file: the project's local one (not in git), or the person's own. */
 export function claudeSettingsFile(scope: ClaudeScope, project: string, env: NodeJS.ProcessEnv = process.env): string {
@@ -54,6 +63,15 @@ export function claudeSettingsFile(scope: ClaudeScope, project: string, env: Nod
 }
 
 type Json = Record<string, unknown>;
+
+export interface JsonHookSpec {
+  brain: MailHookBrain;
+  marker: string;
+  command: string;
+  excludePattern: string;
+  fileOf(scope: HookScope, project: string, env: NodeJS.ProcessEnv): string;
+  badHooksError(file: string): Error;
+}
 
 function readSettings(file: string): Json {
   let text: string;
@@ -78,22 +96,22 @@ function readSettings(file: string): Json {
 
 type Entry = Json & { hooks?: Json[] };
 
-const isOurs = (hook: Json) => typeof hook?.command === 'string' && hook.command.includes(MARKER);
-
-function ownHooks(list: Entry[]): Json[] {
+function ownHooks(list: Entry[], marker: string): Json[] {
+  const isOurs = (hook: Json) => typeof hook?.command === 'string' && hook.command.includes(marker);
   return list.flatMap((entry) => (Array.isArray(entry?.hooks) ? entry.hooks.filter(isOurs) : []));
 }
 
-function currentHook(hooks: Json[]): boolean {
+function currentHook(hooks: Json[], command: string): boolean {
   return (
     hooks.length === 1 &&
     hooks[0]?.type === 'command' &&
-    hooks[0].command === HOOK_COMMAND &&
-    hooks[0].timeout === TIMEOUT
+    hooks[0].command === command &&
+    hooks[0].timeout === HOOK_TIMEOUT
   );
 }
 
-function withoutOwnHooks(list: Entry[]): Entry[] {
+function withoutOwnHooks(list: Entry[], marker: string): Entry[] {
+  const isOurs = (hook: Json) => typeof hook?.command === 'string' && hook.command.includes(marker);
   return list.flatMap((entry) => {
     if (!Array.isArray(entry?.hooks) || !entry.hooks.some(isOurs)) return [entry];
     const rest = entry.hooks.filter((hook) => !isOurs(hook));
@@ -101,29 +119,24 @@ function withoutOwnHooks(list: Entry[]): Entry[] {
   });
 }
 
-function hookState(file: string): 'absent' | 'outdated' | 'installed' {
+export function jsonHookState(spec: JsonHookSpec, file: string): 'absent' | 'outdated' | 'installed' {
   try {
     const hooks = readSettings(file).hooks as Json | undefined;
     const ours = EVENTS.map((event) => {
       const list = hooks?.[event];
-      return Array.isArray(list) ? ownHooks(list) : [];
+      return Array.isArray(list) ? ownHooks(list, spec.marker) : [];
     });
-    if (ours.every(currentHook)) return 'installed';
+    if (ours.every((items) => currentHook(items, spec.command))) return 'installed';
     return ours.some((items) => items.length > 0) ? 'outdated' : 'absent';
   } catch {
     return 'absent';
   }
 }
 
-/** Whether there is any treeyard hook to remove, including an old or partial installation. */
-export function mailHookInstalled(file: string): boolean {
-  return hookState(file) !== 'absent';
-}
-
 export type MailHookResult = { kind: 'installed' | 'updated' | 'already' | 'removed' | 'absent'; file: string };
 
-/** Keeps `.claude/settings.local.json` out of `git status`: Claude Code's own habit, in case the machine lacks it. */
-function keepOutOfGit(project: string, file: string, env: NodeJS.ProcessEnv): void {
+/** Keeps a project-local hook file out of `git status` when it is neither tracked nor already ignored. */
+export function keepOutOfGit(project: string, file: string, pattern: string, env: NodeJS.ProcessEnv): void {
   try {
     const run = (args: string[]) =>
       execFileSync('git', args, {
@@ -133,6 +146,12 @@ function keepOutOfGit(project: string, file: string, env: NodeJS.ProcessEnv): vo
         timeout: 5000,
         stdio: ['ignore', 'pipe', 'ignore'],
       });
+    try {
+      run(['ls-files', '--error-unmatch', '--', file]);
+      return;
+    } catch {
+      // Not tracked in git: check whether it is already ignored.
+    }
     try {
       run(['check-ignore', '-q', '--no-index', file]);
       return;
@@ -144,70 +163,70 @@ function keepOutOfGit(project: string, file: string, env: NodeJS.ProcessEnv): vo
     mkdirSync(dirname(exclude), { recursive: true });
     appendFileSync(
       exclude,
-      `${existsSync(exclude) && !readFileSync(exclude, 'utf8').endsWith('\n') ? '\n' : ''}/.claude/settings.local.json\n`,
+      `${existsSync(exclude) && !readFileSync(exclude, 'utf8').endsWith('\n') ? '\n' : ''}${pattern}\n`,
     );
   } catch {
     // Only a convenience.
   }
 }
 
-/** Installs or updates both events in Claude Code's settings. */
-export function installMailHook(
-  scope: ClaudeScope,
+/** Installs or updates `PostToolUse` and `UserPromptSubmit` in a CLI's JSON hook file. */
+export function installJsonMailHook(
+  spec: JsonHookSpec,
+  scope: HookScope,
   project: string,
   env: NodeJS.ProcessEnv = process.env,
 ): MailHookResult {
-  const file = claudeSettingsFile(scope, project, env);
+  const file = spec.fileOf(scope, project, env);
   const settings = readSettings(file);
-  const bad = () =>
-    new Error(t('{file}: раздел hooks не в том виде, что читает Claude Code — поправь файл сам', { file }));
   if (
     settings.hooks !== undefined &&
     (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks))
   )
-    throw bad();
+    throw spec.badHooksError(file);
   const hooks = (settings.hooks ?? {}) as Json;
   settings.hooks = hooks;
   let changed = false;
   let present = false;
   for (const event of EVENTS) {
     const list = hooks[event];
-    if (list !== undefined && !Array.isArray(list)) throw bad();
+    if (list !== undefined && !Array.isArray(list)) throw spec.badHooksError(file);
     const entries = (list ?? []) as Entry[];
-    const ours = ownHooks(entries);
+    const ours = ownHooks(entries, spec.marker);
     present ||= ours.length > 0;
-    if (currentHook(ours)) continue;
+    if (currentHook(ours, spec.command)) continue;
     changed = true;
     hooks[event] = [
-      ...withoutOwnHooks(entries),
+      ...withoutOwnHooks(entries, spec.marker),
       {
         ...(event === TOOL_EVENT ? { matcher: '*' } : {}),
-        hooks: [{ type: 'command', command: HOOK_COMMAND, timeout: TIMEOUT }],
+        hooks: [{ type: 'command', command: spec.command, timeout: HOOK_TIMEOUT }],
       },
     ];
   }
   if (!changed) return { kind: 'already', file };
   atomicWrite(file, `${JSON.stringify(settings, null, 2)}\n`);
-  if (scope === 'project') keepOutOfGit(project, file, env);
+  if (scope === 'project') keepOutOfGit(project, file, spec.excludePattern, env);
   return { kind: present ? 'updated' : 'installed', file };
 }
 
 /** Removes our hooks from both events and deletes the file if no settings remain. */
-export function removeMailHook(
-  scope: ClaudeScope,
+export function removeJsonMailHook(
+  spec: JsonHookSpec,
+  scope: HookScope,
   project: string,
   env: NodeJS.ProcessEnv = process.env,
 ): MailHookResult {
-  const file = claudeSettingsFile(scope, project, env);
+  const file = spec.fileOf(scope, project, env);
   const settings = readSettings(file);
   const hooks = settings.hooks as Json | undefined;
   if (!hooks) return { kind: 'absent', file };
   let changed = false;
   for (const event of EVENTS) {
     const list = hooks[event];
-    if (!Array.isArray(list) || !ownHooks(list).length) continue;
+    if (!Array.isArray(list) || !ownHooks(list, spec.marker).length) continue;
     changed = true;
-    const kept = withoutOwnHooks(list);
+    const kept = withoutOwnHooks(list, spec.marker);
     if (kept.length) hooks[event] = kept;
     else delete hooks[event];
   }
@@ -219,24 +238,72 @@ export function removeMailHook(
 }
 
 export interface MailHookPlace {
-  scope: ClaudeScope;
+  brain: MailHookBrain;
+  scope: HookScope;
   file: string;
   installed: boolean;
   needsUpdate?: true;
 }
 
-/** Where the hook stands, in the project and in the person's own settings. */
-export function mailHookPlaces(project: string, env: NodeJS.ProcessEnv = process.env): MailHookPlace[] {
+export function jsonMailHookPlaces(
+  spec: JsonHookSpec,
+  project: string,
+  env: NodeJS.ProcessEnv = process.env,
+): MailHookPlace[] {
   return (['project', 'user'] as const).map((scope) => {
-    const file = claudeSettingsFile(scope, project, env);
-    const state = hookState(file);
-    return { scope, file, installed: state !== 'absent', ...(state === 'outdated' ? { needsUpdate: true } : {}) };
+    const file = spec.fileOf(scope, project, env);
+    const state = jsonHookState(spec, file);
+    return {
+      brain: spec.brain,
+      scope,
+      file,
+      installed: state !== 'absent',
+      ...(state === 'outdated' ? { needsUpdate: true } : {}),
+    };
   });
 }
 
-// ── What the hook does ─────────────────────────────────────────────────────
+const CLAUDE_SPEC: JsonHookSpec = {
+  brain: 'claude',
+  marker: CLAUDE_MARKER,
+  command: HOOK_COMMAND,
+  excludePattern: '/.claude/settings.local.json',
+  fileOf: claudeSettingsFile,
+  badHooksError: (file) =>
+    new Error(t('{file}: раздел hooks не в том виде, что читает Claude Code — поправь файл сам', { file })),
+};
 
-/** What Claude Code sends a hook on stdin; the rest of it does not matter here. */
+/** Whether there is any treeyard Claude Code hook to remove, including an old or partial installation. */
+export function mailHookInstalled(file: string): boolean {
+  return jsonHookState(CLAUDE_SPEC, file) !== 'absent';
+}
+
+/** Installs or updates both events in Claude Code's settings. */
+export function installMailHook(
+  scope: ClaudeScope,
+  project: string,
+  env: NodeJS.ProcessEnv = process.env,
+): MailHookResult {
+  return installJsonMailHook(CLAUDE_SPEC, scope, project, env);
+}
+
+/** Removes our hooks from both events in Claude Code's settings and deletes the file if empty. */
+export function removeMailHook(
+  scope: ClaudeScope,
+  project: string,
+  env: NodeJS.ProcessEnv = process.env,
+): MailHookResult {
+  return removeJsonMailHook(CLAUDE_SPEC, scope, project, env);
+}
+
+/** Where the Claude Code hook stands, in the project and in the person's own settings. */
+export function mailHookPlaces(project: string, env: NodeJS.ProcessEnv = process.env): MailHookPlace[] {
+  return jsonMailHookPlaces(CLAUDE_SPEC, project, env);
+}
+
+// ── Shared mailbox pickup & hook delivery ───────────────────────────────────
+
+/** What Claude Code and Codex send a hook on stdin; the rest of it does not matter here. */
 export interface HookInput {
   session_id?: string;
   hook_event_name?: string;
@@ -259,10 +326,78 @@ export function parseHookInput(text: string): HookInput {
   }
 }
 
-/** Claude Code takes 10 000 characters of context from a hook and files the rest away; letters stay under that. */
-const MAX_CHARS = 9000;
+/** Hook context stays under 10 000 characters so the CLI never truncates or files it away. */
+export const MAX_HOOK_CHARS = 9000;
+
+export interface HookDeliveryOptions {
+  /** Which CLI's hook or plugin is handing the letters over. */
+  brain: BrainId;
+  /** `prompt` — alongside a user prompt; `turn` — mid-turn between tool calls or before a model step. */
+  how: 'turn' | 'prompt';
+  sessionId?: string;
+  /** True inside a subagent: letters belong to the node's own session, never its subagents. */
+  subagent?: boolean;
+  maxChars?: number;
+  /** How long to wait for the mailbox lock before leaving delivery for later. */
+  lockWaitMs?: number;
+  /** Hands the formatted letter text to the CLI. Letters are marked only after this succeeds. */
+  deliver(context: string): void;
+}
+
+/**
+ * Shared mailbox pickup for any CLI hook or plugin: under the mailbox lock it takes the waiting
+ * letters of `TREEYARD_NODE` that fit, formats them with their intro and sender lines, hands them
+ * to `deliver`, and marks them delivered (`prompt` or `turn`).
+ */
+export async function deliverHookMail(env: NodeJS.ProcessEnv, options: HookDeliveryOptions): Promise<number[]> {
+  const id = env[NODE_VAR]?.trim();
+  const dir = env[PROJECT_VAR]?.trim();
+  if (!id || !dir || options.subagent) return [];
+  if (!queuedFor(dir, id).length) {
+    // A flag left behind by a delivery that came another way.
+    lowerFlag(dir, id);
+    return [];
+  }
+  const tree = loadTree(dir);
+  const maxChars = options.maxChars ?? MAX_HOOK_CHARS;
+  return withMailLock(
+    dir,
+    async () => {
+      const letters = queuedFor(dir, id);
+      const fit: typeof letters = [];
+      let size = 0;
+      for (const letter of letters) {
+        // A letter is never cut: one too long for the hook waits for the pane, or the next session.
+        size += letter.text.length + 200;
+        if (size > maxChars) break;
+        fit.push(letter);
+      }
+      if (!fit.length) return [];
+      const intro = hookLetterIntro(options.how, fit.length);
+      options.deliver(`${intro}\n${letterBody(tree, fit)}`);
+      const numbers = fit.map((letter) => letter.n);
+      markDelivered(dir, numbers, options.how, {
+        ...(options.sessionId ? { session: `${options.brain} ${options.sessionId.slice(0, 8)}` } : {}),
+      });
+      return numbers;
+    },
+    options.lockWaitMs ?? 2000,
+  );
+}
+
+export function hookLetterIntro(how: 'turn' | 'prompt', count: number): string {
+  if (how === 'prompt')
+    return count === 1
+      ? t('Вместе с запросом пришло письмо для этой сессии.')
+      : t('Вместе с запросом пришли письма для этой сессии.');
+  return count === 1
+    ? t('Пока ты работал, пришло письмо — учти его в этой работе:')
+    : t('Пока ты работал, пришли письма — учти их в этой работе:');
+}
 
 export interface MidTurnOptions {
+  /** Which CLI ran the hook (`claude` by default; `codex` uses the same wire format). */
+  brain?: MailHookBrain;
   /** Hands the model what the hook prints. Letters are marked only after this went out. */
   emit?(text: string): void;
   /** How long to wait for the mailbox lock before leaving delivery for later. */
@@ -274,66 +409,31 @@ function printOut(text: string): void {
 }
 
 /**
- * The hook hands node `TREEYARD_NODE`'s waiting letters to the model as context for the event.
- * Returns the numbers of the letters handed over;
- * none — no letter, no node, or nothing that fits. Under the mailbox lock, like every delivery: the
- * deliverer must not type a letter the hook is handing over, nor the hook one just typed.
+ * Hands node `TREEYARD_NODE`'s waiting letters to Claude Code or Codex as
+ * `hookSpecificOutput.additionalContext` for `PostToolUse` or `UserPromptSubmit`.
  */
 export async function deliverMidTurn(
   env: NodeJS.ProcessEnv,
   input: HookInput,
   options: MidTurnOptions = {},
 ): Promise<number[]> {
-  const id = env[NODE_VAR]?.trim();
-  const dir = env[PROJECT_VAR]?.trim();
-  if (!id || !dir || input.agent_id) return [];
   const event = input.hook_event_name || TOOL_EVENT;
   if (event !== TOOL_EVENT && event !== PROMPT_EVENT) return [];
-  if (!queuedFor(dir, id).length) {
-    // A flag left behind by a delivery that came another way.
-    lowerFlag(dir, id);
-    return [];
-  }
-  const tree = loadTree(dir);
   const emit = options.emit ?? printOut;
-  return withMailLock(
-    dir,
-    async () => {
-      const letters = queuedFor(dir, id);
-      const fit: typeof letters = [];
-      let size = 0;
-      for (const letter of letters) {
-        // A letter is never cut: one too long for the hook waits for the pane, or the next session.
-        size += letter.text.length + 200;
-        if (size > MAX_CHARS) break;
-        fit.push(letter);
-      }
-      if (!fit.length) return [];
-      const intro = letterIntro(event, fit.length);
+  return deliverHookMail(env, {
+    brain: options.brain ?? 'claude',
+    how: event === PROMPT_EVENT ? 'prompt' : 'turn',
+    ...(input.session_id ? { sessionId: input.session_id } : {}),
+    subagent: Boolean(input.agent_id),
+    ...(options.lockWaitMs !== undefined ? { lockWaitMs: options.lockWaitMs } : {}),
+    deliver: (additionalContext) =>
       emit(
         JSON.stringify({
           hookSpecificOutput: {
             hookEventName: event,
-            additionalContext: `${intro}\n${letterBody(tree, fit)}`,
+            additionalContext,
           },
         }),
-      );
-      const numbers = fit.map((letter) => letter.n);
-      markDelivered(dir, numbers, event === PROMPT_EVENT ? 'prompt' : 'turn', {
-        ...(input.session_id ? { session: `claude ${input.session_id.slice(0, 8)}` } : {}),
-      });
-      return numbers;
-    },
-    options.lockWaitMs ?? 2000,
-  );
-}
-
-function letterIntro(event: HookEvent, count: number): string {
-  if (event === PROMPT_EVENT)
-    return count === 1
-      ? t('Вместе с запросом пришло письмо для этой сессии.')
-      : t('Вместе с запросом пришли письма для этой сессии.');
-  return count === 1
-    ? t('Пока ты работал, пришло письмо — учти его в этой работе:')
-    : t('Пока ты работал, пришли письма — учти их в этой работе:');
+      ),
+  });
 }

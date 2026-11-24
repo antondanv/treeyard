@@ -164,14 +164,20 @@ export function statusText(s: ProjectStatus, p: Paint): string {
     );
   }
 
-  if (s.mailHook) {
-    const found = s.mailHook.find((place) => place.installed);
-    row(
-      t('хук писем'),
-      found
-        ? `Claude Code ${ok(t('стоит'))}  ${p.dim(`${found.scope === 'user' ? t('у тебя') : t('в проекте')} · ${homeShort(found.file)}`)}`
-        : `Claude Code ${p.dim(t('не стоит · treeyard hook claude install'))}`,
-    );
+  if (s.mailHook?.length) {
+    const brains = [...new Set(s.mailHook.map((place) => place.brain))];
+    const name = Math.max(...brains.map((brain) => BRAIN_LABEL[brain].length)) + 1;
+    brains.forEach((brain, i) => {
+      const found = s.mailHook!.find((place) => place.brain === brain && place.installed);
+      const install =
+        brain === 'codex' ? t('не стоит · treeyard hook codex install') : t('не стоит · treeyard hook claude install');
+      const state = found ? (found.needsUpdate ? warn(t('устарел')) : ok(t('стоит'))) : '';
+      const text = found
+        ? `${BRAIN_LABEL[brain].padEnd(name)}${state}  ${p.dim(`${found.scope === 'user' ? t('у тебя') : t('в проекте')} · ${homeShort(found.file)}`)}`
+        : `${BRAIN_LABEL[brain].padEnd(name)}${p.dim(install)}`;
+      if (i === 0) row(t('хук писем'), text);
+      else more(text);
+    });
   }
 
   if (s.sessions && s.panes) {
