@@ -1,7 +1,7 @@
 /** Positive evidence of idle state; missing live status is never evidence. */
-import { closeSync, existsSync, fstatSync, openSync, readdirSync, readSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, openSync, readdirSync, readSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
-import { agyHome, codexHome, type SessionInfo } from '@antondanv/brainyard';
+import { agyHome, claudeHome, claudeProjectDir, codexHome, type SessionInfo } from '@antondanv/brainyard';
 
 import type { Pane } from './panes.js';
 
@@ -40,6 +40,21 @@ export function codexIdleTail(text: string, since?: number): boolean {
   return false;
 }
 
+function readTail(path: string, maxBytes: number): string | undefined {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, 'r');
+    const size = fstatSync(fd).size;
+    const data = Buffer.alloc(Math.min(size, maxBytes));
+    const read = readSync(fd, data, 0, data.length, size - data.length);
+    return data.toString('utf8', 0, read);
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
 function codexIdle(id: string, home: string, since: number): boolean {
   const root = join(home, 'sessions');
   const key = `${root}:${id}`;
@@ -48,26 +63,61 @@ function codexIdle(id: string, home: string, since: number): boolean {
     path = rollout(root, id);
     if (path) rollouts.set(key, path);
   }
-  if (!path) return false;
-  let fd: number | undefined;
-  try {
-    fd = openSync(path, 'r');
-    const size = fstatSync(fd).size;
-    const data = Buffer.alloc(Math.min(size, 64 * 1024));
-    readSync(fd, data, 0, data.length, size - data.length);
-    return codexIdleTail(data.toString('utf8'), since);
-  } catch {
-    return false;
-  } finally {
-    if (fd !== undefined) closeSync(fd);
-  }
+  return path ? codexIdleTail(readTail(path, 64 * 1024) ?? '', since) : false;
 }
 
-/** Add idle evidence for CLIs whose live API lists only busy/waiting sessions. */
+function claudeIdleTail(text: string, since: number): boolean {
+  for (const line of text.trimEnd().split('\n').reverse()) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry.isSidechain) continue;
+      if (entry.type === 'system' && entry.subtype === 'turn_duration')
+        return Date.parse(entry.timestamp ?? '') >= since;
+      if (entry.type === 'assistant')
+        return entry.message?.stop_reason === 'end_turn' && Date.parse(entry.timestamp ?? '') >= since;
+      if (
+        entry.type === 'user' ||
+        entry.type === 'api-request' ||
+        (entry.type === 'queue-operation' && entry.operation === 'dequeue')
+      )
+        return false;
+    } catch {
+      // A partial write can be the start of the next turn. Wait for a complete record.
+      return false;
+    }
+  }
+  return false;
+}
+
+function claudeIdle(home: string, cwd: string, id: string, since: number): boolean {
+  if (!/^[\w-]+$/.test(id) || !Number.isFinite(since)) return false;
+  const root = join(home, 'projects');
+  const places = new Set([cwd]);
+  try {
+    places.add(realpathSync(cwd));
+  } catch {
+    // The transcript may still exist after the directory moves.
+  }
+  try {
+    for (const place of places) {
+      const name = claudeProjectDir(place);
+      const dirs = name.length <= 200 ? [name] : readdirSync(root).filter((dir) => dir.startsWith(name.slice(0, 200)));
+      for (const dir of dirs) {
+        const tail = readTail(join(root, dir, `${id}.jsonl`), 256 * 1024);
+        if (tail !== undefined) return claudeIdleTail(tail, since);
+      }
+    }
+  } catch {
+    // An unreadable store gives no evidence about the pane.
+  }
+  return false;
+}
+
+/** Add idle evidence for panes whose sessions are absent from the live list. */
 export async function withPaneIdle(
   panes: readonly Pane[],
   live: ReadonlyMap<string, SessionInfo>,
-  homes: { codex?: string; antigravity?: string } = {},
+  homes: { claude?: string; codex?: string; antigravity?: string } = {},
 ): Promise<Map<string, SessionInfo>> {
   const out = new Map(live);
   const idle = (pane: Pane) =>
@@ -79,8 +129,15 @@ export async function withPaneIdle(
     });
   const missing = panes.filter((p) => p.sessionId && p.brain && !out.has(p.sessionId));
   const since = (pane: Pane) => Date.parse(pane.startedAt ?? '') - 2000;
-  for (const pane of missing)
+  for (const pane of missing) {
     if (pane.brain === 'codex' && codexIdle(pane.sessionId!, homes.codex ?? codexHome(), since(pane))) idle(pane);
+    if (
+      pane.brain === 'claude' &&
+      pane.cwd &&
+      claudeIdle(homes.claude ?? claudeHome(), pane.cwd, pane.sessionId!, Date.parse(pane.startedAt ?? ''))
+    )
+      idle(pane);
+  }
   const agy = missing.filter((p) => p.brain === 'antigravity');
   if (agy.length) {
     try {

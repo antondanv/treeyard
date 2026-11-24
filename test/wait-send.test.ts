@@ -1,10 +1,11 @@
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { PaneInfo, SessionInfo } from '@antondanv/brainyard';
+import { claudeProjectDir, type PaneInfo, type SessionInfo } from '@antondanv/brainyard';
 import { describe, expect, it } from 'vitest';
 
 import { sessionPlan } from '../src/agents/context.js';
 import { deliverAll, ensureDeliverer, runDeliverer } from '../src/agents/deliver.js';
+import { withPaneIdle } from '../src/agents/pane-idle.js';
 import { type SendSources, sendToNode } from '../src/agents/send.js';
 import { parseDuration, screenTail, type WaitSources, waitFor } from '../src/agents/wait.js';
 import { journalEntries } from '../src/model/journal.js';
@@ -22,7 +23,7 @@ import {
 import { addNode, attachCommit, attachSession, logToNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import type { SessionRef, Tree } from '../src/model/types.js';
-import { emptyTree } from './helpers.js';
+import { emptyTree, tempDir } from './helpers.js';
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
@@ -94,6 +95,32 @@ function waitSources(world: World, onLook?: (count: number) => void): WaitSource
 }
 
 const fast = { intervalMs: 5, graceMs: 30_000 };
+
+function claudeTranscript() {
+  const claude = tempDir();
+  const cwd = join(tempDir(), 'Treeyard.worktrees', 'work-node');
+  mkdirSync(cwd, { recursive: true });
+  const dir = join(claude, 'projects', claudeProjectDir(realpathSync(cwd)));
+  mkdirSync(dir, { recursive: true });
+  const sessionId = 'claude-session';
+  const startedAt = ago(60_000);
+  const terminal = pane('claude-cc', { cwd, sessionId, startedAt });
+  return {
+    claude,
+    sessionId,
+    startedAt,
+    terminal,
+    write: (...entries: unknown[]) =>
+      writeFileSync(join(dir, `${sessionId}.jsonl`), entries.map((e) => JSON.stringify(e)).join('\n')),
+  };
+}
+
+const claudeAssistant = (stopReason: string, timestamp: string, isSidechain = false) => ({
+  type: 'assistant',
+  timestamp,
+  isSidechain,
+  message: { stop_reason: stopReason },
+});
 
 describe('treeyard wait', () => {
   it('answers at once for a node that is not «в работе»', async () => {
@@ -233,6 +260,47 @@ describe('treeyard wait', () => {
       new Map([...asked, ...panes.map((p) => [p.sessionId!, live(p.sessionId!, 'idle')] as const)]);
     const idle = await waitFor(tree.project.dir, [node.id], { ...fast, sources });
     expect(idle.settled).toMatchObject([{ reason: 'idle', session: { id: 'th-2', state: 'idle', pane: 'codex-cc' } }]);
+  });
+
+  it('returns the result of a Claude turn from a worktree pane missing from the live list', async () => {
+    const transcript = claudeTranscript();
+    const tree = emptyTree();
+    const node = nodeWithSession(tree, 'Claude', { id: transcript.sessionId, mode: 'pane', pane: 'claude-cc' });
+    const sources = waitSources({ live: [], panes: [transcript.terminal], screens: { 'claude-cc': ['Итог хода'] } });
+    sources.idle = (panes, asked) => withPaneIdle(panes, asked, { claude: transcript.claude });
+    const tool = claudeAssistant('tool_use', ago(1000));
+    transcript.write(tool, { type: 'user', message: { content: [{ type: 'tool_result' }] } });
+    const busy = await waitFor(tree.project.dir, [node.id], { ...fast, timeoutMs: 40, sources });
+    expect(busy.timedOut).toBe(true);
+    expect(busy.pending).toMatchObject([{ status: 'active', session: { state: 'unknown' } }]);
+
+    transcript.write(tool, { type: 'system', subtype: 'turn_duration', timestamp: ago(500) }, { type: 'last-prompt' });
+    const idle = await waitFor(tree.project.dir, [node.id], { ...fast, timeoutMs: 100, sources });
+    expect(idle.timedOut).toBe(false);
+    expect(idle.settled).toMatchObject([
+      { status: 'active', from: 'active', reason: 'idle', session: { state: 'idle', screen: ['Итог хода'] } },
+    ]);
+  });
+
+  it('uses only current main-thread Claude completions and respects the live state', async () => {
+    const { claude, sessionId, startedAt, terminal, write } = claudeTranscript();
+    const states = (reported: SessionInfo[] = []) =>
+      withPaneIdle([terminal], new Map(reported.map((info) => [info.id, info])), { claude });
+    const complete = claudeAssistant('end_turn', startedAt);
+    const stale = new Date(Date.parse(startedAt) - 1).toISOString();
+    write({ ...complete, timestamp: stale });
+    expect((await states()).has(sessionId)).toBe(false);
+    write(complete, { type: 'user' });
+    expect((await states()).has(sessionId)).toBe(false);
+    write(complete, claudeAssistant('tool_use', ago(1000)));
+    expect((await states()).has(sessionId)).toBe(false);
+    write(claudeAssistant('tool_use', startedAt), claudeAssistant('end_turn', ago(1000), true));
+    expect((await states()).has(sessionId)).toBe(false);
+
+    write(complete, { type: 'custom-title' });
+    expect((await states()).get(sessionId)?.live?.status).toBe('idle');
+    const waiting = live(sessionId, 'waiting', { waitingFor: 'permission: Bash' });
+    expect((await states([waiting])).get(sessionId)).toBe(waiting);
   });
 
   it('wakes when the tree changes and, with --all, waits for every node', async () => {
