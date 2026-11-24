@@ -18,7 +18,7 @@ import { letterByNumber, type MailItem, markDelivered, readMail, withMailLock } 
 import { logToNode } from '../model/ops.js';
 import { holderOf } from '../model/tree.js';
 import type { Status, Tree } from '../model/types.js';
-import { DELIVER_SOURCES, type DeliverSources } from './deliver.js';
+import { DELIVER_SOURCES, type DeliverSources, typeText } from './deliver.js';
 import {
   GRACE_MS,
   INTERVAL_MS,
@@ -242,7 +242,7 @@ export async function answerQuestion(
   }
   const typed = option === byNumber || option === byWords ? undefined : wanted;
   if (typed) {
-    await keys(pane, `${PASTE_START}${typed}${PASTE_END}`);
+    await typeText({ type: keys }, pane, `${PASTE_START}${typed}${PASTE_END}`);
     await sources.pause(300);
   }
   await keys(pane, '\r');

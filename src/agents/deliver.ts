@@ -165,6 +165,19 @@ export function carriesWakePrompt(brain: string): boolean {
   return brain !== 'opencode';
 }
 
+/**
+ * Brainyard sends a text to tmux in pieces of 2000 bytes, a key each, and tmux 3.7 refuses a
+ * command that long («command too long», probe 24.11): a long letter goes in smaller pieces, cut
+ * between characters, inside the one bracketed paste.
+ */
+const TYPE_PIECE = 400;
+
+export async function typeText(sources: Pick<DeliverSources, 'type'>, pane: string, text: string): Promise<void> {
+  const chars = Array.from(text);
+  for (let at = 0; at < chars.length; at += TYPE_PIECE)
+    await sources.type(pane, chars.slice(at, at + TYPE_PIECE).join(''));
+}
+
 export function shortId(ref: SessionRef): string {
   return isPending(ref) ? (ref.pane ?? ref.id) : ref.id.slice(0, 8);
 }
@@ -212,7 +225,7 @@ export async function deliverNode(
   const attempt: Attempt = { node: id, letters: numbers, ref, warnings: [] };
   try {
     if (route.kind === 'type') {
-      await sources.type(route.pane, `${PASTE_START}${body}${PASTE_END}`);
+      await typeText(sources, route.pane, `${PASTE_START}${body}${PASTE_END}`);
       await sources.pause(ENTER_AFTER_MS);
       await sources.type(route.pane, '\r');
       Object.assign(attempt, { how: 'typed', pane: route.pane });

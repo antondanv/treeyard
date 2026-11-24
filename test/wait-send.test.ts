@@ -351,6 +351,23 @@ describe('treeyard send', () => {
     expect(letterByNumber(tree.project.dir, 3)).toMatchObject({ state: 'queued', held: 'busy' });
   });
 
+  it('types a long letter in pieces cut between characters, inside one paste', async () => {
+    const tree = emptyTree();
+    const node = nodeWithSession(tree, 'Панель', { id: 'p-1', mode: 'pane', pane: 'claude-aa' });
+    const { sources, calls } = sendSources({
+      live: [live('p-1', 'idle')],
+      panes: [pane('claude-aa', { sessionId: 'p-1' })],
+    });
+    const long = `${'письмо 🌲 '.repeat(120)}конец`;
+    await sendToNode(tree, node.id, long, { sources });
+    const pieces = calls.typed.map(([, data]) => data);
+    expect(pieces.length).toBeGreaterThan(3);
+    expect(pieces.slice(0, -1).join('')).toBe(`\u001b[200~${long}\u001b[201~`);
+    expect(pieces.at(-1)).toBe('\r');
+    // No piece splits a character in two.
+    for (const piece of pieces) expect(Buffer.from(piece, 'utf8').toString('utf8')).toBe(piece);
+  });
+
   it('keeps a letter to a session that waits for the person, and says what it waits for', async () => {
     const tree = emptyTree();
     const node = nodeWithSession(tree, 'Диалог', { id: 'p-1', mode: 'pane', pane: 'claude-aa' });

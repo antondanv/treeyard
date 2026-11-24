@@ -72,6 +72,19 @@ describe.skipIf(!hasTmux)('letters through real tmux panes', () => {
       await until(async () => (await screen(launched.pane)).includes('письмо в очередь'));
       expect(letterByNumber(tree.project.dir, 1)).toMatchObject({ state: 'delivered', delivered: { how: 'typed' } });
 
+      // A long letter: tmux 3.7 refuses Brainyard's 2000-byte pieces, so it goes in smaller ones.
+      const long = `${'длинное письмо, '.repeat(200)}КОНЕЦ`;
+      const [big] = await deliverAll(tree.project.dir, {
+        sources: { ...sources, now: () => Date.now() + 120_000 },
+      }).then(async () => {
+        await sendToNode(loadTree(tree.project.dir), node.id, long, {
+          sources: { ...sources, now: () => Date.now() + 120_000 },
+          spawn: () => undefined,
+        });
+        return [letterByNumber(tree.project.dir, 2)];
+      });
+      expect(big).toMatchObject({ state: 'delivered', delivered: { how: 'typed' } });
+
       // Asleep: the same conversation wakes in a new pane with the next letter.
       const metadata = (await readPanes()).find((p) => p.pane === launched.pane)!;
       expect(await sleepPane(loadTree(tree.project.dir), metadata)).toBe('slept');
@@ -80,7 +93,7 @@ describe.skipIf(!hasTmux)('letters through real tmux panes', () => {
         sources: asleep,
         size: { width: 90, height: 16 },
       });
-      expect(woke).toMatchObject({ how: 'woke', letter: { n: 2, state: 'delivered' } });
+      expect(woke).toMatchObject({ how: 'woke', letter: { n: 3, state: 'delivered' } });
       panes.push(woke.pane!);
       await until(async () => (await screen(woke.pane!)).includes('pane CLI ready'));
       const recorded = JSON.parse(readFileSync(join(tree.project.dir, `pane-${id}.json`), 'utf8'));
