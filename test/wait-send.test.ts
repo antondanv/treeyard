@@ -1,13 +1,17 @@
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { claudeProjectDir, type PaneInfo, type SessionInfo } from '@antondanv/brainyard';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { sessionPlan } from '../src/agents/context.js';
 import { deliverAll, ensureDeliverer, runDeliverer } from '../src/agents/deliver.js';
+import { paneDialog } from '../src/agents/pane-dialog.js';
 import { withPaneIdle } from '../src/agents/pane-idle.js';
 import { type SendSources, sendToNode } from '../src/agents/send.js';
 import { parseDuration, screenTail, type WaitSources, waitFor } from '../src/agents/wait.js';
+import { paint } from '../src/cli/print.js';
+import { waitText } from '../src/cli/wait-text.js';
+import { setLang } from '../src/i18n/i18n.js';
 import { journalEntries } from '../src/model/journal.js';
 import { letterFrom, letterTo } from '../src/model/mail.js';
 import {
@@ -26,6 +30,9 @@ import type { SessionRef, Tree } from '../src/model/types.js';
 import { emptyTree, tempDir } from './helpers.js';
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+const plain = paint({ isTTY: false } as NodeJS.WriteStream);
+
+afterEach(() => setLang('ru'));
 
 /** A node «в работе» with one session. */
 function nodeWithSession(tree: Tree, title: string, ref: Partial<SessionRef> & { id: string }) {
@@ -335,6 +342,227 @@ describe('treeyard wait', () => {
     expect(parseDuration('10 мин')).toBeUndefined();
     expect(parseDuration('скоро')).toBeUndefined();
   });
+
+  it('spots Claude Code and Codex startup dialogs on screen without false positives on prose or code', () => {
+    expect(
+      paneDialog(
+        [
+          '╭──────────────────────────────────────────────────╮',
+          '│ \u001b[1mDo you trust the files in this folder?\u001b[0m          │',
+          '│ /private/tmp/probe                               │',
+          '│ ❯ 1. Yes, proceed                                │',
+          '│   2. No, exit                                    │',
+          '╰──────────────────────────────────────────────────╯',
+          'Enter to confirm · Esc to cancel',
+        ],
+        'claude',
+      ),
+    ).toBe('folder-trust');
+
+    expect(
+      paneDialog(
+        [
+          'Accessing workspace:',
+          '/private/tmp/probe',
+          'Quick safety check: Is this a project you created',
+          'or one you trust?',
+          '❯ 1. Yes, I trust this folder',
+          '  2. No, exit',
+          'Enter to confirm · Esc to cancel',
+        ],
+        'claude',
+      ),
+    ).toBe('folder-trust');
+
+    expect(
+      paneDialog(
+        [
+          'Allow external CLAUDE.md file imports?',
+          "This project's CLAUDE.md imports files outside the current working directory:",
+          '  /Users/dev/AGENTS.md',
+          '❯ 1. Yes, allow external imports',
+          '  2. No, disable external imports',
+          'Enter to confirm · Esc to cancel',
+        ],
+        'claude',
+      ),
+    ).toBe('external-imports');
+
+    expect(paneDialog(['External includes', '  @../shared/CLAUDE.md', '❯ 1. Yes, allow', '  2. No'], 'claude')).toBe(
+      'external-imports',
+    );
+    expect(paneDialog(['External includes', '❯ 1. Yes, allow', '  2. No'], 'codex')).toBeUndefined();
+
+    expect(
+      paneDialog(
+        [
+          'Do you trust the contents of this directory? Working with untrusted',
+          'contents comes with higher risk of prompt injection.',
+          '› 1. Yes, continue',
+          '  2. No, quit',
+          'Press enter to continue',
+        ],
+        'codex',
+      ),
+    ).toBe('folder-trust');
+
+    expect(paneDialog(['Trust this directory?', '/tmp/probe', '› Yes, continue', '  No, quit'], 'codex')).toBe(
+      'folder-trust',
+    );
+
+    // Ordinary prompt prose, code literals, a dialog already past, or another CLI never trigger it.
+    expect(
+      paneDialog([
+        'Распознавать диалоги: «Do you trust the files in this folder?», «Yes, I trust this folder»,',
+        '«Allow external CLAUDE.md file imports?», «Do you trust the contents of this directory?».',
+      ]),
+    ).toBeUndefined();
+    expect(
+      paneDialog([
+        "  'Do you trust the files in this folder?',",
+        "  '❯ 1. Yes, I trust this folder',",
+        "  '  2. No, exit',",
+      ]),
+    ).toBeUndefined();
+    expect(
+      paneDialog([
+        'Do you trust the files in this folder?',
+        '❯ 1. Yes, I trust this folder',
+        '  2. No, exit',
+        '⏺ Читаю дерево проекта и проверяю файлы…',
+        '  Готовлю план.',
+      ]),
+    ).toBeUndefined();
+    expect(
+      paneDialog(['Do you trust the files in this folder?', '❯ 1. Yes, proceed', '  2. No, exit'], 'opencode'),
+    ).toBeUndefined();
+  });
+
+  it('reports startup dialogs at once in RU and EN, with tmux attach, even on a fresh or pending pane', async () => {
+    const tree = emptyTree();
+    const trust = nodeWithSession(tree, 'Доверие Claude', {
+      id: 'c-1',
+      mode: 'pane',
+      pane: 'claude-trust',
+      started: ago(500),
+      opened: ago(500),
+    });
+    const imports = nodeWithSession(tree, 'Импорты Claude', {
+      id: 'c-2',
+      mode: 'pane',
+      pane: 'claude-imports',
+      started: ago(500),
+      opened: ago(500),
+    });
+    const codex = nodeWithSession(tree, 'Доверие Codex', {
+      id: 'pane:codex-trust',
+      brain: 'codex',
+      mode: 'pane',
+      pane: 'codex-trust',
+      started: ago(500),
+      opened: ago(500),
+    });
+    const agy = nodeWithSession(tree, 'Доверие Antigravity', {
+      id: 'pane:agy-trust',
+      brain: 'antigravity',
+      mode: 'pane',
+      pane: 'agy-trust',
+      started: ago(500),
+      opened: ago(500),
+    });
+    const sources = waitSources({
+      live: [],
+      panes: [
+        pane('claude-trust', { sessionId: 'c-1' }),
+        pane('claude-imports', { sessionId: 'c-2' }),
+        pane('codex-trust', { brain: 'codex' }),
+        pane('agy-trust', { brain: 'antigravity' }),
+      ],
+      screens: {
+        'claude-trust': [
+          'Quick safety check: Is this a project you created or one you trust?',
+          '❯ 1. Yes, I trust this folder',
+          '  2. No, exit',
+        ],
+        'claude-imports': [
+          'Allow external CLAUDE.md file imports?',
+          '❯ 1. Yes, allow external imports',
+          '  2. No, disable external imports',
+        ],
+        'codex-trust': ['Do you trust the contents of this directory?', '› 1. Yes, continue', '  2. No, quit'],
+        'agy-trust': [
+          'Accessing workspace:',
+          '/tmp/project',
+          'Do you trust the contents of this project?',
+          'Antigravity CLI requires permission to read, edit, and execute files here.',
+          '> Yes, I trust this folder',
+          '  No, exit',
+          '  ↑/↓ Navigate · enter Confirm',
+        ],
+      },
+    });
+    // Even if a resumed session already had an old transcript, the startup dialog on screen wins.
+    sources.message = async () => 'старый ответ прошлого запуска';
+
+    const ru = await waitFor(tree.project.dir, [trust.id, imports.id, codex.id, agy.id], {
+      ...fast,
+      all: true,
+      sources,
+    });
+    expect(ru.timedOut).toBe(false);
+    expect(ru.settled).toMatchObject([
+      {
+        id: trust.id,
+        reason: 'waiting',
+        session: {
+          state: 'waiting',
+          waitingFor: 'доверие к папке',
+          pane: 'claude-trust',
+          screen: [
+            'Quick safety check: Is this a project you created or one you trust?',
+            '❯ 1. Yes, I trust this folder',
+            '  2. No, exit',
+          ],
+        },
+      },
+      {
+        id: imports.id,
+        reason: 'waiting',
+        session: { state: 'waiting', waitingFor: 'внешние импорты CLAUDE.md', pane: 'claude-imports' },
+      },
+      {
+        id: codex.id,
+        reason: 'waiting',
+        session: { brain: 'codex', id: null, state: 'waiting', waitingFor: 'доверие к папке', pane: 'codex-trust' },
+      },
+      {
+        id: agy.id,
+        reason: 'waiting',
+        session: {
+          brain: 'antigravity',
+          id: null,
+          state: 'waiting',
+          waitingFor: 'доверие к папке',
+          pane: 'agy-trust',
+        },
+      },
+    ]);
+    expect(ru.settled[0]?.session?.message).toBeUndefined();
+    const ruText = waitText(ru, plain);
+    expect(ruText).toContain('ждёт человека: доверие к папке');
+    expect(ruText).toContain('ждёт человека: внешние импорты CLAUDE.md');
+    expect(ruText).toContain('ответить в панели: tmux -L brainyard attach -t claude-trust');
+    expect(ruText).toContain('ответить в панели: tmux -L brainyard attach -t claude-imports');
+    expect(ruText).toContain('ответить в панели: tmux -L brainyard attach -t codex-trust');
+    expect(ruText).toContain('ответить в панели: tmux -L brainyard attach -t agy-trust');
+
+    setLang('en');
+    const en = await waitFor(tree.project.dir, [imports.id, codex.id], { ...fast, all: true, sources });
+    const enText = waitText(en, plain);
+    expect(enText).toContain('waits for the person: external CLAUDE.md imports');
+    expect(enText).toContain('waits for the person: folder trust');
+    expect(enText).toContain('answer in the pane: tmux -L brainyard attach -t codex-trust');
+  });
 });
 
 /** Brainyard as send sees it, recording every call. */
@@ -348,6 +576,7 @@ function sendSources(world: World) {
   const sources: SendSources = {
     live: async () => world.live,
     panes: async () => world.panes,
+    capture: async (name) => (world.screens?.[name] ? { lines: world.screens[name]! } : undefined),
     type: async (name, data) => {
       calls.typed.push([name, data]);
     },
@@ -450,6 +679,74 @@ describe('treeyard send', () => {
     world.live = [live('p-1', 'idle')];
     await deliverAll(tree.project.dir, { sources });
     expect(calls.typed.map(([, data]) => data)).toEqual(['\u001b[200~да\u001b[201~', '\r']);
+  });
+
+  it('holds letters as waiting on a startup dialog even past START_MS, instead of typing into the dialog', async () => {
+    const tree = emptyTree();
+    const claudeNode = nodeWithSession(tree, 'Доверие', {
+      id: 'p-trust',
+      mode: 'pane',
+      pane: 'claude-trust',
+      started: ago(120_000),
+      opened: ago(120_000),
+    });
+    const codexNode = nodeWithSession(tree, 'Codex доверие', {
+      id: 'pane:codex-trust',
+      brain: 'codex',
+      mode: 'pane',
+      pane: 'codex-trust',
+      started: ago(120_000),
+      opened: ago(120_000),
+    });
+    const world: World = {
+      live: [],
+      panes: [pane('claude-trust', { sessionId: 'p-trust' }), pane('codex-trust', { brain: 'codex' })],
+      screens: {
+        'claude-trust': [
+          'Allow external CLAUDE.md file imports?',
+          '❯ 1. Yes, allow external imports',
+          '  2. No, disable external imports',
+        ],
+        'codex-trust': ['Do you trust the contents of this directory?', '› 1. Yes, continue', '  2. No, quit'],
+      },
+    };
+    const { sources, calls } = sendSources(world);
+    const first = await sendToNode(tree, claudeNode.id, 'начинай', { sources, spawn: () => undefined });
+    const second = await sendToNode(tree, codexNode.id, 'и ты начинай', { sources, spawn: () => undefined });
+    expect(first).toMatchObject({
+      held: 'waiting',
+      heldFor: 'внешние импорты CLAUDE.md',
+      letter: { state: 'queued', held: 'waiting', heldFor: 'внешние импорты CLAUDE.md' },
+    });
+    expect(second).toMatchObject({
+      held: 'waiting',
+      heldFor: 'доверие к папке',
+      letter: { state: 'queued', held: 'waiting', heldFor: 'доверие к папке' },
+    });
+    expect(calls.typed).toEqual([]);
+
+    // Another delivery pass while the dialogs stay on screen still holds both letters.
+    const stillHeld = await deliverAll(tree.project.dir, { sources });
+    expect(stillHeld).toMatchObject([
+      { node: claudeNode.id, held: 'waiting', heldFor: 'внешние импорты CLAUDE.md' },
+      { node: codexNode.id, held: 'waiting', heldFor: 'доверие к папке' },
+    ]);
+    expect(calls.typed).toEqual([]);
+
+    // Once the person confirms in the panes and the turns end, the letters go in typed.
+    world.screens = {};
+    world.panes = [
+      pane('claude-trust', { sessionId: 'p-trust' }),
+      pane('codex-trust', { brain: 'codex', sessionId: 'th-trust' }),
+    ];
+    world.live = [live('p-trust', 'idle'), { ...live('th-trust', 'idle'), brain: 'codex' }];
+    await deliverAll(tree.project.dir, { sources });
+    expect(calls.typed).toEqual([
+      ['claude-trust', '\u001b[200~начинай\u001b[201~'],
+      ['claude-trust', '\r'],
+      ['codex-trust', '\u001b[200~и ты начинай\u001b[201~'],
+      ['codex-trust', '\r'],
+    ]);
   });
 
   it('stops a background session that ended its turn and resumes it in the background with the letter', async () => {

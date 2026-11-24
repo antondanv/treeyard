@@ -566,10 +566,13 @@ another.
 A coordinator follows the nodes it handed out with two commands, without polling `show` and
 `git log` and without subagents of its own. `treeyard wait a b` waits until at least one node needs
 it: the node left “active” (to review, waiting, done), or its newest session ended its turn,
-waits for the person (a permission, a question in a dialog) or ended (its pane went to sleep, its
+waits for the person (a permission, a question in a dialog, or a CLI startup dialog on the pane's
+screen — trusting the folder in Claude Code, Codex and Antigravity, external `CLAUDE.md` imports in
+Claude Code, before the CLI itself reports the session) or ended (its pane went to sleep, its
 background run is over). A node no longer active answers at once. For such a node it prints
 the status (`active → in review`), the last journal entry written by a person or an agent
-(the session's summary, as a rule), the session's state and the last message the session wrote,
+(the session's summary, as a rule), the session's state (when a session waits for the person in a
+pane — with `tmux -L brainyard attach -t <pane>`) and the last message the session wrote,
 whole, however long: the question it ended its turn with, or its summary. The message comes from
 the CLI's own transcript, read through Brainyard (Claude Code, Codex, OpenCode — where Brainyard
 can read the CLI's store); where there is no transcript to read, a session in a pane shows the end
@@ -621,7 +624,8 @@ once if the session can take it, otherwise by itself as soon as it can:
   message is typed in once it is ready;
 - a Claude Code background session — resumed in the background (one that ended its turn is stopped
   first);
-- a busy session, one waiting for the person (a permission, a question in a dialog — keys would
+- a busy session, one waiting for the person (a permission, a question in a dialog, a startup
+  dialog of trusting the folder or external `CLAUDE.md` imports — keys would
   land in it) and one open in the person's terminal — the message waits: for the end of the turn,
   for the person's answer in the pane (`tmux -L brainyard attach -t <pane>`) or in `claude attach`,
   or for the terminal to be closed so the session can wake in a pane. With the Claude Code hooks
@@ -669,7 +673,8 @@ does. `--timeout 10m` — how long to wait, after which the exit code is 124. Wi
 in a dialog (Claude Code: “input needed”, Codex: “input”) in a pane: a choice's number or words —
 picked with the arrows and Enter, any other text — into the row of one's own answer (“Type
 something”, “Other”) and Enter. The node's journal gets `the person's answer in the dialog: «…»`. A
-permission, a folder to trust and anything that is not a question — refused with exit code 1: only
+permission, a startup dialog (trusting the folder, external `CLAUDE.md` imports) and anything that
+is not a question — refused with exit code 1 and `tmux -L brainyard attach -t <pane>`: only
 the person gives those, in the pane. A session that does not wait on a question, is not in a pane or
 shows no choices — refused too.
 

@@ -24,6 +24,7 @@ import type { SessionRef, Status, Tree, TreeNode } from '../model/types.js';
 import { watchTree } from '../watch.js';
 import { lastMessage } from './last-message.js';
 import { findOverlaps, notifyOverlaps, type Overlap } from './overlap.js';
+import { paneDialog, type StartupDialog, startupWaitingFor } from './pane-dialog.js';
 import { withPaneIdle } from './pane-idle.js';
 import { isPending, paneFor, paneInProject } from './panes.js';
 
@@ -158,14 +159,22 @@ export interface World {
   panes: readonly PaneInfo[];
   /** Pane name → its session, for panes whose CLI names the session late. */
   paneSessions: ReadonlyMap<string, string>;
+  /** Pane name → startup dialog on its screen before the CLI reports a live state. */
+  paneDialogs?: ReadonlyMap<string, StartupDialog>;
+  /** Pane name → screen lines already read while checking for startup dialogs. */
+  paneScreens?: ReadonlyMap<string, readonly string[]>;
 }
 
-/** What `observe` asks; `paneSession` and `idle` only make the answer sharper. */
-export type ObserveSources = Pick<WaitSources, 'live' | 'panes'> & Partial<Pick<WaitSources, 'paneSession' | 'idle'>>;
+/** What `observe` asks; `paneSession`, `idle` and `capture` make the answer sharper. */
+export type ObserveSources = Pick<WaitSources, 'live' | 'panes'> &
+  Partial<Pick<WaitSources, 'paneSession' | 'idle'>> & {
+    capture?(pane: string): Promise<{ lines: readonly string[] } | undefined>;
+  };
 
 /**
  * What the sessions of the machine are doing now: their live states, the panes, the sessions of
- * panes whose CLI named them late, the idle state of Codex and Antigravity panes.
+ * panes whose CLI named them late, the idle state of Codex and Antigravity panes, and startup
+ * dialogs on panes the CLI has not reported yet.
  */
 export async function observe(dir: string, sources: ObserveSources): Promise<World> {
   const [live, panes] = await Promise.all([sources.live().catch(() => []), sources.panes().catch(() => [])]);
@@ -181,7 +190,26 @@ export async function observe(dir: string, sources: ObserveSources): Promise<Wor
   );
   const asked = new Map(live.map((session) => [session.id, session]));
   const states = sources.idle ? await sources.idle(named, asked).catch(() => asked) : asked;
-  return { live: states, panes, paneSessions: names };
+  const paneDialogs = new Map<string, StartupDialog>();
+  const paneScreens = new Map<string, readonly string[]>();
+  if (sources.capture) {
+    const capture = sources.capture;
+    const silent = named.filter(
+      (pane) =>
+        (!pane.brain || pane.brain === 'claude' || pane.brain === 'codex' || pane.brain === 'antigravity') &&
+        (!pane.sessionId || !states.get(pane.sessionId)?.live?.status),
+    );
+    await Promise.all(
+      silent.map(async (pane) => {
+        const screen = await capture(pane.pane).catch(() => undefined);
+        if (!screen) return;
+        paneScreens.set(pane.pane, screen.lines);
+        const dialog = paneDialog(screen.lines, pane.brain);
+        if (dialog) paneDialogs.set(pane.pane, dialog);
+      }),
+    );
+  }
+  return { live: states, panes, paneSessions: names, paneDialogs, paneScreens };
 }
 
 /** What a session is doing, from its live state and its pane. */
@@ -193,9 +221,13 @@ export function sessionSight(ref: SessionRef, world: World): SessionSight {
   if (ref.mode) sight.mode = ref.mode;
   if (pane) sight.pane = pane.pane;
   const status = info?.live?.status;
+  const dialog = !status && pane ? world.paneDialogs?.get(pane.pane) : undefined;
   if (status === 'waiting') {
     sight.state = 'waiting';
     if (info?.live?.waitingFor) sight.waitingFor = info.live.waitingFor;
+  } else if (dialog) {
+    sight.state = 'waiting';
+    sight.waitingFor = startupWaitingFor(dialog);
   } else if (status === 'idle') sight.state = 'idle';
   else if (status) sight.state = 'busy';
   // No word from the CLI: a live pane is still starting or does not say; without one the process is over.
@@ -260,15 +292,18 @@ export async function look(
     if (reason) sight.reason = reason;
     if (session && reason) {
       // The transcript says what the journal does not yet — the question, or the answer the session
-      // ended with — and says it whole; the end of the screen only stands in for a missing one.
+      // ended with — and says it whole; the end of the screen only stands in for a missing one, and
+      // a startup dialog lives only on the screen.
+      const onDialog = Boolean(session.pane && world.paneDialogs?.has(session.pane));
       const message =
-        session.id && sources.message
+        !onDialog && session.id && sources.message
           ? await sources.message(session.brain, session.id).catch(() => undefined)
           : undefined;
       if (message) session.message = message;
       else if (session.pane && reason !== 'gone') {
-        const screen = await sources.capture(session.pane).catch(() => undefined);
-        if (screen) session.screen = screenTail(screen.lines);
+        const lines =
+          world.paneScreens?.get(session.pane) ?? (await sources.capture(session.pane).catch(() => undefined))?.lines;
+        if (lines) session.screen = screenTail(lines);
       }
     }
     sights.push(sight);

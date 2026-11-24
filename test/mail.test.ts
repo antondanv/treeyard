@@ -4,7 +4,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { sessionPlan } from '../src/agents/context.js';
 import { type SendSources, sendToNode } from '../src/agents/send.js';
 import { setLang } from '../src/i18n/i18n.js';
-import { letterFrom, lettersOf, letterText, letterTo, parseLetter, senderNode } from '../src/model/mail.js';
+import {
+  letterFrom,
+  letterState,
+  lettersOf,
+  letterText,
+  letterTo,
+  parseLetter,
+  senderNode,
+} from '../src/model/mail.js';
 import { addLetter, markDelivered, markHeld } from '../src/model/mailbox.js';
 import { NODE_VAR, PROJECT_VAR } from '../src/model/notes.js';
 import { addNode, attachSession, logToNode } from '../src/model/ops.js';
@@ -139,6 +147,29 @@ describe('letters between the sessions of nodes', () => {
     // Its own node, or no coordinator at all, adds nothing.
     expect(sessionPlan(tree, child.id, 'do', 'claude', undefined, child).prompt).not.toContain('Тебя запустила');
     expect(sessionPlan(tree, child.id, 'do', 'claude').prompt).not.toContain('Задание к узлу');
+  });
+
+  it('holds a letter for a pane on a startup dialog as waiting, and renders its reason in RU and EN', async () => {
+    const { tree, node } = paneNode('Новый проект');
+    const name = `claude-${node.id}`;
+    const { sources, typed } = typing([
+      { pane: name, brain: 'claude', sessionId: `s-${node.id}`, attached: false, width: 80, height: 24 },
+    ]);
+    sources.capture = async () => ({
+      lines: ['Do you trust the files in this folder?', '❯ 1. Yes, I trust this folder', '  2. No, exit'],
+    });
+    const sent = await sendToNode(tree, node.id, 'привет', { sources, spawn: () => undefined });
+    expect(typed).toEqual([]);
+    expect(sent).toMatchObject({ held: 'waiting', heldFor: 'доверие к папке' });
+    expect(letterState({ state: 'queued', held: sent.held, heldFor: sent.heldFor })).toBe(
+      'в очереди: сессия ждёт человека — придёт, когда он ответит (доверие к папке)',
+    );
+    setLang('en');
+    const enSent = await sendToNode(tree, node.id, 'hello', { sources, spawn: () => undefined });
+    expect(enSent).toMatchObject({ held: 'waiting', heldFor: 'folder trust' });
+    expect(letterState({ state: 'queued', held: enSent.held, heldFor: enSent.heldFor })).toBe(
+      'queued: the session waits for the person — it arrives once they answer (folder trust)',
+    );
   });
 });
 
