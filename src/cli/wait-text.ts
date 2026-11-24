@@ -1,4 +1,5 @@
 /** `treeyard wait` as text: a block per node that needs the coordinator, a line per node still at work. */
+import { LISTED } from '../agents/overlap.js';
 import type { InboxLetter, SessionSight, SessionState, Sight, WaitResult } from '../agents/wait.js';
 import { t } from '../i18n/i18n.js';
 import { STATUS_LABEL } from '../model/ops.js';
@@ -87,11 +88,34 @@ export function inboxBlock(letter: InboxLetter, p: Paint): string {
   return lines.join('\n');
 }
 
+/**
+ * Two nodes that change one file: «A» и «B» правят один файл: путь — a line per file, the rest
+ * counted. Shared by `wait` and `queue`.
+ */
+export function overlapLines(aTitle: string, bTitle: string, files: readonly string[]): string[] {
+  const lines = files
+    .slice(0, LISTED)
+    .map((file) => t('«{a}» и «{b}» правят один файл: {file}', { a: aTitle, b: bTitle, file }));
+  if (files.length > LISTED) lines.push(t('… и ещё {p1}', { p1: files.length - LISTED }));
+  return lines;
+}
+
+function overlapBlock(result: WaitResult, p: Paint): string | undefined {
+  const lines = (result.conflicts ?? []).flatMap((overlap) =>
+    overlapLines(overlap.nodes[0].title, overlap.nodes[1].title, overlap.files).map(
+      (line) => `${p.c('#ffcf70', '⚠')} ${line}`,
+    ),
+  );
+  return lines.length ? lines.join('\n') : undefined;
+}
+
 export function waitText(result: WaitResult, p: Paint): string {
   const parts = [
     ...result.letters.map((letter) => inboxBlock(letter, p)),
     ...result.settled.filter((sight) => sight.reason !== 'letter').map((sight) => sightBlock(sight, p)),
   ];
+  const overlaps = overlapBlock(result, p);
+  if (overlaps) parts.push(overlaps);
   if (result.pending.length)
     parts.push([p.dim(t('ещё в работе:')), ...result.pending.map((sight) => pendingLine(sight, p))].join('\n'));
   return `${parts.join('\n\n')}\n`;
@@ -131,5 +155,9 @@ export function waitJson(result: WaitResult): unknown {
     })),
     settled: result.settled.map(node),
     pending: result.pending.map(node),
+    conflicts: (result.conflicts ?? []).map((overlap) => ({
+      nodes: overlap.nodes.map((each) => ({ node: each.id, title: each.title, status: each.status })),
+      files: overlap.files,
+    })),
   };
 }

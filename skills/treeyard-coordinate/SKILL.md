@@ -227,6 +227,11 @@ needs you yet: call it again.
   A question only the person can answer → into the summary. A session you started knows how to
   write to you (its first message says so); a Codex session started «as in config.toml» may not
   reach `send` and asks in its last message.
+- **Two nodes in one file:** `wait` (and `queue`) print `⚠ «A» and «B» edit the same file: path`
+  (in a Russian tree `«A» и «B» правят один файл: path`) from the nodes' branch commits and
+  uncommitted edits in their worktrees (`--json`: `conflicts`), and treeyard writes to both sessions
+  once per pair and file. Hand out nothing else that touches that file; merge one branch first, the
+  other node catches up after.
 - **A letter to you:** answer with `treeyard send <its id> "…"` (it goes as the answer to that
   letter); a question for the person → to the person, then send their answer.
 - **Writing to a session:** `treeyard send <id> "…"` never refuses for what the session is doing:

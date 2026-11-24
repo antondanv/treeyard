@@ -16,7 +16,16 @@ import { watchTree } from '../watch.js';
 import { worktreeFor } from '../worktree.js';
 import type { LaunchOptions } from './launch.js';
 import { paneInProject } from './panes.js';
-import { GRACE_MS, INTERVAL_MS, look, type SessionSight, SOURCES, type WaitSources } from './wait.js';
+import {
+  GRACE_MS,
+  INTERVAL_MS,
+  look,
+  lookOverlaps,
+  type OverlapLook,
+  type SessionSight,
+  SOURCES,
+  type WaitSources,
+} from './wait.js';
 
 /** What happened, a line each. */
 export type QueueEvent =
@@ -31,6 +40,8 @@ export type QueueEvent =
   | { type: 'resume'; brain: BrainId }
   /** It could not start and nothing it waits for is moving. */
   | { type: 'blocked'; node: string; title: string; reason: string }
+  /** Two nodes' worktrees change the same files (new ones since the last event for this pair). */
+  | { type: 'overlap'; a: string; aTitle: string; b: string; bTitle: string; files: string[] }
   /** `stopped` — interrupted (Ctrl+C): the same command again picks up the nodes at work. */
   | { type: 'end'; started: number; finished: number; blocked: number; stopped: boolean };
 
@@ -103,6 +114,9 @@ export async function runQueue(dir: string, ids: readonly string[], options: Que
   const ended = new Set<string>();
   const asked = new Map<string, string>();
   const worked = new Set<string>();
+  const overlapLook: OverlapLook = { found: [] };
+  /** `a|b|file` of the overlaps already printed. */
+  const shown = new Set<string>();
   let started = 0;
   let finished = 0;
   let paused: string | undefined;
@@ -134,6 +148,14 @@ export async function runQueue(dir: string, ids: readonly string[], options: Que
             worked,
           )
         : [];
+      // Two nodes in one file: said once per file, and the sessions of both get a letter (see overlap.ts).
+      for (const overlap of await lookOverlaps(dir, order, sources, overlapLook)) {
+        const [a, b] = overlap.nodes;
+        const fresh = overlap.files.filter((file) => !shown.has(`${a.id}|${b.id}|${file}`));
+        if (!fresh.length) continue;
+        for (const file of fresh) shown.add(`${a.id}|${b.id}|${file}`);
+        emit({ type: 'overlap', a: a.id, aTitle: a.title, b: b.id, bTitle: b.title, files: fresh });
+      }
       let running = 0;
       for (const sight of sights) {
         const session: SessionSight | undefined = sight.session;

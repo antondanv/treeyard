@@ -545,6 +545,22 @@ export function worktreeState(project: string, wt: NodeWorktree): WorktreeState 
   return { dirty, unmerged: list(`HEAD..${wt.branch}`), commits: list(`${wt.base}..${wt.branch}`), noBranch };
 }
 
+/**
+ * The files a node's worktree changes against the main folder's branch: what its branch committed
+ * since the two parted (`HEAD...branch` — a branch that was merged, or caught up with the main one,
+ * counts only what is its own) and what is not committed yet. Paths from the repository's root, each
+ * once; deleted and renamed ones as both names. No branch, no repository — nothing.
+ */
+export function changedFiles(project: string, wt: NodeWorktree): string[] {
+  const names = (run: Git) => run.out.split('\0').filter(Boolean);
+  const committed = git(project, ['diff', '--name-only', '--no-renames', '-z', `HEAD...${wt.branch}`]);
+  const status = git(wt.path, ['status', '--porcelain=v1', '--untracked-files=all', '--no-renames', '-z']);
+  const dirty = names(status)
+    .filter((entry) => /^[ MADRCU?!]{2} /.test(entry))
+    .map((entry) => entry.slice(3));
+  return [...new Set([...(committed.ok ? names(committed) : []), ...dirty])].sort();
+}
+
 const commitsCache = new Map<string, { at: number; shas: string[] }>();
 
 /** The commits a node's branch made since it started, oldest first; none without a worktree or branch. */

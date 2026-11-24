@@ -1516,6 +1516,11 @@ export const EN: Record<string, string> = {
   'конец экрана:': 'end of the screen:',
   'последнее сообщение:': 'the last message:',
   'ещё в работе:': 'still active:',
+  '«{a}» и «{b}» правят один файл: {file}': '«{a}» and «{b}» edit the same file: {file}',
+  'Письмо от treeyard, не от человека: узел «{title}» ({id}) в своём worktree правит тот же файл, что и ты: {files}. Ветки столкнутся при слиянии. Напиши ему — treeyard send {id} "…" — кто что меняет; свои правки в этом файле держи небольшими и коммить сразу. Влить ветки и развести конфликт — дело координатора.':
+    'A letter from treeyard, not from the person: the node «{title}» ({id}) edits the same file as you in its worktree: {files}. The branches will collide in the merge. Write to it — treeyard send {id} "…" — about who changes what; keep your edits to this file small and commit them at once. Merging the branches and resolving the conflict is up to the coordinator.',
+  'Письмо от treeyard, не от человека: узел «{title}» ({id}) в своём worktree правит те же файлы, что и ты: {files}. Ветки столкнутся при слиянии. Напиши ему — treeyard send {id} "…" — кто что меняет; свои правки в этих файлах держи небольшими и коммить сразу. Влить ветки и развести конфликт — дело координатора.':
+    'A letter from treeyard, not from the person: the node «{title}» ({id}) edits the same files as you in its worktree: {files}. The branches will collide in the merge. Write to it — treeyard send {id} "…" — about who changes what; keep your edits to these files small and commit them at once. Merging the branches and resolving the conflict is up to the coordinator.',
   // letters between the sessions of nodes
   'письмо от «{from}»: «{text}»': 'message from «{from}»: «{text}»',
   'письмо узлу «{to}»: «{text}»': 'message to node «{to}»: «{text}»',
