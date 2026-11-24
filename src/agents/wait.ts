@@ -23,6 +23,7 @@ import { loadTree } from '../model/store.js';
 import type { SessionRef, Status, Tree, TreeNode } from '../model/types.js';
 import { watchTree } from '../watch.js';
 import { lastMessage } from './last-message.js';
+import { findOverlaps, notifyOverlaps, type Overlap } from './overlap.js';
 import { withPaneIdle } from './pane-idle.js';
 import { isPending, paneFor, paneInProject } from './panes.js';
 
@@ -69,6 +70,8 @@ export interface WaitResult {
   pending: Sight[];
   /** Letters to the coordinator's own node that waited for it: whole, handed over by this wait. */
   letters: InboxLetter[];
+  /** Pairs of nodes whose worktrees change one file, among the nodes of the wait and the ones at work beside them. */
+  conflicts?: Overlap[];
   timedOut: boolean;
 }
 
@@ -85,6 +88,8 @@ export interface WaitSources {
   /** Adds the idle state of panes whose CLI lists only busy sessions (Codex, Antigravity). */
   idle(panes: readonly PaneInfo[], live: ReadonlyMap<string, SessionInfo>): Promise<ReadonlyMap<string, SessionInfo>>;
   watch(dir: string, wake: () => void): { stop(): void };
+  /** Writes to a node's session about a file another node changes too; none — nobody is told. */
+  notify?(tree: Tree, id: string, text: string): Promise<void>;
   now(): number;
 }
 
@@ -98,6 +103,11 @@ export const SOURCES: WaitSources = {
   message: lastMessage,
   idle: (panes, live) => withPaneIdle(panes, live),
   watch: (dir, wake) => watchTree(dir, wake),
+  notify: async (tree, id, text) => {
+    // Loaded here: send.ts reads this module.
+    const { sendToNode } = await import('./send.js');
+    await sendToNode(tree, id, text, { source: 'treeyard' });
+  },
   now: () => Date.now(),
 };
 
@@ -276,6 +286,43 @@ export function screenTail(lines: readonly string[], rows = SCREEN_ROWS): string
   return plain.filter((line) => line.trim()).slice(-rows);
 }
 
+/** How often the worktrees are read while nodes are waited for: git per node is not for every look. */
+export const OVERLAP_EVERY_MS = 15_000;
+/** The answer is about to be given: a look younger than this is fresh enough. */
+const OVERLAP_FRESH_MS = 2000;
+
+/** When the worktrees were last read by a wait or a queue, and what they showed. */
+export interface OverlapLook {
+  at?: number;
+  found: Overlap[];
+}
+
+/**
+ * The pairs of nodes that change one file now — the nodes of `ids` against every node at work —
+ * and, for a pair seen for the first time, a letter to the sessions of both. Reads git again only
+ * when the last look is older than `maxAge`.
+ */
+export async function lookOverlaps(
+  dir: string,
+  ids: readonly string[],
+  sources: Pick<WaitSources, 'load' | 'notify' | 'now'>,
+  last: OverlapLook,
+  maxAge = OVERLAP_EVERY_MS,
+): Promise<Overlap[]> {
+  const now = sources.now();
+  if (last.at !== undefined && now - last.at < maxAge) return last.found;
+  last.at = now;
+  try {
+    const tree = sources.load(dir);
+    last.found = findOverlaps(tree, ids);
+    const notify = sources.notify;
+    if (notify && last.found.length) await notifyOverlaps(tree, last.found, (id, text) => notify(tree, id, text));
+  } catch {
+    // No git, a tree being written this moment: the next look has it; a wait does not fail over a heads-up.
+  }
+  return last.found;
+}
+
 /**
  * Waits until one of the nodes (every one with `all`) needs the coordinator, or the time is up.
  * Nodes that are not «в работе» already need it: the answer comes at once.
@@ -289,6 +336,7 @@ export async function waitFor(dir: string, ids: readonly string[], options: Wait
   const first = sources.load(dir);
   const from = new Map(ids.map((id) => [id, first.nodes.get(id)?.status ?? 'todo'] as const));
   const worked = new Set<string>();
+  const overlapLook: OverlapLook = { found: [] };
   let wake: (() => void) | undefined;
   const watcher = sources.watch(dir, () => wake?.());
   try {
@@ -315,10 +363,18 @@ export async function waitFor(dir: string, ids: readonly string[], options: Wait
       }
       const settled = sights.filter((sight) => sight.reason);
       const pending = sights.filter((sight) => !sight.reason);
-      if (letters.length || (settled.length && (!options.all || pending.length === 0)))
-        return { settled, pending, letters, timedOut: false };
+      const done = letters.length > 0 || (settled.length > 0 && (!options.all || pending.length === 0));
       const left = deadline - sources.now();
-      if (left <= 0) return { settled, pending, letters: [], timedOut: true };
+      // The sessions are told as soon as two nodes meet in a file; the answer carries what is true now.
+      const conflicts = await lookOverlaps(
+        dir,
+        ids,
+        sources,
+        overlapLook,
+        done || left <= 0 ? OVERLAP_FRESH_MS : OVERLAP_EVERY_MS,
+      );
+      if (done) return { settled, pending, letters, conflicts, timedOut: false };
+      if (left <= 0) return { settled, pending, letters: [], conflicts, timedOut: true };
       await new Promise<void>((done) => {
         const timer = setTimeout(done, Math.min(interval, left));
         wake = () => {

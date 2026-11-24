@@ -167,7 +167,7 @@ import {
   worktreeJson,
 } from './print.js';
 import { skillLines, skillsAutoLine, statusText } from './status-text.js';
-import { sightBlock, waitJson, waitText } from './wait-text.js';
+import { overlapLines, sightBlock, waitJson, waitText } from './wait-text.js';
 
 const require = createRequire(import.meta.url);
 const VERSION = (require('../../package.json') as { version: string }).version;
@@ -277,7 +277,10 @@ function commandLines(): string {
                                            из стенограммы CLI (нет стенограммы — конец экрана панели; в --json поле
                                            «message»); --all — пока все узлы; время вышло — код 124; узел уже не в
                                            работе — ответ сразу; письмо узлу твоей сессии (координатора) — тоже возврат,
-                                           с письмом целиком
+                                           с письмом целиком; два узла в работе (или на проверке), правящие один файл
+                                           (коммиты их веток и незакоммиченное в worktree), — строка «A» и «B» правят один
+                                           файл: путь (в --json — conflicts); сессиям обоих один раз на пару и файл
+                                           уходит письмо об этом
   treeyard send <id> "<текст>"|- [--json]   письмо следующей репликой той же сессии узла, а не новой сессии: сначала
                                            в ящик (номер), потом свободной панели — вставкой, уснувшей — пробуждением,
                                            фоновой Claude Code — продолжением; занятой, ждущей человека, открытой в его
@@ -298,6 +301,8 @@ function commandLines(): string {
                                            повторный запуск подхватит узлы в работе; --brain, --start (do), --model,
                                            --effort, --worktree, --no-worktree, --yes — как у open; при --parallel от 2 один узел идёт в
                                            папке проекта, остальные — каждый в своём worktree
+                                           узлы, правящие один файл, — строка «A» и «B» правят один файл: путь (событие overlap в
+                                           --json) и письмо их сессиям, как у wait
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            доска GitHub Project (карточки — узлы, колонки — статусы) или issues
                                            репозитория (открытые — узлы, закрытие — в обе стороны)
@@ -407,7 +412,10 @@ function commandLines(): string {
                                            the CLI's transcript (no transcript — the end of the pane's screen; the
                                            field «message» in --json); --all — until every node does; out of time — exit
                                            code 124; a node no longer active — at once; a message to your session's node
-                                           (the coordinator's) — it returns too, whole
+                                           (the coordinator's) — it returns too, whole; two nodes at work (or in review)
+                                           that change one file (their branches' commits and what is uncommitted in their
+                                           worktrees) — a line «A» and «B» edit the same file: path (conflicts in --json);
+                                           the sessions of both get a letter about it, once per pair and file
   treeyard send <id> "<text>"|- [--json]   a message as the next one of the node's own session, not a new session: into
                                            the mailbox first (a number), then typed into an idle pane, waking a sleeping
                                            one, resuming a Claude Code background one; for a busy one, one waiting for the
@@ -429,6 +437,8 @@ function commandLines(): string {
                                            up the nodes at work; --brain, --start (do), --model, --effort, --worktree,
                                            --no-worktree, --yes — as for open; from --parallel 2 one node goes in the project's folder,
                                            the rest in a worktree each
+                                           nodes that change one file — a line «A» and «B» edit the same file: path (an overlap
+                                           event in --json) and a letter to their sessions, as in wait
   treeyard github [link <owner>/<N>|<owner>/<repo> [--parent id] | sync]
                                            a GitHub Project board (cards are nodes, columns are statuses) or a
                                            repository's issues (open ones are nodes, closing goes both ways)
@@ -1698,6 +1708,10 @@ function queueLine(event: QueueEvent, p: typeof out): string {
       return `${clock}  ${p.c('#ffcf70', '‖')} ${node(event.node, event.title)} · ${
         event.reason ? t('не дождался: {needs}', { needs: event.reason }) : t('не запустился')
       }`;
+    case 'overlap':
+      return overlapLines(event.aTitle, event.bTitle, event.files)
+        .map((line) => `${clock}  ${p.c('#ffcf70', '⚠')} ${line}`)
+        .join('\n');
     default: {
       const counts = { started: event.started, finished: event.finished, blocked: event.blocked };
       return `${clock}  ${p.dim(
