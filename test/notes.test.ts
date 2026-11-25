@@ -81,8 +81,8 @@ describe('notes', () => {
 
 describe('where notes go, from the settings screen', () => {
   const DOWN = '\u001b[B';
-  /** «Куда падают замечания»: the last of the settings for all projects. */
-  const toNotes = [',', ...Array.from({ length: 13 }, () => DOWN)];
+  /** «Куда падают замечания»: after the panes, the launch memory and the staleness. */
+  const toNotes = [',', ...Array.from({ length: 14 }, () => DOWN)];
   const home = process.env.TREEYARD_HOME;
 
   afterEach(() => {
