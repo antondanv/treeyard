@@ -1060,6 +1060,13 @@ export const EN: Record<string, string> = {
   'здесь нет дерева (.tree/) — --node не к чему отнести': 'no tree here (.tree/) — --node has nothing to point to',
   'Скиллы в CLI': 'Skills in the CLIs',
   'ставить сами': 'install by itself',
+  'Новые версии treeyard': 'New treeyard versions',
+  сообщать: 'tell me',
+  молчать: 'stay quiet',
+  'раз в сутки спрашивает npm в фоне; без сети молчит · для одного запуска: TREEYARD_UPDATES=off':
+    'asks npm once a day in the background; silent offline · for one run: TREEYARD_UPDATES=off',
+  'Вышел treeyard {latest} (стоит {current}) · обновить: {command}':
+    'treeyard {latest} is out ({current} installed) · update: {command}',
   вручную: 'by hand',
   'в Claude Code, Codex и Antigravity, свежие с каждой версией':
     'in Claude Code, Codex and Antigravity, fresh with every version',

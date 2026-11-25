@@ -259,6 +259,16 @@ Settings — the `,` key (always shown in the top right corner) or `treeyard con
 | `antigravity_access` | Antigravity's access: `full` (no confirmations), `normal` (it asks before every command) or `ask` (the default — asked before the first launch); see “What agents may do” |
 | `codex_access` | how Codex starts from the tree: `sandbox` (the sandbox + treeyard and git: workspace-write with the network and the project's `.git` open), `config` (as `~/.codex/config.toml` says) or `ask` (the default — asked before the first launch); see “What agents may do” |
 | `skills` | install treeyard's skills into Claude Code, Codex and Antigravity and keep them at its version (default on); `off` — only by hand, `treeyard skills install` |
+| `updates` | tell when a newer treeyard is in npm (default on); `off` — never; `TREEYARD_UPDATES=off` — for one run |
+
+A newer version is announced in a toast when the tree opens, and in `treeyard status` and
+`treeyard --version` at a terminal, with the command that installs it (`npm install -g
+@antondanv/treeyard@latest`, or the same for pnpm, yarn or bun, whichever put treeyard
+there). npm is asked at most once a day, by a separate background process: a start never
+waits for it, and without a network it stays silent and tries again an hour later. The
+answer is cached in `~/.treeyard/update-check.json`. A checkout or `npm link` is never told;
+neither is a run with `CI` or `NO_UPDATE_NOTIFIER` set. `treeyard config updates off`
+switches it off for good.
 
 With `live` on, a working Codex shows a spinner at its node and counts among “agents
 working” at the top, in a long session too. A question or a permission request in a pane

@@ -3189,6 +3189,16 @@ export function App(props: AppProps) {
           : t('treeyard skills install — поставить или обновить вручную'),
       },
       {
+        key: 'updates',
+        label: t('Новые версии treeyard'),
+        options: [
+          { value: 'on', label: t('сообщать') },
+          { value: 'off', label: t('молчать') },
+        ],
+        value: s.updates ? 'on' : 'off',
+        hint: t('раз в сутки спрашивает npm в фоне; без сети молчит · для одного запуска: TREEYARD_UPDATES=off'),
+      },
+      {
         key: 'brain',
         section: t('ЭТОТ ПРОЕКТ  .tree/tree.md'),
         label: t('Мозг по умолчанию'),
@@ -3296,6 +3306,7 @@ export function App(props: AppProps) {
     else if (key === 'maxPanes') updateSettings({ maxPanes: Number(value) });
     else if (key === 'staleAfter') updateSettings({ staleAfter: Number(value) });
     else if (key === 'skills') updateSettings({ skills: on });
+    else if (key === 'updates') updateSettings({ updates: on });
     else if (key === 'github') {
       if (value !== 'linked') change(t('узел GitHub'), () => setOffer(tree, on));
     } else if (key === 'notes') {
