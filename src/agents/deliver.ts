@@ -54,7 +54,7 @@ import { sessionFolder } from '../worktree.js';
 import { fullAccess } from './access.js';
 import { withPaneIdle } from './pane-idle.js';
 import { isPending, type PaneSize } from './panes.js';
-import { newestSession, observe, type SessionSight, sessionSight, type World } from './wait.js';
+import { newestSession, observe, type SessionSight, sessionSight, sessionSince, type World } from './wait.js';
 
 /** What delivery uses of Brainyard; tests put their own. */
 export interface DeliverSources {
@@ -63,7 +63,11 @@ export interface DeliverSources {
   /** The session a Codex, Antigravity or OpenCode pane started. */
   paneSession?(pane: PaneInfo): Promise<string | undefined>;
   /** Adds the idle state of panes whose CLI lists only busy sessions (Codex, Antigravity). */
-  idle?(panes: readonly PaneInfo[], live: ReadonlyMap<string, SessionInfo>): Promise<ReadonlyMap<string, SessionInfo>>;
+  idle?(
+    panes: readonly PaneInfo[],
+    live: ReadonlyMap<string, SessionInfo>,
+    since?: ReadonlyMap<string, number>,
+  ): Promise<ReadonlyMap<string, SessionInfo>>;
   /** Reads a pane's screen to spot startup dialogs before the CLI reports its session. */
   capture?(pane: string): Promise<{ lines: string[] } | undefined>;
   type(pane: string, data: string): Promise<void>;
@@ -79,7 +83,7 @@ export const DELIVER_SOURCES: DeliverSources = {
   live: () => liveSessions({ all: true, panes: {} }),
   panes: () => listPanes(),
   paneSession: async (pane) => (await findPaneSession(pane))?.id,
-  idle: (panes, live) => withPaneIdle(panes, live),
+  idle: (panes, live, since) => withPaneIdle(panes, live, since ? { since } : {}),
   capture: (pane) => capturePane(pane),
   type: (pane, data) => sendToPane(pane, data),
   startPane,
@@ -301,7 +305,13 @@ export async function deliverAll(
   const sources = options.sources ?? DELIVER_SOURCES;
   const nodes = [...new Set(queuedLetters(dir).map((letter) => letter.to))].filter((id) => !only || only.has(id));
   if (!nodes.length) return [];
-  const world = await observe(dir, sources);
+  let since: Map<string, number> | undefined;
+  try {
+    since = sessionSince(loadTree(dir));
+  } catch {
+    // Tree unreadable right now: `observe` falls back to `pane.startedAt`.
+  }
+  const world = await observe(dir, sources, since ? { since } : undefined);
   return withMailLock(dir, async () => {
     const tree = loadTree(dir);
     const attempts: Attempt[] = [];

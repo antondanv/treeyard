@@ -6,9 +6,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { sessionPlan } from '../src/agents/context.js';
 import { deliverAll, ensureDeliverer, runDeliverer } from '../src/agents/deliver.js';
 import { paneDialog } from '../src/agents/pane-dialog.js';
-import { withPaneIdle } from '../src/agents/pane-idle.js';
+import { agyScreenBusy, withPaneIdle } from '../src/agents/pane-idle.js';
 import { type SendSources, sendToNode } from '../src/agents/send.js';
-import { parseDuration, screenTail, type WaitSources, waitFor } from '../src/agents/wait.js';
+import { observe, parseDuration, screenTail, sessionSight, type WaitSources, waitFor } from '../src/agents/wait.js';
 import { paint } from '../src/cli/print.js';
 import { waitText } from '../src/cli/wait-text.js';
 import { setLang } from '../src/i18n/i18n.js';
@@ -619,6 +619,254 @@ describe('treeyard wait', () => {
         reason: 'waiting',
         session: { brain: 'antigravity', state: 'waiting', waitingFor: 'доверие к папке', pane: 'agy-idle-trust' },
       },
+    ]);
+  });
+
+  it('ignores stale idle records older than ref.opened after treeyard send for Antigravity, Codex and Claude', async () => {
+    const home = tempDir();
+    mkdirSync(join(home, 'sessions'), { recursive: true });
+    const { DatabaseSync } = await import('node:sqlite');
+    const dbPath = join(home, 'conversation_summaries.db');
+    const db = new DatabaseSync(dbPath);
+    db.exec(
+      'CREATE TABLE conversation_summaries (conversation_id TEXT, status TEXT, not_fully_idle INTEGER, killed INTEGER, last_modified_time TEXT)',
+    );
+    const setAgy = (id: string, status: string, modified: string) => {
+      db.prepare('DELETE FROM conversation_summaries WHERE conversation_id = ?').run(id);
+      db.prepare('INSERT INTO conversation_summaries VALUES (?, ?, 0, 0, ?)').run(id, status, modified);
+    };
+
+    const startedAt = ago(600_000); // pane created 10m ago
+    const prevTurnDone = ago(300_000); // previous turn ended 5m ago
+    const sentAt = ago(60_000); // treeyard send 1m ago (past GRACE_MS = 30s)
+    const newTurnDone = ago(5_000); // new turn ended 5s ago
+
+    // 1) Antigravity DB holds stale IDLE from the previous turn (newer than startedAt, older than opened).
+    setAgy('agy-stale', 'CASCADE_RUN_STATUS_IDLE', prevTurnDone.replace('T', ' '));
+    // 2) Codex rollout holds stale task_complete from the previous turn.
+    const codexRollout = join(home, 'sessions', 'rollout-codex-stale.jsonl');
+    writeFileSync(
+      codexRollout,
+      JSON.stringify({ timestamp: prevTurnDone, type: 'event_msg', payload: { type: 'task_complete' } }),
+    );
+    // 3) Claude transcript holds stale end_turn from the previous turn.
+    const transcript = claudeTranscript();
+    transcript.terminal.startedAt = startedAt;
+    transcript.write(claudeAssistant('end_turn', prevTurnDone));
+
+    const tree = emptyTree();
+    const agyNode = nodeWithSession(tree, 'Antigravity после send', {
+      id: 'agy-stale',
+      brain: 'antigravity',
+      mode: 'pane',
+      pane: 'agy-p1',
+      started: startedAt,
+      opened: sentAt,
+    });
+    const codexNode = nodeWithSession(tree, 'Codex после send', {
+      id: 'codex-stale',
+      brain: 'codex',
+      mode: 'pane',
+      pane: 'codex-p1',
+      started: startedAt,
+      opened: sentAt,
+    });
+    const claudeNode = nodeWithSession(tree, 'Claude после send', {
+      id: transcript.sessionId,
+      brain: 'claude',
+      mode: 'pane',
+      pane: 'claude-cc',
+      started: startedAt,
+      opened: sentAt,
+    });
+
+    const panes = [
+      pane('agy-p1', { brain: 'antigravity', sessionId: 'agy-stale', startedAt }),
+      pane('codex-p1', { brain: 'codex', sessionId: 'codex-stale', startedAt }),
+      transcript.terminal,
+    ];
+    const sources = waitSources({
+      live: [],
+      panes,
+      screens: {
+        'agy-p1': [
+          '────────────────────────────────────────────────────────────────────────',
+          '>',
+          '────────────────────────────────────────────────────────────────────────',
+          '? for shortcuts                              auto · Gemini 4 Neon · high',
+        ],
+      },
+    });
+    sources.idle = (list, asked, since) =>
+      withPaneIdle(list, asked, {
+        antigravity: home,
+        codex: home,
+        claude: transcript.claude,
+        ...(since ? { since } : {}),
+      });
+
+    // Even past GRACE_MS, none of the three stale IDLEs wakes waitFor.
+    const stale = await waitFor(tree.project.dir, [agyNode.id, codexNode.id, claudeNode.id], {
+      ...fast,
+      timeoutMs: 40,
+      sources,
+    });
+    expect(stale.timedOut).toBe(true);
+    expect(stale.settled).toEqual([]);
+    expect(stale.pending.map((s) => s.session?.state)).toEqual(['unknown', 'unknown', 'unknown']);
+
+    // Once each CLI writes a completion newer than ref.opened, all three settle as idle.
+    setAgy('agy-stale', 'CASCADE_RUN_STATUS_IDLE', newTurnDone.replace('T', ' '));
+    writeFileSync(
+      codexRollout,
+      JSON.stringify({ timestamp: newTurnDone, type: 'event_msg', payload: { type: 'task_complete' } }),
+    );
+    transcript.write(claudeAssistant('end_turn', newTurnDone));
+
+    const fresh = await waitFor(tree.project.dir, [agyNode.id, codexNode.id, claudeNode.id], {
+      ...fast,
+      all: true,
+      timeoutMs: 200,
+      sources,
+    });
+    db.close();
+    expect(fresh.timedOut).toBe(false);
+    expect(fresh.settled).toMatchObject([
+      { id: agyNode.id, reason: 'idle', session: { brain: 'antigravity', state: 'idle' } },
+      { id: codexNode.id, reason: 'idle', session: { brain: 'codex', state: 'idle' } },
+      { id: claudeNode.id, reason: 'idle', session: { brain: 'claude', state: 'idle' } },
+    ]);
+  });
+
+  it('treats an Antigravity pane with an active screen (esc to cancel / spinner) as busy despite IDLE in DB, until ? for shortcuts returns', async () => {
+    const activeScreen = [
+      '● Explored 3 files (codex-live.js, sessions.js, panes.test.ts)',
+      '○ Running (npm run typecheck) (ctrl+o to expand)',
+      '⣟  Running command... 1s',
+      '────────────────────────────────────────────────────────────────────────',
+      '> Auto mode: edits & safe commands auto-approved (shift+tab to cycle)',
+      '────────────────────────────────────────────────────────────────────────',
+      '\u001b[2mesc to cancel\u001b[0m                                auto · Gemini 4 Neon · high',
+    ];
+    const activeWithTasks = [
+      '⣷  6/8 steps · Running command... 13s',
+      '────────────────────────────────────────────────────────────────────────',
+      '>',
+      '────────────────────────────────────────────────────────────────────────',
+      '  ● [12:43:54] treeyard wait ds4q --timeout 10m running',
+      '────────────────────────────────────────────────────────────────────────',
+      'esc to cancel          auto · Gemini 4 Neon · xhigh · 2 task(s) · /tasks',
+    ];
+    const idleScreen = [
+      'Ответ готов, в тексте упоминается esc to cancel.',
+      '────────────────────────────────────────────────────────────────────────',
+      '>',
+      '────────────────────────────────────────────────────────────────────────',
+      '? for shortcuts                              auto · Gemini 4 Neon · high',
+    ];
+    const idleWithTasks = [
+      '────────────────────────────────────────────────────────────────────────',
+      '>',
+      '────────────────────────────────────────────────────────────────────────',
+      '  ● [12:43:54] treeyard wait ds4q --timeout 10m running',
+      '────────────────────────────────────────────────────────────────────────',
+      '? for shortcuts        auto · Gemini 4 Neon · xhigh · 2 task(s) · /tasks',
+    ];
+    const trustScreen = [
+      'Accessing workspace:',
+      '/tmp/project',
+      'Do you trust the contents of this project?',
+      'Antigravity CLI requires permission to read, edit, and execute files here.',
+      '> Yes, I trust this folder',
+      '  No, exit',
+      '  ↑/↓ Navigate · enter Confirm',
+      '                                           auto · Gemini 4 Carbon · high',
+    ];
+
+    expect(agyScreenBusy(activeScreen)).toBe(true);
+    expect(agyScreenBusy(activeWithTasks)).toBe(true);
+    expect(agyScreenBusy(['⣻  Generating... 2s'])).toBe(true);
+    expect(agyScreenBusy(idleScreen)).toBe(false);
+    expect(agyScreenBusy(idleWithTasks)).toBe(false);
+    expect(agyScreenBusy(trustScreen)).toBe(false);
+    expect(agyScreenBusy(['Итог хода'])).toBe(false);
+
+    // Full DB + observe + waitFor + deliverAll flow:
+    const home = tempDir();
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(join(home, 'conversation_summaries.db'));
+    db.exec(
+      'CREATE TABLE conversation_summaries (conversation_id TEXT, status TEXT, not_fully_idle INTEGER, killed INTEGER, last_modified_time TEXT)',
+    );
+    const startedAt = ago(120_000);
+    db.prepare('INSERT INTO conversation_summaries VALUES (?, ?, 0, 0, ?)').run(
+      'agy-flicker',
+      'CASCADE_RUN_STATUS_IDLE',
+      ago(1000).replace('T', ' '),
+    );
+    db.close();
+
+    const tree = emptyTree();
+    const node = nodeWithSession(tree, 'Antigravity мелькает', {
+      id: 'agy-flicker',
+      brain: 'antigravity',
+      mode: 'pane',
+      pane: 'agy-live',
+      started: startedAt,
+      opened: startedAt,
+    });
+    const world: World = {
+      live: [],
+      panes: [pane('agy-live', { brain: 'antigravity', sessionId: 'agy-flicker', startedAt })],
+      screens: { 'agy-live': activeScreen },
+    };
+    const sources = waitSources(world);
+    sources.idle = (list, asked, since) =>
+      withPaneIdle(list, asked, { antigravity: home, ...(since ? { since } : {}) });
+
+    // Direct observe() check: DB says IDLE, screen says esc to cancel -> busy!
+    const observedBusy = await observe(tree.project.dir, sources);
+    expect(sessionSight(node.sessions[0]!, observedBusy)).toMatchObject({
+      brain: 'antigravity',
+      id: 'agy-flicker',
+      pane: 'agy-live',
+      state: 'busy',
+    });
+
+    // waitFor does NOT return prematurely while esc to cancel is on screen.
+    const stillWorking = await waitFor(tree.project.dir, [node.id], { ...fast, timeoutMs: 40, sources });
+    expect(stillWorking.timedOut).toBe(true);
+    expect(stillWorking.settled).toEqual([]);
+    expect(stillWorking.pending).toMatchObject([{ id: node.id, session: { state: 'busy' } }]);
+
+    // deliverAll also holds a queued letter as busy instead of typing into the working pane.
+    const { sources: deliverSrc, calls } = sendSources(world);
+    deliverSrc.idle = (list, asked, since) =>
+      withPaneIdle(list, asked, { antigravity: home, ...(since ? { since } : {}) });
+    addLetter(tree.project.dir, { to: node.id, text: 'подожди конца хода' });
+    const held = await deliverAll(tree.project.dir, { sources: deliverSrc });
+    expect(held).toMatchObject([{ node: node.id, held: 'busy' }]);
+    expect(calls.typed).toEqual([]);
+
+    // Folder-trust dialog still wins over IDLE/busy and reports waiting.
+    world.screens = { 'agy-live': trustScreen };
+    const onTrust = await waitFor(tree.project.dir, [node.id], { ...fast, timeoutMs: 100, sources });
+    expect(onTrust.timedOut).toBe(false);
+    expect(onTrust.settled).toMatchObject([
+      { id: node.id, reason: 'waiting', session: { state: 'waiting', waitingFor: 'доверие к папке' } },
+    ]);
+
+    // Once the turn really ends (? for shortcuts), waitFor wakes with idle and deliverAll types the letter.
+    world.screens = { 'agy-live': idleScreen };
+    const done = await waitFor(tree.project.dir, [node.id], { ...fast, timeoutMs: 100, sources });
+    expect(done.timedOut).toBe(false);
+    expect(done.settled).toMatchObject([{ id: node.id, reason: 'idle', session: { state: 'idle' } }]);
+
+    const delivered = await deliverAll(tree.project.dir, { sources: deliverSrc });
+    expect(delivered).toMatchObject([{ node: node.id, how: 'typed', pane: 'agy-live' }]);
+    expect(calls.typed).toEqual([
+      ['agy-live', '\u001b[200~подожди конца хода\u001b[201~'],
+      ['agy-live', '\r'],
     ]);
   });
 });

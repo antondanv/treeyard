@@ -20,12 +20,13 @@ import { type Entry, isOwnLine, parseEntry } from '../model/history.js';
 import { journalEntries } from '../model/journal.js';
 import { type MailItem, markDelivered, queuedFor, withMailLock } from '../model/mailbox.js';
 import { loadTree } from '../model/store.js';
+import { sessionHolders } from '../model/tree.js';
 import type { SessionRef, Status, Tree, TreeNode } from '../model/types.js';
 import { watchTree } from '../watch.js';
 import { lastMessage } from './last-message.js';
 import { findOverlaps, hasNewConflicts, markConflictsSeen, notifyOverlaps, type Overlap } from './overlap.js';
 import { paneDialog, type StartupDialog, startupWaitingFor } from './pane-dialog.js';
-import { withPaneIdle } from './pane-idle.js';
+import { agyScreenBusy, withPaneIdle } from './pane-idle.js';
 import { isPending, paneFor, paneInProject } from './panes.js';
 
 /** What a session is doing, as its CLI tells it; `gone` — its process ended (a pane asleep, a finished background run). */
@@ -87,7 +88,11 @@ export interface WaitSources {
   /** The last message of a session, whole, from the CLI's transcript; none — the screen stands in. */
   message?(brain: SessionRef['brain'], id: string): Promise<string | undefined>;
   /** Adds the idle state of panes whose CLI lists only busy sessions (Codex, Antigravity). */
-  idle(panes: readonly PaneInfo[], live: ReadonlyMap<string, SessionInfo>): Promise<ReadonlyMap<string, SessionInfo>>;
+  idle(
+    panes: readonly PaneInfo[],
+    live: ReadonlyMap<string, SessionInfo>,
+    since?: ReadonlyMap<string, number>,
+  ): Promise<ReadonlyMap<string, SessionInfo>>;
   watch(dir: string, wake: () => void): { stop(): void };
   /** Writes to a node's session about a file another node changes too; none — nobody is told. */
   notify?(tree: Tree, id: string, text: string): Promise<void>;
@@ -102,7 +107,7 @@ export const SOURCES: WaitSources = {
   paneSession: async (pane) => (await findPaneSession(pane))?.id,
   capture: (pane) => capturePane(pane),
   message: lastMessage,
-  idle: (panes, live) => withPaneIdle(panes, live),
+  idle: (panes, live, since) => withPaneIdle(panes, live, since ? { since } : {}),
   watch: (dir, wake) => watchTree(dir, wake),
   notify: async (tree, id, text) => {
     // Loaded here: send.ts reads this module.
@@ -153,6 +158,29 @@ export function lastEntry(node: TreeNode): Entry | undefined {
   return undefined;
 }
 
+/**
+ * Latest `opened` timestamp (ms) per pane name and session id across the tree.
+ * After `treeyard send` writes to a live pane, `ref.opened` is newer than `pane.startedAt`, so an
+ * older idle record from the previous turn must not count as finishing the new one.
+ */
+export function sessionSince(tree: Tree): Map<string, number> {
+  const since = new Map<string, number>();
+  const bump = (key: string | undefined, ms: number) => {
+    if (!key || !Number.isFinite(ms)) return;
+    const prev = since.get(key);
+    if (prev === undefined || ms > prev) since.set(key, ms);
+  };
+  for (const node of sessionHolders(tree)) {
+    for (const ref of node.sessions) {
+      const opened = Date.parse(ref.opened ?? '');
+      if (!Number.isFinite(opened)) continue;
+      bump(ref.pane, opened);
+      if (!isPending(ref)) bump(ref.id, opened);
+    }
+  }
+  return since;
+}
+
 /** What the sessions of the machine are doing now, gathered once per look. */
 export interface World {
   live: ReadonlyMap<string, SessionInfo>;
@@ -163,6 +191,13 @@ export interface World {
   paneDialogs?: ReadonlyMap<string, StartupDialog>;
   /** Pane name → screen lines already read while checking for startup dialogs. */
   paneScreens?: ReadonlyMap<string, readonly string[]>;
+  /** Panes whose screen shows an active turn (e.g. Antigravity `esc to cancel`). */
+  paneBusy?: ReadonlySet<string>;
+}
+
+export interface ObserveOptions {
+  /** Earliest timestamp (ms) that can count as completion of a pane's current turn. */
+  since?: ReadonlyMap<string, number>;
 }
 
 /** What `observe` asks; `paneSession`, `idle` and `capture` make the answer sharper. */
@@ -174,9 +209,9 @@ export type ObserveSources = Pick<WaitSources, 'live' | 'panes'> &
 /**
  * What the sessions of the machine are doing now: their live states, the panes, the sessions of
  * panes whose CLI named them late, the idle state of Codex and Antigravity panes, and startup
- * dialogs on panes the CLI has not reported yet.
+ * dialogs or active-turn indicators on panes' screens.
  */
-export async function observe(dir: string, sources: ObserveSources): Promise<World> {
+export async function observe(dir: string, sources: ObserveSources, options?: ObserveOptions): Promise<World> {
   const [live, panes] = await Promise.all([sources.live().catch(() => []), sources.panes().catch(() => [])]);
   const names = new Map<string, string>();
   if (sources.paneSession)
@@ -189,15 +224,29 @@ export async function observe(dir: string, sources: ObserveSources): Promise<Wor
     pane.sessionId || !names.has(pane.pane) ? pane : { ...pane, sessionId: names.get(pane.pane)! },
   );
   const asked = new Map(live.map((session) => [session.id, session]));
-  const states = sources.idle ? await sources.idle(named, asked).catch(() => asked) : asked;
+  let states: ReadonlyMap<string, SessionInfo> = asked;
+  if (sources.idle) {
+    let since = options?.since;
+    if (since === undefined && named.some((pane) => pane.sessionId && pane.brain && !asked.has(pane.sessionId))) {
+      try {
+        since = sessionSince(loadTree(dir));
+      } catch {
+        // Unreadable tree at `dir`: `withPaneIdle` falls back to `pane.startedAt`.
+      }
+    }
+    states = await sources.idle(named, asked, since).catch(() => asked);
+  }
+  const nextStates = new Map(states);
   const paneDialogs = new Map<string, StartupDialog>();
   const paneScreens = new Map<string, readonly string[]>();
+  const paneBusy = new Set<string>();
   if (sources.capture) {
     const capture = sources.capture;
     const silent = named.filter((pane) => {
       if (pane.brain && pane.brain !== 'claude' && pane.brain !== 'codex' && pane.brain !== 'antigravity') return false;
-      const status = pane.sessionId ? states.get(pane.sessionId)?.live?.status : undefined;
-      // Antigravity writes a summary (RUNNING or IDLE) before the person answers its workspace-trust prompt.
+      const status = pane.sessionId ? nextStates.get(pane.sessionId)?.live?.status : undefined;
+      // Antigravity writes a summary (RUNNING or IDLE) before workspace trust is answered, and
+      // may briefly report IDLE in SQLite between steps while its screen still shows `esc to cancel`.
       return !status || (pane.brain === 'antigravity' && status !== 'waiting');
     });
     await Promise.all(
@@ -206,11 +255,24 @@ export async function observe(dir: string, sources: ObserveSources): Promise<Wor
         if (!screen) return;
         paneScreens.set(pane.pane, screen.lines);
         const dialog = paneDialog(screen.lines, pane.brain);
-        if (dialog) paneDialogs.set(pane.pane, dialog);
+        if (dialog) {
+          paneDialogs.set(pane.pane, dialog);
+          return;
+        }
+        if (pane.brain === 'antigravity' && agyScreenBusy(screen.lines)) {
+          paneBusy.add(pane.pane);
+          if (pane.sessionId) {
+            const prev = nextStates.get(pane.sessionId);
+            nextStates.set(pane.sessionId, {
+              ...(prev ?? { brain: 'antigravity', id: pane.sessionId, interactive: true }),
+              live: { status: 'busy', kind: prev?.live?.kind ?? 'interactive' },
+            });
+          }
+        }
       }),
     );
   }
-  return { live: states, panes, paneSessions: names, paneDialogs, paneScreens };
+  return { live: nextStates, panes, paneSessions: names, paneDialogs, paneScreens, paneBusy };
 }
 
 /** What a session is doing, from its live state and its pane. */
@@ -226,13 +288,15 @@ export function sessionSight(ref: SessionRef, world: World): SessionSight {
     pane && (!status || (ref.brain === 'antigravity' && status !== 'waiting'))
       ? world.paneDialogs?.get(pane.pane)
       : undefined;
+  const busyScreen = Boolean(pane && status !== 'waiting' && world.paneBusy?.has(pane.pane));
   if (status === 'waiting') {
     sight.state = 'waiting';
     if (info?.live?.waitingFor) sight.waitingFor = info.live.waitingFor;
   } else if (dialog) {
     sight.state = 'waiting';
     sight.waitingFor = startupWaitingFor(dialog);
-  } else if (status === 'idle') sight.state = 'idle';
+  } else if (busyScreen) sight.state = 'busy';
+  else if (status === 'idle') sight.state = 'idle';
   else if (status) sight.state = 'busy';
   // No word from the CLI: a live pane is still starting or does not say; without one the process is over.
   else if (!pane) sight.state = 'gone';
@@ -276,7 +340,9 @@ export async function look(
   const tree = sources.load(dir);
   const nodes = ids.map((id) => tree.nodes.get(id)).filter((node): node is TreeNode => Boolean(node));
   const asking = nodes.some((node) => node.sessions.length);
-  const world: World = asking ? await observe(dir, sources) : { live: new Map(), panes: [], paneSessions: new Map() };
+  const world: World = asking
+    ? await observe(dir, sources, { since: sessionSince(tree) })
+    : { live: new Map(), panes: [], paneSessions: new Map() };
   const now = sources.now();
   const sights: Sight[] = [];
   for (const node of nodes) {
