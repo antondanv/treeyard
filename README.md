@@ -19,6 +19,45 @@ https://github.com/user-attachments/assets/e2f796e4-2617-4ba7-97e9-ef8ba56e2ed3
 
 </div>
 
+## Quick start
+
+You need Node.js 22+ and at least one agent CLI: Claude Code, Codex, Antigravity or
+OpenCode. To have agents work in a pane next to the tree, also install
+[tmux](https://github.com/tmux/tmux/wiki/Installing) (the link has the commands for every
+system); without it, sessions open in this terminal.
+
+```sh
+npm install -g @antondanv/treeyard
+cd my-project && treeyard                  # no tree yet: the planting wizard
+```
+
+On the first run there is no tree yet, and the wizard asks how to plant it. With an agent:
+in an empty folder it asks you to tell everything you think about the project, in a
+folder with code it reads the code, the documents and the history first; then it asks
+questions and writes the tree only after your “yes”. Or on your own, from a template: a
+couple of questions, and the tree is ready.
+
+Once the tree is open: `c` starts Claude Code on the selected node, `?` shows all the
+keys, `,` opens the settings (the language, the theme and the rest). Other ways in:
+
+```sh
+treeyard init                              # a new tree: with an agent or from a template
+treeyard init --agent --brain codex        # straight to the agent, no wizard
+treeyard import                            # the agent quietly reads the project's plan and builds the tree
+```
+
+**Contents**
+
+- [What it is and why you'd want it](#what-it-is-and-why-youd-want-it)
+- [How you work with it](#how-you-work-with-it)
+- [What agents are allowed to do](#what-agents-are-allowed-to-do)
+- [The vibe-coding practices built in](#the-vibe-coding-practices-built-in)
+- [When to use it and when not](#when-to-use-it-and-when-not)
+- [In numbers](#in-numbers)
+- [Why I built it](#why-i-built-it)
+- [Documentation](#documentation)
+- [Development](#development)
+
 ## What it is and why you'd want it
 
 You already work with Claude Code or Codex, and the project's rules are in `AGENTS.md` or
@@ -83,101 +122,6 @@ journal, and one list shows everything you can do right now.
 That is Agent-Driven Development: you plan, the agents build, and you manage the project
 and accept the work.
 
-## The vibe-coding practices built in
-
-Treeyard doesn't just show tasks. It has rules built in that save tokens and time and
-raise the quality of what you ship. You don't have to police them yourself: the tool
-works that way.
-
-| What Treeyard does | What you get |
-| --- | --- |
-| An agent gets the context of its own task only | A session starts with about 3k tokens instead of 65k for the whole plan, and short instructions don't get lost |
-| One task — one session | The agent finishes the task while its context is fresh; no endless “just a bit more” |
-| A plan first, then code | A mistake is caught in the plan, not in code already written |
-| An agent can't mark its own work done; it shows proof | Fewer “done, but it doesn't work”: there is a command with its output, a screenshot, the commits |
-| A new idea is a separate task, not “while I'm at it” | Tokens and time go into what you asked for, and ideas aren't lost |
-| History lives in the task's journal, decisions in one place with their reasons | A new session doesn't reread a log thousands of lines long; what was decided, and why, is written down once |
-| A goal from real life, your own steps in the plan, a “waiting” status | The project doesn't stall on a server, a domain or payments: they are visible from day one, and work goes on in other branches |
-
-The rules come from my own projects and from practices other people have tested for
-years: Mikado, Shape Up, GTD, Anthropic's recommendations for Claude Code. All twelve are
-on one page — [docs/practice.md](docs/practice.md).
-
-## Why I built it
-
-I built Treeyard out of my own vibe coding. With agents, code gets written fast — and then
-the project stalls. It stalls on the steps only a person can take: a server, a domain,
-payments, showing it to a real person. Meanwhile the agents get side features, the plan
-grows into a log thousands of lines long, and every new session starts by rereading it.
-Code: done. Project: stuck.
-
-Treeyard is the practices that got my projects past that point, put into one tool. I run
-my own projects this way, Treeyard itself included.
-
-## In numbers
-
-- **~95% fewer tokens to get an agent going.** A session opened from a node starts with
-  about 3k tokens of context: 2.6k–4.0k, median 3.0k over seven nodes of this repository's
-  tree. Handing the agent the whole plan instead — every node with its description and
-  journal — is 65k tokens on the same tree of 105 nodes, 84k with `docs/` and the README:
-  the node's context is 95–96% smaller. Even the one-page overview (`treeyard show`, 5.5k)
-  is almost twice as big.
-- **The saving grows with the tree.** On a fresh tree of 12 nodes the whole plan (1.0k) is
-  smaller than a node's context (1.7k), so there is nothing to save yet. And most of a
-  session's tokens go into the code itself, not into its start.
-- **Built with itself.** Treeyard has been run by its own tree since the first commit: in
-  five days, 108 commits, 41 nodes done and 18 more in review, 35 agent sessions opened
-  from nodes (2026-10-02 → 2026-10-06).
-
-<sub>How the tokens were counted (2026-10-06): `treeyard context <id>` into a file, then
-`claude -p "/context" --system-prompt-file <file>` — Claude's own tokenizer, checked
-against a real request (3,387 tokens against “3.4k”). Codex and Gemini count with their
-own tokenizers.</sub>
-
-## When to use it — and when not
-
-**Use it when**
-
-- the project lives longer than one session — days, weeks, months;
-- there are several directions at once, and some of them wait for the outside world;
-- part of the work is yours alone: a server, a domain, payments, a contract, showing it to
-  people;
-- you run several agents or several CLIs in parallel and want to see who is doing what;
-- you keep several projects and come back to one after a break: the tree and the journals
-  say where you stopped.
-
-**Don't, when**
-
-- it's one small task: write a script, fix a bug, answer a question. Open plain `claude`
-  or `codex` — planting a tree, criteria and statuses won't pay off;
-- it's a throwaway prototype for one evening;
-- a team already lives in its own tracker: Treeyard is made for one person with agents (it
-  does sync with a GitHub Project board, though).
-
-Treeyard doesn't write code itself — your agents do. It keeps the plan, gives each agent
-its task and shows where the project stands.
-
-## Quick start
-
-You need Node.js 22+ and at least one agent CLI: Claude Code, Codex, Antigravity or
-OpenCode. To have agents work in a pane next to the tree, also install
-[tmux](https://github.com/tmux/tmux/wiki/Installing) (the link has the commands for every
-system); without it, sessions open in this terminal.
-
-```sh
-npm install -g @antondanv/treeyard
-cd my-project && treeyard                  # no tree yet: the planting wizard
-```
-
-The language, the theme and the rest are yours to set up in the settings — the `,` key.
-Other ways in:
-
-```sh
-treeyard init                              # a new tree: with an agent or from a template
-treeyard init --agent --brain codex        # straight to the agent, no wizard
-treeyard import                            # the agent quietly reads the project's plan and builds the tree
-```
-
 ## How you work with it
 
 1. **Now** (`2`) lists everything you can do right now, across all branches. Pick a node.
@@ -209,6 +153,80 @@ treeyard import                            # the agent quietly reads the project
 
 Before each launch the confirmation shows what access the agent gets. Details —
 [What agents may do](docs/reference.md#what-agents-may-do).
+
+## The vibe-coding practices built in
+
+Treeyard doesn't just show tasks. It has rules built in that save tokens and time and
+raise the quality of what you ship. You don't have to police them yourself: the tool
+works that way.
+
+| What Treeyard does | What you get |
+| --- | --- |
+| An agent gets the context of its own task only | A session starts with about 3k tokens instead of 65k for the whole plan, and short instructions don't get lost |
+| One task — one session | The agent finishes the task while its context is fresh; no endless “just a bit more” |
+| A plan first, then code | A mistake is caught in the plan, not in code already written |
+| An agent can't mark its own work done; it shows proof | Fewer “done, but it doesn't work”: there is a command with its output, a screenshot, the commits |
+| A new idea is a separate task, not “while I'm at it” | Tokens and time go into what you asked for, and ideas aren't lost |
+| History lives in the task's journal, decisions in one place with their reasons | A new session doesn't reread a log thousands of lines long; what was decided, and why, is written down once |
+| A goal from real life, your own steps in the plan, a “waiting” status | The project doesn't stall on a server, a domain or payments: they are visible from day one, and work goes on in other branches |
+
+The rules come from my own projects and from practices other people have tested for
+years: Mikado, Shape Up, GTD, Anthropic's recommendations for Claude Code. All twelve are
+on one page — [docs/practice.md](docs/practice.md).
+
+## When to use it and when not
+
+**Use it when**
+
+- the project lives longer than one session — days, weeks, months;
+- there are several directions at once, and some of them wait for the outside world;
+- part of the work is yours alone: a server, a domain, payments, a contract, showing it to
+  people;
+- you run several agents or several CLIs in parallel and want to see who is doing what;
+- you keep several projects and come back to one after a break: the tree and the journals
+  say where you stopped.
+
+**Don't, when**
+
+- it's one small task: write a script, fix a bug, answer a question. Open plain `claude`
+  or `codex` — planting a tree, criteria and statuses won't pay off;
+- it's a throwaway prototype for one evening;
+- a team already lives in its own tracker: Treeyard is made for one person with agents (it
+  does sync with a GitHub Project board, though).
+
+Treeyard doesn't write code itself — your agents do. It keeps the plan, gives each agent
+its task and shows where the project stands.
+
+## In numbers
+
+- **~95% fewer tokens to get an agent going.** A session opened from a node starts with
+  about 3k tokens of context: 2.6k–4.0k, median 3.0k over seven nodes of this repository's
+  tree. Handing the agent the whole plan instead — every node with its description and
+  journal — is 65k tokens on the same tree of 105 nodes, 84k with `docs/` and the README:
+  the node's context is 95–96% smaller. Even the one-page overview (`treeyard show`, 5.5k)
+  is almost twice as big.
+- **The saving grows with the tree.** On a fresh tree of 12 nodes the whole plan (1.0k) is
+  smaller than a node's context (1.7k), so there is nothing to save yet. And most of a
+  session's tokens go into the code itself, not into its start.
+- **Built with itself.** Treeyard has been run by its own tree since the first commit: in
+  five days, 108 commits, 41 nodes done and 18 more in review, 35 agent sessions opened
+  from nodes (2026-10-02 → 2026-10-06).
+
+<sub>How the tokens were counted (2026-10-06): `treeyard context <id>` into a file, then
+`claude -p "/context" --system-prompt-file <file>` — Claude's own tokenizer, checked
+against a real request (3,387 tokens against “3.4k”). Codex and Gemini count with their
+own tokenizers.</sub>
+
+## Why I built it
+
+I built Treeyard out of my own vibe coding. With agents, code gets written fast — and then
+the project stalls. It stalls on the steps only a person can take: a server, a domain,
+payments, showing it to a real person. Meanwhile the agents get side features, the plan
+grows into a log thousands of lines long, and every new session starts by rereading it.
+Code: done. Project: stuck.
+
+Treeyard is the practices that got my projects past that point, put into one tool. I run
+my own projects this way, Treeyard itself included.
 
 ## Documentation
 
