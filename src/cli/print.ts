@@ -7,7 +7,7 @@ import { t } from '../i18n/i18n.js';
 import { parseEntry, statusHistory, statusSteps } from '../model/history.js';
 import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
-import { type Link, linkLabel, linksOf } from '../model/links.js';
+import { type Link, linkLabel, linksOf, needsName } from '../model/links.js';
 import { answers, type Letter, letterPeer, letterState, mailOf } from '../model/mail.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
@@ -162,7 +162,7 @@ export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): s
       }
       if (node.who === 'human' && node.status !== 'done') line += p.c('#ffcf70', t('  · ты'));
       for (const link of linksOf(tree, node).needs)
-        line += link.node ? p.dim(`  → ${link.project} ${GLYPH[link.node.status]}`) : p.dim(`  → ${link.project} ?`);
+        line += p.dim(`  → ${needsName(link)} ${link.node ? GLYPH[link.node.status] : '?'}`);
       if (node.status === 'waiting') {
         line += p.c(
           '#ffcf70',

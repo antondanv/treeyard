@@ -10,7 +10,7 @@ import stringWidth from 'string-width';
 import { BRAIN_SHORT } from '../agents/launch.js';
 import { formatMemory, type Pane } from '../agents/panes.js';
 import { t } from '../i18n/i18n.js';
-import type { Link } from '../model/links.js';
+import { type Link, needsName } from '../model/links.js';
 import { GLYPH } from '../model/overview.js';
 import { type Stale, staleLabel } from '../model/stale.js';
 import { ago, duration } from '../model/time.js';
@@ -239,7 +239,7 @@ function badgeFor(
           ? (STATUS_COLOR[shown.node.status] ?? C.warn)
           : C.faint;
     return {
-      text: `→ ${shown.project} ${mark}${open.length > 1 ? ` +${open.length - 1}` : ''}`,
+      text: `→ ${needsName(shown)} ${mark}${open.length > 1 ? ` +${open.length - 1}` : ''}`,
       compact: `→ ${mark}`,
       mark: '→',
       color,

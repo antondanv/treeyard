@@ -30,6 +30,8 @@ export interface Link {
   /** The other project's title, or the folder's name when its tree is gone. */
   project: string;
   node?: TreeNode;
+  /** The ref leads into the tree that holds it: a node of the same project. */
+  same?: boolean;
   missing?: 'project' | 'node' | 'format';
 }
 
@@ -103,8 +105,10 @@ export function resolveLink(fromDir: string, ref: string): Link {
   const tree = linkedTree(dir);
   const folder = parsed.path.split('/').filter(Boolean).at(-1) ?? parsed.path;
   if (!tree) return { ref, project: folder, missing: 'project' };
+  const same = real(dir) === real(fromDir);
+  const base = { ref, project: tree.project.title, ...(same ? { same } : {}) };
   const node = tree.nodes.get(parsed.id);
-  return node ? { ref, project: tree.project.title, node } : { ref, project: tree.project.title, missing: 'node' };
+  return node ? { ...base, node } : { ...base, missing: 'node' };
 }
 
 /** What a node waits for in other trees, and what waits for it. */
@@ -114,6 +118,14 @@ export function linksOf(tree: Tree, node: TreeNode): { needs: Link[]; neededBy: 
     needs: (node.needs ?? []).map((ref) => resolveLink(dir, ref)),
     neededBy: (node.neededBy ?? []).map((ref) => resolveLink(dir, ref)),
   };
+}
+
+/**
+ * How a `needs` link is named in a tree row: a node of this very tree by its id
+ * (`3aag`), a node of another project by that project's title, as before.
+ */
+export function needsName(link: Link): string {
+  return link.same ? (parseRef(link.ref)?.id ?? link.project) : link.project;
 }
 
 /** Every node it waits for is done: the work can go on. */
