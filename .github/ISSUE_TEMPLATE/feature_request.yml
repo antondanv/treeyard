@@ -1,0 +1,25 @@
+name: Idea
+description: Something treeyard should do, or do differently
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English or Russian is fine. Start with the problem: a good description of it helps more than a ready solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you were doing and what got in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How you see it working. Optional.
+  - type: textarea
+    id: now
+    attributes:
+      label: How you manage now
+      description: A workaround you use today, if any. Optional.

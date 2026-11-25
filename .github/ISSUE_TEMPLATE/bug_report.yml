@@ -1,0 +1,48 @@
+name: Bug
+description: Something in treeyard doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English or Russian is fine. Please look through the open issues first: the bug may already be known.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+      placeholder: |
+        1. In a tree with two nodes, pressed …
+        2. …
+        Expected: …
+        Got: …
+    validations:
+      required: true
+  - type: textarea
+    id: crash
+    attributes:
+      label: Crash report or output
+      description: |
+        When treeyard crashes, it writes a report to ~/.treeyard/crashes/ and prints its path. Paste it here, or the error you saw.
+        The report holds the command and the stack and may name paths of your projects — look it over first.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: treeyard version
+      description: Output of `treeyard --version`
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Node, OS and terminal
+      description: "`node --version`, the OS, the terminal app, and `tmux -V` if you use panes"
+      placeholder: Node 22.12.0, macOS 15.4, iTerm2 3.5, tmux 3.5a
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent CLI
+      description: If the bug is in a session — which agent CLI and its version.
