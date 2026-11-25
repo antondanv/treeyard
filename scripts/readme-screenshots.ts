@@ -86,6 +86,9 @@ async function shoot(lang: Lang): Promise<void> {
   git('commit', '-q', '--allow-empty', '-m', 'First commit');
   treeyard('import', '--from-json', TREES[lang]);
   hideGithubOffer(dir);
+  // A planted project tells its agents about the tree; without it the header warns.
+  writeFileSync(join(dir, 'AGENTS.md'), '# Larchwood Roasters\n');
+  treeyard('pointer');
 
   const planned = JSON.parse(readFileSync(TREES[lang], 'utf8')) as { nodes: PlannedNode[] };
   const ids = idsByTitle(JSON.parse(treeyard('show', '--json')).nodes);
