@@ -16,6 +16,19 @@ vi.mock('@antondanv/brainyard', async (original) => ({
   ...backend,
 }));
 
+const idleSpy = vi.hoisted(() => ({ calls: [] as unknown[][] }));
+
+vi.mock('../src/agents/pane-idle.js', async (original) => {
+  const real = await original<typeof import('../src/agents/pane-idle.js')>();
+  return {
+    ...real,
+    withPaneIdle: (...args: Parameters<typeof real.withPaneIdle>) => {
+      idleSpy.calls.push(args);
+      return real.withPaneIdle(...args);
+    },
+  };
+});
+
 import type { SessionInfo } from '@antondanv/brainyard';
 import { type Pane, sleepingRef, sleepNodePane, sleepNodePanes } from '../src/agents/panes.js';
 import { sleepCommand } from '../src/cli/commands.js';
@@ -48,6 +61,7 @@ const live = (id: string, status = 'idle', extra: Record<string, unknown> = {}):
 
 beforeEach(() => {
   vi.clearAllMocks();
+  idleSpy.calls.length = 0;
   backend.listPanes.mockResolvedValue([]);
   backend.sessions.mockResolvedValue([]);
   backend.setPaneSession.mockResolvedValue(true);
@@ -146,6 +160,33 @@ describe('sleepNodePane and sleepNodePanes', () => {
     expect(forced.ok).toBe(true);
     expect(forced.status).toBe('slept');
     expect(backend.closePane).toHaveBeenCalledWith('claude-1');
+  });
+
+  it('does not close a pane written to after its last turn until the CLI confirms the turn ended', async () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Written to' });
+    const opened = new Date().toISOString();
+    attachSession(tree, node.id, {
+      brain: 'claude',
+      id: 'conv-sent',
+      pane: 'claude-sent',
+      mode: 'pane',
+      started: ago(30),
+      opened,
+    });
+    backend.listPanes.mockResolvedValue([pane('claude-sent', { sessionId: 'conv-sent' })]);
+    backend.liveSessions.mockResolvedValue([]);
+
+    const refused = await sleepNodePane(tree, node.id);
+    expect(refused.ok).toBe(false);
+    expect(refused.status).toBe('unknown');
+    expect(backend.closePane).not.toHaveBeenCalled();
+    const since = idleSpy.calls[0]?.[2] as { since?: Map<string, number> } | undefined;
+    expect(since?.since?.get('claude-sent')).toBe(Date.parse(opened));
+    expect(since?.since?.get('conv-sent')).toBe(Date.parse(opened));
+
+    const forced = await sleepNodePane(tree, node.id, { force: true });
+    expect(forced.status).toBe('slept');
   });
 
   it('refuses on busy, waiting, or attached pane without --force, and sleeps with --force', async () => {
