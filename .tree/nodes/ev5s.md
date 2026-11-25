@@ -3,8 +3,10 @@ id: ev5s
 title: Нестабильный тест мыши
 parent: b9ke
 order: 20
-status: active
+status: review
 done_when: Причина нестабильности найдена и записана в журнал; тест проходит 50 прогонов подряд локально и в CI на Node 24 / macos-latest
+commits:
+  - 55bb91b22eb39b627fb62d2042ebfb6a6752a7f8
 sessions:
   - brain: antigravity
     id: 9259e6d2-9e37-4b56-a401-0a9bbdb26696
@@ -31,7 +33,7 @@ sessions:
     pane: claude-16e1b4cd
     dir: /Users/antondanilov/Projects/Treeyard.worktrees/ev5s
 created: 2026-10-10
-updated: 2026-11-26T00:31:32+03:00
+updated: 2026-11-26T00:39:38+03:00
 ---
 
 Тест mouse.test.tsx «presses the panel buttons without starting to type, and types after a click inside» упал в CI на Node 24 / macos-latest.
@@ -49,3 +51,6 @@ CI run 38047175313 на 1551d11 (2026-10-10): AssertionError: expected false to 
 - 2026-11-26 00:05 · агент · в работе → к работе
 - 2026-11-26 00:31 · claude · новая сессия в панели (do) в worktree treeyard/ev5s
 - 2026-11-26 00:31 · claude · к работе → в работе
+- 2026-11-26 00:39 · claude · привязан коммит 55bb91b22eb39b627fb62d2042ebfb6a6752a7f8
+- 2026-11-26 00:39 · claude · Причина: гонка в самом тесте, кода приложения она не касается. После клика по дереву кадр без «печатаешь в Claude Code» рисуется раньше, чем React возвращает дереву его клавиши (useInput с isActive подписывается в эффекте), поэтому нажатие «p скрыть», пришедшее сразу за кадром, терялось: панель не скрывалась и последний until(…без hello…) ждал свои 8 с (CI: 9,2 с, AssertionError: expected false to be true). Та же природа, что в vqek (там гонка после ⌃Q). Доказано без нагрузки: во временной копии теста нажатие в микрозадаче сразу после кадра — падение за 8,9 с с тем же AssertionError; то же нажатие через 100 мс — зелёный. Исправление (55bb91b, test/mouse.test.tsx): pause(100) перед кликом по «p скрыть», с комментарием. Доказательства: npx vitest run test/mouse.test.tsx --maxWorkers=1 — 50 прогонов подряд, по одному, перед каждым проверка load average: pass=50 fail=0; npm run typecheck и npm run lint чистые. Полный npm test и build не запускал — координатору. Осталось: CI на Node 24 / macos-latest без push не проверить — после push (его делает человек) убедиться, что задание зелёное.
+- 2026-11-26 00:39 · claude · в работе → на проверке
