@@ -1246,11 +1246,13 @@ the branch up to date locally.
 The tree is read at startup and reloaded when its files change. Animation frames
 reuse it; ordering work and ideas builds the tree order once per list.
 
-When the terminal reports a loss of focus, Treeyard pauses animations and screen capture
-of the visible session, and keeps the last tree frame. Agents, status discovery and
-automatic sleep keep working. Returning to the window immediately refreshes the tree,
-statuses and session screen; typing or clicking also resumes the interface if a focus
-report was lost. A running title schedules a frame only when its visible text moves.
+When the terminal reports a loss of focus (the window is on another monitor), Treeyard
+keeps showing what the agents do, only less often: the tree and node statuses every 2 s,
+session statuses every 3 s, the visible session's screen every 2 s; a new frame is drawn
+only when something changed. Animations and the running title stand still out of focus.
+Returning to the window reads the session screen at once; typing or clicking also resumes
+the interface if a focus report was lost. A running title schedules a frame only when its
+visible text moves.
 
 Focus tracking uses the [terminal's focus reports](https://www.invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-FocusIn_FocusOut)
 and needs no operating-system polling. Terminals that do not send them keep the normal
