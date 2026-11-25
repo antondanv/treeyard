@@ -67,6 +67,7 @@ import {
 import {
   isPending,
   launchInPane,
+  panesAvailable,
   peekJson,
   peekNodePane,
   peekText,
@@ -113,6 +114,7 @@ import {
   syncIssues,
 } from '../github.js';
 import { pick, plural, t } from '../i18n/i18n.js';
+import { lastLaunch, loadLaunchMemory, openOptions } from '../launch-memory.js';
 import { BatchError, type BatchNode, parseBatch, plantBatch, resolveBatchRefs } from '../model/batch.js';
 import { clipboardImage, forgetClipboard } from '../model/clipboard.js';
 import { type FindField, findNodes } from '../model/find.js';
@@ -321,7 +323,8 @@ function commandLines(): string {
                                            --settings — и ~/.treeyard; --dry-run — только показать; .tree/ и блок в AGENTS.md остаются
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   что получит агент
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
-                                           сессия по узлу прямо из shell
+                                           сессия по узлу прямо из shell; без флагов — как последний запуск
+                                           (CLI, модель, усилие, место, worktree), с --brain — как последний запуск этого CLI
                 [--task "…"|-]             задание сверх контекста узла: в конец первого сообщения (- — из stdin)
                 [--model <модель>] [--effort <уровень>]   только на этот запуск
                 [--worktree|--no-worktree]   в своём git worktree узла (ветка treeyard/<id>; сессии любого CLI) или в
@@ -492,7 +495,8 @@ function commandLines(): string {
                                            --settings — ~/.treeyard too; --dry-run — only show; .tree/ and the AGENTS.md block stay
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   what an agent gets
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
-                                           a session for a node straight from the shell
+                                           a session for a node straight from the shell; no flags — as the last launch
+                                           (CLI, model, effort, place, worktree), with --brain — as that CLI's last launch
                 [--task "…"|-]             an assignment on top of the node's context: added to the first message (- reads stdin)
                 [--model <model>] [--effort <level>]   for this launch only
                 [--worktree|--no-worktree]   in the node's own git worktree (branch treeyard/<id>; sessions of any CLI)
@@ -3509,25 +3513,34 @@ async function openCommand(args: string[]): Promise<number> {
   // Every id is checked before the first launch: a typo must not leave half the nodes started.
   const ids = positionals.length ? [...new Set(positionals.map((p) => nodeArg(tree, p)))] : [nodeArg(tree, undefined)];
   const id = ids[0]!;
-  const brain = brainArg(values.brain, defaultBrain(tree.project.brain));
+  // Without flags a session starts as the last launch did; --brain takes that CLI's last launch.
+  // Every flag said out loud is stronger than the memory, and a coordinator's --task bypasses it.
+  const memory = values.task ? {} : loadLaunchMemory(tree.project.dir);
+  const brain = brainArg(values.brain, lastLaunch(memory)?.brain ?? defaultBrain(tree.project.brain));
   if (values.pane && values.bg) throw new UsageError(t('выбери одно: --pane или --bg'));
+  const wish = worktreeOption(values);
+  const picked = openOptions(
+    {
+      ...(values.brain ? { brain } : {}),
+      ...(values.start ? { start: startArg(values.start, 'plan') } : {}),
+      ...(values.bg ? { background: true } : {}),
+      ...(values.pane ? { pane: true } : {}),
+      ...(values.model ? { model: values.model } : {}),
+      ...(values.effort ? { effort: values.effort } : {}),
+      ...('worktree' in wish ? { worktree: wish.worktree } : {}),
+    },
+    memory,
+    { brain, start: tree.project.start ?? 'plan' },
+    panesAvailable(),
+  );
   // Sessions in this terminal hold it one after another; only a pane or the background returns at once.
-  if (ids.length > 1 && !values.bg && !values.pane)
+  if (ids.length > 1 && !picked.background && !picked.pane)
     throw new UsageError(t('несколько узлов — только с --pane или --bg: treeyard open <id> <id>… --pane|--bg'));
   // In this terminal the CLI owns stdout; only a pane or the background returns at once with something to print.
-  if (values.json && !values.pane && !values.bg)
+  if (values.json && !picked.pane && !picked.background)
     throw new UsageError(t('--json — только с --pane или --bg: treeyard open <id> --pane|--bg --json'));
   const task = await taskArg(values.task);
-  const options = {
-    brain,
-    start: startArg(values.start, tree.project.start ?? 'plan'),
-    ...(values.bg ? { background: true } : {}),
-    ...(values.pane ? { pane: true } : {}),
-    ...(values.model ? { model: values.model } : {}),
-    ...(values.effort ? { effort: values.effort } : {}),
-    ...worktreeOption(values),
-    ...(task ? { task } : {}),
-  };
+  const options: LaunchOptions = { ...picked, ...(task ? { task } : {}) };
   // Rights before the confirmation, and even with --yes: --yes skips a question, it does not grant access.
   if (!(await chooseAccess(brain))) return 0;
   if (settings().confirm && !values.yes && process.stdin.isTTY) {
@@ -4319,6 +4332,7 @@ const GLOBAL_KEYS = [
   'statusOrder',
   'live',
   'open',
+  'launchMemory',
   'sleepAfter',
   'maxPanes',
   'staleAfter',
@@ -4335,6 +4349,7 @@ const SNAKE: Record<string, string> = {
   statusOrder: 'status_order',
   antigravityAccess: 'antigravity_access',
   codexAccess: 'codex_access',
+  launchMemory: 'launch_memory',
 };
 const PROJECT_KEYS = ['brain', 'start', 'model', 'effort', 'assist_model', 'setup', 'mail_limit'] as const;
 
@@ -4403,6 +4418,9 @@ function configCommand(args: string[]): number {
     } else if (key === 'open') {
       if (value !== 'pane' && value !== 'terminal') throw new UsageError(t('где: pane или terminal'));
       updateSettings({ open: value });
+    } else if (key === 'launchMemory') {
+      if (value !== 'project' && value !== 'global') throw new UsageError(t('память запусков: project или global'));
+      updateSettings({ launchMemory: value });
     } else if (key === 'statusOrder') {
       const list = value.split(/[\s,]+/).filter(Boolean);
       if ((STATUS_ORDER_NAMES as readonly string[]).includes(value))

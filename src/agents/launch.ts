@@ -17,6 +17,7 @@ import {
   stopSession,
 } from '@antondanv/brainyard';
 import { t } from '../i18n/i18n.js';
+import { rememberLaunch } from '../launch-memory.js';
 import { senderNode } from '../model/mail.js';
 import { markDelivered } from '../model/mailbox.js';
 import { AS_VAR, nodeEnv } from '../model/notes.js';
@@ -178,6 +179,7 @@ export async function launch(tree: Tree, id: string, options: LaunchOptions): Pr
   });
   if (place.warnings.length) result.warnings = [...(result.warnings ?? []), ...place.warnings];
   if (!result.sessionId) return { result };
+  rememberLaunch(tree.project.dir, options);
   const ref: SessionRef = {
     brain: options.brain,
     id: result.sessionId,

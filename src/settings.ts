@@ -53,7 +53,13 @@ export interface Settings {
   codexAccess: CodexAccess | '';
   /** treeyard puts its skills into the CLIs by itself and keeps them at its version. */
   skills: boolean;
+  /** Whose memory of the last launches the menu and `treeyard open` use: each project's own or one for all. */
+  launchMemory: MemoryScope;
 }
+
+/** Whose memory it is: each project's own or one for all of them. */
+export type MemoryScope = 'project' | 'global';
+export const MEMORY_SCOPES: readonly MemoryScope[] = ['project', 'global'];
 
 export type OpenIn = 'pane' | 'terminal';
 /** `full` — no confirmations at all; `normal` — the CLI's own mode, which asks. */
@@ -81,6 +87,7 @@ export const DEFAULTS: Settings = {
   antigravityAccess: '',
   codexAccess: '',
   skills: true,
+  launchMemory: 'project',
 };
 
 /** `~/.treeyard`, or `$TREEYARD_HOME`: what follows the person from project to project. */
@@ -103,6 +110,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
       custom_order?: unknown;
       antigravity_access?: unknown;
       codex_access?: unknown;
+      launch_memory?: unknown;
     };
     if (data.lang && (LANGS as readonly string[]).includes(data.lang)) settings.lang = data.lang;
     if (typeof data.confirm === 'boolean') settings.confirm = data.confirm;
@@ -129,6 +137,8 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     const codex = data.codex_access ?? data.codexAccess;
     if (codex === 'sandbox' || codex === 'config') settings.codexAccess = codex;
     if (typeof data.skills === 'boolean') settings.skills = data.skills;
+    const memory = data.launch_memory ?? data.launchMemory;
+    if ((MEMORY_SCOPES as readonly unknown[]).includes(memory)) settings.launchMemory = memory as MemoryScope;
   } catch {
     // No file yet: the defaults.
   }
@@ -140,8 +150,17 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
 export function saveSettings(settings: Settings, env: NodeJS.ProcessEnv = process.env): void {
   const path = settingsPath(env);
   mkdirSync(dirname(path), { recursive: true });
-  const { sleepAfter, maxPanes, staleAfter, statusOrder, customOrder, antigravityAccess, codexAccess, ...rest } =
-    settings;
+  const {
+    sleepAfter,
+    maxPanes,
+    staleAfter,
+    statusOrder,
+    customOrder,
+    antigravityAccess,
+    codexAccess,
+    launchMemory,
+    ...rest
+  } = settings;
   const data = {
     ...rest,
     status_order: statusOrder,
@@ -149,6 +168,7 @@ export function saveSettings(settings: Settings, env: NodeJS.ProcessEnv = proces
     sleep_after: sleepAfter,
     max_panes: maxPanes,
     stale_after: staleAfter,
+    launch_memory: launchMemory,
     // Not chosen stays out of the file: the next launch asks.
     ...(antigravityAccess ? { antigravity_access: antigravityAccess } : {}),
     ...(codexAccess ? { codex_access: codexAccess } : {}),

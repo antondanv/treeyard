@@ -500,6 +500,8 @@ export interface MenuItem {
   label: ReactNode;
   /** One letter that picks the item at once. */
   hotkey?: string;
+  /** Another letter that picks it too, not drawn. */
+  alias?: string;
   hint?: string;
   disabled?: boolean;
   /** Draws a separator before the item. */
@@ -533,7 +535,9 @@ export function Menu(props: {
       }
       if (key.upArrow || input === 'k') return setIndex((i) => (i - 1 + n) % n);
       if (key.downArrow || input === 'j') return setIndex((i) => (i + 1) % n);
-      const hit = key.return ? highlighted : choosable.find((item) => item.hotkey && item.hotkey === input);
+      const hit = key.return
+        ? highlighted
+        : choosable.find((item) => input && (item.hotkey === input || item.alias === input));
       if (!hit) return;
       done.current = true;
       props.onPick(hit.key);

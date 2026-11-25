@@ -13,6 +13,7 @@ import { ROOT_START_HINT, ROOT_START_LABEL, START_HINT, START_LABEL } from '../a
 import { BRAIN_LABEL, BRAIN_SHORT, type LaunchOptions, sessionEffort } from '../agents/launch.js';
 import { formatMemory, isPending, type Pane, paneFor, panesAvailable } from '../agents/panes.js';
 import { plural, t } from '../i18n/i18n.js';
+import { type LaunchWhere, whereOf } from '../launch-memory.js';
 import { STATUS_LABEL, WHO_LABEL } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
 import { ago } from '../model/time.js';
@@ -419,11 +420,71 @@ function forgetKey(node: TreeNode, onChoose: (choice: SessionChoice) => void) {
   };
 }
 
+/** One CLI's launch in the menu: how it would start, and whether that is what it ran with last time. */
+export interface LaunchEntry {
+  options: LaunchOptions;
+  /** The CLI has been launched before: the options are its last launch, not the defaults. */
+  remembered: boolean;
+}
+
+const BRAIN_HOTKEY: Record<BrainId, string> = { claude: 'c', codex: 'x', antigravity: 'g', opencode: 'O' };
+
+const WHERE_LABEL: Record<LaunchWhere, () => string> = {
+  pane: () => t('в панели'),
+  terminal: () => t('в терминале'),
+  background: () => t('в фоне'),
+};
+
+/** What a launch comes with, in a line: «делать · opus · high · в панели · worktree». */
+export function launchSummary(options: LaunchOptions, withWhere = true): string {
+  const parts: string[] = [START_LABEL[options.start]];
+  if (options.model) parts.push(options.model);
+  if (options.effort) parts.push(options.effort);
+  if (withWhere) parts.push(WHERE_LABEL[whereOf(options)]());
+  if (options.worktree) parts.push('worktree');
+  return parts.join(' · ');
+}
+
+/** Claude Code in the background: what its entry says, but away from the terminal and without a chat. */
+export function inBackground(options: LaunchOptions): LaunchOptions {
+  return { ...options, background: true, pane: false, start: options.start === 'chat' ? 'do' : options.start };
+}
+
+/** A launch as a menu item: the CLI, then its settings dimmed; clipped to `room` so a narrow menu stays tidy. */
+function launchItem(
+  key: string,
+  hotkey: string,
+  title: string,
+  summary: string,
+  hint: string,
+  start: StartMode,
+  room: number,
+  extra: Partial<MenuItem> = {},
+): MenuItem {
+  const head = `▶ ${title}`;
+  const full = `${head} · ${summary}`;
+  const text = clip(full, room);
+  return {
+    key,
+    hotkey,
+    // A line that does not fit says the rest here, when the item is selected.
+    hint: text === full ? `${hint} — ${START_HINT[start]}` : `${hint}: ${summary}`,
+    label: (
+      <Text>
+        <Text>{text.slice(0, head.length)}</Text>
+        <Text color={C.dim}>{text.slice(head.length)}</Text>
+      </Text>
+    ),
+    ...extra,
+  };
+}
+
 export function NodeMenu(props: {
   node: TreeNode;
   width: number;
   height: number;
-  defaults: LaunchOptions;
+  /** Every CLI with the launch it starts with, the one launched last first. */
+  launches: LaunchEntry[];
   live: Map<string, SessionInfo>;
   panes: readonly Pane[];
   frame: number;
@@ -432,35 +493,53 @@ export function NodeMenu(props: {
   onChoose: (choice: SessionChoice) => void;
   onCancel: () => void;
 }) {
-  const { node, defaults } = props;
-  const start = defaults.start;
+  const { node, launches } = props;
   const items: MenuItem[] = sessionItems(node, props, t('Сессии узла'));
+  // The frame, the cursor and the hotkey take 8 columns of the menu's width.
+  const room = props.width - 8;
+  launches.forEach(({ options, remembered }, index) => {
+    const { brain } = options;
+    const hint =
+      index === 0 && remembered ? t('как в прошлый раз') : remembered ? t('его последний запуск') : t('по умолчанию');
+    const background = brain === 'claude' && options.background;
+    items.push(
+      launchItem(
+        `new:${brain}`,
+        BRAIN_HOTKEY[brain],
+        BRAIN_LABEL[brain],
+        launchSummary(options),
+        hint,
+        options.start,
+        room,
+        {
+          ...(index === 0 ? { section: t('Новая сессия') } : {}),
+          // Claude Code's last launch was in the background: its own «в фоне» item below is the same, so b picks this one.
+          ...(background ? { alias: 'b' } : {}),
+        },
+      ),
+    );
+    if (brain === 'claude' && !background) {
+      // The place is the item's whole point: it need not repeat in the line.
+      const away = inBackground(options);
+      items.push(
+        launchItem(
+          'new:claude:bg',
+          'b',
+          t('Claude Code в фоне'),
+          launchSummary(away, false),
+          t('работает сам, а ты — в дереве; на узле появится индикатор'),
+          away.start,
+          room,
+        ),
+      );
+    }
+  });
   items.push(
-    {
-      key: 'new:claude',
-      hotkey: 'c',
-      section: t('Новая сессия'),
-      label: `▶ Claude Code · ${START_LABEL[start]}`,
-      hint: t('сессия по узлу — {p1}', {
-        p1: START_HINT[start],
-      }),
-    },
-    {
-      key: 'new:claude:bg',
-      hotkey: 'b',
-      label: t('▶ Claude Code в фоне · {p1}', {
-        p1: START_LABEL[start === 'chat' ? 'do' : start],
-      }),
-      hint: t('работает сам, а ты — в дереве; на узле появится индикатор'),
-    },
-    { key: 'new:codex', hotkey: 'x', label: `▶ Codex · ${START_LABEL[start === 'goal' ? 'do' : start]}` },
-    { key: 'new:antigravity', hotkey: 'g', label: `▶ Antigravity · ${START_LABEL[start === 'goal' ? 'do' : start]}` },
-    { key: 'new:opencode', hotkey: 'O', label: `▶ OpenCode · ${START_LABEL[start === 'goal' ? 'do' : start]}` },
     {
       key: 'configure',
       hotkey: 'o',
       label: t('⚙ Настроить запуск…'),
-      hint: t('мозг, модель, усилие, как начать, worktree'),
+      hint: t('мозг, модель, усилие, как начать, worktree — и он станет последним запуском'),
     },
     {
       key: 'split',
@@ -527,11 +606,9 @@ export function NodeMenu(props: {
       return;
     }
     const [, brain, bg] = key.split(':') as [string, BrainId, string | undefined];
-    const background = bg === 'bg';
-    let mode: StartMode = start;
-    if (brain !== 'claude' && mode === 'goal') mode = 'do';
-    if (background && mode === 'chat') mode = 'do';
-    props.onChoose({ kind: 'new', options: { brain, start: mode, background, pane: defaults.pane && !background } });
+    const entry = launches.find((launch) => launch.options.brain === brain);
+    if (!entry) return;
+    props.onChoose({ kind: 'new', options: bg === 'bg' ? inBackground(entry.options) : entry.options });
   };
   return (
     <Frame
@@ -655,11 +732,8 @@ export function ProjectMenu(props: {
           if (key === 'new:plan' || key === 'new:chat')
             return props.onChoose({
               kind: 'new',
-              options: {
-                brain: props.defaults.brain,
-                start: key === 'new:chat' ? 'chat' : 'plan',
-                pane: props.defaults.pane,
-              },
+              // The session starts the way the last one did, only the first message is the root's own.
+              options: { ...props.defaults, start: key === 'new:chat' ? 'chat' : 'plan', background: false },
             });
           props.onPick(key as 'docs' | 'rules' | 'settings' | 'add');
         }}

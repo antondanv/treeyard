@@ -26,6 +26,7 @@ import {
 } from '@antondanv/brainyard';
 
 import { t } from '../i18n/i18n.js';
+import { rememberLaunch } from '../launch-memory.js';
 import { senderNode } from '../model/mail.js';
 import { markDelivered } from '../model/mailbox.js';
 import { nodeEnv } from '../model/notes.js';
@@ -111,6 +112,7 @@ export async function launchInPane(
     width: size.width,
     height: size.height,
   });
+  rememberLaunch(tree.project.dir, { ...options, pane: true, background: false });
   const ref: SessionRef = {
     brain: options.brain,
     id: started.sessionId ?? `${PENDING}${started.pane}`,

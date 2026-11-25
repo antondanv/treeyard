@@ -209,6 +209,13 @@ export const EN: Record<string, string> = {
   'Где открывать сессии': 'Open sessions in',
   'для панелей нужен tmux; сессии продолжают работать после выхода':
     'panes need tmux; sessions keep running after you leave',
+  'память запусков: project или global': 'launch memory: project or global',
+  'Память запусков': 'Launch memory',
+  'у проекта': 'per project',
+  'общая для всех проектов': 'shared by all projects',
+  'последний запуск каждого CLI — свой у каждого проекта, не в git':
+    "each CLI's last launch is kept per project, out of git",
+  'последний запуск каждого CLI — один на все проекты': "each CLI's last launch is one for all projects",
   'Усыплять после простоя': 'Sleep after idle',
   '{n} мин': '{n} min',
   выкл: 'off',
@@ -218,7 +225,6 @@ export const EN: Record<string, string> = {
   'без предела': 'unlimited',
   'при превышении засыпает самая давно простаивающая': 'above the limit, the longest-idle session sleeps first',
   усыпить: 'sleep',
-  'сессия по узлу — {p1}': 'session for this node — {p1}',
   спит: 'sleeping',
   '⌃Q — обратно к дереву': '⌃Q — back to the tree',
   'вернулся из панели': 'back from the pane',
@@ -774,11 +780,13 @@ export const EN: Record<string, string> = {
   'Статус · {title}': 'Status · {title}',
   выбрать: 'choose',
   'буква — сразу': 'a letter — at once',
-  '▶ Claude Code в фоне · {p1}': '▶ Claude Code in the background · {p1}',
   'работает сам, а ты — в дереве; на узле появится индикатор':
     'works on its own while you stay in the tree; the node shows its state',
   '⚙ Настроить запуск…': '⚙ Set up the launch…',
-  'мозг, модель, усилие, как начать, worktree': 'brain, model, effort, how to start, worktree',
+  'мозг, модель, усилие, как начать, worktree — и он станет последним запуском':
+    'brain, model, effort, how to start, worktree — and it becomes the last launch',
+  'как в прошлый раз': 'as last time',
+  'его последний запуск': 'its last launch',
   'Агент без сессии': 'Agent without a session',
   '✂ Разбить на шаги': '✂ Break into steps',
   'агент читает проект и предлагает 3–7 подзадач с критериями — ты выбираешь, какие добавить':

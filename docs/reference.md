@@ -109,6 +109,20 @@ current is left alone.
 
 <img src="screenshot-menu.png" width="860" alt="Enter on a node: a menu with a new session — Claude Code, Claude Code in the background, Codex, Antigravity, OpenCode, set up the launch — and agent tasks without a session: break into steps, write a “done when”, run the check, node diffs, what the agent gets">
 
+**The last launch comes first.** Under “New session” the menu puts the CLI you launched last on
+top, with exactly how it started: how (plan, do, `/goal`, chat), model, effort, where (pane,
+this terminal, background) and a worktree — the line shows all of it. Below are the other CLIs,
+each with the settings of *its own* last launch, the most recently used first; one never
+launched stays with the defaults (the project's `start`, its model and effort if it is the
+project's own CLI, `open` for the place). Launch Claude Code on a model and an effort, then
+Antigravity: Antigravity is on top and Claude Code below with its own settings. A launch through
+“⚙ Set up the launch…” is remembered the same way, and the form opens with the last launch. The
+hotkeys stay with their CLIs in any order: `c` Claude Code, `b` Claude Code in the background,
+`x` Codex, `g` Antigravity, `O` OpenCode (when Claude Code ran in the background last, `c` and
+`b` are the same item). The memory is the project's own by default; the setting `launch_memory`
+(`,` → “Launch memory”) makes it one for all projects. A launch with `--task` (a coordinator's
+assignment) is not remembered.
+
 From the root, `c` starts a review of the whole tree by the project's agent; `⏎` opens a
 menu with the review and a conversation about the project. In “⚙ Another agent, place,
 model…” (`o`) you pick Claude Code, Codex, Antigravity or OpenCode, a pane or the
@@ -237,6 +251,7 @@ Settings — the `,` key (always shown in the top right corner) or `treeyard con
 | `status_order` | the order of statuses under each parent: `active-first` (default), `done-first`, `active-last`, `custom`, or all seven statuses comma-separated — your own |
 | `live` | live status of Claude Code, Codex, Antigravity and OpenCode sessions: who is working, who waits for you |
 | `open` | open sessions in a pane (`pane`, the default) or in the terminal (`terminal`); without tmux — in the terminal |
+| `launch_memory` | whose memory of the last launches the node menu and `treeyard open` use: `project` (the default — each project has its own, in `.tree/.local/`, out of git) or `global` (one for all projects, in `~/.treeyard/last-launch.json`); see the node menu above |
 | `sleep_after` | put sessions to sleep after 15/30/60 idle minutes (default 30); `0` — never |
 | `max_panes` | the limit of the project's live panes: 3/5/8 (default 5); `0` — no limit |
 | `stale_after` | hours after which an «in progress» node with no live session and no records is marked «no session N h» (default 2); `0` — off |
@@ -597,7 +612,11 @@ message, after the standard one, under “Task for this node:” (in a `chat` st
 becomes the first message; `--task -` reads it from stdin; `treeyard context <id> --task "…"`
 shows the result; with `--start goal` it becomes part of the `/goal` condition).
 `--model` and `--effort` set the model and the effort for this launch only; without them the CLI
-uses its own defaults. `--worktree` starts the session in the node's own
+uses its own defaults. Without flags `open` starts the way the last launch did — its CLI, how to
+start, model, effort, place (pane, background or this terminal) and worktree; with `--brain` — the
+way that CLI last started. Every flag said out loud beats the memory (`--model` drops the
+remembered effort, which belonged to the remembered model); a CLI never launched starts by the
+project's defaults, and with `--task` the memory is not read and not written. `--worktree` starts the session in the node's own
 [git worktree](#git-worktrees-of-nodes), in any CLI; `--no-worktree` — in the project's folder.
 `--pane` starts the session in a tmux pane (works in Claude Code, Codex, Antigravity and OpenCode)
 and returns at once; the session is saved in the node. With `--pane` you can name several nodes —
