@@ -232,6 +232,11 @@ export const EN: Record<string, string> = {
   'агент не предложил ни одного шага': 'the agent proposed no steps',
   'агент не сформулировал критерий': 'the agent wrote no criterion',
   'агент не ответил': 'the agent did not answer',
+  'агент не ответил за {n} мин — задачу снял; попробуй ещё раз или выбери другой CLI':
+    'the agent did not answer in {n} min — the job was stopped; try again or pick another CLI',
+  отменено: 'cancelled',
+  'отменено: {label}': 'cancelled: {label}',
+  'Esc — отменить': 'Esc cancels',
   'в ответе агента нет JSON': "no JSON in the agent's answer",
   план: 'plan',
   делать: 'do',

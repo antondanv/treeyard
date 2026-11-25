@@ -30,6 +30,7 @@ import {
 } from '../agents/access.js';
 import {
   ASSIST_EFFORT,
+  AssistCancelled,
   type AssistChoice,
   type AssistJob,
   proposeCriterion,
@@ -282,6 +283,8 @@ interface Job {
   label: string;
   /** The latest thing it did. */
   detail?: string;
+  /** Esc stops it: an agent job without a session can hang on a model that never answers. */
+  cancel?: () => void;
 }
 
 const VIEW_LABEL: Record<View, string> = labels(() => ({
@@ -355,6 +358,8 @@ export function App(props: AppProps) {
   const [listIndex, setListIndex] = useState<Record<string, number>>({});
   const [toast, setToast] = useState<Toast | undefined>(props.toast);
   const [job, setJob] = useState<Job | undefined>();
+  /** Which agent job is the live one: a cancelled job's late answer must not touch the next one. */
+  const jobSeq = useRef(0);
   const [branch, setBranch] = useState<string | undefined>();
   /** Sessions opened outside the tree read only the agent files: is the block about the tree in them? */
   const [pointerNeeded, setPointerNeeded] = useState(() => pointerGap(props.dir));
@@ -1221,7 +1226,11 @@ export function App(props: AppProps) {
       setJob((current) => (current ? { ...current, detail: event.summary } : current));
   };
 
-  const splitNode = (node: TreeNode, choice: AssistChoice) => {
+  /**
+   * An agent job without a session. Esc cancels it: the job is freed at once, the CLI is stopped
+   * through the signal, and whatever its late answer does is ignored.
+   */
+  const agentJob = (label: string, work: (signal: AbortSignal) => Promise<() => void>) => {
     if (job)
       return say(
         t('подожди: {label}', {
@@ -1229,46 +1238,62 @@ export function App(props: AppProps) {
         }),
         C.warn,
       );
+    const controller = new AbortController();
+    const seq = ++jobSeq.current;
+    const mine = () => jobSeq.current === seq;
     setJob({
-      label: t('{p1} разбивает «{title}» на шаги', {
-        p1: BRAIN_SHORT[choice.brain],
-        title: node.title,
-      }),
+      label,
+      cancel: () => {
+        if (!mine()) return;
+        jobSeq.current++;
+        controller.abort();
+        setJob(undefined);
+        say(t('отменено: {label}', { label }), C.warn);
+      },
     });
-    void fitChoice(choice)
-      .then((fitted) => proposeSteps(treeRef.current, node.id, { ...fitted, onEvent: feed }))
-      .then((steps) => offer({ kind: 'steps', node: node.id, steps }))
-      .catch((error: Error) => say(error.message, C.bad))
-      .finally(() => setJob(undefined));
+    void work(controller.signal)
+      .then((present) => {
+        if (mine()) present();
+      })
+      .catch((error: Error) => {
+        if (mine() && !(error instanceof AssistCancelled)) say(error.message, C.bad);
+      })
+      .finally(() => {
+        if (mine()) setJob(undefined);
+      });
   };
 
-  const askCriterion = (node: TreeNode, choice: AssistChoice) => {
-    if (job)
-      return say(
-        t('подожди: {label}', {
-          label: job.label,
-        }),
-        C.warn,
-      );
-    setJob({
-      label: t('{p1} формулирует «готово, когда» для «{title}»', {
+  const splitNode = (node: TreeNode, choice: AssistChoice) =>
+    agentJob(
+      t('{p1} разбивает «{title}» на шаги', {
         p1: BRAIN_SHORT[choice.brain],
         title: node.title,
       }),
-    });
-    void fitChoice(choice)
-      .then((fitted) => proposeCriterion(treeRef.current, node.id, { ...fitted, onEvent: feed }))
-      .then((criterion) =>
-        offer({
-          kind: 'criterion',
-          node: node.id,
-          doneWhen: criterion.doneWhen,
-          ...(criterion.check ? { check: criterion.check } : {}),
-        }),
-      )
-      .catch((error: Error) => say(error.message, C.bad))
-      .finally(() => setJob(undefined));
-  };
+      (signal) =>
+        fitChoice(choice)
+          .then((fitted) => proposeSteps(treeRef.current, node.id, { ...fitted, onEvent: feed, signal }))
+          .then((steps) => () => offer({ kind: 'steps', node: node.id, steps })),
+    );
+
+  const askCriterion = (node: TreeNode, choice: AssistChoice) =>
+    agentJob(
+      t('{p1} формулирует «готово, когда» для «{title}»', {
+        p1: BRAIN_SHORT[choice.brain],
+        title: node.title,
+      }),
+      (signal) =>
+        fitChoice(choice)
+          .then((fitted) => proposeCriterion(treeRef.current, node.id, { ...fitted, onEvent: feed, signal }))
+          .then(
+            (criterion) => () =>
+              offer({
+                kind: 'criterion',
+                node: node.id,
+                doneWhen: criterion.doneWhen,
+                ...(criterion.check ? { check: criterion.check } : {}),
+              }),
+          ),
+    );
 
   const check = (node: TreeNode) => {
     if (!node.check) return say(t('у узла нет команды проверки — e, поле «Проверка»'), C.warn);
@@ -2115,6 +2140,7 @@ export function App(props: AppProps) {
       if (key.ctrl && input === 'c') return handOver({ type: 'quit' });
       const n = Number(input);
       if (input && n >= 1 && n <= VIEWS.length && !key.ctrl && !key.meta) return setView(VIEWS[n - 1]!);
+      if (key.escape && job?.cancel) return job.cancel();
       if (key.escape && filter) return setFilter('');
       if (input === '!' && tree.problems.length > 0) return setModal({ kind: 'problems' });
       if (input === '!' && pointerNeeded) return setModal({ kind: 'pointer' });
@@ -3678,6 +3704,7 @@ export function App(props: AppProps) {
           ) : job ? (
             <Text color={C.agent} wrap="truncate-end">
               {SPINNER[frame % SPINNER.length]} {job.label}
+              {job.cancel ? <Text color={C.faint}> · {t('Esc — отменить')}</Text> : null}
               {job.detail ? <Text color={C.faint}> · {job.detail}</Text> : null}
             </Text>
           ) : toast ? (

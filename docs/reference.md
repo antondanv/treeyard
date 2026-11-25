@@ -165,6 +165,7 @@ meaning. Russian text in search, forms and agent panes is typed as usual.
 | `V` | node diffs: linked commits → files → a coloured diff; also in the `⏎` menu and the `:` palette |
 | `P` | project documents: every `.md`, read with Markdown drawn and edited in the built-in editor; also `⏎` on the root `◆` |
 | `S` | an agent breaks the node into 3–7 steps, you tick the ones to add (who breaks it — you choose in the confirmation) |
+| `Esc` | while an agent job without a session runs (`S`, “done when”) — cancel it: the CLI is stopped, the tree is free at once. A job that gets no answer in 8 minutes (3 for “done when”) is stopped on its own, with a message |
 | `t` | run the node's check (the command in its “check” field) |
 | `u` | undo the last change |
 | `tab` `⇧tab` | nest · lift a level up |
