@@ -138,8 +138,9 @@ function unavailableText(b: BrainUsage): string {
 export function settleExpired(brains: readonly BrainUsage[], now = Date.now()): BrainUsage[] {
   return brains.map((b) => {
     if (!b.limits) return b;
+    // Already settled windows stay as they are, so a second pass keeps `previousUtilization`.
     const limits = b.limits.map((w) =>
-      w.resetsAt && w.resetsAt * 1000 <= now
+      w.resetsAt && w.resetsAt * 1000 <= now && !(w as { expired?: boolean }).expired
         ? { ...w, utilization: 0, expired: true, previousUtilization: w.utilization }
         : w,
     );
@@ -169,8 +170,10 @@ export function limitsText(rawBrains: readonly BrainUsage[], p: Paint, now = Dat
         const pctText = `${pct}%`.padStart(4);
         const coloredPct = pct >= 90 ? p.c('#ff7b72', pctText) : pct >= 75 ? p.c('#ffcf70', pctText) : pctText;
         const expired = (w as { expired?: boolean }).expired === true;
-        const resetKey = expired ? 'сброшено в {time}' : 'сброс в {time}';
-        const reset = w.resetsAt ? p.dim(` · ${t(resetKey, { time: clockOf(w.resetsAt * 1000, now) })}`) : '';
+        const time = w.resetsAt ? clockOf(w.resetsAt * 1000, now) : '';
+        // Literal keys, so the i18n check sees both lines.
+        const resetText = expired ? t('сброшено в {time}', { time }) : t('сброс в {time}', { time });
+        const reset = w.resetsAt ? p.dim(` · ${resetText}`) : '';
         lines.push(`  ${windowName}  ${coloredPct}${reset}`);
       }
     }
