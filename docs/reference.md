@@ -398,6 +398,16 @@ and stdout holds only the JSON (the `✓` lines and warnings go quiet). Several 
 session that did not start is an object with `error` and `null` for `id` and `startedAt`, and
 the exit code is 1 as without `--json`.
 
+`treeyard sleep <id> [<id>…] [--force] [--json] [--project <dir>]` puts a node's live pane to
+sleep: closes the tmux process, leaving the session in the node for waking and continuation
+(`wakeInPane`, `treeyard send`, or `⏎` in the TUI). If the pane is currently working (`busy`),
+waiting for the person (`waiting`), or attached to a terminal (`attached`), without `--force`
+the command refuses, explains why, and exits with code 1; with `--force` it closes the pane.
+Before closing, it settles any pending session id so the conversation is not lost. If the pane
+is already sleeping or the node has no live pane, it notes that cleanly without error. Multiple
+ids are put to sleep in turn; `--json` outputs an array of results for each node (or an object for
+a single node).
+
 ## Agents and the tree
 
 A session from a node gets a short context: the path from the root (why this), the
@@ -470,6 +480,7 @@ treeyard deliver --once                          # one delivery pass over waitin
 treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's open children in order, two sessions at a time, the next when a node leaves “active”
 treeyard worktree                               # the nodes' worktrees: folder, branch, commits, what is not committed (add | setup | rm <id>)
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
+treeyard sleep <id> [<id>…] [--force] [--json]  # put the live panes of nodes to sleep; keeps the session for waking; refuses on busy/waiting/attached without --force
 treeyard status                                 # a summary: versions, tree, nodes, skills, Codex's way to treeyard and git, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
 treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md (what it says — below)

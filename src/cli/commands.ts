@@ -41,7 +41,7 @@ import {
 import { type Attempt, deliverAll, ensureDeliverer, runDeliverer } from '../agents/deliver.js';
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
-import { isPending, launchInPane, readPanes, sessionPanes } from '../agents/panes.js';
+import { isPending, launchInPane, readPanes, sessionPanes, sleepNodePanes } from '../agents/panes.js';
 import { DEFAULT_MAIL_LIMIT } from '../agents/pingpong.js';
 import { LIMIT, type QueueEvent, queueNodes, queueSources, runQueue } from '../agents/queue.js';
 import {
@@ -289,6 +289,9 @@ function commandLines(): string {
                                            .worktreeinclude); setup — подготовить заново; rm — убрать, но не пока в нём
                                            есть незакоммиченное или невлитое; сессии в нём пишут основное дерево
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
+  treeyard sleep <id> [<id>…] [--force] [--json] [--project <папка>]   усыпить живую панель узла: закрывает процесс
+                                           tmux, оставляя сессию в узле для пробуждения и продолжения; отказывает,
+                                           если панель работает, ждёт человека или к ней подключён терминал (без --force)
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   ждать, пока узел уйдёт из «в работе» или его сессия
                                            закончит ход, будет ждать человека или закончится; печатает статус, последнюю
                                            запись журнала, сессию и её последнее сообщение целиком — вопрос или итог
@@ -437,6 +440,9 @@ function commandLines(): string {
                                            anything uncommitted or unmerged; sessions in it write the main tree
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are; ▣ — a live pane
                                            (pane in JSON)
+  treeyard sleep <id> [<id>…] [--force] [--json] [--project <dir>]   put a node's live pane to sleep: closes the tmux
+                                           process, leaving the session in the node for waking and continuation; refuses
+                                           if the pane is working, waiting for the person, or attached (without --force)
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   wait until a node leaves «active» or its session
                                            ends its turn, waits for the person or ends; prints the status, the last journal
                                            entry, the session and its last message whole — a question or a summary from
@@ -640,6 +646,8 @@ async function main(argv: string[]): Promise<number> {
       return worktreeCommand(rest);
     case 'sessions':
       return sessionsCommand(rest);
+    case 'sleep':
+      return sleepCommand(rest);
     case 'github':
       return githubCommand(rest);
     case 'config':
@@ -3572,6 +3580,38 @@ async function sessionsCommand(args: string[]): Promise<number> {
   if (list.length === 0) process.stdout.write(`${out.dim(t('сессий в этой папке ещё не было'))}\n`);
   else process.stdout.write(`\n${offTreeLine(offTreeTally(list, owners))}\n`);
   return 0;
+}
+
+export async function sleepCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, {
+    force: { type: 'boolean', default: false },
+    json: { type: 'boolean', default: false },
+    project: { type: 'string' },
+  });
+  if (positionals.length === 0) {
+    throw new UsageError(t('укажи узел: treeyard sleep <id> [<id>…]'));
+  }
+  const tree = project(values.project);
+  const results = await sleepNodePanes(tree, positionals, { force: values.force });
+  let failed = 0;
+  for (const r of results) {
+    if (!r.ok) failed++;
+    if (values.json) continue;
+    if (r.ok) {
+      if (r.status === 'slept') {
+        process.stdout.write(`${out.c('#7ee2a8', '✓')} ${r.node}  ${r.title} · ${r.message}\n`);
+      } else {
+        process.stdout.write(`${out.dim('·')} ${r.node}  ${r.title} · ${r.message}\n`);
+      }
+    } else {
+      process.stderr.write(`${err.c('#ff7b72', '✗')} ${r.node}  ${r.title ? `${r.title} · ` : ''}${r.error}\n`);
+    }
+  }
+  if (values.json) {
+    const data = positionals.length === 1 ? results[0] : results;
+    process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+  }
+  return failed ? 1 : 0;
 }
 
 /** «Запустить? [Y/n]» — Enter is yes. */

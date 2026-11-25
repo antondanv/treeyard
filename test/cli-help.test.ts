@@ -46,6 +46,7 @@ const COMMANDS = [
   'open',
   'worktree',
   'sessions',
+  'sleep',
   'wait',
   'send',
   'deliver',

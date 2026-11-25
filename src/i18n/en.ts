@@ -354,6 +354,17 @@ export const EN: Record<string, string> = {
     'the session started ({short}) but its id was not found — not saved on the node',
   'сессия {session}': 'session {session}',
   'панель {pane}': 'pane {pane}',
+  'панель уже спит': 'pane is already sleeping',
+  'нет живой панели': 'no live pane',
+  'у сессии ещё нет id в CLI — без --force не закрываю':
+    'session has no id in the CLI yet — refusing to close without --force',
+  'к панели подключён терминал — без --force не закрываю':
+    'terminal is attached to the pane — refusing to close without --force',
+  'панель сейчас работает — без --force не закрываю': 'pane is busy — refusing to close without --force',
+  'панель ждёт человека — без --force не закрываю': 'pane is waiting for the user — refusing to close without --force',
+  'не удалось закрыть панель {pane}': 'could not close pane {pane}',
+  'панель {pane} уснула': 'pane {pane} put to sleep',
+  'укажи узел: treeyard sleep <id> [<id>…]': 'specify a node: treeyard sleep <id> [<id>…]',
   'без названия': 'untitled',
   'сессий в этой папке ещё не было': 'no sessions in this folder yet',
   'Для всех проектов': 'All projects',

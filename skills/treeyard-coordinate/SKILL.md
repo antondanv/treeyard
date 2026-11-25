@@ -65,7 +65,7 @@ Coordinate:
 - [ ] 3. Sessions started: treeyard open … --pane|--bg --worktree --start do --task …
 - [ ] 4. Waiting: treeyard wait; a letter or question you can answer → treeyard send; one only the person can → to them
 - [ ] 5. Each finished node accepted: journal, commits, diff, criterion
-- [ ] 6. Worktree branches merged one by one; checks green on the main branch after each
+- [ ] 6. Worktree branches merged one by one; checks green on the main branch after each; pane put to sleep: treeyard sleep <id>
 - [ ] 7. Journal entry on each node; review; tree files committed
 - [ ] 8. Next batch — back to 1; nothing left → own node to review
 - [ ] 9. Summary to the person
@@ -318,7 +318,7 @@ in the main folder, after `git status`: others' uncommitted changes stay untouch
    committed or not merged: stop and look. Claude Code's own worktree: `git worktree unlock <path>`
    (it locks them), `git worktree remove <path>`, `git branch -d <branch>` — never `-D`.
 
-Panes stay too: Brainyard puts idle ones to sleep, and the person continues them from the node.
+6. **Sleep the pane once accepted** (and when it is no longer needed): run `treeyard sleep <id>`. The session stays in the node, and the person can always continue it from the tree.
 
 ## 7. Journal, review, tree files
 
