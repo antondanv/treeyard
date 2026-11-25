@@ -2,12 +2,12 @@
 
 **Цель:** Соло-разработчик ведёт свои проекты с агентами через дерево и доводит их до проверки в жизни, а не до вечного «код готов, проект стоит»
 
-Готово 72 из 108 · в работе 2 · на проверке 12 · ждут 1 · идей 14
+Готово 81 из 108 · в работе 2 · на проверке 3 · ждут 1 · идей 15
 
 > Этот файл собирает treeyard из `nodes/` — правьте узлы, а не его.
 > `○` к работе · `◐` в работе · `◎` на проверке · `‖` ждёт · `✓` готово · `◇` идея · `✗` отказ
 
-- ○ [Агенты ведут дерево без обходных путей](nodes/zv6f.md) — 41/52
+- ○ [Агенты ведут дерево без обходных путей](nodes/zv6f.md) — 50/52
   - ○ [Команды treeyard для агентов](nodes/vkxh.md) — 5/5
     - ✓ [add --after молча игнорируется](nodes/yrfw.md)
     - ✓ [Команды вместо циклов и пайпов агентов](nodes/s3sb.md) — 1/1
@@ -25,7 +25,7 @@
     - ✓ [treeyard status в скилле treeyard](nodes/ufn3.md)
     - ✓ [treeyard status: сводка по проекту](nodes/g3k6.md)
     - ✓ [show --open прячет открытые узлы](nodes/65pa.md)
-  - ◎ [Координатор раздаёт узлы сессиям](nodes/7997.md) — 28/38
+  - ◎ [Координатор раздаёт узлы сессиям](nodes/7997.md) — 37/38
     - ✓ [treeyard open для координатора: задание сверх контекста узла (--task); --model, --effort, --worktree — в справке](nodes/edxd.md)
     - ✓ [Почта агентов](nodes/sqxa.md) — 1/1
       - ✓ [treeyard send: письмо в сессию узла](nodes/sb3h.md)
@@ -44,7 +44,7 @@
     - ✓ [HEAD из worktree при --project](nodes/aehc.md)
     - ✗ [Проба wait и send: фон](nodes/mbub.md)
     - ✗ [Проба wait и send: панель](nodes/ngqk.md)
-    - ◎ [Почта для мультиагентной работы](nodes/5byq.md) — 21/30
+    - ◎ [Почта для мультиагентной работы](nodes/5byq.md) — 30/30
       - ✓ [Письма отдельно от журнала](nodes/fasf.md)
       - ✓ [Доступ Codex к treeyard и git](nodes/zwwp.md)
       - ✓ [Ящик узла и доставка](nodes/n6bg.md)
@@ -79,8 +79,8 @@
       - ✓ [Ранние конфликты между узлами](nodes/bd7z.md)
       - ✓ [Стартовые диалоги CLI в wait](nodes/yp4c.md)
       - ✓ [Хук писем для Codex](nodes/84dz.md)
-      - ◎ [Хук писем для Antigravity](nodes/fquh.md)
-      - ◎ [Плагин писем для OpenCode](nodes/ah5m.md)
+      - ✓ [Хук писем для Antigravity](nodes/fquh.md)
+      - ✓ [Плагин писем для OpenCode](nodes/ah5m.md)
       - ✓ [Письма вместе с запросом человека](nodes/2y7m.md)
       - ✓ [Пробное слияние веток узлов](nodes/qwmr.md)
       - ✓ [Узел в папке проекта в конфликтах](nodes/9xxa.md)
@@ -90,17 +90,18 @@
       - ✓ [Antigravity пишет в журнал от имени человека](nodes/pr7g.md)
       - ✓ [Длинное письмо не набирается в панель](nodes/6ry9.md)
       - ✓ [Состояние Claude из песочницы](nodes/r7rk.md)
-      - ◎ [Не фиксировать Claude в инструкциях](nodes/yr5u.md)
+      - ✓ [Не фиксировать Claude в инструкциях](nodes/yr5u.md)
       - ✓ [Подтверждение разрешений из CLI](nodes/cnbn.md)
-      - ◎ [Усыплять отработанные панели из CLI](nodes/tq52.md)
-      - ◎ [Antigravity мелькает idle между шагами](nodes/ds4q.md)
-      - ◎ [Экран панели из CLI](nodes/jr63.md)
-      - ◎ [Модели и лимиты CLI](nodes/7vry.md)
-      - ◎ [Sleep и peek видят send](nodes/bybr.md)
-      - ◎ [Просроченные окна в limits](nodes/c3bx.md)
+      - ✓ [Усыплять отработанные панели из CLI](nodes/tq52.md)
+      - ✓ [Antigravity мелькает idle между шагами](nodes/ds4q.md)
+      - ✓ [Экран панели из CLI](nodes/jr63.md)
+      - ✓ [Модели и лимиты CLI](nodes/7vry.md)
+      - ✓ [Sleep и peek видят send](nodes/bybr.md)
+      - ✓ [Просроченные окна в limits](nodes/c3bx.md)
     - ◎ [Worktree для любого CLI](nodes/ahhv.md) — 0/1
       - ◇ [Порты и окружение worktree](nodes/va4y.md)
       - ◇ [Слияние узла одной командой](nodes/sb2e.md)
+      - ◇ [Уборка worktree закрытых узлов](nodes/wak4.md)
   - ○ [Скиллы и инструкции агентов](nodes/h6kw.md) — 8/9
     - ◐ [Прогон скиллов на моделях](nodes/ea8e.md)
     - ✓ [Скилл treeyard: работа с деревом](nodes/as4m.md)

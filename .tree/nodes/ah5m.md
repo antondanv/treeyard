@@ -3,7 +3,7 @@ id: ah5m
 title: Плагин писем для OpenCode
 parent: 5byq
 order: 130
-status: review
+status: done
 done_when: проверено живьём на OpenCode (1.19+), доходит ли process.env.TREEYARD_NODE и работает ли контекст-хук плагина; при поддержке — treeyard hook opencode install|remove|status, отображение в status, уборка в uninstall, перенос в worktree, тесты, справка на обоих языках и живая проверка на временной копии (при ограничении CLI — статус waiting с доказательством)
 commits:
   - a9ef2412779cf66cc569c73a4ca25b9d3cb2b8eb
@@ -18,7 +18,8 @@ sessions:
     pane: agy-11c9c821
     dir: /Users/antondanilov/Projects/Treeyard.worktrees/ah5m
 created: 2026-11-24
-updated: 2026-11-25T19:25:38+03:00
+updated: 2026-11-25T20:10:26+03:00
+closed: 2026-11-25
 ---
 
 Из разбора 23.11: у OpenCode 1.18 хуков-команд нет, только плагины (.opencode/plugins/, ~/.config/opencode/plugins/); V2 API ctx.session.hook("context", …) правит контекст перед запросом. Доходит ли process.env сессии до плагина — не описано.
@@ -35,3 +36,4 @@ updated: 2026-11-25T19:25:38+03:00
 - 2026-11-25 13:18 · antigravity · в работе → на проверке
 - 2026-11-25 19:20 · агент · привязан коммит 2d3b9fc2cb56c0fa2c62a9ee042279ed91d08acc
 - 2026-11-25 19:25 · ты · Принято (координатор): a9ef241 влит в main (2d3b9fc, конфликт импортов в commands.ts разрешён); живая проверка OpenCode 1.19.6 (доставка вместе с запросом и посреди хода, 0 вызовов treeyard без писем); npm run typecheck, npm test 1040/1040, lint, build — чисто. Панель усыплена через treeyard sleep. Осталось: ничего.
+- 2026-11-25 20:10 · ты · на проверке → готово

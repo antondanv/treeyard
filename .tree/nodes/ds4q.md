@@ -3,7 +3,7 @@ id: ds4q
 title: Antigravity мелькает idle между шагами
 parent: 5byq
 order: 260
-status: review
+status: done
 done_when: treeyard wait и deliver не принимают работающую панель Antigravity за закончившую ход («idle») между шагами генерации/выполнения команд; исследована причина в conversation_summaries.db и экране панели; тесты и живая проверка на работающей панели Antigravity
 commits:
   - 5bc3bc57466a07480f58bce0b213c4b3d0c0c96e
@@ -17,7 +17,8 @@ sessions:
     pane: agy-1c0822e8
     dir: /Users/antondanilov/Projects/Treeyard.worktrees/ds4q
 created: 2026-11-24
-updated: 2026-11-25T12:57:32+03:00
+updated: 2026-11-25T20:10:26+03:00
+closed: 2026-11-25
 ---
 
 Наблюдение 24.11 при координации панелей Antigravity: между шагами и генерацией в conversation_summaries.db кратковременно ставится status=IDLE, хотя на экране панели ещё крутится спиннер и «esc to cancel». Из-за этого treeyard wait иногда преждевременно возвращается с «закончила ход». Можно сверять экран панели (или выдерживать короткое подтверждение подряд двух опросов) перед тем как считать панель Antigravity свободной.
@@ -34,3 +35,4 @@ updated: 2026-11-25T12:57:32+03:00
 - 2026-11-25 12:51 · antigravity · Исправлены обе причины ложного idle в wait/deliver (src/agents/pane-idle.ts, src/agents/wait.ts, src/agents/deliver.ts, test/wait-send.test.ts, docs/architecture.md): (1) withPaneIdle сравнивает метки завершения хода для Antigravity, Codex и Claude с max(pane.startedAt, ref.opened) через sessionSince(tree) в observe()/look()/deliverAll() — старый IDLE старше последнего treeyard send больше не засчитывается; (2) agyScreenBusy проверяет активный экран Antigravity (esc to cancel в футере или брайль-спиннер без ? for shortcuts и диалогов) и в observe() перебивает мелькающий IDLE из conversation_summaries.db в busy, не мешая диалогу доверия к папке. Проверено: npm run typecheck, vitest (wait-send/mail/reply/queue/panes — 5/5, 69/69), npm run lint (234 файла), npm run build, и живая проверка observe()+sessionSight() на работающей панели agy-1c0822e8 (esc to cancel в ANSI-футере даёт busy даже при подставленном IDLE из БД; conversation_summaries.db в WAL-режиме подтвердил задержку обновления >3 мин). Осталось: ничего.
 - 2026-11-25 12:51 · antigravity · в работе → на проверке
 - 2026-11-25 12:57 · ты · Принято (координатор): 5bc3bc5 влит в main; починены оба источника ложного idle (since = max(startedAt, opened) и agyScreenBusy); npm run typecheck, npm test 1013/1013 (1012/1013 + planting-tmux.test.ts 1/1), lint, build — чисто. Панель усыплена через treeyard sleep. Осталось: ничего.
+- 2026-11-25 20:10 · ты · на проверке → готово
