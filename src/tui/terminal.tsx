@@ -22,7 +22,7 @@ import { C } from './theme.js';
  * the screen at once and then often for a moment — long enough for a CLI to echo — and idle panes
  * stay cheap. Mutable for tests.
  */
-export const CAPTURE_MS = { idle: 125, active: 16, window: 500 };
+export const CAPTURE_MS = { idle: 125, active: 16, window: 500, background: 2000 };
 
 /** Ctrl+Q belongs to the tree; all other bytes belong to the CLI. */
 export function paneInput(data: string): { data: string; leave: boolean } {
@@ -82,6 +82,8 @@ export function TerminalPane(props: {
 }) {
   const { pane, width, height, focused } = props;
   const terminalFocused = useTerminalFocus();
+  const terminalFocusedRef = useRef(terminalFocused);
+  terminalFocusedRef.current = terminalFocused;
   const [screen, setScreen] = useState<PaneScreen>();
   // The tree owns the mouse, so the terminal cannot select here: a drag selects, its release copies.
   const [selection, setSelection] = useState<Selection>();
@@ -129,7 +131,6 @@ export function TerminalPane(props: {
   controls.current = { scrollTo, send, copy };
 
   useEffect(() => {
-    if (!terminalFocused) return;
     if (capturedPane.current !== pane.pane) {
       capturedPane.current = pane.pane;
       setScreen(undefined);
@@ -180,7 +181,15 @@ export function TerminalPane(props: {
         if (!stopped) {
           const now = again;
           again = false;
-          schedule(now ? 0 : Date.now() < activeUntil ? CAPTURE_MS.active : CAPTURE_MS.idle);
+          schedule(
+            now
+              ? 0
+              : !terminalFocusedRef.current
+                ? CAPTURE_MS.background
+                : Date.now() < activeUntil
+                  ? CAPTURE_MS.active
+                  : CAPTURE_MS.idle,
+          );
         }
       }
     };
@@ -204,7 +213,12 @@ export function TerminalPane(props: {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [pane.pane, pane.attached, width, height, terminalFocused]);
+  }, [pane.pane, pane.attached, width, height]);
+
+  // Coming back to the terminal shows the CLI's current screen at once, not after a slow background read.
+  useEffect(() => {
+    if (terminalFocused) wake.current();
+  }, [terminalFocused]);
 
   // A click inside starts typing there; the buttons in the footer are clicks of their own.
   useClick(box, () => {

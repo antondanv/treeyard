@@ -195,7 +195,7 @@ import { useMarqueeClock } from './marquee-clock.js';
 import { type Click, Clickable, MouseProvider, usePress } from './mouse.js';
 import { ListRow, paneState, RootRow, rowOverflow, SessionRow, TreeRow, treePrefix } from './rows.js';
 import { TerminalPane } from './terminal.js';
-import { useTerminalFocus } from './terminal-focus.js';
+import { BACKGROUND_MS, sameJson, useTerminalFocus } from './terminal-focus.js';
 import { breadcrumb } from './text.js';
 import { C, SPINNER, STATUS_COLOR } from './theme.js';
 import {
@@ -307,9 +307,6 @@ export interface AppProps {
 export function App(props: AppProps) {
   const { exit } = useApp();
   const terminalFocused = useTerminalFocus();
-  const terminalFocusedRef = useRef(terminalFocused);
-  terminalFocusedRef.current = terminalFocused;
-  const lastDisplay = useRef<ReactNode>(undefined);
   const { columns, rows } = useWindowSize();
   // Animation must not re-read and parse every node just to initialize an existing ref.
   const treeRef = useRef<Tree>(null!);
@@ -441,18 +438,18 @@ export function App(props: AppProps) {
       if (stamp !== stampRef.current) {
         stampRef.current = stamp;
         treeRef.current = loadTree(props.dir);
-        if (terminalFocusedRef.current) bump();
+        bump();
       }
     };
     refresh();
-    const timer = setInterval(refresh, terminalFocused ? 700 : 3000);
+    // Out of focus the tree still follows the agents, only less often.
+    const timer = setInterval(refresh, terminalFocused ? 700 : BACKGROUND_MS);
     return () => clearInterval(timer);
   }, [props.dir, bump, terminalFocused]);
 
   // Poll metadata and live status for all panes, but never their screens.
   const watching = !props.offline && settings().live;
   useEffect(() => {
-    if (!terminalFocused && !watching && !hasPanes) return;
     let stop = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -464,12 +461,13 @@ export function App(props: AppProps) {
         if (stop) return;
         if (await settlePending(treeRef.current, list)) {
           stampRef.current = treeStamp(props.dir);
-          if (terminalFocusedRef.current) bump();
+          bump();
         }
         if (stop) return;
         const states = watching ? await withPaneIdle(list, map) : map;
         if (stop) return;
-        if (terminalFocusedRef.current) setLive(states);
+        // Same answer as before: no new frame, in the background above all.
+        setLive((before) => (sameJson([...before], [...states]) ? before : states));
         // Without live status, automatic sleep cannot protect working agents.
         const sleeping = watching
           ? panesToSleep(list, {
@@ -499,7 +497,9 @@ export function App(props: AppProps) {
             }),
           });
         }
-        if (!stop && terminalFocusedRef.current) setPanes(sleeping.length ? await readPanes() : list);
+        if (stop) return;
+        const shown = sleeping.length ? await readPanes() : list;
+        if (!stop) setPanes((before) => (sameJson(before, shown) ? before : shown));
       } catch {
         // Failed status discovery never leads to automatic sleep.
       }
@@ -510,10 +510,9 @@ export function App(props: AppProps) {
       stop = true;
       clearTimeout(timer);
     };
-  }, [watching, hasPanes, props.dir, bump, terminalFocused]);
+  }, [watching, hasPanes, props.dir, bump]);
 
   useEffect(() => {
-    if (!terminalFocused) return;
     if (view !== 'sessions') return;
     if (props.offline) {
       setAllSessions([]);
@@ -534,13 +533,13 @@ export function App(props: AppProps) {
       stop = true;
       clearInterval(timer);
     };
-  }, [view, props.offline, terminalFocused]);
+  }, [view, props.offline]);
 
   useEffect(() => {
-    if (!toast || !terminalFocused) return;
+    if (!toast) return;
     const timer = setTimeout(() => setToast(undefined), 7000);
     return () => clearTimeout(timer);
-  }, [toast, terminalFocused]);
+  }, [toast]);
 
   // A proposal that came while a dialog was open waits for it to close.
   useEffect(() => {
@@ -3491,7 +3490,7 @@ export function App(props: AppProps) {
     </Box>
   );
 
-  const display = (
+  return (
     <MouseProvider>
       <Box flexDirection="column" width={width} height={height}>
         {/* Header: the mark, the project, the tabs. */}
@@ -3643,9 +3642,6 @@ export function App(props: AppProps) {
       </Box>
     </MouseProvider>
   );
-  // Background housekeeping may update state, but the last visible frame stays on screen.
-  if (terminalFocused) lastDisplay.current = display;
-  return lastDisplay.current ?? display;
 }
 
 /** Two lines under the tree: the path to the selection, and its "done" or what it waits for. */

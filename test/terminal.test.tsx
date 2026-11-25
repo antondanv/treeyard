@@ -26,7 +26,7 @@ vi.mock('@antondanv/brainyard', async (original) => ({
   paneMemory: async () => new Map([['claude-one', 180 * 1024 * 1024]]),
 }));
 
-import { addNode, attachSession, updateNode } from '../src/model/ops.js';
+import { addNode, attachSession, setStatus, updateNode } from '../src/model/ops.js';
 import * as store from '../src/model/store.js';
 import { loadTree } from '../src/model/store.js';
 import { DEFAULTS, resetSettings } from '../src/settings.js';
@@ -48,7 +48,8 @@ class Output extends EventEmitter {
   }
   write = (text: string) => {
     this.writes++;
-    this.frame = text;
+    // Bracketed paste switching is not a picture: the last frame stays the frame.
+    if (text !== '\u001b[?2004h' && text !== '\u001b[?2004l') this.frame = text;
     return true;
   };
 }
@@ -73,9 +74,9 @@ class Input extends EventEmitter {
   }
 }
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
-async function until(check: () => boolean) {
+async function until(check: () => boolean, ms = 8000) {
   // Generous: the whole suite runs in parallel, and these wait for real timers.
-  const end = Date.now() + 8000;
+  const end = Date.now() + ms;
   while (!check() && Date.now() < end) await pause(20);
   expect(check()).toBe(true);
 }
@@ -179,7 +180,7 @@ describe('terminal panes in the tree', () => {
     expect(app.stdout.writes).toBe(writes);
   });
 
-  it('pauses drawing and screen capture without focus, keeps status discovery and resumes the CLI', async () => {
+  it('without focus keeps drawing what changed, slowly and without animation', async () => {
     backend.liveSessions.mockResolvedValue([{ brain: 'claude', id: 'conversation', live: { status: 'busy' } }]);
     const app = mount();
     await until(() => app.stdout.frame.includes('hello from the CLI'));
@@ -187,9 +188,11 @@ describe('terminal panes in the tree', () => {
     await until(() => app.stdout.frame.includes('печатаешь в Claude Code'));
     app.stdin.write('\u001b[O');
     await pause(150);
-    const captures = backend.capturePane.mock.calls.length;
-    const discoveries = backend.liveSessions.mock.calls.length;
-    const writes = app.stdout.writes;
+    // Nothing changes: no frames and no spinner while the terminal is away.
+    const quiet = app.stdout.writes;
+    await pause(1200);
+    expect(app.stdout.writes).toBe(quiet);
+    // The pane's output reaches the screen without focus, within the background interval.
     backend.capturePane.mockResolvedValue({
       lines: ['changed while hidden'],
       width: 60,
@@ -198,18 +201,38 @@ describe('terminal panes in the tree', () => {
       historySize: 100,
       scrollOffset: 0,
     });
+    await until(() => app.stdout.frame.includes('changed while hidden'), 4000);
+    // A node edited by an agent does too.
     updateNode(app.tree, app.node.id, { title: 'Changed node' });
+    await until(() => app.stdout.frame.includes('Changed node'), 4000);
+    const discoveries = backend.liveSessions.mock.calls.length;
     await pause(3300);
-    expect(backend.capturePane.mock.calls.length).toBe(captures);
     expect(backend.liveSessions.mock.calls.length).toBeGreaterThan(discoveries);
-    expect(app.stdout.writes).toBe(writes);
     expect(backend.closePane).not.toHaveBeenCalled();
+    // Coming back shows the CLI's current screen at once, not after the background interval.
+    backend.capturePane.mockResolvedValue({
+      lines: ['changed again'],
+      width: 60,
+      height: 12,
+      cursor: { x: 0, y: 0, visible: false },
+      historySize: 100,
+      scrollOffset: 0,
+    });
     app.stdin.write('\u001b[I');
-    await until(() => app.stdout.frame.includes('changed while hidden') && app.stdout.frame.includes('Changed node'));
+    await until(() => app.stdout.frame.includes('changed again'), 700);
     expect(backend.sendToPane).not.toHaveBeenCalled();
     app.stdin.write('x');
     await until(() => backend.sendToPane.mock.calls.length === 1);
     expect(backend.sendToPane).toHaveBeenCalledWith('claude-one', 'x');
+  });
+
+  it('shows a new status of a node without focus', async () => {
+    const app = mount();
+    await until(() => app.stdout.frame.includes('hello from the CLI'));
+    app.stdin.write('\u001b[O');
+    await pause(150);
+    setStatus(app.tree, app.node.id, 'review');
+    await until(() => app.stdout.frame.includes('на проверке · '), 4000);
   });
 
   it('animates without rereading the tree and still notices external edits', async () => {
