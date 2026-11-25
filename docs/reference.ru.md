@@ -970,16 +970,19 @@ treeyard diff <id> --project ../X --add HEAD    # привязать к дере
 запустили, если это git worktree того же репозитория: из worktree сессии `HEAD` — коммит её ветки,
 и с `--project <основная папка>` тоже. Из чужого репозитория — в репозитории дерева.
 
-#### Письма вместе с запросом и посреди хода в Claude Code, Codex и Antigravity
+#### Письма вместе с запросом и посреди хода в Claude Code, Codex, Antigravity и OpenCode
 
 Treeyard ставит два хука в Claude Code и в Codex (0.172+): `UserPromptSubmit` добавляет ждущие письма
 в `additionalContext` вместе с очередной репликой, в том числе в сессии, открытой в твоём терминале, а
 `PostToolUse` добавляет письма после вызова инструмента в том же ходу. В Antigravity (`agy` 1.5+)
 Treeyard ставит хук `PreInvocation` (`treeyard-mail`): он передаёт ждущие письма через `injectSteps`
 (`systemMessage`) перед каждым обращением к модели — и вместе с запросом (`invocationNum: 0`), и посреди
-хода после вызова инструментов (`invocationNum > 0`). Все хуки показывают модели, от кого письмо и как на
-него ответить, если оно пришло из другого узла. В ящике появляется «доставлено: вместе с запросом» или
-«доставлено: посреди хода». Каждое письмо приходит один раз.
+хода после вызова инструментов (`invocationNum > 0`). В OpenCode (1.19+), где вместо хуков-команд работают
+JS-плагины, Treeyard ставит `treeyard-mail.js`: `chat.message` добавляет ждущие письма синтетической частью
+запроса, а `tool.execute.after` дописывает письма посреди хода через `<system-reminder>` после вызова
+инструментов. Все хуки и плагин показывают модели, от кого письмо и как на него ответить, если оно пришло из
+другого узла. В ящике появляется «доставлено: вместе с запросом» или «доставлено: посреди хода». Каждое
+письмо приходит один раз.
 
 ```sh
 treeyard hook claude install              # поставить или обновить оба хука в .claude/settings.local.json проекта
@@ -996,37 +999,42 @@ treeyard hook antigravity install         # поставить или обнов
 treeyard hook antigravity install --user  # или в ~/.gemini/config/hooks.json — для всех проектов и worktree
 treeyard hook antigravity status          # проверить настройки проекта и пользователя, увидеть, где нужно обновление
 treeyard hook antigravity remove          # убрать запись treeyard (с --user — из твоих настроек)
+
+treeyard hook opencode install            # поставить или обновить .opencode/plugins/treeyard-mail.js в проекте
+treeyard hook opencode install --user     # или в ~/.config/opencode/plugins/ ($OPENCODE_CONFIG_DIR) — для всех проектов и worktree
+treeyard hook opencode status             # проверить проект и твои настройки, увидеть, где нужно обновление
+treeyard hook opencode remove             # убрать плагин treeyard (с --user — из твоих настроек)
 ```
 
-В `treeyard status` строка «хук писем» показывает Claude Code, Codex и Antigravity. Если у тебя уже
+В `treeyard status` строка «хук писем» показывает Claude Code, Codex, Antigravity и OpenCode. Если у тебя уже
 стоял `PostToolUse`, повтори `install` с теми же настройками, чтобы добавить `UserPromptSubmit`. `remove`
-и `uninstall` сохраняют остальные настройки, пустой файл удаляется; проектные файлы не попадают в
-`git status` (через `.git/info/exclude`).
+и `uninstall` сохраняют остальные настройки и чужие плагины, пустые файлы удаляются; проектные файлы не
+попадают в `git status` (через `.git/info/exclude`).
 
 - **Одобрение хука в Codex.** Каждый новый или изменённый хук Codex просит одобрить один раз — на
   экране «Hooks need review» при старте сессии или по `/hooks` внутри открытой сессии — и запоминает
   хэш по пути файла в `config.toml`; одобренный хук выполняется вне песочницы Codex. С `--user`
-  (`~/.codex/hooks.json`) одобрять достаточно один раз для всех проектов и всех git worktree. Antigravity
-  и Claude Code запускают `.agents/hooks.json` и `.claude/settings.local.json` без отдельного подтверждения.
-- **Только сессии, запущенные из узла.** Строка хука начинается с `[ -n "$TREEYARD_NODE" ]`, потом
+  (`~/.codex/hooks.json`) одобрять достаточно один раз для всех проектов и всех git worktree. Claude Code,
+  Antigravity и OpenCode загружают `.claude/settings.local.json`, `.agents/hooks.json` и
+  `.opencode/plugins/treeyard-mail.js` без отдельного подтверждения.
+- **Только сессии, запущенные из узла.** Строка shell-хука начинается с `[ -n "$TREEYARD_NODE" ]`, потом
   проверяет флаг ящика узла (`.tree/.local/mail/inbox/<узел>` — он есть, пока для узла есть
   письма): без письма это три проверки shell, около 0,3 мс сверх пустого `sh -c` (3,0 против 2,7
-  мс), и `treeyard` не запускается. Любая другая сессия Claude Code, Codex или Antigravity — твоя, в том
-  же проекте — не затронута.
+  мс), а плагин OpenCode проверяет `TREEYARD_NODE` и `existsSync` этого же флага прямо в процессе, так что
+  `treeyard` не запускается, пока нет письма. Любая другая сессия Claude Code, Codex, Antigravity или
+  OpenCode — твоя, в том же проекте — не затронута.
 - **Уже идущую сессию** можно перезапустить (или открыть `/hooks` в Codex), если CLI ещё не подхватил
   изменения.
 - **Сессия в git worktree**: [worktree узла](#git-worktree-узлов), который заводит treeyard,
-  получает копии `.claude/settings.local.json`, `.codex/hooks.json` и `.agents/hooks.json` проекта вместе
-  с хуками (заведённый до установки хука — `treeyard worktree setup <id>`, `install` в нём или `--user`).
-  В любом другом git worktree таких файлов нет: их нет в git. Для таких сессий — `--user` (хук всё равно
-  работает только в сессиях с `TREEYARD_NODE`).
+  получает копии `.claude/settings.local.json`, `.codex/hooks.json`, `.agents/hooks.json` и
+  `.opencode/plugins/treeyard-mail.js` проекта вместе с хуками и плагином (заведённый до установки —
+  `treeyard worktree setup <id>`, `install` в нём или `--user`). В любом другом git worktree таких файлов
+  нет: их нет в git. Для таких сессий — `--user` (всё равно работает только в сессиях с `TREEYARD_NODE`).
 - **Субагент** сессии ничего не получает: письмо — самой сессии.
 - **Длинные письма** остаются в ящике: хук отдаёт письма до 9 000 символов и письмо не режет; что не
   поместилось, доходит обычным путём (в панель после хода или в первое сообщение новой сессии).
 - Если в `PATH` нет `treeyard` или ящик занят, запрос или вызов инструмента продолжаются.
-  Письмо остаётся в очереди до следующей попытки доставки. Замок ящика хуки ждут до двух секунд.
-- **OpenCode**, судя по его документации, хуков-команд не имеет — только плагины в коде; для него письма
-  по-прежнему приходят после хода.
+  Письмо остаётся в очереди до следующей попытки доставки. Замок ящика хуки и плагин ждут до двух секунд.
 
 #### Хук коммитов
 
@@ -1268,9 +1276,9 @@ issue заодно лежит на доске карточкой, это всё 
   treeyard бывал (`treeyard projects`); строки самого хука остаются, файл, в котором кроме
   блока ничего не было, удаляется. Хуки внутри репозитория (husky и подобное) команда не
   правит, а говорит, откуда убрать строку;
-- хуки treeyard для писем Claude Code, Codex и Antigravity
-  (`treeyard hook claude`, `treeyard hook codex`, `treeyard hook antigravity`) — в тех же проектах (и их
-  worktree) и в настройках самих Claude Code, Codex и Antigravity;
+- хуки и плагин treeyard для писем Claude Code, Codex, Antigravity и OpenCode
+  (`treeyard hook claude`, `treeyard hook codex`, `treeyard hook antigravity`, `treeyard hook opencode`) —
+  в тех же проектах (и их worktree) и в настройках самих Claude Code, Codex, Antigravity и OpenCode;
 - драйвер слияния обзора `merge.treeyard` из `.git/config` там же; `.tree/.gitattributes`
   остаётся с деревом;
 - с `--settings` — ещё настройки, список проектов и журналы падений в `~/.treeyard` (или

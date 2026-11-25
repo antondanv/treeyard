@@ -519,6 +519,18 @@ describe('treeyard hook claude', () => {
       { brain: 'codex', scope: 'user', file: join(codexOwn, 'hooks.json'), installed: false },
       { brain: 'antigravity', scope: 'project', file: join(real, '.agents', 'hooks.json'), installed: false },
       { brain: 'antigravity', scope: 'user', file: join(home, '.gemini', 'config', 'hooks.json'), installed: false },
+      {
+        brain: 'opencode',
+        scope: 'project',
+        file: join(real, '.opencode', 'plugins', 'treeyard-mail.js'),
+        installed: false,
+      },
+      {
+        brain: 'opencode',
+        scope: 'user',
+        file: join(home, '.config', 'opencode', 'plugins', 'treeyard-mail.js'),
+        installed: false,
+      },
     ]);
 
     expect((await sh('hook', 'claude', 'remove')).stdout).toContain('хук убран');

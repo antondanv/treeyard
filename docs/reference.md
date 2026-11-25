@@ -963,16 +963,19 @@ treeyard diff <id> --project ../X --add HEAD    # attach to the tree of another 
 they run in when it is a git worktree of the same repository: from a session's worktree `HEAD` is
 its branch's commit, with `--project <main folder>` too. From another repository — in the tree's.
 
-#### Messages alongside a prompt and during a turn in Claude Code, Codex and Antigravity
+#### Messages alongside a prompt and during a turn in Claude Code, Codex, Antigravity and OpenCode
 
 Treeyard installs two hooks in Claude Code and in Codex (0.172+): `UserPromptSubmit` adds waiting
 messages as `additionalContext` alongside the submitted prompt, including in a session open in your
 terminal, and `PostToolUse` adds the same context after a tool call during the current turn. In
 Antigravity (`agy` 1.5+), Treeyard installs a `PreInvocation` hook (`treeyard-mail`) that injects waiting
 messages as `injectSteps` (`systemMessage`) before each model call — alongside the prompt (`invocationNum: 0`)
-and mid-turn after tool calls (`invocationNum > 0`). All hooks use the usual sender and reply line for
-messages from other nodes. The mailbox reports “delivered: alongside the prompt” or “delivered: in the
-middle of a turn” and sends each message once.
+and mid-turn after tool calls (`invocationNum > 0`). In OpenCode (1.19+), which has JS plugins instead of
+command hooks, Treeyard installs `treeyard-mail.js`: `chat.message` attaches waiting messages as a synthetic
+part of the submitted prompt, and `tool.execute.after` appends mid-turn messages as `<system-reminder>` after
+tool calls. All hooks and plugins use the usual sender and reply line for messages from other nodes. The
+mailbox reports “delivered: alongside the prompt” or “delivered: in the middle of a turn” and sends each
+message once.
 
 ```sh
 treeyard hook claude install              # install or update both hooks in the project's .claude/settings.local.json
@@ -989,40 +992,44 @@ treeyard hook antigravity install         # install or update PreInvocation in t
 treeyard hook antigravity install --user  # or into ~/.gemini/config/hooks.json, for every project and worktree
 treeyard hook antigravity status          # show both scopes and report an installation that needs updating
 treeyard hook antigravity remove          # remove Treeyard's entry (use --user for your own settings)
+
+treeyard hook opencode install            # install or update .opencode/plugins/treeyard-mail.js in the project
+treeyard hook opencode install --user     # or into ~/.config/opencode/plugins/ ($OPENCODE_CONFIG_DIR), for every project and worktree
+treeyard hook opencode status             # show both scopes and report an installation that needs updating
+treeyard hook opencode remove             # remove Treeyard's plugin (use --user for your own settings)
 ```
 
-`treeyard status` has a “letter hook” row for Claude Code, Codex and Antigravity. If you installed
+`treeyard status` has a “letter hook” row for Claude Code, Codex, Antigravity and OpenCode. If you installed
 `PostToolUse` before, rerun `install` in the same scope to add `UserPromptSubmit`. `remove` and `uninstall`
-preserve other settings and delete the file if it becomes empty; project files stay out of `git status`
+preserve other settings and plugins and delete empty files; project files stay out of `git status`
 through `.git/info/exclude`.
 
 - **Trusting the hook in Codex.** Codex asks you to review any new or changed hook once — in the
   “Hooks need review” prompt when a session starts or via `/hooks` inside an open session — and stores
   its hash per file in `config.toml`; trusted hooks run outside Codex's sandbox. With `--user`
-  (`~/.codex/hooks.json`) you trust it once for every project and every git worktree. Antigravity and
-  Claude Code run `.agents/hooks.json` and `.claude/settings.local.json` without an extra approval step.
-- **Only sessions started from a node.** The hook's shell line starts with
-  `[ -n "$TREEYARD_NODE" ]` and then tests the node's inbox flag
-  (`.tree/.local/mail/inbox/<node>`, which exists while messages wait for it): without a message the
-  line is three shell tests, about 0.3 ms over an empty `sh -c` (3.0 against 2.7 ms), and no
-  `treeyard` is started. Any other Claude Code, Codex or Antigravity session — your own, in the same
-  project — is not touched.
+  (`~/.codex/hooks.json`) you trust it once for every project and every git worktree. Claude Code,
+  Antigravity and OpenCode load `.claude/settings.local.json`, `.agents/hooks.json` and
+  `.opencode/plugins/treeyard-mail.js` without an extra approval step.
+- **Only sessions started from a node.** The shell hook line starts with `[ -n "$TREEYARD_NODE" ]` and tests
+  the node's inbox flag (`.tree/.local/mail/inbox/<node>`, which exists while messages wait for it): without a
+  message the line is three shell tests, about 0.3 ms over an empty `sh -c` (3.0 against 2.7 ms), and in
+  OpenCode the plugin checks `TREEYARD_NODE` and `existsSync` on the same flag in-process, so no `treeyard` is
+  started unless mail waits. Any other Claude Code, Codex, Antigravity or OpenCode session — your own, in the
+  same project — is not touched.
 - **An already running session** may need a restart (or `/hooks` in Codex) if the CLI has yet to load
   the changes.
 - **A session in a git worktree**: a [worktree of a node](#git-worktrees-of-nodes) treeyard makes
-  gets a copy of the project's `.claude/settings.local.json`, `.codex/hooks.json` and `.agents/hooks.json`,
-  hooks included (one made before the hook was installed — `treeyard worktree setup <id>`, `install` there,
-  or `--user`). Any other git worktree has no such files: they are not in git. For those sessions use
-  `--user` (the hook still works only for sessions with `TREEYARD_NODE`).
+  gets a copy of the project's `.claude/settings.local.json`, `.codex/hooks.json`, `.agents/hooks.json` and
+  `.opencode/plugins/treeyard-mail.js`, hooks and plugins included (one made before installation —
+  `treeyard worktree setup <id>`, `install` there, or `--user`). Any other git worktree has no such files:
+  they are not in git. For those sessions use `--user` (they still work only for sessions with `TREEYARD_NODE`).
 - **A subagent** of the session gets nothing: the message is for the session itself.
 - **Long messages** stay in the mailbox: the hook keeps letters under 9 000 characters and never cuts
   a message; one that does not fit goes the usual way (into the pane after the turn, or into the first
   message of a new session).
-- The hooks leave the prompt and tool calls running if `treeyard` is missing from `PATH` or the
-  mailbox is busy. The messages stay queued for the next delivery attempt. The hooks wait up to
+- The hooks and plugin leave the prompt and tool calls running if `treeyard` is missing from `PATH` or the
+  mailbox is busy. The messages stay queued for the next delivery attempt. They wait up to
   two seconds for the mailbox lock.
-- **OpenCode**, by its documentation, has no command hooks, only plugins in code; for it messages still
-  come after the turn.
 
 #### Commit hook
 
@@ -1259,9 +1266,10 @@ pipe (`treeyard show | head`) is not a crash: treeyard exits quietly.
   project treeyard has seen (`treeyard projects`); the hook's own lines stay, a file that held
   nothing but the block is deleted. Hooks inside the repository (husky and the like) are not
   edited; the command says where to take the line out;
-- Treeyard's mail hooks for Claude Code, Codex and Antigravity
-  (`treeyard hook claude`, `treeyard hook codex`, `treeyard hook antigravity`), in the same projects
-  (and their node worktrees) and in Claude Code's, Codex's and Antigravity's own settings;
+- Treeyard's mail hooks and plugin for Claude Code, Codex, Antigravity and OpenCode
+  (`treeyard hook claude`, `treeyard hook codex`, `treeyard hook antigravity`, `treeyard hook opencode`), in
+  the same projects (and their node worktrees) and in Claude Code's, Codex's, Antigravity's and OpenCode's
+  own settings;
 - the overview's merge driver `merge.treeyard` from `.git/config`, in the same places;
   `.tree/.gitattributes` stays with the tree;
 - with `--settings` — also the settings, the list of projects and the crash logs in

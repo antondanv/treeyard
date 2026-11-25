@@ -34,6 +34,7 @@ export const EN: Record<string, string> = {
   'хук Claude Code для писем': 'the Claude Code hook for letters',
   'хук Codex для писем': 'the Codex hook for letters',
   'хук Antigravity для писем': 'the Antigravity hook for letters',
+  'плагин OpenCode для писем': 'the OpenCode plugin for letters',
   'treeyard hook codex install | remove | status [--user]': 'treeyard hook codex install | remove | status [--user]',
   'поставить — treeyard hook codex install (только для проекта) или с --user (для всех проектов и worktree)':
     'to put it in — treeyard hook codex install (this project only) or with --user (every project and worktree)',
@@ -57,6 +58,22 @@ export const EN: Record<string, string> = {
     '{file}: the hooks section is not in the form Codex reads — fix the file yourself',
   '{file}: хуки не в том виде, что читает Antigravity — поправь файл сам':
     '{file}: the hooks are not in the form Antigravity reads — fix the file yourself',
+  '{file}: чужой файл, не плагин treeyard — убери или переименуй его сам':
+    '{file}: not a treeyard plugin — remove or rename the file yourself',
+  'плагин стоит: {file}': 'the plugin is in place: {file}',
+  'плагин поставлен: {file}': 'plugin installed: {file}',
+  'плагин уже стоит: {file}': 'the plugin is already in place: {file}',
+  'плагин убран: {file}': 'plugin removed: {file}',
+  'плагина нет: {file}': 'no plugin: {file}',
+  'плагин обновлён: {file}': 'plugin updated: {file}',
+  'treeyard hook opencode install | remove | status [--user]':
+    'treeyard hook opencode install | remove | status [--user]',
+  'поставить — treeyard hook opencode install (только для проекта) или с --user (для всех проектов и worktree)':
+    'to put it in — treeyard hook opencode install (this project only) or with --user (every project and worktree)',
+  'обновить плагин в {file} — treeyard hook opencode install{p1}':
+    'to update the plugin in {file}, run treeyard hook opencode install{p1}',
+  'сессии OpenCode из узлов получат письма вместе с запросом и посреди хода. Убрать плагин — treeyard hook opencode remove{p1}':
+    'OpenCode sessions started from nodes will receive letters alongside a prompt and during a turn. To remove the plugin, run treeyard hook opencode remove{p1}',
   'Пока ты работал, пришло письмо — учти его в этой работе:':
     'A letter came while you were working — take it into account in this work:',
   'Пока ты работал, пришли письма — учти их в этой работе:':
@@ -67,6 +84,7 @@ export const EN: Record<string, string> = {
   'не стоит · treeyard hook claude install': 'not installed · treeyard hook claude install',
   'не стоит · treeyard hook codex install': 'not installed · treeyard hook codex install',
   'не стоит · treeyard hook antigravity install': 'not installed · treeyard hook antigravity install',
+  'не стоит · treeyard hook opencode install': 'not installed · treeyard hook opencode install',
   'посреди хода': 'in the middle of a turn',
   'вместе с запросом': 'alongside the prompt',
   'укажи SHA коммита (от 4 шестнадцатеричных символов)': 'give a commit SHA (at least 4 hexadecimal characters)',
