@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Reference
+    url: https://github.com/antondanv/treeyard/blob/main/docs/reference.md
+    about: Every key, setting and command. Many questions are answered there.
+  - name: Contributing rules
+    url: https://github.com/antondanv/treeyard/blob/main/CONTRIBUTING.md
+    about: How to build, check and send a change.
