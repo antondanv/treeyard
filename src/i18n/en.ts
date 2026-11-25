@@ -377,6 +377,17 @@ export const EN: Record<string, string> = {
   'не удалось закрыть панель {pane}': 'could not close pane {pane}',
   'панель {pane} уснула': 'pane {pane} put to sleep',
   'укажи узел: treeyard sleep <id> [<id>…]': 'specify a node: treeyard sleep <id> [<id>…]',
+  '(экран пуст)': '(screen is empty)',
+  'панель спит · продолжить: treeyard send {id} "…", журнал: treeyard show {id}':
+    'pane is sleeping · continue: treeyard send {id} "…", journal: treeyard show {id}',
+  'нет живой панели (сессия в фоне) · журнал: treeyard show {id}, ожидание: treeyard wait {id}':
+    'no live pane (background session) · journal: treeyard show {id}, wait: treeyard wait {id}',
+  'нет живой панели · журнал: treeyard show {id}, ожидание: treeyard wait {id}':
+    'no live pane · journal: treeyard show {id}, wait: treeyard wait {id}',
+  '--lines — положительное целое число': '--lines must be a positive integer',
+  'укажи узел: treeyard peek <id> [--lines N] [--json]': 'specify a node: treeyard peek <id> [--lines N] [--json]',
+  'укажи один узел: treeyard peek <id> [--lines N] [--json]':
+    'specify one node: treeyard peek <id> [--lines N] [--json]',
   'без названия': 'untitled',
   'сессий в этой папке ещё не было': 'no sessions in this folder yet',
   'Для всех проектов': 'All projects',

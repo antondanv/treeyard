@@ -48,7 +48,16 @@ import {
 import { type Attempt, deliverAll, ensureDeliverer, runDeliverer } from '../agents/deliver.js';
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
-import { isPending, launchInPane, readPanes, sessionPanes, sleepNodePanes } from '../agents/panes.js';
+import {
+  isPending,
+  launchInPane,
+  peekJson,
+  peekNodePane,
+  peekText,
+  readPanes,
+  sessionPanes,
+  sleepNodePanes,
+} from '../agents/panes.js';
 import { DEFAULT_MAIL_LIMIT } from '../agents/pingpong.js';
 import { LIMIT, type QueueEvent, queueNodes, queueSources, runQueue } from '../agents/queue.js';
 import {
@@ -302,6 +311,9 @@ function commandLines(): string {
   treeyard sleep <id> [<id>…] [--force] [--json] [--project <папка>]   усыпить живую панель узла: закрывает процесс
                                            tmux, оставляя сессию в узле для пробуждения и продолжения; отказывает,
                                            если панель работает, ждёт человека или к ней подключён терминал (без --force)
+  treeyard peek <id> [--lines N] [--json] [--project <папка>]   заглянуть на экран живой панели узла: статус сессии, имя
+                                           панели и последние N строк экрана (по умолчанию 25) без ANSI-кодов; для спящей
+                                           или отсутствующей панели — понятное сообщение
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   ждать, пока узел уйдёт из «в работе» или его сессия
                                            закончит ход, будет ждать человека или закончится; печатает статус, последнюю
                                            запись журнала, сессию и её последнее сообщение целиком — вопрос или итог
@@ -456,6 +468,9 @@ function commandLines(): string {
   treeyard sleep <id> [<id>…] [--force] [--json] [--project <dir>]   put a node's live pane to sleep: closes the tmux
                                            process, leaving the session in the node for waking and continuation; refuses
                                            if the pane is working, waiting for the person, or attached (without --force)
+  treeyard peek <id> [--lines N] [--json] [--project <dir>]   peek at a node's live pane screen: session status, pane name
+                                           and the last N lines (default 25) without ANSI codes; for a sleeping or missing
+                                           pane — a clear message
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   wait until a node leaves «active» or its session
                                            ends its turn, waits for the person or ends; prints the status, the last journal
                                            entry, the session and its last message whole — a question or a summary from
@@ -661,6 +676,8 @@ async function main(argv: string[]): Promise<number> {
       return sessionsCommand(rest);
     case 'sleep':
       return sleepCommand(rest);
+    case 'peek':
+      return peekCommand(rest);
     case 'github':
       return githubCommand(rest);
     case 'config':
@@ -3685,6 +3702,47 @@ export async function sleepCommand(args: string[]): Promise<number> {
     process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
   }
   return failed ? 1 : 0;
+}
+
+function parseLines(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const n = Number.parseInt(raw, 10);
+  if (Number.isNaN(n) || n <= 0 || String(n) !== raw.trim()) {
+    throw new UsageError(t('--lines — положительное целое число'));
+  }
+  return n;
+}
+
+export async function peekCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, {
+    lines: { type: 'string' },
+    json: { type: 'boolean', default: false },
+    project: { type: 'string' },
+  });
+  if (positionals.length === 0) {
+    throw new UsageError(t('укажи узел: treeyard peek <id> [--lines N] [--json]'));
+  }
+  if (positionals.length > 1) {
+    throw new UsageError(t('укажи один узел: treeyard peek <id> [--lines N] [--json]'));
+  }
+  const lines = parseLines(values.lines);
+  const tree = project(values.project);
+  const result = await peekNodePane(tree, positionals[0]!, {
+    ...(lines !== undefined ? { lines } : {}),
+  });
+
+  if (values.json) {
+    process.stdout.write(`${JSON.stringify(peekJson(result), null, 2)}\n`);
+    return result.ok ? 0 : 1;
+  }
+
+  if (!result.ok) {
+    process.stderr.write(`${err.c('#ff7b72', '✗')} ${result.error}\n`);
+    return 1;
+  }
+
+  process.stdout.write(peekText(result, out));
+  return 0;
 }
 
 /** «Запустить? [Y/n]» — Enter is yes. */

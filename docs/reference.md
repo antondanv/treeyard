@@ -408,6 +408,13 @@ is already sleeping or the node has no live pane, it notes that cleanly without 
 ids are put to sleep in turn; `--json` outputs an array of results for each node (or an object for
 a single node).
 
+`treeyard peek <id> [--lines N] [--json] [--project <dir>]` peeks at the screen of a node's live
+pane straight from the CLI, without `tmux attach` or manual capture: shows the session status,
+pane name, and the last N lines of the screen (default 25) without ANSI codes. If the session is
+waiting for the person (`waiting`), it includes the command to attach. When the pane sleeps or the
+node has no live pane, it reports that politely (exit code 0; in `--json`, `live: false, pane: null, screen: []`)
+with hints on how to continue or inspect the journal. If the node does not exist, it exits with code 1.
+
 ## Agents and the tree
 
 A session from a node gets a short context: the path from the root (why this), the
@@ -481,6 +488,7 @@ treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's ope
 treeyard worktree                               # the nodes' worktrees: folder, branch, commits, what is not committed (add | setup | rm <id>)
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
 treeyard sleep <id> [<id>…] [--force] [--json]  # put the live panes of nodes to sleep; keeps the session for waking; refuses on busy/waiting/attached without --force
+treeyard peek <id> [--lines N] [--json]        # peek at a node's live pane screen: session status, pane name and the last N lines (default 25) without ANSI
 treeyard status                                 # a summary: versions, tree, nodes, skills, Codex's way to treeyard and git, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
 treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md (what it says — below)

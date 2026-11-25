@@ -63,7 +63,7 @@ Coordinate:
 - [ ] 1. Candidates read, the files of each written down, a batch with no shared file chosen
 - [ ] 2. Plan agreed with the person: nodes, CLI, pane or background, model, what waits
 - [ ] 3. Sessions started: treeyard open … --pane|--bg --worktree --start do --task …
-- [ ] 4. Waiting: treeyard wait; a letter or question you can answer → treeyard send; one only the person can → to them
+- [ ] 4. Waiting: treeyard wait (or peek on a live pane: treeyard peek <id>); a letter or question you can answer → treeyard send; one only the person can → to them
 - [ ] 5. Each finished node accepted: journal, commits, diff, criterion
 - [ ] 6. Worktree branches merged one by one; checks green on the main branch after each; pane put to sleep: treeyard sleep <id>
 - [ ] 7. Journal entry on each node; review; tree files committed
@@ -226,6 +226,10 @@ needs you yet: call it again.
 - **Claude Code:** run it as a background command and act when it exits. **Codex, Antigravity,
   OpenCode:** a `--timeout` under your shell's limit per command, then call it again. No shell
   loops around treeyard, no pipes out of it.
+- **Peek at a live pane:** when you want to look at what a working pane is doing right now without
+  attaching or waiting for the turn to end: run `treeyard peek <id> [--lines 40]`. It prints the
+  session status, pane name, and the screen tail stripped of ANSI codes. No `tmux attach`, no manual
+  `capturePane`. If the pane sleeps or has no live pane, it tells you cleanly.
 - **Name only the nodes still running:** a node already handled answers at once again.
 - **Ended its turn, node still `active`:** read its last message (or the end of its screen) and its
   last entry. A

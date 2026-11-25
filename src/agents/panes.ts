@@ -589,3 +589,13 @@ export async function sleepNodePanes(
   }
   return results;
 }
+
+export {
+  DEFAULT_PEEK_SOURCES,
+  type PeekOptions,
+  type PeekResult,
+  type PeekSources,
+  peekJson,
+  peekNodePane,
+  peekText,
+} from './peek.js';
