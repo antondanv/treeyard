@@ -16,6 +16,7 @@ import { agyMailHookPlaces } from './agents/agy-hook.js';
 import { configLines, reach, readSandbox } from './agents/codex-config.js';
 import { allMailHookPlaces } from './agents/codex-hook.js';
 import { BRAIN_LABEL } from './agents/launch.js';
+import { opencodeMailHookPlaces } from './agents/opencode-plugin.js';
 import { type Pane, paneFor, paneInProject, readPanes } from './agents/panes.js';
 import { type SkillStatus, skillStates } from './agents/skills.js';
 import type { MailHookPlace } from './agents/turn-hook.js';
@@ -228,7 +229,7 @@ export interface ProjectStatus {
   codex?: CodexStatus;
   pointer?: PointerStatus[];
   hook?: HookInfo;
-  /** The Claude Code, Codex and Antigravity hooks that hand letters to a session: in the project and in the person's settings. */
+  /** The Claude Code, Codex, Antigravity and OpenCode hooks and plugins that hand letters to a session. */
   mailHook?: MailHookPlace[];
   sessions?: LiveSession[];
   panes?: PaneSummary[];
@@ -387,7 +388,11 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     ...(codex ? { codex } : {}),
     pointer: pointerStates(place.folder),
     hook: hookInfo(place.folder),
-    mailHook: [...allMailHookPlaces(tree.project.dir, env), ...agyMailHookPlaces(tree.project.dir, env)],
+    mailHook: [
+      ...allMailHookPlaces(tree.project.dir, env),
+      ...agyMailHookPlaces(tree.project.dir, env),
+      ...opencodeMailHookPlaces(tree.project.dir, env),
+    ],
     sessions,
     panes: paneList,
     github,

@@ -10,6 +10,7 @@ import { join } from 'node:path';
 
 import { type AgyScope, agyMailHookPlaces, removeAgyMailHook } from './agents/agy-hook.js';
 import { allMailHookPlaces, type CodexScope, removeCodexMailHook } from './agents/codex-hook.js';
+import { type OpencodeScope, opencodeMailHookPlaces, removeOpencodeMailPlugin } from './agents/opencode-plugin.js';
 import { PROJECT_SKILLS, shippedSkills, skillHomes, skillsRoot } from './agents/skills.js';
 import { type ClaudeScope, removeMailHook } from './agents/turn-hook.js';
 import { hookInstalled, hookPlace, removeHook } from './commit-hook.js';
@@ -32,6 +33,8 @@ export type Leftover =
   | { kind: 'codex-hook'; path: string; scope: CodexScope; folder: string }
   /** The Antigravity hook for letters in a project's `.agents/hooks.json` or in `~/.gemini/config/hooks.json`. */
   | { kind: 'agy-hook'; path: string; scope: AgyScope; folder: string }
+  /** The OpenCode plugin for letters in `.opencode/plugins/treeyard-mail.js` or `~/.config/opencode/plugins/treeyard-mail.js`. */
+  | { kind: 'opencode-hook'; path: string; scope: OpencodeScope; folder: string }
   /** The overview's merge driver in a repository's config (`.tree/.gitattributes` stays with the tree). */
   | { kind: 'merge'; path: string; folder: string }
   /** settings.json or projects.json in treeyard's home folder. */
@@ -92,11 +95,22 @@ export function leftovers(options: UninstallOptions): Leftover[] {
   }
   const mailFolders = [...folders, ...folders.flatMap((folder) => worktreeDirs(folder))];
   for (const folder of mailFolders)
-    for (const place of [...allMailHookPlaces(folder, env), ...agyMailHookPlaces(folder, env)]) {
+    for (const place of [
+      ...allMailHookPlaces(folder, env),
+      ...agyMailHookPlaces(folder, env),
+      ...opencodeMailHookPlaces(folder, env),
+    ]) {
       if (!place.installed || seen.has(place.file)) continue;
       seen.add(place.file);
       out.push({
-        kind: place.brain === 'codex' ? 'codex-hook' : place.brain === 'antigravity' ? 'agy-hook' : 'claude-hook',
+        kind:
+          place.brain === 'codex'
+            ? 'codex-hook'
+            : place.brain === 'antigravity'
+              ? 'agy-hook'
+              : place.brain === 'opencode'
+                ? 'opencode-hook'
+                : 'claude-hook',
         path: place.file,
         scope: place.scope,
         folder,
@@ -149,6 +163,9 @@ export function uninstall(options: UninstallOptions): Removed[] {
       } else if (item.kind === 'agy-hook') {
         // Only our entry: the rest of Antigravity's hooks.json is the person's.
         removeAgyMailHook(item.scope, item.folder, env);
+      } else if (item.kind === 'opencode-hook') {
+        // Only our plugin file: other OpenCode plugins and configs stay untouched.
+        removeOpencodeMailPlugin(item.scope, item.folder, env);
       } else if (item.kind === 'merge') {
         if (!removeMergeDriver(item.folder)) throw new Error(t('git config не убрал драйвер'));
       } else {

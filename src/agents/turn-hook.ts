@@ -6,11 +6,13 @@
  * middle of a long turn is read after it. It also cannot type into the person's own terminal.
  * CLIs with lifecycle hooks or plugins can read letters earlier:
  * - `deliverHookMail` is the shared mailbox step for any CLI (Claude Code, Codex, Antigravity,
- *   and future OpenCode plugins): under the mailbox lock it takes the node's fitting
+ *   and OpenCode): under the mailbox lock it takes the node's fitting
  *   letters, hands the formatted block to the CLI, and marks them delivered once emitted.
  * - Claude Code and Codex share the same JSON hook shape (`PostToolUse` and `UserPromptSubmit`
  *   with `hookSpecificOutput.additionalContext`), driven by `JsonHookSpec` and `deliverMidTurn`;
- *   Antigravity (`agy-hook.ts`) uses `PreInvocation` and `injectSteps` on top of `deliverHookMail`.
+ *   Antigravity (`agy-hook.ts`) uses `PreInvocation` and `injectSteps`, and OpenCode
+ *   (`opencode-plugin.ts`) uses a JS plugin (`chat.message` and `tool.execute.after`) on top of
+ *   `deliverHookMail`.
  *
  * - The shell line tests the node's inbox flag (mailbox.ts) first and starts treeyard only when a
  *   letter waits: without letters, it costs a `[ -e … ]` on each event.
@@ -54,7 +56,7 @@ export const HOOK_TIMEOUT = 10;
 
 export type HookScope = 'project' | 'user';
 export type ClaudeScope = HookScope;
-export type MailHookBrain = 'claude' | 'codex' | 'antigravity';
+export type MailHookBrain = 'claude' | 'codex' | 'antigravity' | 'opencode';
 
 /** Claude Code's settings file: the project's local one (not in git), or the person's own. */
 export function claudeSettingsFile(scope: ClaudeScope, project: string, env: NodeJS.ProcessEnv = process.env): string {

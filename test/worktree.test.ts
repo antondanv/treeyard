@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { installAgyMailHook } from '../src/agents/agy-hook.js';
 import { installCodexMailHook } from '../src/agents/codex-hook.js';
+import { installOpencodeMailPlugin } from '../src/agents/opencode-plugin.js';
 import { installMailHook } from '../src/agents/turn-hook.js';
 import { addNode, attachCommits } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
@@ -125,16 +126,20 @@ describe('a worktree of a node', () => {
       readFileSync(join(main, '.claude', 'settings.local.json'), 'utf8'),
     );
 
-    // Codex and Antigravity hooks installed later reach an existing worktree via `prepareAgain` and stay out of git status.
+    // Codex, Antigravity and OpenCode hooks/plugins installed later reach an existing worktree via `prepareAgain` and stay out of git status.
     installCodexMailHook('project', main);
     installAgyMailHook('project', main);
+    installOpencodeMailPlugin('project', main);
     const refreshed = await prepareAgain(tree, a);
-    expect(refreshed.copied).toBe(2);
+    expect(refreshed.copied).toBe(3);
     expect(readFileSync(join(made.worktree.path, '.codex', 'hooks.json'), 'utf8')).toBe(
       readFileSync(join(main, '.codex', 'hooks.json'), 'utf8'),
     );
     expect(readFileSync(join(made.worktree.path, '.agents', 'hooks.json'), 'utf8')).toBe(
       readFileSync(join(main, '.agents', 'hooks.json'), 'utf8'),
+    );
+    expect(readFileSync(join(made.worktree.path, '.opencode', 'plugins', 'treeyard-mail.js'), 'utf8')).toBe(
+      readFileSync(join(main, '.opencode', 'plugins', 'treeyard-mail.js'), 'utf8'),
     );
     expect(worktreeState(main, made.worktree).dirty).toEqual([]);
   });
