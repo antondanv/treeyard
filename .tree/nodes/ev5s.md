@@ -3,7 +3,7 @@ id: ev5s
 title: Нестабильный тест мыши
 parent: b9ke
 order: 20
-status: todo
+status: active
 done_when: Причина нестабильности найдена и записана в журнал; тест проходит 50 прогонов подряд локально и в CI на Node 24 / macos-latest
 sessions:
   - brain: antigravity
@@ -22,8 +22,16 @@ sessions:
     mode: pane
     pane: claude-b66e5ff1
     dir: /Users/antondanilov/Projects/Treeyard.worktrees/ev5s
+  - brain: claude
+    id: fdd5d3ff-ced1-4111-9682-2ac418cfc040
+    name: Treeyard · Нестабильный тест мыши
+    started: 2026-11-26T00:31:32+03:00
+    opened: 2026-11-26T00:31:32+03:00
+    mode: pane
+    pane: claude-16e1b4cd
+    dir: /Users/antondanilov/Projects/Treeyard.worktrees/ev5s
 created: 2026-10-10
-updated: 2026-11-26T00:05:25+03:00
+updated: 2026-11-26T00:31:32+03:00
 ---
 
 Тест mouse.test.tsx «presses the panel buttons without starting to type, and types after a click inside» упал в CI на Node 24 / macos-latest.
@@ -39,3 +47,5 @@ CI run 38047175313 на 1551d11 (2026-10-10): AssertionError: expected false to 
 - 2026-11-25 23:53 · claude · новая сессия в панели (do) в worktree treeyard/ev5s
 - 2026-11-26 00:05 · агент · 26.11 ~00:01–00:03 сессия запустила десятки параллельных прогонов vitest (96 логов heavy*.log за 2 минуты), чтобы поймать нестабильность под нагрузкой; вместе с двумя соседними сессиями это повесило Mac. Логи удалены, кода не было. Дальше — только последовательные повторы одного файла, без параллельных копий.
 - 2026-11-26 00:05 · агент · в работе → к работе
+- 2026-11-26 00:31 · claude · новая сессия в панели (do) в worktree treeyard/ev5s
+- 2026-11-26 00:31 · claude · к работе → в работе
