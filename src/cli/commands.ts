@@ -182,8 +182,12 @@ import { inlineMark, WORDMARK } from '../tui/logo.js';
 import type { Leftover } from '../uninstall.js';
 import { WATCH_VERSION, watchTree } from '../watch.js';
 import {
+  blockers,
+  closedWorktrees,
   ensureWorktree,
   insideFolder,
+  isWorktreeCleanMerged,
+  type NodeWorktree,
   nodeCommits,
   prepareAgain,
   removeWorktree,
@@ -324,10 +328,13 @@ function commandLines(): string {
                                            очереди, строка на узел (✓ id название · сессия <id> | панель <имя>);
                                            не встала — ✗ и код 1; --json — массив вместо объекта; все узлы, кроме первого,
                                            — каждый в своём worktree, первый остаётся в папке проекта
-  treeyard worktree [add|setup|rm <id>] [--json]   worktree узлов: без слов — список (папка, ветка, коммиты, что не
+  treeyard worktree [add|setup <id>] [--json]   worktree узлов: без слов — список (папка, ветка, коммиты, что не
                                            закоммичено); add — завести (подготовка: setup из tree.md и копия по
-                                           .worktreeinclude); setup — подготовить заново; rm — убрать, но не пока в нём
-                                           есть незакоммиченное или невлитое; сессии в нём пишут основное дерево
+                                           .worktreeinclude); setup — подготовить заново; сессии в нём пишут основное дерево
+  treeyard worktree rm <id>…|--done [--dry-run] [--json]   убрать worktree и ветку (не пока есть незакоммиченное,
+                                           невлитое или живая панель): несколько id — строка на узел, отказ у одного не
+                                           мешает остальным (код 1); --done — все закрытые узлы (готово и отказ), где всё
+                                           закоммичено и влито, с отчётом, что убрано и что оставлено; --dry-run — только показать
   treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
   treeyard sleep <id> [<id>…] [--force] [--json] [--project <папка>]   усыпить живую панель узла: закрывает процесс
                                            tmux, оставляя сессию в узле для пробуждения и продолжения; отказывает,
@@ -487,10 +494,14 @@ function commandLines(): string {
                                            after another, a line per node (✓ id title · session <id> | pane <name>);
                                            one that fails — ✗ and exit 1; --json — an array instead of an object; all nodes
                                            but the first get a worktree each, the first stays in the project's folder
-  treeyard worktree [add|setup|rm <id>] [--json]   the nodes' worktrees: bare — the list (folder, branch, commits, what is
+  treeyard worktree [add|setup <id>] [--json]   the nodes' worktrees: bare — the list (folder, branch, commits, what is
                                            not committed); add — make one (preparation: setup from tree.md and the copy
-                                           by .worktreeinclude); setup — prepare again; rm — remove, but not while it holds
-                                           anything uncommitted or unmerged; sessions in it write the main tree
+                                           by .worktreeinclude); setup — prepare again; sessions in it write the main tree
+  treeyard worktree rm <id>…|--done [--dry-run] [--json]   remove worktrees and branches (never while anything is
+                                           uncommitted, unmerged or a pane is open): several ids — a line per node, one
+                                           refusal does not stop the rest (exit 1); --done — every closed node (done or
+                                           dropped) that is clean and merged, reporting what was removed and what was kept;
+                                           --dry-run — only show
   treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are; ▣ — a live pane
                                            (pane in JSON)
   treeyard sleep <id> [<id>…] [--force] [--json] [--project <dir>]   put a node's live pane to sleep: closes the tmux
@@ -2311,6 +2322,18 @@ async function setCommand(args: string[]): Promise<number> {
     const note = demoted.has(id) ? ` · ${demotedNote(values.as)}` : '';
     process.stdout.write(`${node.id} · ${STATUS_LABEL[node.status]} · ${node.title}${note}\n`);
   }
+  if (status === 'done') {
+    const clean = ids.filter((id) => !demoted.has(id) && isWorktreeCleanMerged(tree.project.dir, id));
+    if (clean.length === 1) {
+      process.stdout.write(
+        `${out.dim(t('worktree влит и чист — убрать: treeyard worktree rm {id}', { id: clean[0]! }))}\n`,
+      );
+    } else if (clean.length > 1) {
+      process.stdout.write(
+        `${out.dim(t('worktree влиты и чисты — убрать: treeyard worktree rm {ids}', { ids: clean.join(' ') }))}\n`,
+      );
+    }
+  }
   return 0;
 }
 
@@ -3620,22 +3643,51 @@ async function openInBackground(
   return failed ? 1 : 0;
 }
 
+interface WorktreeRmRow {
+  node: string;
+  title: string | null;
+  branch: string | null;
+  path: string | null;
+  status: 'removed' | 'would_remove' | 'kept';
+  attached?: number;
+  reasons?: string[];
+}
+
+function worktreeRemovalReasons(
+  dir: string,
+  wt: NodeWorktree,
+  panes: ReadonlyArray<{ pane: string; cwd?: string }>,
+): string[] {
+  const busy = panes
+    .filter((pane) => pane.cwd && insideFolder(pane.cwd, wt.path))
+    .map((pane) => t('в worktree открыта сессия в панели {pane} — закрой её', { pane: pane.pane }));
+  return [...busy, ...blockers(worktreeState(dir, wt))];
+}
+
 /**
- * `treeyard worktree [add|setup|rm <id>]`: the git worktrees of the nodes. Bare — the list with what
- * each holds; `add` makes one (the branch `treeyard/<id>`, the copy by `.worktreeinclude`, the project's
- * `setup`); `setup` prepares a standing one again; `rm` removes one, but not while it holds anything
- * uncommitted or unmerged — treeyard has no way to throw work away.
+ * `treeyard worktree [add|setup <id> | rm <id>…|--done [--dry-run]]`: the git worktrees of the nodes.
+ * Bare — the list with what each holds; `add` makes one (the branch `treeyard/<id>`, the copy by
+ * `.worktreeinclude`, the project's `setup`); `setup` prepares a standing one again; `rm` removes one,
+ * several, or (`--done`) all closed nodes' clean, merged worktrees — never while anything is uncommitted,
+ * unmerged or a pane is open there.
  */
 async function worktreeCommand(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, { json: { type: 'boolean' } });
-  const usage = t('treeyard worktree [add|setup|rm <id>] [--json]');
+  const { values, positionals } = parse(args, {
+    json: { type: 'boolean' },
+    done: { type: 'boolean' },
+    'dry-run': { type: 'boolean' },
+  });
+  const usage = t('treeyard worktree [add|setup <id> | rm <id>…|--done [--dry-run]] [--json]');
   const first = positionals[0];
   const action = first === 'add' || first === 'setup' || first === 'rm' || first === 'list' ? first : undefined;
   const rest = action ? positionals.slice(1) : positionals;
   const tree = project();
   const dir = tree.project.dir;
   const json = values.json === true;
+  const doneOnly = values.done === true;
+  const dryRun = values['dry-run'] === true;
   const titleOf = (id: string) => tree.nodes.get(id)?.title ?? id;
+  if (action !== 'rm' && (doneOnly || dryRun)) throw new UsageError(usage);
   if (!action || action === 'list') {
     const only = rest.map((id) => nodeArg(tree, id));
     const list = worktreesOf(dir).filter((wt) => !only.length || only.includes(wt.id));
@@ -3665,10 +3717,10 @@ async function worktreeCommand(args: string[]): Promise<number> {
       );
     return 0;
   }
-  if (rest.length !== 1) throw new UsageError(usage);
-  const id = nodeArg(tree, rest[0]);
-  if (id === ROOT) throw new UsageError(t('worktree заводят узлу, а не корню — {usage}', { usage }));
   if (action === 'add' || action === 'setup') {
+    if (rest.length !== 1) throw new UsageError(usage);
+    const id = nodeArg(tree, rest[0]);
+    if (id === ROOT) throw new UsageError(t('worktree заводят узлу, а не корню — {usage}', { usage }));
     const prepared = action === 'add' ? await ensureWorktree(tree, id) : await prepareAgain(tree, id);
     const wt = prepared.worktree;
     if (json) {
@@ -3694,33 +3746,227 @@ async function worktreeCommand(args: string[]): Promise<number> {
     return 0;
   }
   // rm
-  const wt = worktreeFor(dir, id);
-  if (!wt) throw new UsageError(t('у узла «{title}» нет worktree', { title: titleOf(id) }));
-  const refuse = (reasons: string[]): number => {
-    const hint = t('закоммить и влей ветку {branch} в ветку основной папки — тогда worktree уберётся', {
-      branch: wt.branch,
-    });
-    const head = t('не убираю worktree узла «{title}»', { title: titleOf(id) });
-    process.stderr.write(
-      `${err.c('#ff7b72', '✗')} ${head}\n${reasons.map((reason) => `  - ${reason}`).join('\n')}\n${err.dim(hint)}\n`,
-    );
-    return 1;
-  };
-  // A session still running there would be left without its folder.
-  const busy = (await readPanes().catch(() => [])).filter((pane) => pane.cwd && insideFolder(pane.cwd, wt.path));
-  if (busy.length)
-    return refuse(busy.map((pane) => t('в worktree открыта сессия в панели {pane} — закрой её', { pane: pane.pane })));
-  try {
-    const removed = removeWorktree(tree, id);
-    const done = t('worktree убран, ветка {branch} удалена', { branch: removed.worktree.branch });
-    process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${titleOf(id)} · ${done}\n`);
-    if (removed.attached)
-      process.stdout.write(`  ${out.dim(t('коммиты ветки остались у узла: {n}', { n: removed.attached }))}\n`);
-    return 0;
-  } catch (error) {
-    if (error instanceof WorktreeBusy) return refuse(error.reasons);
-    throw error;
+  if (doneOnly && rest.length > 0) throw new UsageError(t('выбери одно: id узлов или --done'));
+  if (!doneOnly && rest.length === 0) throw new UsageError(usage);
+
+  if (doneOnly) {
+    const list = closedWorktrees(tree);
+    if (!list.length) {
+      if (json) process.stdout.write('[]\n');
+      else process.stdout.write(`${out.dim(t('закрытых узлов с worktree нет'))}\n`);
+      return 0;
+    }
+    const panes = await readPanes().catch(() => []);
+    const rows: WorktreeRmRow[] = [];
+    let removedCount = 0;
+    let keptCount = 0;
+    let gitFailed = 0;
+    for (const wt of list) {
+      const id = wt.id;
+      const title = titleOf(id);
+      const reasons = worktreeRemovalReasons(dir, wt, panes);
+      if (reasons.length) {
+        keptCount++;
+        rows.push({ node: id, title, branch: wt.branch, path: wt.dir, status: 'kept', reasons });
+        if (!json) {
+          const why = reasons.join('; ');
+          const label = dryRun ? t('оставит: {why}', { why }) : t('оставлен: {why}', { why });
+          process.stdout.write(`${out.c('#ffcf70', '·')} ${id}  ${title} · ${label}\n`);
+        }
+        continue;
+      }
+      if (dryRun) {
+        removedCount++;
+        rows.push({ node: id, title, branch: wt.branch, path: wt.dir, status: 'would_remove' });
+        if (!json)
+          process.stdout.write(
+            `${out.dim('·')} ${id}  ${title} · ${t('уберёт worktree, ветка {branch}', { branch: wt.branch })}\n`,
+          );
+        continue;
+      }
+      try {
+        const removed = removeWorktree(tree, id);
+        removedCount++;
+        rows.push({
+          node: id,
+          title,
+          branch: removed.worktree.branch,
+          path: removed.worktree.dir,
+          status: 'removed',
+          attached: removed.attached,
+        });
+        if (!json) {
+          const done = t('worktree убран, ветка {branch} удалена', { branch: removed.worktree.branch });
+          const extra = removed.attached ? ` · ${t('коммитов у узла: {n}', { n: removed.attached })}` : '';
+          process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${title} · ${done}${extra}\n`);
+        }
+      } catch (error) {
+        if (!(error instanceof WorktreeBusy)) throw error;
+        keptCount++;
+        gitFailed++;
+        rows.push({ node: id, title, branch: wt.branch, path: wt.dir, status: 'kept', reasons: error.reasons });
+        if (!json)
+          process.stdout.write(
+            `${out.c('#ffcf70', '·')} ${id}  ${title} · ${t('оставлен: {why}', { why: error.reasons.join('; ') })}\n`,
+          );
+      }
+    }
+    if (json) {
+      process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+    } else {
+      const summary = dryRun
+        ? t('уберёт: {removed} · оставит: {kept}', { removed: removedCount, kept: keptCount })
+        : t('убрано: {removed} · оставлено: {kept}', { removed: removedCount, kept: keptCount });
+      process.stdout.write(`${out.dim(summary)}\n`);
+    }
+    return gitFailed ? 1 : 0;
   }
+
+  if (rest.length === 1) {
+    const id = nodeArg(tree, rest[0]);
+    if (id === ROOT) throw new UsageError(t('worktree заводят узлу, а не корню — {usage}', { usage }));
+    const wt = worktreeFor(dir, id);
+    if (!wt) throw new UsageError(t('у узла «{title}» нет worktree', { title: titleOf(id) }));
+    const refuse = (reasons: string[]): number => {
+      if (json) {
+        const row: WorktreeRmRow = {
+          node: id,
+          title: titleOf(id),
+          branch: wt.branch,
+          path: wt.dir,
+          status: 'kept',
+          reasons,
+        };
+        process.stdout.write(`${JSON.stringify(row, null, 2)}\n`);
+        return 1;
+      }
+      const hint = t('закоммить и влей ветку {branch} в ветку основной папки — тогда worktree уберётся', {
+        branch: wt.branch,
+      });
+      const head = t('не убираю worktree узла «{title}»', { title: titleOf(id) });
+      process.stderr.write(
+        `${err.c('#ff7b72', '✗')} ${head}\n${reasons.map((reason) => `  - ${reason}`).join('\n')}\n${err.dim(hint)}\n`,
+      );
+      return 1;
+    };
+    const panes = await readPanes().catch(() => []);
+    const reasons = worktreeRemovalReasons(dir, wt, panes);
+    if (reasons.length) return refuse(reasons);
+    if (dryRun) {
+      if (json) {
+        const row: WorktreeRmRow = {
+          node: id,
+          title: titleOf(id),
+          branch: wt.branch,
+          path: wt.dir,
+          status: 'would_remove',
+        };
+        process.stdout.write(`${JSON.stringify(row, null, 2)}\n`);
+      } else {
+        process.stdout.write(
+          `${out.dim('·')} ${id}  ${titleOf(id)} · ${t('уберёт worktree, ветка {branch}', { branch: wt.branch })}\n`,
+        );
+      }
+      return 0;
+    }
+    try {
+      const removed = removeWorktree(tree, id);
+      if (json) {
+        const row: WorktreeRmRow = {
+          node: id,
+          title: titleOf(id),
+          branch: removed.worktree.branch,
+          path: removed.worktree.dir,
+          status: 'removed',
+          attached: removed.attached,
+        };
+        process.stdout.write(`${JSON.stringify(row, null, 2)}\n`);
+        return 0;
+      }
+      const done = t('worktree убран, ветка {branch} удалена', { branch: removed.worktree.branch });
+      process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${titleOf(id)} · ${done}\n`);
+      if (removed.attached)
+        process.stdout.write(`  ${out.dim(t('коммиты ветки остались у узла: {n}', { n: removed.attached }))}\n`);
+      return 0;
+    } catch (error) {
+      if (error instanceof WorktreeBusy) return refuse(error.reasons);
+      throw error;
+    }
+  }
+
+  // Several explicit ids: a line per node, one refusal does not stop the rest, exit 1 if any failed.
+  const panes = await readPanes().catch(() => []);
+  const seen = new Set<string>();
+  const rows: WorktreeRmRow[] = [];
+  let failed = 0;
+  for (const raw of rest) {
+    let id: string;
+    try {
+      id = nodeArg(tree, raw);
+    } catch (error) {
+      failed++;
+      const reason = (error as Error).message;
+      rows.push({ node: raw, title: null, branch: null, path: null, status: 'kept', reasons: [reason] });
+      if (!json) process.stderr.write(`${err.c('#ff7b72', '✗')} ${raw} · ${reason}\n`);
+      continue;
+    }
+    if (id === ROOT) {
+      failed++;
+      const reason = t('у корня нет worktree');
+      rows.push({ node: id, title: tree.project.title, branch: null, path: null, status: 'kept', reasons: [reason] });
+      if (!json) process.stderr.write(`${err.c('#ff7b72', '✗')} ${id}  ${tree.project.title} · ${reason}\n`);
+      continue;
+    }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const title = titleOf(id);
+    const wt = worktreeFor(dir, id);
+    if (!wt) {
+      failed++;
+      const reason = t('у узла нет worktree');
+      rows.push({ node: id, title, branch: null, path: null, status: 'kept', reasons: [reason] });
+      if (!json) process.stderr.write(`${err.c('#ff7b72', '✗')} ${id}  ${title} · ${reason}\n`);
+      continue;
+    }
+    const reasons = worktreeRemovalReasons(dir, wt, panes);
+    if (reasons.length) {
+      failed++;
+      rows.push({ node: id, title, branch: wt.branch, path: wt.dir, status: 'kept', reasons });
+      if (!json) process.stderr.write(`${err.c('#ff7b72', '✗')} ${id}  ${title} · ${reasons.join('; ')}\n`);
+      continue;
+    }
+    if (dryRun) {
+      rows.push({ node: id, title, branch: wt.branch, path: wt.dir, status: 'would_remove' });
+      if (!json)
+        process.stdout.write(
+          `${out.dim('·')} ${id}  ${title} · ${t('уберёт worktree, ветка {branch}', { branch: wt.branch })}\n`,
+        );
+      continue;
+    }
+    try {
+      const removed = removeWorktree(tree, id);
+      rows.push({
+        node: id,
+        title,
+        branch: removed.worktree.branch,
+        path: removed.worktree.dir,
+        status: 'removed',
+        attached: removed.attached,
+      });
+      if (!json) {
+        const done = t('worktree убран, ветка {branch} удалена', { branch: removed.worktree.branch });
+        const extra = removed.attached ? ` · ${t('коммитов у узла: {n}', { n: removed.attached })}` : '';
+        process.stdout.write(`${out.c('#7ee2a8', '✓')} ${id}  ${title} · ${done}${extra}\n`);
+      }
+    } catch (error) {
+      if (!(error instanceof WorktreeBusy)) throw error;
+      failed++;
+      rows.push({ node: id, title, branch: wt.branch, path: wt.dir, status: 'kept', reasons: error.reasons });
+      if (!json) process.stderr.write(`${err.c('#ff7b72', '✗')} ${id}  ${title} · ${error.reasons.join('; ')}\n`);
+    }
+  }
+  if (json) process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+  return failed ? 1 : 0;
 }
 
 async function sessionsCommand(args: string[]): Promise<number> {
