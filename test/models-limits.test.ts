@@ -181,7 +181,7 @@ describe('modelsText formatting', () => {
 
 describe('limitsText formatting', () => {
   it('formats limit windows, percentage, reset time, source and age', () => {
-    const text = limitsText(sampleUsageBrains, mockPaint);
+    const text = limitsText(sampleUsageBrains, mockPaint, Date.parse('2026-11-25T10:30:00Z'));
 
     expect(text).toContain('Claude Code');
     expect(text).toContain('кеш');
@@ -206,9 +206,20 @@ describe('limitsText formatting', () => {
     expect(text).toContain('ошибка: Config file missing');
   });
 
+  it('shows a window past its reset time as reset, 0%', () => {
+    const now = Date.parse('2026-11-25T16:54:00Z');
+    const text = limitsText(sampleUsageBrains, mockPaint, now);
+    expect(text).toMatch(/seven_day\s+0% · сброшено в \d\d:\d\d/);
+    expect(text).not.toContain('100%');
+    expect(text).toMatch(/primary\s+0% · сброшено в \d\d:\d\d/);
+    expect(text).toMatch(/secondary\s+80% · сброс в \d\d\.\d\d \d\d:\d\d/);
+    setLang('en');
+    expect(limitsText(sampleUsageBrains, mockPaint, now)).toMatch(/reset at \d\d:\d\d/);
+  });
+
   it('formats limit windows in English', () => {
     setLang('en');
-    const text = limitsText(sampleUsageBrains, mockPaint);
+    const text = limitsText(sampleUsageBrains, mockPaint, Date.parse('2026-11-25T10:30:00Z'));
 
     expect(text).toContain('Claude Code');
     expect(text).toContain('cache');
@@ -331,6 +342,16 @@ describe('modelsCommand unit tests', () => {
     const code = await modelsCommand(['--brain', 'cc'], { modelsFn: mockModelsFn });
     expect(code).toBe(0);
     expect(mockModelsFn).toHaveBeenCalledWith('claude');
+  });
+
+  it('flags expired windows in json', async () => {
+    const mockUsageFn = vi.fn(async () => ({ brains: sampleUsageBrains, sessions: [], checkedAt: '' }));
+    const now = Date.parse('2026-11-25T16:54:00Z');
+    await limitsCommand(['claude', '--json'], { usageFn: mockUsageFn, now });
+    const parsed = JSON.parse(capturedStdout.join(''));
+    const w = parsed.limits.find((x: { window: string }) => x.window === 'seven_day');
+    expect(w).toMatchObject({ expired: true, utilization: 0, previousUtilization: 1 });
+    expect(parsed.limits[0].expired).toBeUndefined();
   });
 
   it('outputs json array for all brains', async () => {

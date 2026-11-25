@@ -423,7 +423,7 @@ the clean catalog structure.
 
 `treeyard limits [brain] [--json]` reads local limit and quota windows through Brainyard without network
 calls (`offline: true`): utilization percentage, reset time, source (`cache`, `rollout`, etc.), and
-snapshot age. If there are no local snapshots (offline mode or missing cache), explains the reason cleanly.
+snapshot age. A window whose reset time has already passed is shown as reset (`reset at 19:00`, 0%); in `--json` it gets `expired: true`, `utilization: 0` and the stale value in `previousUtilization`. If there are no local snapshots (offline mode or missing cache), explains the reason cleanly.
 `--json` outputs the limit windows for automation.
 
 ## Agents and the tree

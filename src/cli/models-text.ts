@@ -131,8 +131,25 @@ function unavailableText(b: BrainUsage): string {
   return b.detail ?? t('нет локальных данных');
 }
 
+/**
+ * A window whose reset time has passed is already reset: show 0% and mark it,
+ * keeping the stale value as `previousUtilization` (snapshots are not refreshed offline).
+ */
+export function settleExpired(brains: readonly BrainUsage[], now = Date.now()): BrainUsage[] {
+  return brains.map((b) => {
+    if (!b.limits) return b;
+    const limits = b.limits.map((w) =>
+      w.resetsAt && w.resetsAt * 1000 <= now
+        ? { ...w, utilization: 0, expired: true, previousUtilization: w.utilization }
+        : w,
+    );
+    return { ...b, limits };
+  });
+}
+
 /** Format local limit windows into text: CLI name, metadata, windows, percentages, reset time. */
-export function limitsText(brains: readonly BrainUsage[], p: Paint): string {
+export function limitsText(rawBrains: readonly BrainUsage[], p: Paint, now = Date.now()): string {
+  const brains = settleExpired(rawBrains, now);
   const blocks: string[] = [];
   for (const b of brains) {
     const src = sourceLabel(b.limitsSource);
@@ -151,7 +168,9 @@ export function limitsText(brains: readonly BrainUsage[], p: Paint): string {
         const pct = Math.round(w.utilization * 100);
         const pctText = `${pct}%`.padStart(4);
         const coloredPct = pct >= 90 ? p.c('#ff7b72', pctText) : pct >= 75 ? p.c('#ffcf70', pctText) : pctText;
-        const reset = w.resetsAt ? p.dim(` · ${t('сброс в {time}', { time: clockOf(w.resetsAt * 1000) })}`) : '';
+        const expired = (w as { expired?: boolean }).expired === true;
+        const resetKey = expired ? 'сброшено в {time}' : 'сброс в {time}';
+        const reset = w.resetsAt ? p.dim(` · ${t(resetKey, { time: clockOf(w.resetsAt * 1000, now) })}`) : '';
         lines.push(`  ${windowName}  ${coloredPct}${reset}`);
       }
     }
