@@ -113,11 +113,57 @@ function claudeIdle(home: string, cwd: string, id: string, since: number): boole
   return false;
 }
 
+export interface PaneIdleOptions {
+  claude?: string;
+  codex?: string;
+  antigravity?: string;
+  /**
+   * Earliest timestamp (ms) that can count as completion of the current turn, keyed by pane name or
+   * session id (typically `ref.opened` after `treeyard send`). An older idle record from a previous
+   * turn never counts even when `pane.startedAt` is older.
+   */
+  since?: ReadonlyMap<string, number>;
+}
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: escape sequences are what is stripped.
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
+const AGY_IDLE_FOOTER = /^\?\s*for shortcuts(?:\s|$)/i;
+const AGY_DIALOG_FOOTER = /↑\/↓|\benter\s+(?:to\s+)?confirm\b/i;
+const AGY_BUSY_FOOTER = /^esc to cancel(?:\s|$)/i;
+const AGY_SPINNER =
+  /^[\u2801-\u28ff]\s+(?:\d+\/\d+\s+steps\s*·\s*)?(?:Running|Generating|Thinking|Loading|Reading|Searching|Editing|Writing|Planning|Waiting|Working|Exploring)\b/i;
+
+/**
+ * Whether an Antigravity pane's screen shows an active turn (`esc to cancel` in the footer or an
+ * active spinner without the idle `? for shortcuts` footer or a confirmation dialog).
+ */
+export function agyScreenBusy(lines: readonly string[]): boolean {
+  const rows = lines.map((line) => line.replace(ANSI, '').trim()).filter(Boolean);
+  if (!rows.length) return false;
+  const footer = rows.slice(-2);
+  if (footer.some((row) => AGY_IDLE_FOOTER.test(row) || AGY_DIALOG_FOOTER.test(row))) return false;
+  if (footer.some((row) => AGY_BUSY_FOOTER.test(row))) return true;
+  return rows.slice(-10).some((row) => AGY_SPINNER.test(row));
+}
+
+function paneSince(pane: Pane, slack: number, sinceByKey?: ReadonlyMap<string, number>): number {
+  const started = Date.parse(pane.startedAt ?? '');
+  const base = Number.isFinite(started) ? started - slack : Number.NaN;
+  const fromPane = sinceByKey?.get(pane.pane);
+  const fromSession = pane.sessionId ? sinceByKey?.get(pane.sessionId) : undefined;
+  let opened = Number.NaN;
+  if (fromPane !== undefined && Number.isFinite(fromPane)) opened = fromPane;
+  if (fromSession !== undefined && Number.isFinite(fromSession))
+    opened = Number.isFinite(opened) ? Math.max(opened, fromSession) : fromSession;
+  if (!Number.isFinite(opened)) return base;
+  return Number.isFinite(base) ? Math.max(base, opened) : opened;
+}
+
 /** Add idle evidence for panes whose sessions are absent from the live list. */
 export async function withPaneIdle(
   panes: readonly Pane[],
   live: ReadonlyMap<string, SessionInfo>,
-  homes: { claude?: string; codex?: string; antigravity?: string } = {},
+  options: PaneIdleOptions = {},
 ): Promise<Map<string, SessionInfo>> {
   const out = new Map(live);
   const idle = (pane: Pane) =>
@@ -128,13 +174,16 @@ export async function withPaneIdle(
       live: { status: 'idle', kind: 'interactive' },
     });
   const missing = panes.filter((p) => p.sessionId && p.brain && !out.has(p.sessionId));
-  const since = (pane: Pane) => Date.parse(pane.startedAt ?? '') - 2000;
   for (const pane of missing) {
-    if (pane.brain === 'codex' && codexIdle(pane.sessionId!, homes.codex ?? codexHome(), since(pane))) idle(pane);
+    if (
+      pane.brain === 'codex' &&
+      codexIdle(pane.sessionId!, options.codex ?? codexHome(), paneSince(pane, 2000, options.since))
+    )
+      idle(pane);
     if (
       pane.brain === 'claude' &&
       pane.cwd &&
-      claudeIdle(homes.claude ?? claudeHome(), pane.cwd, pane.sessionId!, Date.parse(pane.startedAt ?? ''))
+      claudeIdle(options.claude ?? claudeHome(), pane.cwd, pane.sessionId!, paneSince(pane, 0, options.since))
     )
       idle(pane);
   }
@@ -142,7 +191,7 @@ export async function withPaneIdle(
   if (agy.length) {
     try {
       const { DatabaseSync } = await import('node:sqlite');
-      const db = new DatabaseSync(join(homes.antigravity ?? agyHome(), 'conversation_summaries.db'), {
+      const db = new DatabaseSync(join(options.antigravity ?? agyHome(), 'conversation_summaries.db'), {
         readOnly: true,
       });
       try {
@@ -158,7 +207,7 @@ export async function withPaneIdle(
             Number(row.killed) !== 1 &&
             Number(row.not_fully_idle) === 0 &&
             /^(?:CASCADE_RUN_STATUS_)?(IDLE|DONE|COMPLETE|COMPLETED|FINISHED)$/i.test(String(row.status)) &&
-            Date.parse(stamp) >= since(pane)
+            Date.parse(stamp) >= paneSince(pane, 2000, options.since)
           )
             idle(pane);
         }
