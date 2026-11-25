@@ -92,6 +92,7 @@ import {
   syncIssues,
 } from '../github.js';
 import { labels, plural, t } from '../i18n/i18n.js';
+import { brainOrder, type LaunchMemory, lastLaunch, launchOptions, loadLaunchMemory } from '../launch-memory.js';
 import { activity, type Event } from '../model/activity.js';
 import { addImage, droppedPath } from '../model/images.js';
 import { description } from '../model/journal.js';
@@ -150,7 +151,7 @@ import {
   type Tree,
   type TreeNode,
 } from '../model/types.js';
-import { MAX_PANES, SLEEP_AFTER, STALE_AFTER, settings, updateSettings } from '../settings.js';
+import { MAX_PANES, type MemoryScope, SLEEP_AFTER, STALE_AFTER, settings, updateSettings } from '../settings.js';
 import { plantPointer, pointerGap } from '../templates/pointer.js';
 import { catalogHint, effortOptions, effortsFor, fitChoice, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './components/controls.js';
@@ -164,6 +165,8 @@ import {
   type ConfirmRow,
   CriterionDialog,
   HelpDialog,
+  inBackground,
+  type LaunchEntry,
   LaunchForm,
   NodeForm,
   NodeMenu,
@@ -310,6 +313,7 @@ export function App(props: AppProps) {
   const { columns, rows } = useWindowSize();
   // Animation must not re-read and parse every node just to initialize an existing ref.
   const treeRef = useRef<Tree>(null!);
+  const memoryRef = useRef<{ scope: MemoryScope; memory: LaunchMemory } | undefined>(undefined);
   if (!treeRef.current) treeRef.current = loadTree(props.dir);
   const historyRef = useRef(new History(props.dir));
   const initialized = useRef(false);
@@ -882,6 +886,7 @@ export function App(props: AppProps) {
 
   const say = (text: string, color?: string) => setToast({ text, ...(color ? { color } : {}) });
   const reload = () => {
+    memoryRef.current = undefined;
     treeRef.current = loadTree(props.dir);
     stampRef.current = treeStamp(props.dir);
     bump();
@@ -965,20 +970,57 @@ export function App(props: AppProps) {
     effort: ASSIST_EFFORT[job],
   });
 
-  const defaults = (): LaunchOptions => ({
-    brain: defaultBrain(tree.project.brain),
-    start: rootSelected ? rootStart(tree.project.start ?? 'plan') : (tree.project.start ?? 'plan'),
-    pane: hasPanes && settings().open === 'pane',
-  });
-
-  /** The project's model and effort, when the session runs on the project's own CLI and chose none itself. */
-  const withProject = (options: LaunchOptions): LaunchOptions => {
+  /** What a CLI that was never launched starts with: the project's defaults, the project's model and effort if it is the project's own CLI. */
+  const defaultLaunch = (brain: BrainId): LaunchOptions => {
     const p = tree.project;
-    if (options.brain !== defaultBrain(p.brain)) return options;
-    const out = { ...options };
-    if (!out.model && p.model) out.model = p.model;
-    if (!out.effort && p.effort) out.effort = p.effort;
-    return out;
+    const start = p.start ?? 'plan';
+    const options: LaunchOptions = {
+      brain,
+      start: brain !== 'claude' && start === 'goal' ? 'do' : start,
+      pane: hasPanes && settings().open === 'pane',
+    };
+    if (brain === defaultBrain(p.brain)) {
+      if (p.model) options.model = p.model;
+      if (p.effort) options.effort = p.effort;
+    }
+    return options;
+  };
+
+  /** The memory of the last launches, read again when the other scope is chosen or a launch has been made. */
+  const launchMemory = (): LaunchMemory => {
+    const scope = settings().launchMemory;
+    if (memoryRef.current?.scope !== scope)
+      memoryRef.current = { scope, memory: loadLaunchMemory(tree.project.dir, scope) };
+    return memoryRef.current.memory;
+  };
+
+  /** Every CLI with the launch it starts with: the one run last on top, with its settings, the others with theirs. */
+  const launchEntries = (): LaunchEntry[] => {
+    const memory = launchMemory();
+    return brainOrder(memory, defaultBrain(tree.project.brain)).map((brain) => {
+      const saved = memory[brain];
+      return saved
+        ? { remembered: true, options: launchOptions(saved, hasPanes) }
+        : { remembered: false, options: defaultLaunch(brain) };
+    });
+  };
+
+  /** Claude Code as it ran last time, or by default: what `c` starts. */
+  const claudeLaunch = (): LaunchOptions =>
+    launchEntries().find((entry) => entry.options.brain === 'claude')?.options ?? defaultLaunch('claude');
+
+  /** How a session starts when nothing else is said: as the last launch did, else by the project's defaults. */
+  const defaults = (): LaunchOptions => {
+    const last = lastLaunch(launchMemory());
+    const base = last ? launchOptions(last, hasPanes) : defaultLaunch(defaultBrain(tree.project.brain));
+    if (!rootSelected) return base;
+    // From the root: a review or a talk, never in the background.
+    return {
+      ...base,
+      start: rootStart(base.start),
+      background: false,
+      pane: base.pane || (Boolean(base.background) && hasPanes && settings().open === 'pane'),
+    };
   };
 
   /** Every session and every agent job goes through here: confirmed first, unless the person turned that off. */
@@ -1268,7 +1310,7 @@ export function App(props: AppProps) {
     const node = holderOf(tree, nodeId);
     if (!node) return;
     if (choice.kind === 'configure') return setModal({ kind: 'launch', node: nodeId });
-    if (choice.kind === 'new') return request({ kind: 'new', node: nodeId, options: withProject(choice.options) });
+    if (choice.kind === 'new') return request({ kind: 'new', node: nodeId, options: choice.options });
     if (choice.kind === 'split' || choice.kind === 'criterion')
       return request({ kind: choice.kind, node: nodeId, choice: assistChoice(choice.kind) });
     if (choice.kind === 'check') return check(node);
@@ -1426,7 +1468,7 @@ export function App(props: AppProps) {
     if (!created) return;
     setExpanded((set) => new Set(set).add(created!.parent));
     setSelected(created.id);
-    request({ kind: 'new', node: created.id, options: withProject({ ...defaults(), start: 'do' }) });
+    request({ kind: 'new', node: created.id, options: { ...defaults(), start: 'do' } });
   };
 
   const githubJob = (label: string, work: (tree: Tree) => Promise<string>) => {
@@ -1553,21 +1595,14 @@ export function App(props: AppProps) {
       label: t('Claude Code по узлу'),
       keys: 'c',
       needs: 'node',
-      run: () =>
-        current && request({ kind: 'new', node: current.id, options: withProject({ ...defaults(), brain: 'claude' }) }),
+      run: () => current && request({ kind: 'new', node: current.id, options: claudeLaunch() }),
     },
     background: {
       label: t('Claude Code в фоне'),
       keys: 'b',
       needs: 'node',
       run: () => {
-        if (!current) return;
-        const start = defaults().start;
-        request({
-          kind: 'new',
-          node: current.id,
-          options: withProject({ brain: 'claude', start: start === 'chat' ? 'do' : start, background: true }),
-        });
+        if (current) request({ kind: 'new', node: current.id, options: inBackground(claudeLaunch()) });
       },
     },
     launch: {
@@ -2110,7 +2145,7 @@ export function App(props: AppProps) {
       }
 
       if (rootSelected && input === 'c')
-        return request({ kind: 'new', node: ROOT, options: withProject({ ...defaults(), start: 'plan' }) });
+        return request({ kind: 'new', node: ROOT, options: { ...defaults(), start: 'plan' } });
       if (rootSelected && input === 'o') return setModal({ kind: 'launch', node: ROOT });
       if (arrows(input, key)) return;
       if (key.return) return enter();
@@ -2681,7 +2716,7 @@ export function App(props: AppProps) {
             node={modalNode}
             width={w}
             height={bodyHeight}
-            defaults={defaults()}
+            launches={launchEntries()}
             live={live}
             panes={panes}
             frame={frame}
@@ -2707,11 +2742,8 @@ export function App(props: AppProps) {
             width={w}
             defaults={
               modal.options ?? {
-                brain: defaults().brain,
+                ...defaults(),
                 start: modalNode.id === ROOT ? rootStart(defaults().start) : defaults().start,
-                pane: defaults().pane,
-                ...(tree.project.model ? { model: tree.project.model } : {}),
-                ...(tree.project.effort ? { effort: tree.project.effort } : {}),
               }
             }
             onCancel={close}
@@ -3104,6 +3136,19 @@ export function App(props: AppProps) {
         hint: t('для панелей нужен tmux; сессии продолжают работать после выхода'),
       },
       {
+        key: 'launchMemory',
+        label: t('Память запусков'),
+        options: [
+          { value: 'project', label: t('у проекта') },
+          { value: 'global', label: t('общая для всех проектов') },
+        ],
+        value: s.launchMemory,
+        hint:
+          s.launchMemory === 'project'
+            ? t('последний запуск каждого CLI — свой у каждого проекта, не в git')
+            : t('последний запуск каждого CLI — один на все проекты'),
+      },
+      {
         key: 'sleepAfter',
         label: t('Усыплять после простоя'),
         options: SLEEP_AFTER.map((n) => ({ value: String(n), label: n ? t('{n} мин', { n }) : t('выкл') })),
@@ -3245,6 +3290,8 @@ export function App(props: AppProps) {
       updateSettings({ statusOrder: value as StatusOrderName });
     else if (key === 'live') updateSettings({ live: on });
     else if (key === 'open' && (value === 'pane' || value === 'terminal')) updateSettings({ open: value });
+    else if (key === 'launchMemory' && (value === 'project' || value === 'global'))
+      updateSettings({ launchMemory: value });
     else if (key === 'sleepAfter') updateSettings({ sleepAfter: Number(value) });
     else if (key === 'maxPanes') updateSettings({ maxPanes: Number(value) });
     else if (key === 'staleAfter') updateSettings({ staleAfter: Number(value) });
