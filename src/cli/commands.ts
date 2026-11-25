@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline';
 
 import { parseArgs } from 'node:util';
 
-import type { Catalog, UsageReport } from '@antondanv/brainyard';
+import { type Catalog, listPanes, setPaneSession, type UsageReport } from '@antondanv/brainyard';
 
 import {
   ACCESS_HINT,
@@ -158,6 +158,7 @@ import {
   offTreeTally,
   STATUS_ORDER_NAMES,
   type StatusOrderName,
+  sessionHolders,
 } from '../model/tree.js';
 import {
   BRAIN_IDS,
@@ -335,7 +336,10 @@ function commandLines(): string {
                                            невлитое или живая панель): несколько id — строка на узел, отказ у одного не
                                            мешает остальным (код 1); --done — все закрытые узлы (готово и отказ), где всё
                                            закоммичено и влито, с отчётом, что убрано и что оставлено; --dry-run — только показать
-  treeyard sessions [--json]               сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
+  treeyard sessions [--json] [--project <папка>]
+                                           сессии папки во всех CLI и чьи они; ▣ — живая панель (в JSON — pane)
+  treeyard sessions <id> <old-id> --replace <new-id> [--project <папка>]
+                                           заменить id сессии узла (в том числе pane:…); полные id, старый из show --only sessions
   treeyard sleep <id> [<id>…] [--force] [--json] [--project <папка>]   усыпить живую панель узла: закрывает процесс
                                            tmux, оставляя сессию в узле для пробуждения и продолжения; отказывает,
                                            если панель работает, ждёт человека или к ней подключён терминал (без --force)
@@ -502,8 +506,11 @@ function commandLines(): string {
                                            refusal does not stop the rest (exit 1); --done — every closed node (done or
                                            dropped) that is clean and merged, reporting what was removed and what was kept;
                                            --dry-run — only show
-  treeyard sessions [--json]               sessions of this folder in every CLI, and whose they are; ▣ — a live pane
+  treeyard sessions [--json] [--project <dir>]
+                                           sessions of this folder in every CLI, and whose they are; ▣ — a live pane
                                            (pane in JSON)
+  treeyard sessions <id> <old-id> --replace <new-id> [--project <dir>]
+                                           replace a node's session id (including pane:…); use full ids, old one from show --only sessions
   treeyard sleep <id> [<id>…] [--force] [--json] [--project <dir>]   put a node's live pane to sleep: closes the tmux
                                            process, leaving the session in the node for waking and continuation; refuses
                                            if the pane is working, waiting for the person, or attached (without --force)
@@ -3971,8 +3978,25 @@ async function worktreeCommand(args: string[]): Promise<number> {
 }
 
 async function sessionsCommand(args: string[]): Promise<number> {
-  const { values } = parse(args, { json: { type: 'boolean' } });
-  const tree = project();
+  const { values, positionals } = parse(args, {
+    json: { type: 'boolean' },
+    replace: { type: 'string' },
+    project: { type: 'string' },
+  });
+  if (values.replace !== undefined || positionals.length) {
+    const [node, oldId] = positionals;
+    if (
+      positionals.length !== 2 ||
+      !oldId ||
+      !values.replace ||
+      /\s/.test(values.replace) ||
+      values.replace.startsWith('pane:') ||
+      values.json
+    )
+      throw new UsageError('treeyard sessions <id> <old-id> --replace <new-id>');
+    return replaceSession(values.project, node!, oldId, values.replace);
+  }
+  const tree = project(values.project);
   const list = await projectSessions(tree);
   const owners = sessionOwners(tree);
   const panes = await sessionPanes(tree.project.dir);
@@ -4008,6 +4032,37 @@ async function sessionsCommand(args: string[]): Promise<number> {
   }
   if (list.length === 0) process.stdout.write(`${out.dim(t('сессий в этой папке ещё не было'))}\n`);
   else process.stdout.write(`\n${offTreeLine(offTreeTally(list, owners))}\n`);
+  return 0;
+}
+
+async function replaceSession(folder: string | undefined, node: string, oldId: string, newId: string): Promise<number> {
+  const panes = await listPanes();
+  const tree = project(folder);
+  const id = nodeArg(tree, node);
+  const refs = tree.nodes.get(id)?.sessions.filter((ref) => ref.id === oldId);
+  if (refs?.length !== 1)
+    throw new UsageError(t('укажи точный id одной сессии из treeyard show {id} --only sessions', { id }));
+  const ref = refs[0]!;
+  const owner = sessionHolders(tree).find((other) =>
+    other.sessions.some((session) => session !== ref && session.id === newId),
+  );
+  if (owner) throw new UsageError(t('сессия {session} уже привязана к узлу {id}', { session: newId, id: owner.id }));
+
+  const paneName = ref.pane ?? (isPending(ref) ? oldId.slice('pane:'.length) : undefined);
+  const pane = panes.find((pane) => pane.pane === paneName && pane.brain === ref.brain);
+  const message = t('исправлена привязка сессии: {old} → {new}', { old: oldId, new: newId });
+  if (oldId !== newId) {
+    ref.id = newId;
+    if (paneName) ref.pane = paneName;
+    logToNode(tree, id, message, sourceOf(undefined));
+  }
+  if (pane && pane.sessionId !== newId && !(await setPaneSession(pane.pane, newId))) {
+    process.stderr.write(
+      `${t('привязка в дереве сохранена, не удалось обновить панель {pane}', { pane: pane.pane })}\n`,
+    );
+    return 1;
+  }
+  process.stdout.write(`${id} · ${message}\n`);
   return 0;
 }
 

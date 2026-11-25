@@ -29,7 +29,7 @@ import {
   sleepingRef,
   wakeInPane,
 } from '../src/agents/panes.js';
-import { addNode, attachSession } from '../src/model/ops.js';
+import { addNode, attachSession, logToNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { DEFAULTS, loadSettings, saveSettings } from '../src/settings.js';
 import { emptyTree, tempDir } from './helpers.js';
@@ -157,6 +157,34 @@ describe('pane lifecycle', () => {
     const pending = { brain: 'codex' as const, id: 'pane:missing', mode: 'pane' as const };
     expect(isPending(pending)).toBe(true);
     await expect(wakeInPane(tree, node.id, pending, { width: 60, height: 12 })).rejects.toThrow(/не сохранил/);
+  });
+
+  it('waits for an Antigravity pane match and keeps a repair made during lookup', async () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Agy work' });
+    const running = pane('agy-one', 0, { brain: 'antigravity', sessionId: undefined });
+    attachSession(tree, node.id, {
+      brain: 'antigravity',
+      id: 'pane:agy-one',
+      pane: running.pane,
+      mode: 'pane',
+      started: ago(1),
+    });
+    const earlier: SessionInfo = { brain: 'antigravity', id: 'wrong', startedAt: ago(1), interactive: true };
+    backend.sessions.mockResolvedValue([earlier]);
+    backend.findPaneSession.mockResolvedValueOnce(undefined);
+    expect(await settlePending(tree, [running])).toBe(false);
+    expect(backend.sessions).not.toHaveBeenCalled();
+
+    backend.findPaneSession.mockImplementationOnce(async () => {
+      const current = loadTree(tree.project.dir);
+      current.nodes.get(node.id)!.sessions[0]!.id = 'from-repair';
+      logToNode(current, node.id, 'repaired');
+      return earlier;
+    });
+    expect(await settlePending(tree, [running])).toBe(false);
+    expect(backend.setPaneSession).not.toHaveBeenCalled();
+    expect(loadTree(tree.project.dir).nodes.get(node.id)!.sessions[0]!.id).toBe('from-repair');
   });
 });
 

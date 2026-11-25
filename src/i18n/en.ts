@@ -411,6 +411,12 @@ export const EN: Record<string, string> = {
     'specify one node: treeyard peek <id> [--lines N] [--json]',
   'без названия': 'untitled',
   'сессий в этой папке ещё не было': 'no sessions in this folder yet',
+  'укажи точный id одной сессии из treeyard show {id} --only sessions':
+    'use the exact id of one session from treeyard show {id} --only sessions',
+  'сессия {session} уже привязана к узлу {id}': 'session {session} already belongs to node {id}',
+  'исправлена привязка сессии: {old} → {new}': 'updated session binding: {old} → {new}',
+  'привязка в дереве сохранена, не удалось обновить панель {pane}':
+    'saved the binding in the tree but could not update pane {pane}',
   'Для всех проектов': 'All projects',
   'Этот проект': 'This project',
   'Изменить: treeyard config <ключ> <значение> · в дереве — клавиша «,»':

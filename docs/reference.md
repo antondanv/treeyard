@@ -391,6 +391,12 @@ the TUI does that when it next looks. With several nodes — `treeyard open a b 
 prints an array of those objects, one per node, in the order given; a pane that did not start is an
 object with `error` and `null` for `id`, `pane` and `startedAt`.
 
+`treeyard sessions <id> <old-id> --replace <new-id> [--project <dir>]` repairs a node's session
+binding. Copy the full old id (or `pane:…`) from `treeyard show <id> --only sessions` and the full
+conversation id from `treeyard sessions --json`. The command updates the stored id and its live
+pane and records the change in the node's journal. If the conversation already belongs to another
+node, correct that node's binding first.
+
 `treeyard open <id> --bg --json` is the same for a background session, for a coordinator that
 reads the result with a program: `{"node", "brain", "id", "startedAt", "warnings"}` — no `pane`,
 and stdout holds only the JSON (the `✓` lines and warnings go quiet). Several nodes —
@@ -498,6 +504,7 @@ treeyard deliver --once                          # one delivery pass over waitin
 treeyard queue <id> --pane --parallel 2 --task "…"   # a queue: the node's open children in order, two sessions at a time, the next when a node leaves “active”
 treeyard worktree                               # the nodes' worktrees: folder, branch, commits, what is not committed (add | setup | rm <id>)
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
+treeyard sessions <id> <old-id> --replace <new-id>  # repair a node's session binding, including pane:…
 treeyard sleep <id> [<id>…] [--force] [--json]  # put the live panes of nodes to sleep; keeps the session for waking; refuses on busy/waiting/attached without --force
 treeyard peek <id> [--lines N] [--json]        # peek at a node's live pane screen: session status, pane name and the last N lines (default 25) without ANSI
 treeyard models [brain] [--json]               # models and effort levels for CLIs (id, label, efforts)

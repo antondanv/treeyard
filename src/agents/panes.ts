@@ -30,6 +30,7 @@ import { senderNode } from '../model/mail.js';
 import { markDelivered } from '../model/mailbox.js';
 import { nodeEnv } from '../model/notes.js';
 import { attachSession, detachSession, setStatus } from '../model/ops.js';
+import { loadTree } from '../model/store.js';
 import { nowIso } from '../model/time.js';
 import { holderOf, sessionHolders } from '../model/tree.js';
 import { type BrainId, ROOT, type SessionRef, type Tree, type TreeNode } from '../model/types.js';
@@ -287,9 +288,12 @@ export async function settlePending(tree: Tree, panes: readonly Pane[]): Promise
   );
   const history = new Map<string, SessionInfo[]>();
   for (const { node, ref } of pending) {
-    const pane = panes.find((p) => p.pane === ref.pane && p.brain === ref.brain);
+    const pane = paneFor(ref, panes);
     let id = pane?.sessionId;
-    if (!id && ref.started) {
+    if (!id && pane?.brain === 'antigravity') {
+      // Brainyard can identify the exact launch from its pane log.
+      id = (await findPaneSession(pane))?.id;
+    } else if (!id && ref.started) {
       const folder = sessionFolder(tree.project.dir, ref);
       const key = `${ref.brain}\0${folder}`;
       let candidates = history.get(key);
@@ -311,11 +315,20 @@ export async function settlePending(tree: Tree, panes: readonly Pane[]): Promise
         .sort((a, b) => Date.parse(a.startedAt ?? '') - Date.parse(b.startedAt ?? ''))[0]?.id;
     }
     if (!id || used.has(`${ref.brain}:${id}`)) continue;
-    if (pane) await setPaneSession(pane.pane, id);
+    // The lookup can overlap a manual repair or another tree settling this pane.
+    const current = loadTree(tree.project.dir);
+    const saved = holderOf(current, node.id)?.sessions.find((s) => s.brain === ref.brain && s.id === ref.id);
+    if (
+      !saved ||
+      sessionHolders(current).some((holder) => holder.sessions.some((s) => s.brain === ref.brain && s.id === id))
+    )
+      continue;
     used.add(`${ref.brain}:${id}`);
-    ref.id = id;
-    attachSession(tree, node.id, ref);
+    saved.id = id;
+    attachSession(current, node.id, saved);
+    Object.assign(tree, current);
     changed = true;
+    if (pane) await setPaneSession(pane.pane, id);
   }
   return changed;
 }

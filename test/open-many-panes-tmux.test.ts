@@ -1,20 +1,26 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { readdirSync, realpathSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { listPanes, panesAvailable } from '@antondanv/brainyard';
-import { afterEach, describe, expect, it } from 'vitest';
+import { capturePane, listPanes, panesAvailable, setPaneSession } from '@antondanv/brainyard';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { addNode } from '../src/model/ops.js';
+import { settlePending } from '../src/agents/panes.js';
+import { addNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import type { BrainId, TreeNode } from '../src/model/types.js';
+import { worktreeParent } from '../src/worktree.js';
 import { accessHome, emptyTree, tempDir, treeyardIn } from './helpers.js';
 
 const node = process.execPath;
 const fixture = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 const sockets: string[] = [];
+const worktreeDirs: string[] = [];
 
 afterEach(() => {
   for (const socket of sockets.splice(0)) spawnSync('tmux', ['-L', socket, 'kill-server']);
+  for (const dir of worktreeDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  vi.unstubAllEnvs();
 });
 
 const CASES: { brain: BrainId; bin: string; file: string; named: boolean }[] = [
@@ -25,7 +31,7 @@ const CASES: { brain: BrainId; bin: string; file: string; named: boolean }[] = [
 ];
 
 /** Three nodes in a fresh tree and a CLI run on its own tmux server, with `brain`'s stand-in unless `missing`. */
-function setup(c: (typeof CASES)[number], missing = false) {
+function setup(c: (typeof CASES)[number], missing = false, env: NodeJS.ProcessEnv = {}) {
   const tree = emptyTree();
   const nodes = ['Бот', 'Сайт', 'Почта'].map((title) => addNode(tree, { title, doneWhen: `${title} работает` }));
   // Each case starts its own tmux server from the CLI, so its panes get this home: the
@@ -46,9 +52,10 @@ function setup(c: (typeof CASES)[number], missing = false) {
     BRAINYARD_AGY_BIN: 'treeyard-test-no-agy',
     BRAINYARD_OPENCODE_BIN: 'treeyard-test-no-opencode',
     ...(missing ? {} : { [c.bin]: JSON.stringify([node, fixture(c.file)]) }),
+    ...env,
   });
   const saved = (n: TreeNode) => loadTree(tree.project.dir).nodes.get(n.id)!;
-  return { tree, nodes, socket, sh, saved };
+  return { tree, nodes, socket, sh, saved, home };
 }
 
 type Started = { node: string; brain: string; id: string | null; pane: string | null; startedAt: string | null };
@@ -72,6 +79,98 @@ describe.skipIf(!panesAvailable())('open <id> <id>… --pane with real tmux', ()
         expect(now.sessions).toMatchObject([{ brain: c.brain, mode: 'pane', pane }]);
         expect(now.status).toBe('active');
       });
+    },
+    40_000,
+  );
+
+  it.each(['open', 'queue'])(
+    'Antigravity %s resolves three panes from separate logs',
+    async (command) => {
+      const agy = CASES.find((c) => c.brain === 'antigravity')!;
+      const { tree, nodes, socket, sh, saved, home } = setup(agy, false, { TREEYARD_TEST_AGY_LOGS: '1' });
+      const dir = realpathSync(tree.project.dir);
+      worktreeDirs.push(worktreeParent(dir));
+      execFileSync('git', ['init', '-q', dir]);
+      execFileSync('git', [
+        '-C',
+        dir,
+        '-c',
+        'user.name=Test',
+        '-c',
+        'user.email=test@example.test',
+        'commit',
+        '-qm',
+        'Init',
+        '--allow-empty',
+      ]);
+      const ids = nodes.map((n) => n.id);
+      const started = sh(
+        command,
+        ...ids,
+        '--brain',
+        agy.brain,
+        '--pane',
+        '--worktree',
+        '--json',
+        '--yes',
+        ...(command === 'queue' ? ['--parallel', '3'] : []),
+      );
+      try {
+        if (command === 'open') expect((await started).code).toBe(0);
+        await expect
+          .poll(() => nodes.map((n) => saved(n).status), { timeout: 15_000 })
+          .toEqual(['active', 'active', 'active']);
+        const refs = nodes.map((n) => saved(n).sessions[0]!);
+        const expected = await Promise.all(
+          refs.map(async (ref, i) => {
+            expect(ref.id).toBe(`pane:${ref.pane}`);
+            expect(ref.dir).toBe(join(worktreeParent(dir), ids[i]!));
+            const conversation = async () =>
+              /stand-in ready ([0-9a-f-]{36})/.exec(
+                (await capturePane(ref.pane!, { socket }))?.lines.join('\n') ?? '',
+              )?.[1];
+            await expect.poll(conversation, { timeout: 10_000 }).toBeDefined();
+            return { id: (await conversation())!, pane: ref.pane, cwd: ref.dir, node: ids[i] };
+          }),
+        );
+        expect(new Set(expected.map((row) => row.id)).size).toBe(3);
+        const logs = readdirSync(join(home, '.gemini', 'antigravity-cli', 'log'));
+        expect(logs).toHaveLength(3);
+        for (const { pane } of expected) expect(logs.some((name) => name.endsWith(`-${pane}.log`))).toBe(true);
+        const result = await sh('sessions', '--json');
+        expect(result.code, result.stderr).toBe(0);
+        const sessions: unknown = JSON.parse(result.stdout);
+        expect(sessions).toHaveLength(3);
+        expect(sessions).toEqual(expect.arrayContaining(expected.map((row) => expect.objectContaining(row))));
+        const waited = await sh('wait', ...ids, '--all', '--json', '--timeout', '1s');
+        expect(waited.code, waited.stderr).toBe(124);
+        expect(JSON.parse(waited.stdout).pending).toEqual(
+          expected.map(({ node, id, pane }) =>
+            expect.objectContaining({ node, session: expect.objectContaining({ id, pane, state: 'busy' }) }),
+          ),
+        );
+
+        if (command === 'open') {
+          const [first] = expected;
+          // Simulate wrong metadata on the live pane, then repair the placeholder from the CLI.
+          expect(await setPaneSession(first!.pane!, 'wrong-id', { socket })).toBe(true);
+          const repaired = await sh('sessions', first!.node!, `pane:${first!.pane}`, '--replace', first!.id);
+          expect(repaired.code, repaired.stderr).toBe(0);
+        }
+        vi.stubEnv('HOME', home);
+        vi.stubEnv('BRAINYARD_TMUX_SOCKET', socket);
+        expect(await settlePending(loadTree(dir), await listPanes({ socket }))).toBe(true);
+        expect(nodes.map((n) => saved(n).sessions[0]?.id)).toEqual(expected.map((row) => row.id));
+        expect(await listPanes({ socket })).toEqual(
+          expect.arrayContaining(expected.map(({ pane, id }) => expect.objectContaining({ pane, sessionId: id }))),
+        );
+      } finally {
+        if (command === 'queue') {
+          const current = loadTree(dir);
+          for (const id of ids) setStatus(current, id, 'review');
+        }
+      }
+      expect((await started).code).toBe(0);
     },
     40_000,
   );

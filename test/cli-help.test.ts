@@ -174,6 +174,9 @@ describe('treeyard <command> --help', () => {
       expect(help).toContain('treeyard import [--brain <cli>]');
       expect(help).toContain('treeyard open <id> <id>… --pane|--bg');
       expect(help).toContain('treeyard queue <id> [<id>…] --pane|--bg');
+      const sessions = (await sh('sessions', '--help')).stdout;
+      expect(sessions).toContain('treeyard sessions <id> <old-id> --replace <new-id>');
+      expect(sessions).toContain(lang === 'en' ? "replace a node's session id" : 'заменить id сессии узла');
       expect(help).not.toContain('--brain claude]');
       expect(help).not.toContain('--brain codex]');
     }
