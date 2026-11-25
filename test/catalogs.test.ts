@@ -12,10 +12,24 @@ const DOWN = '\u001b[B';
 const RIGHT = '\u001b[C';
 const LEFT = '\u001b[D';
 const downs = (n: number) => Array.from({ length: n }, () => DOWN);
-/** Rows of the settings screen before «Мозг по умолчанию»: language … status order … live, panes, launch memory, notes, skills. */
-const BRAIN_ROW = 16;
-/** Rows before «Модель сессий»: the brain and the start come after them. */
-const MODEL_ROW = BRAIN_ROW + 2;
+const BRAIN_ROW = 'Мозг по умолчанию';
+const MODEL_ROW = 'Модель сессий';
+
+/**
+ * The keys that open the settings and stop on the row with this label (the Russian one, as the
+ * tests run). The place is read off the screen, so a setting added above the row moves nothing
+ * here. Headers, hints and the footer are not rows.
+ */
+async function toRow(dir: string, label: string): Promise<string[]> {
+  const frame = await snapshot(dir, { columns: 120, rows: 70, keys: [','] });
+  const rows = frame
+    .split('\n')
+    .map((line) => /^\s*│ (?:❯| ) (\S.*?)(?:\s{2,}|\s*│)/.exec(line)?.[1])
+    .filter((text): text is string => text !== undefined);
+  const index = rows.indexOf(label);
+  if (index < 0) throw new Error(`no settings row «${label}» among: ${rows.join(' | ')}`);
+  return [',', ...downs(index)];
+}
 
 beforeEach(() => {
   process.env.TREEYARD_HOME = tempDir('treeyard-home-');
@@ -59,7 +73,7 @@ describe('models come from the CLI, not from typing', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(MODEL_ROW), RIGHT, RIGHT],
+      keys: [...(await toRow(tree.project.dir, MODEL_ROW)), RIGHT, RIGHT],
     });
     expect(frame).toMatch(/Модель сессий\s+.*Opus/);
     expect(frame).toContain('Sonnet');
@@ -75,7 +89,7 @@ describe('models come from the CLI, not from typing', () => {
     await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(MODEL_ROW), RIGHT, RIGHT, RIGHT, RIGHT],
+      keys: [...(await toRow(tree.project.dir, MODEL_ROW)), RIGHT, RIGHT, RIGHT, RIGHT],
     });
     const project = loadTree(tree.project.dir).project;
     expect(project.model).toBe('haiku');
@@ -90,7 +104,7 @@ describe('models come from the CLI, not from typing', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(BRAIN_ROW), RIGHT, DOWN, DOWN],
+      keys: [...(await toRow(tree.project.dir, BRAIN_ROW)), RIGHT, DOWN, DOWN],
     });
     const project = loadTree(tree.project.dir).project;
     expect(project.brain).toBe('codex');
@@ -110,7 +124,7 @@ describe('models come from the CLI, not from typing', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', ...downs(BRAIN_ROW), LEFT, DOWN, DOWN, DOWN],
+      keys: [...(await toRow(tree.project.dir, BRAIN_ROW)), LEFT, DOWN, DOWN, DOWN],
     });
     const project = loadTree(tree.project.dir).project;
     expect(project.brain).toBe('opencode');
@@ -119,7 +133,11 @@ describe('models come from the CLI, not from typing', () => {
     expect(frame).toMatch(/Усилие\s+в самой сессии/);
     expect(frame).toContain('OpenCode меняет усилие — вариант модели — прямо в сессии: ctrl+t');
     // Pressing ←→ on it changes nothing.
-    await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(MODEL_ROW), RIGHT, LEFT] });
+    await snapshot(tree.project.dir, {
+      columns: 110,
+      rows: 34,
+      keys: [...(await toRow(tree.project.dir, MODEL_ROW)), RIGHT, LEFT],
+    });
     expect(loadTree(tree.project.dir).project.effort).toBeUndefined();
   });
 
@@ -177,7 +195,11 @@ describe('settings are easy to find', () => {
 
   it('the live status covers every CLI', async () => {
     const tree = sample();
-    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [',', ...downs(8)] });
+    const frame = await snapshot(tree.project.dir, {
+      columns: 110,
+      rows: 34,
+      keys: await toRow(tree.project.dir, 'Живые статусы сессий'),
+    });
     expect(frame).toContain('Живые статусы сессий');
     expect(frame).toContain('Claude Code, Codex, Antigravity и OpenCode');
   });
@@ -212,7 +234,7 @@ describe('a burst of keys lands where it was meant to', () => {
     await snapshot(tree.project.dir, {
       columns: 110,
       rows: 34,
-      keys: [',', `${'\u001b[B'.repeat(MODEL_ROW)}${RIGHT}${RIGHT}`],
+      keys: [',', `${(await toRow(tree.project.dir, MODEL_ROW)).slice(1).join('')}${RIGHT}${RIGHT}`],
     });
     expect(loadTree(tree.project.dir).project.model).toBe('opus');
   });
