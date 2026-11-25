@@ -35,9 +35,21 @@ export interface AssistChoice {
 /** Steps need a look around the project; a criterion is one sentence. */
 export const ASSIST_EFFORT: Record<AssistJob, string> = { split: 'medium', criterion: 'low' };
 
+/** A job with no session answers in minutes; a CLI that hangs past this is stopped, not waited for forever. */
+export const ASSIST_TIMEOUT_MS: Record<AssistJob, number> = { split: 8 * 60_000, criterion: 3 * 60_000 };
+
+/** The person stopped the job (Esc): not a failure, nothing to report as one. */
+export class AssistCancelled extends Error {
+  constructor() {
+    super(t('отменено'));
+  }
+}
+
 export interface AssistOptions extends AssistChoice {
   onEvent?: (event: AgentEvent) => void;
   signal?: AbortSignal;
+  /** Hard limit for this job; the default depends on the job (`ASSIST_TIMEOUT_MS`). */
+  timeoutMs?: number;
 }
 
 export function splitPrompt(tree: Tree, id: string): string {
@@ -92,7 +104,7 @@ Answer ONLY with JSON in a \`\`\`json block:`,
 }
 
 export async function proposeSteps(tree: Tree, id: string, options: AssistOptions): Promise<Step[]> {
-  const text = await ask(tree, splitPrompt(tree, id), options);
+  const text = await ask(tree, splitPrompt(tree, id), 'split', options);
   const data = json(text);
   const list = Array.isArray(data.children) ? data.children : Array.isArray(data.nodes) ? data.nodes : [];
   const steps: Step[] = [];
@@ -112,7 +124,7 @@ export async function proposeSteps(tree: Tree, id: string, options: AssistOption
 }
 
 export async function proposeCriterion(tree: Tree, id: string, options: AssistOptions): Promise<Criterion> {
-  const data = json(await ask(tree, criterionPrompt(tree, id), options));
+  const data = json(await ask(tree, criterionPrompt(tree, id), 'criterion', options));
   const doneWhen = typeof data.done_when === 'string' ? data.done_when.trim() : '';
   if (!doneWhen) throw new Error(t('агент не сформулировал критерий'));
   const criterion: Criterion = { doneWhen };
@@ -120,19 +132,30 @@ export async function proposeCriterion(tree: Tree, id: string, options: AssistOp
   return criterion;
 }
 
-async function ask(tree: Tree, prompt: string, options: AssistOptions): Promise<string> {
+async function ask(tree: Tree, prompt: string, job: AssistJob, options: AssistOptions): Promise<string> {
+  const timeoutMs = options.timeoutMs ?? ASSIST_TIMEOUT_MS[job];
   const result = await run({
     brain: options.brain,
     cwd: tree.project.dir,
     prompt,
     access: 'readonly',
     web: false,
+    timeoutMs,
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.onEvent ? { onEvent: options.onEvent } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
   });
-  if (!result.ok) throw new Error(result.error?.message ?? t('агент не ответил'));
+  if (!result.ok) {
+    if (options.signal?.aborted || result.error?.kind === 'stopped') throw new AssistCancelled();
+    if (result.error?.kind === 'timeout')
+      throw new Error(
+        t('агент не ответил за {n} мин — задачу снял; попробуй ещё раз или выбери другой CLI', {
+          n: Math.max(1, Math.round(timeoutMs / 60_000)),
+        }),
+      );
+    throw new Error(result.error?.message ?? t('агент не ответил'));
+  }
   return result.text;
 }
 
