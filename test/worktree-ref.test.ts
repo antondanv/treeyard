@@ -43,20 +43,30 @@ describe('HEAD from a git worktree', () => {
     expect(wtHead).not.toBe(mainHead);
     const sh = treeyardIn(wt);
 
-    // The main folder's tree, as a background session in a worktree writes it.
-    const log = await sh('log', node, 'итог', '--commit', 'HEAD', '--project', main);
+    // Without --project, a command in the worktree writes the main tree and resolves HEAD to the worktree's commit.
+    const log = await sh('log', node, 'итог', '--commit', 'HEAD');
     expect(log.code, log.stderr).toBe(0);
     expect(loadTree(main).nodes.get(node)!.commits).toEqual([wtHead]);
+    expect(loadTree(wt).nodes.get(node)!.commits).toBeUndefined();
 
-    // The worktree's own copy of the tree, without --project.
-    const own = await sh('diff', node, '--add', 'HEAD');
+    // With --project <main>, a second commit in the worktree attaches to the main tree too.
+    writeFileSync(join(wt, 'more.txt'), 'ещё работа\n');
+    git(wt, 'add', 'more.txt');
+    git(wt, 'commit', '-q', '-m', 'more');
+    const wtHead2 = git(wt, 'rev-parse', 'HEAD');
+    const withFlag = await sh('diff', node, '--add', 'HEAD', '--project', main);
+    expect(withFlag.code, withFlag.stderr).toBe(0);
+    expect(loadTree(main).nodes.get(node)!.commits).toEqual([wtHead, wtHead2]);
+
+    // Explicit --project . targets the worktree's own copy of the tree.
+    const own = await sh('diff', node, '--add', 'HEAD', '--project', '.');
     expect(own.code, own.stderr).toBe(0);
-    expect(loadTree(wt).nodes.get(node)!.commits).toEqual([wtHead]);
+    expect(loadTree(wt).nodes.get(node)!.commits).toEqual([wtHead2]);
 
     // From the main folder HEAD is still the main branch.
     const fromMain = await treeyardIn(main)('diff', node, '--add', 'HEAD');
     expect(fromMain.code, fromMain.stderr).toBe(0);
-    expect(loadTree(main).nodes.get(node)!.commits).toEqual([wtHead, mainHead]);
+    expect(loadTree(main).nodes.get(node)!.commits).toEqual([wtHead, wtHead2, mainHead]);
   }, 60_000);
 
   it('leaves another repository’s HEAD out: the tree’s own repository decides', async () => {

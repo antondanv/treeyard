@@ -12,6 +12,7 @@ import { NODE_VAR, PROJECT_VAR, SESSION_VAR } from './model/notes.js';
 import { attachCommit } from './model/ops.js';
 import { findProject, loadTree, TREE_DIR } from './model/store.js';
 import type { Tree } from './model/types.js';
+import { treeOfWorktree } from './worktree.js';
 
 const BEGIN = '# >>> treeyard';
 const END = '# <<< treeyard';
@@ -250,8 +251,8 @@ export function sessionNode(tree: Tree, env: NodeJS.ProcessEnv): string | undefi
 /** Binds HEAD of the repository of `cwd` to the session's node; undefined (and no noise) when it does not apply. */
 export function bindHeadCommit(env: NodeJS.ProcessEnv, cwd: string): string | undefined {
   if (!env[NODE_VAR]?.trim()) return undefined;
-  // Sessions from before TREEYARD_PROJECT: the tree of the current folder.
-  const project = env[PROJECT_VAR]?.trim() || findProject(cwd);
+  // Sessions from before TREEYARD_PROJECT: the main tree from a git worktree, else the current folder's tree.
+  const project = env[PROJECT_VAR]?.trim() || treeOfWorktree(cwd, env) || findProject(cwd);
   if (!project) return undefined;
   const tree = loadTree(project);
   const id = sessionNode(tree, env);

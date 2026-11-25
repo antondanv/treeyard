@@ -250,31 +250,54 @@ export function sessionFolder(project: string, ref: Pick<SessionRef, 'dir'>): st
 }
 
 /**
- * The main tree for a command run inside a linked git worktree: one treeyard made, or one whose
- * main checkout holds the tree named in `TREEYARD_PROJECT` (a session opened from a node that
- * moved into Claude Code's own worktree, or a helper given `TREEYARD_PROJECT`). Commands write to
- * the main tree, not the branch's copy of `.tree/`. Undefined for any other folder, including a
- * person's own git worktree without `TREEYARD_PROJECT` or a different repository.
+ * Resolves the git common directory of a linked worktree from its `.git` target (`<gitdir>/commondir`).
+ * Returns `undefined` when there is no `commondir` file (e.g. a submodule or separate-git-dir main repo).
  */
-export function treeOfWorktree(cwd: string = process.cwd(), env: NodeJS.ProcessEnv = process.env): string | undefined {
+function commonGitDir(resolvedGitdir: string): string | undefined {
+  try {
+    const raw = readFileSync(join(resolvedGitdir, 'commondir'), 'utf8').trim();
+    return raw ? resolve(resolvedGitdir, raw) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether `<common>/config` marks the repository as bare (`[core] bare = true`). */
+function isBareConfig(common: string): boolean {
+  try {
+    const text = readFileSync(join(common, 'config'), 'utf8');
+    let inCore = false;
+    for (const line of text.split(/\r?\n/)) {
+      const section = /^\s*\[([^\]]+)\]/.exec(line);
+      if (section) {
+        inCore = section[1]!.trim().toLowerCase() === 'core';
+        continue;
+      }
+      if (inCore && /^\s*bare\s*=\s*true\s*(?:[#;].*)?$/i.test(line)) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Finds the linked worktree's top folder and the repository's main working checkout via git common dir.
+ * Returns `undefined` in the main checkout, outside git, in a bare repository's worktree (no main checkout),
+ * or in a git submodule.
+ */
+function worktreeMain(cwd: string): { top: string; main: string } | undefined {
   for (let at = resolve(cwd); ; ) {
     const dotGit = join(at, '.git');
     try {
       if (statSync(dotGit).isDirectory()) return undefined;
       const gitdir = /^gitdir:\s*(.+)$/m.exec(readFileSync(dotGit, 'utf8'))?.[1]?.trim();
-      if (!gitdir || !/[\\/]worktrees[\\/][^\\/]+$/.test(gitdir)) return undefined;
-      const common = dirname(dirname(resolve(at, gitdir)));
-      if (basename(common) !== '.git') return undefined;
-      const main = dirname(common);
-      const project = findProject(join(main, relative(real(at), real(cwd))));
-      if (project && insideFolder(project, main) && worktreesOf(project).some((wt) => real(wt.path) === real(at)))
-        return project;
-      const fromEnv = env[PROJECT_VAR]?.trim();
-      if (!fromEnv) return undefined;
-      const envPath = resolve(cwd, fromEnv.replace(/^~(?=$|\/)/, homedir()));
-      const envDir = existsSync(envPath) ? findProject(envPath) : undefined;
-      if (!envDir || !insideFolder(envDir, main)) return undefined;
-      return project && real(envDir) === real(project) ? project : real(envDir);
+      if (!gitdir) return undefined;
+      const common = commonGitDir(resolve(at, gitdir));
+      if (!common || basename(common) !== '.git' || isBareConfig(common)) return undefined;
+      const main = real(dirname(common));
+      if (sameFolder(at, main)) return undefined;
+      return { top: at, main };
     } catch {
       // No `.git` here: look further up.
     }
@@ -282,6 +305,31 @@ export function treeOfWorktree(cwd: string = process.cwd(), env: NodeJS.ProcessE
     if (up === at) return undefined;
     at = up;
   }
+}
+
+/**
+ * The main tree for a command run inside any linked git worktree of a repository (one treeyard
+ * made, `git worktree add`, Claude Code's `.claude/worktrees/…`), found through the git common dir.
+ * Commands read and write the main checkout's tree that the TUI sees, not the branch's copy of
+ * `.tree/`. Returns `undefined` when the main checkout has no `.tree/` (only the branch has one),
+ * in a bare repository's worktree, in a submodule, in the main checkout itself, or outside git.
+ * Explicit `--project` bypasses this function so `--project .` still targets the branch's own tree.
+ */
+export function treeOfWorktree(cwd: string = process.cwd(), env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const wt = worktreeMain(cwd);
+  if (!wt) return undefined;
+  const project = findProject(join(wt.main, relative(real(wt.top), real(cwd))));
+  const mainProject = project && insideFolder(project, wt.main) ? project : undefined;
+  // A session opened from a sub-tree inside the main checkout (e.g. a monorepo package) keeps its tree via TREEYARD_PROJECT.
+  const fromEnv = env[PROJECT_VAR]?.trim();
+  if (fromEnv) {
+    const envPath = resolve(cwd, fromEnv.replace(/^~(?=$|\/)/, homedir()));
+    const envDir = existsSync(envPath) ? findProject(envPath) : undefined;
+    if (envDir && insideFolder(envDir, wt.main)) {
+      return mainProject && real(envDir) === real(mainProject) ? mainProject : real(envDir);
+    }
+  }
+  return mainProject;
 }
 
 // ── Making one ──────────────────────────────────────────────────────────────

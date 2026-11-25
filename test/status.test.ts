@@ -297,13 +297,13 @@ describe('treeyard status in a git worktree', () => {
     expect(status.worktree).toMatchObject({ tree: 'main', copy: true, branch: 'feat' });
     expect(status.tree?.dir).toBe(realpathSync(main));
     expect(status.problems.find((p) => p.kind === 'abandoned')).toMatchObject({
-      fix: expect.stringMatching(new RegExp(`^treeyard set ${node.id} status=todo --project \\S+$`)),
+      fix: `treeyard set ${node.id} status=todo`,
     });
     expect(status.problems.find((p) => p.kind === 'abandoned')?.or).toBeUndefined();
     const text = statusText(status, plain);
     expect(text).toContain('git worktree, ветка feat');
     expect(text).toContain(' · основное');
-    expect(text).toContain('здесь копия ветки, человек видит основное — команды дерева с --project');
+    expect(text).toContain('здесь копия ветки — команды treeyard идут в основное (копия ветки: --project .)');
   });
 
   it('a worktree inside the main folder without a tree of its own reaches the main tree too', () => {

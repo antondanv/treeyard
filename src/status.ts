@@ -411,9 +411,8 @@ function list(items: string[]): string {
 /** The problems of a status, each with its fix, the most urgent first. */
 export function problemsOf(status: ProjectStatus, place: Place): Problem[] {
   const out: Problem[] = [];
-  // From a worktree, a command that writes the tree goes to the main one.
+  // From a worktree, tree commands resolve to the main checkout by themselves; github sync still runs from main.
   const main = place.project && place.worktree && !inside(place.project, place.worktree.top) ? place.project : '';
-  const onMain = (command: string) => (main ? `${command} --project ${homeShort(main)}` : command);
   const fromMain = (command: string) => (main ? `cd ${homeShort(main)} && ${command}` : command);
 
   if (!status.tree) out.push({ kind: 'no-tree', what: t('здесь нет дерева (.tree/)'), fix: 'treeyard init' });
@@ -425,7 +424,7 @@ export function problemsOf(status: ProjectStatus, place: Place): Problem[] {
     if (where) {
       const path = homeShort(join(status.tree!.dir, '.tree', where));
       out.push({ kind: 'tree-file', what: problem, fix: `$EDITOR ${path}` });
-    } else if (node) out.push({ kind: 'tree-parent', what: problem, fix: onMain(`treeyard set ${node} parent=root`) });
+    } else if (node) out.push({ kind: 'tree-parent', what: problem, fix: `treeyard set ${node} parent=root` });
   }
 
   for (const node of status.nodes?.abandoned ?? [])
@@ -435,7 +434,7 @@ export function problemsOf(status: ProjectStatus, place: Place): Problem[] {
         title: node.title,
         time: duration(0, node.hours * 3_600_000),
       }),
-      fix: onMain(`treeyard set ${node.id} status=todo`),
+      fix: `treeyard set ${node.id} status=todo`,
       ...(main ? {} : { or: `treeyard open ${node.id}` }),
     });
 

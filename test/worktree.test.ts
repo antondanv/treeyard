@@ -260,25 +260,86 @@ describe('where a command or a session lands', () => {
     expect(JSON.parse(status.stdout).worktree).toMatchObject({ tree: 'main', branch: `treeyard/${a}` });
   }, 60_000);
 
-  it('leaves a git worktree treeyard did not make alone: its tree is its own', async () => {
+  it('a plain git worktree (without TREEYARD_PROJECT) reads and writes the main tree via git common dir, while --project . targets its own copy', async () => {
     const { main, a } = repo();
     const plain = join(tempDir(), 'plain');
     git(main, 'worktree', 'add', '-q', '-b', 'side', plain);
-    expect(treeOfWorktree(plain, {})).toBeUndefined();
-    const log = await treeyardIn(plain)('log', a, 'в копию ветки');
-    expect(log.code, log.stderr).toBe(0);
-    expect(loadTree(plain).nodes.get(a)!.body).toContain('в копию ветки');
-    expect(loadTree(main).nodes.get(a)!.body).not.toContain('в копию ветки');
+    const sub = join(plain, 'nested', 'dir');
+    mkdirSync(sub, { recursive: true });
 
-    // With --project <main>, add writes directly into the main tree and leaves the branch copy alone.
-    const added = await treeyardIn(plain)('add', 'Идея с флагом', '--parent', a, '--status', 'idea', '--project', main);
+    expect(treeOfWorktree(plain, {})).toBe(realpathSync(main));
+    expect(treeOfWorktree(sub, {})).toBe(realpathSync(main));
+
+    // A change made in the main tree is visible when reading from the worktree.
+    const mainLog = await treeyardIn(main)('log', a, 'свежая запись в основном');
+    expect(mainLog.code, mainLog.stderr).toBe(0);
+    const shown = await treeyardIn(sub)('show', a);
+    expect(shown.code, shown.stderr).toBe(0);
+    expect(shown.stdout).toContain('свежая запись в основном');
+
+    // Writes from the plain worktree (root or subfolder) go to the main tree, not the branch copy.
+    const log = await treeyardIn(plain)('log', a, 'запись из обычного worktree');
+    expect(log.code, log.stderr).toBe(0);
+    expect(loadTree(main).nodes.get(a)!.body).toContain('запись из обычного worktree');
+    expect(loadTree(plain).nodes.get(a)!.body).not.toContain('запись из обычного worktree');
+
+    const added = await treeyardIn(sub)('add', 'Идея без флага', '--parent', a, '--status', 'idea');
     expect(added.code, added.stderr).toBe(0);
     const ideaId = added.stdout.trim();
-    expect(loadTree(main).nodes.get(ideaId)).toMatchObject({ title: 'Идея с флагом', parent: a, status: 'idea' });
+    expect(loadTree(main).nodes.get(ideaId)).toMatchObject({ title: 'Идея без флага', parent: a, status: 'idea' });
     expect(loadTree(plain).nodes.has(ideaId)).toBe(false);
+
+    // Explicit --project . targets the worktree's own .tree/ copy without redirecting to main.
+    const ownLog = await treeyardIn(plain)('log', a, 'явно в копию ветки', '--project', '.');
+    expect(ownLog.code, ownLog.stderr).toBe(0);
+    expect(loadTree(plain).nodes.get(a)!.body).toContain('явно в копию ветки');
+    expect(loadTree(main).nodes.get(a)!.body).not.toContain('явно в копию ветки');
+    const ownShow = await treeyardIn(main)('show', a, '--project', plain);
+    expect(ownShow.code, ownShow.stderr).toBe(0);
+    expect(ownShow.stdout).toContain('явно в копию ветки');
+    expect(ownShow.stdout).not.toContain('запись из обычного worktree');
+
+    // A nested worktree inside the main folder (e.g. Claude Code's .claude/worktrees/...) resolves to main too, even on an orphan branch.
+    const inner = join(main, '.claude', 'worktrees', 'agent');
+    git(main, 'worktree', 'add', '-q', '--orphan', '-b', 'agent-orphan', inner);
+    expect(treeOfWorktree(inner, {})).toBe(realpathSync(main));
+    const innerLog = await treeyardIn(inner)('log', a, 'из .claude/worktrees');
+    expect(innerLog.code, innerLog.stderr).toBe(0);
+    expect(loadTree(main).nodes.get(a)!.body).toContain('из .claude/worktrees');
   }, 60_000);
 
-  it('redirects a git worktree to the main tree when TREEYARD_PROJECT names it, and never hijacks other folders', async () => {
+  it('keeps the branch’s own .tree/ when the main checkout has none, in a bare repo worktree, or in a submodule', async () => {
+    // 1. Only the branch has a tree: main checkout has no .tree/.
+    const noMainTree = tempDir();
+    git(noMainTree, 'init', '-q', '-b', 'main');
+    git(noMainTree, 'commit', '-q', '--allow-empty', '-m', 'init');
+    const branchWt = join(tempDir(), 'branch-only');
+    git(noMainTree, 'worktree', 'add', '-q', '-b', 'with-tree', branchWt);
+    const seed = emptyTree();
+    mkdirSync(join(branchWt, '.tree', 'nodes'), { recursive: true });
+    writeFileSync(join(branchWt, '.tree', 'tree.md'), readFileSync(join(seed.project.dir, '.tree', 'tree.md')));
+    const branchNode = addNode(loadTree(branchWt), { title: 'Только на ветке' });
+    expect(treeOfWorktree(branchWt, {})).toBeUndefined();
+    const branchLog = await treeyardIn(branchWt)('log', branchNode.id, 'живёт на ветке');
+    expect(branchLog.code, branchLog.stderr).toBe(0);
+    expect(loadTree(branchWt).nodes.get(branchNode.id)!.body).toContain('живёт на ветке');
+
+    // 2. Bare repository with a linked worktree: no main working checkout exists.
+    const bare = join(tempDir(), 'repo.git');
+    git(tempDir(), 'init', '-q', '--bare', bare);
+    const bareWt = join(tempDir(), 'bare-wt');
+    git(bare, 'worktree', 'add', '-q', '--orphan', '-b', 'main', bareWt);
+    expect(treeOfWorktree(bareWt, {})).toBeUndefined();
+
+    // 3. Git submodule (.git file without commondir): keeps its own tree.
+    const subRepo = repo();
+    const superRepo = repo();
+    git(superRepo.main, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', subRepo.main, 'libs/sub');
+    const subDir = join(superRepo.main, 'libs', 'sub');
+    expect(treeOfWorktree(subDir, {})).toBeUndefined();
+  }, 60_000);
+
+  it('respects TREEYARD_PROJECT for sub-trees inside the same repo and never hijacks other repos or plain folders', async () => {
     const { main, a } = repo();
     const plain = join(tempDir(), 'plain');
     git(main, 'worktree', 'add', '-q', '-b', 'side', plain);
@@ -288,12 +349,27 @@ describe('where a command or a session lands', () => {
     // TREEYARD_PROJECT matching this repo's main tree resolves to main from root or a subfolder.
     expect(treeOfWorktree(plain, { TREEYARD_PROJECT: main })).toBe(realpathSync(main));
     expect(treeOfWorktree(sub, { TREEYARD_PROJECT: main })).toBe(realpathSync(main));
-    // A different repository in TREEYARD_PROJECT must never hijack this worktree.
+    // A different repository in TREEYARD_PROJECT must never hijack this worktree (resolves to own main, never other).
     const other = repo();
-    expect(treeOfWorktree(plain, { TREEYARD_PROJECT: other.main })).toBeUndefined();
+    expect(treeOfWorktree(plain, { TREEYARD_PROJECT: other.main })).toBe(realpathSync(main));
     // Outside a git worktree (a plain folder or another project), TREEYARD_PROJECT does not redirect.
     expect(treeOfWorktree(other.main, { TREEYARD_PROJECT: main })).toBeUndefined();
     expect(treeOfWorktree(tempDir(), { TREEYARD_PROJECT: main })).toBeUndefined();
+
+    // Monorepo: tree in a subfolder (`apps/web/.tree`) resolves from that subfolder or via TREEYARD_PROJECT from repo root.
+    const mono = tempDir();
+    const appDir = join(mono, 'apps', 'web');
+    mkdirSync(join(appDir, '.tree', 'nodes'), { recursive: true });
+    writeFileSync(join(appDir, '.tree', 'tree.md'), readFileSync(join(main, '.tree', 'tree.md')));
+    git(mono, 'init', '-q', '-b', 'main');
+    git(mono, 'add', '-A');
+    git(mono, 'commit', '-q', '-m', 'mono');
+    const monoWt = join(tempDir(), 'mono-wt');
+    git(mono, 'worktree', 'add', '-q', '-b', 'feat', monoWt);
+    expect(treeOfWorktree(join(monoWt, 'apps', 'web'), {})).toBe(realpathSync(appDir));
+    expect(treeOfWorktree(monoWt, {})).toBeUndefined();
+    expect(treeOfWorktree(monoWt, { TREEYARD_PROJECT: appDir })).toBe(realpathSync(appDir));
+    expect(treeOfWorktree(monoWt, { TREEYARD_PROJECT: other.main })).toBeUndefined();
 
     // Commands in a non-treeyard worktree with TREEYARD_PROJECT write to the main tree, not the branch copy.
     const cli = treeyardIn(plain, { TREEYARD_PROJECT: main });

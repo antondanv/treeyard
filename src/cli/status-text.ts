@@ -99,10 +99,8 @@ export function statusText(s: ProjectStatus, p: Paint): string {
       more(
         p.dim(
           s.worktree?.copy
-            ? t('здесь копия ветки, человек видит основное — команды дерева с --project {main}', {
-                main: homeShort(s.tree.dir),
-              })
-            : t('команды дерева — с --project {main}', { main: homeShort(s.tree.dir) }),
+            ? t('здесь копия ветки — команды treeyard идут в основное (копия ветки: --project .)')
+            : t('команды treeyard идут в основное'),
         ),
       );
     if (s.worktree?.tree === 'branch') more(p.dim(t('дерево только в этой ветке: в основной папке его нет')));

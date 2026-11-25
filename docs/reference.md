@@ -790,13 +790,15 @@ alike: treeyard makes the worktree itself, not the CLI.
   session in the project's folder and give every other node a worktree. A folder without git, or a
   repository without a commit, makes no worktrees and the nodes stay together, as they did.
   `--worktree` gives one to every node, `--no-worktree` to none. The confirmation says which.
-- **Commands from inside write the main tree.** The session's `treeyard log`, `add`, `set`, `show`…
-  from a worktree treeyard made — or from any git worktree of the repository when `TREEYARD_PROJECT`
-  points at its main tree (as in a session opened from a node that moved into Claude Code's own
-  worktree) — go to the main tree, not to the branch's copy of `.tree/`, with no `--project` needed.
-  (Another git worktree without `TREEYARD_PROJECT` keeps its own `.tree/`, and still takes
-  `--project <main folder>`.) The session's first message says where it stands and that the branch is
-  merged by the coordinator or the person.
+- **Commands from inside write the main tree.** `treeyard` (including the TUI, `show`, `log`, `add`,
+  `set`, `config`…) run inside any linked git worktree of the repository — whether treeyard made it,
+  `git worktree add`, or Claude Code's `.claude/worktrees/…` — finds the main checkout through the
+  git common dir and reads/writes the main tree that the TUI sees, not the branch's copy of `.tree/`,
+  with no `--project` needed. A worktree keeps its own `.tree/` only when the main checkout has no
+  tree (only the branch has one), in a bare repository's worktree (there is no main checkout), in a
+  submodule, or when targeted explicitly with `--project .` (from inside) or `--project <worktree>`.
+  The session's first message says where it stands and that the branch is merged by the coordinator
+  or the person.
 - **Commits are the node's by themselves.** What the branch made since it started shows in the node
   (`treeyard show <id>`, the card, `V` in the tree) and in `treeyard diff <id>` — no
   [hook](#commit-hook) and no `--add`. When the branch is merged and the worktree removed, its
@@ -842,8 +844,8 @@ node, its edit stays.
 `treeyard status` shows in one command how the project is set up and what is wrong with it:
 
 - the versions of treeyard and Brainyard;
-- the folder and its tree; in a git worktree — the main tree (the one the person sees), not the
-  branch's copy, and a hint that tree commands go with `--project <main folder>`;
+- the folder and its tree; in a git worktree — the main tree (the one the person sees and that
+  treeyard commands use automatically), not the branch's copy (pass `--project .` for the branch's copy);
 - nodes by status and the abandoned ones — «in progress» with no live session and no pane for
   longer than `stale_after` hours; unlike `show`, live sessions and panes count here;
 - the `treeyard`, `treeyard-init` and `treeyard-coordinate` skills in Claude Code, Codex and

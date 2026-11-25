@@ -1406,9 +1406,9 @@ export const EN: Record<string, string> = {
   'git worktree': 'git worktree',
   дерево: 'tree',
   основное: 'the main one',
-  'здесь копия ветки, человек видит основное — команды дерева с --project {main}':
-    'this is the branch’s copy, the person sees the main one — tree commands with --project {main}',
-  'команды дерева — с --project {main}': 'tree commands — with --project {main}',
+  'здесь копия ветки — команды treeyard идут в основное (копия ветки: --project .)':
+    'this is the branch’s copy — treeyard commands use the main one (branch copy: --project .)',
+  'команды treeyard идут в основное': 'treeyard commands use the main one',
   'дерево только в этой ветке: в основной папке его нет': 'the tree is only in this branch: the main folder has none',
   узлы: 'nodes',
   брошены: 'abandoned',

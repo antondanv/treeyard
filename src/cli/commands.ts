@@ -767,7 +767,8 @@ function parse<T extends NonNullable<Parameters<typeof parseArgs>[0]>['options']
  * a project does, so a git worktree reaches the main tree the same way.
  */
 function projectDir(folder?: string): string {
-  // A worktree treeyard made for a node writes the main tree, not its branch's copy of `.tree/`.
+  // From a linked git worktree, read and write the main checkout's tree, not the branch's copy.
+  // Explicit `--project` (e.g. `--project .` inside a worktree) selects that folder's tree directly.
   const dir = folder ? findProject(folderArg(folder)) : (treeOfWorktree() ?? findProject());
   if (!dir) throw new UsageError(t('здесь нет дерева (.tree/) — treeyard init, чтобы посадить'));
   // So `treeyard projects` lists it.
@@ -905,7 +906,7 @@ async function openTui(skillsNote = ''): Promise<number> {
     // No terminal to draw in: print the tree instead.
     return showCommand([]);
   }
-  const dir = findProject();
+  const dir = treeOfWorktree() ?? findProject();
   // No tree here yet: the first-run wizard, which may hand over to an agent; the note waits until it is over.
   if (!dir) {
     const code = await wizard(process.cwd());
@@ -951,7 +952,7 @@ const NO_AUTO_SKILLS = new Set([
  */
 function autoSkills(command: string | undefined): string {
   if (command && NO_AUTO_SKILLS.has(command)) return '';
-  const project = findProject();
+  const project = treeOfWorktree() ?? findProject();
   const planting = command === 'init' || (command === undefined && Boolean(process.stdin.isTTY));
   if (!project && !planting) return '';
   if (!skillsAuto()) return '';
@@ -1078,7 +1079,7 @@ async function statusCommand(args: string[]): Promise<number> {
   if (positionals.length) throw new UsageError(t('treeyard status [--json] [--project <папка>]'));
   const start = values.project ? folderArg(values.project) : process.cwd();
   let place = locate(start);
-  // A worktree treeyard made for a node: its tree is the main one, not the branch's copy.
+  // A worktree resolves to the main tree through git common dir (or TREEYARD_PROJECT for a sub-tree inside main).
   const owner = values.project ? undefined : treeOfWorktree(start);
   if (owner && place.worktree) place = { ...place, project: owner };
   const status = await projectStatus(place);
