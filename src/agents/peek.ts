@@ -12,7 +12,15 @@ import { holderOf } from '../model/tree.js';
 import { type BrainId, ROOT, type Tree } from '../model/types.js';
 import { withPaneIdle } from './pane-idle.js';
 import { isPending, nodePane, sleepingRef } from './panes.js';
-import { type ObserveSources, observe, type SessionState, screenTail, sessionSight, type World } from './wait.js';
+import {
+  type ObserveSources,
+  observe,
+  type SessionState,
+  screenTail,
+  sessionSight,
+  sessionSince,
+  type World,
+} from './wait.js';
 
 export interface PeekSources extends ObserveSources {
   capture: (pane: string) => Promise<{ lines: readonly string[] } | undefined>;
@@ -22,7 +30,7 @@ export const DEFAULT_PEEK_SOURCES: PeekSources = {
   live: () => liveSessions({ all: true, panes: {} }),
   panes: () => listPanes(),
   paneSession: async (pane) => (await findPaneSession(pane))?.id,
-  idle: (panes, live) => withPaneIdle(panes, live),
+  idle: (panes, live, since) => withPaneIdle(panes, live, since ? { since } : {}),
   capture: (pane) => capturePane(pane),
 };
 
@@ -189,7 +197,7 @@ export async function peekNodePane(tree: Tree, id: string, options: PeekOptions 
   }
 
   const sources: PeekSources = { ...DEFAULT_PEEK_SOURCES, ...options.sources };
-  const world = options.world ?? (await observe(tree.project.dir, sources));
+  const world = options.world ?? (await observe(tree.project.dir, sources, { since: sessionSince(tree) }));
   const found = nodePane(node, world.panes);
 
   if (!found) {

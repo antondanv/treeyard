@@ -392,6 +392,8 @@ export const EN: Record<string, string> = {
   'к панели подключён терминал — без --force не закрываю':
     'terminal is attached to the pane — refusing to close without --force',
   'панель сейчас работает — без --force не закрываю': 'pane is busy — refusing to close without --force',
+  'CLI не подтвердил конец хода панели — без --force не закрываю':
+    'the CLI has not confirmed the pane ended its turn — refusing to close without --force',
   'панель ждёт человека — без --force не закрываю': 'pane is waiting for the user — refusing to close without --force',
   'не удалось закрыть панель {pane}': 'could not close pane {pane}',
   'панель {pane} уснула': 'pane {pane} put to sleep',

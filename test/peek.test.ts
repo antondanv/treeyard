@@ -16,6 +16,19 @@ vi.mock('@antondanv/brainyard', async (original) => ({
   ...backend,
 }));
 
+const idleSpy = vi.hoisted(() => ({ calls: [] as unknown[][] }));
+
+vi.mock('../src/agents/pane-idle.js', async (original) => {
+  const real = await original<typeof import('../src/agents/pane-idle.js')>();
+  return {
+    ...real,
+    withPaneIdle: (...args: Parameters<typeof real.withPaneIdle>) => {
+      idleSpy.calls.push(args);
+      return real.withPaneIdle(...args);
+    },
+  };
+});
+
 import type { SessionInfo } from '@antondanv/brainyard';
 import { type Pane, peekJson, peekNodePane, peekText } from '../src/agents/panes.js';
 import { peekCommand } from '../src/cli/commands.js';
@@ -47,6 +60,7 @@ const live = (id: string, status = 'idle', extra: Record<string, unknown> = {}):
 
 beforeEach(() => {
   vi.clearAllMocks();
+  idleSpy.calls.length = 0;
   backend.listPanes.mockResolvedValue([]);
   backend.sessions.mockResolvedValue([]);
   backend.setPaneSession.mockResolvedValue(true);
@@ -164,6 +178,30 @@ describe('peekNodePane unit tests', () => {
     expect(result.live).toBe(true);
     expect(result.state).toBe('idle');
     expect(result.lines).toEqual(['Turn completed. Awaiting commands.']);
+  });
+
+  it('does not say the turn ended for a pane written to after its last turn', async () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Written to' });
+    const opened = new Date().toISOString();
+    attachSession(tree, node.id, {
+      brain: 'claude',
+      id: 'conv-sent',
+      pane: 'claude-sent',
+      mode: 'pane',
+      started: ago(30),
+      opened,
+    });
+    backend.listPanes.mockResolvedValue([pane('claude-sent', { sessionId: 'conv-sent' })]);
+    backend.liveSessions.mockResolvedValue([]);
+    backend.capturePane.mockResolvedValue({ lines: ['> hello'] });
+
+    const result = await peekNodePane(tree, node.id);
+
+    expect(result.state).toBe('unknown');
+    expect(peekText(result)).not.toContain('закончила ход');
+    const since = idleSpy.calls[0]?.[2] as { since?: Map<string, number> } | undefined;
+    expect(since?.since?.get('claude-sent')).toBe(Date.parse(opened));
   });
 
   it('reports politely when pane is sleeping', async () => {

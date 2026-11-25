@@ -38,7 +38,7 @@ import { fullAccess } from './access.js';
 import { sessionPlan } from './context.js';
 import type { LaunchOptions } from './launch.js';
 import { withPaneIdle } from './pane-idle.js';
-import { type ObserveSources, observe, sessionSight, type World } from './wait.js';
+import { type ObserveSources, observe, sessionSight, sessionSince, type World } from './wait.js';
 
 export { panesAvailable };
 
@@ -391,6 +391,7 @@ export type SleepStatus =
   | 'no_pane'
   | 'busy'
   | 'waiting'
+  | 'unknown'
   | 'attached'
   | 'pending'
   | 'failed';
@@ -415,7 +416,7 @@ export const DEFAULT_SLEEP_SOURCES: SleepSources = {
   live: () => liveSessions({ all: true, panes: {} }),
   panes: () => listPanes(),
   paneSession: async (pane) => (await findPaneSession(pane))?.id,
-  idle: (panes, live) => withPaneIdle(panes, live),
+  idle: (panes, live, since) => withPaneIdle(panes, live, since ? { since } : {}),
   capture: (pane) => capturePane(pane),
   closePane: (pane) => closePane(pane),
   findPaneSession: (pane) => findPaneSession(pane),
@@ -430,7 +431,7 @@ export interface SleepPaneOptions {
 /**
  * Puts a node's live pane to sleep from the CLI: closes tmux process,
  * leaving the session in the node for waking and continuation.
- * Refuses if the pane is busy, waiting for user, attached or pending (without force).
+ * Refuses if the pane is busy, unconfirmed, waiting for user, attached or pending (without force).
  */
 export async function sleepNodePane(tree: Tree, id: string, options: SleepPaneOptions = {}): Promise<SleepResult> {
   const node = holderOf(tree, id);
@@ -447,7 +448,7 @@ export async function sleepNodePane(tree: Tree, id: string, options: SleepPaneOp
   }
 
   const sources = options.sources ?? DEFAULT_SLEEP_SOURCES;
-  const world = options.world ?? (await observe(tree.project.dir, sources));
+  const world = options.world ?? (await observe(tree.project.dir, sources, { since: sessionSince(tree) }));
   const found = nodePane(node, world.panes);
 
   if (!found) {
@@ -540,6 +541,19 @@ export async function sleepNodePane(tree: Tree, id: string, options: SleepPaneOp
     };
   }
 
+  // No word from the CLI yet (a letter just landed, the turn it started is not over): not safe to close.
+  if (sight.state === 'unknown' && !options.force) {
+    return {
+      node: id,
+      title: node.title,
+      ok: false,
+      status: 'unknown',
+      pane: pane.pane,
+      session: isPending(ref) ? null : ref.id,
+      error: t('CLI не подтвердил конец хода панели — без --force не закрываю'),
+    };
+  }
+
   const closeFn = sources.closePane ?? closePane;
   const closed = await closeFn(pane.pane);
   if (!closed) {
@@ -574,7 +588,7 @@ export async function sleepNodePanes(
   options: SleepPaneOptions = {},
 ): Promise<SleepResult[]> {
   const sources = options.sources ?? DEFAULT_SLEEP_SOURCES;
-  const world = options.world ?? (await observe(tree.project.dir, sources));
+  const world = options.world ?? (await observe(tree.project.dir, sources, { since: sessionSince(tree) }));
   const results: SleepResult[] = [];
   let currentWorld = world;
   for (const id of ids) {
