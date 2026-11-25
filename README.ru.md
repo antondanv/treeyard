@@ -254,6 +254,8 @@ FORCE_COLOR=2 npx tsx scripts/screenshot.ts ../my-app shot.png 130x36   # PNG и
 Сессии, панели и модели работают через [Brainyard](https://github.com/antondanv/brainyard)
 (`@antondanv/brainyard`) — единый слой для всех CLI агентов.
 
+Как прислать правку или сообщить об ошибке — в [правилах совместной работы](CONTRIBUTING.ru.md).
+
 ## Лицензия
 
 [MIT](LICENSE)

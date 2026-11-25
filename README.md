@@ -254,6 +254,8 @@ FORCE_COLOR=2 npx tsx scripts/screenshot.ts ../my-app shot.png 130x36   # a PNG 
 Sessions, panes and models go through [Brainyard](https://github.com/antondanv/brainyard)
 (`@antondanv/brainyard`), one layer for every agent CLI.
 
+How to send a change or report a bug — in the [contributing guide](CONTRIBUTING.md).
+
 ## License
 
 [MIT](LICENSE)
