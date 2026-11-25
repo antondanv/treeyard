@@ -33,6 +33,7 @@ export const EN: Record<string, string> = {
     'Claude Code sessions started from nodes will receive letters alongside a prompt and during a turn. To remove both hooks, run treeyard hook claude remove{p1}',
   'хук Claude Code для писем': 'the Claude Code hook for letters',
   'хук Codex для писем': 'the Codex hook for letters',
+  'хук Antigravity для писем': 'the Antigravity hook for letters',
   'treeyard hook codex install | remove | status [--user]': 'treeyard hook codex install | remove | status [--user]',
   'поставить — treeyard hook codex install (только для проекта) или с --user (для всех проектов и worktree)':
     'to put it in — treeyard hook codex install (this project only) or with --user (every project and worktree)',
@@ -40,12 +41,22 @@ export const EN: Record<string, string> = {
     'to update the hook in {file}, run treeyard hook codex install{p1}',
   'сессии Codex из узлов получат письма вместе с запросом и посреди хода после одобрения хука в Codex (при старте сессии или /hooks). Убрать оба хука — treeyard hook codex remove{p1}':
     'Codex sessions started from nodes will receive letters alongside a prompt and during a turn once you trust the hook in Codex (at session start or via /hooks). To remove both hooks, run treeyard hook codex remove{p1}',
+  'treeyard hook antigravity install | remove | status [--user]':
+    'treeyard hook antigravity install | remove | status [--user]',
+  'поставить — treeyard hook antigravity install (только для проекта) или с --user (для всех проектов и worktree)':
+    'to put it in — treeyard hook antigravity install (this project only) or with --user (every project and worktree)',
+  'обновить хук в {file} — treeyard hook antigravity install{p1}':
+    'to update the hook in {file}, run treeyard hook antigravity install{p1}',
+  'сессии Antigravity из узлов получат письма вместе с запросом и посреди хода. Убрать хук — treeyard hook antigravity remove{p1}':
+    'Antigravity sessions started from nodes will receive letters alongside a prompt and during a turn. To remove the hook, run treeyard hook antigravity remove{p1}',
   '{file} — не JSON-объект: хук поставь сам или поправь файл':
     '{file} is not a JSON object: put the hook in yourself or fix the file',
   '{file}: раздел hooks не в том виде, что читает Claude Code — поправь файл сам':
     '{file}: the hooks section is not in the form Claude Code reads — fix the file yourself',
   '{file}: раздел hooks не в том виде, что читает Codex — поправь файл сам':
     '{file}: the hooks section is not in the form Codex reads — fix the file yourself',
+  '{file}: хуки не в том виде, что читает Antigravity — поправь файл сам':
+    '{file}: the hooks are not in the form Antigravity reads — fix the file yourself',
   'Пока ты работал, пришло письмо — учти его в этой работе:':
     'A letter came while you were working — take it into account in this work:',
   'Пока ты работал, пришли письма — учти их в этой работе:':
@@ -55,6 +66,7 @@ export const EN: Record<string, string> = {
   'хук писем': 'letter hook',
   'не стоит · treeyard hook claude install': 'not installed · treeyard hook claude install',
   'не стоит · treeyard hook codex install': 'not installed · treeyard hook codex install',
+  'не стоит · treeyard hook antigravity install': 'not installed · treeyard hook antigravity install',
   'посреди хода': 'in the middle of a turn',
   'вместе с запросом': 'alongside the prompt',
   'укажи SHA коммита (от 4 шестнадцатеричных символов)': 'give a commit SHA (at least 4 hexadecimal characters)',

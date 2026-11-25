@@ -385,12 +385,14 @@ function markPrepared(project: string, wt: NodeWorktree): NodeWorktree {
 const LOCAL_HOOK_FILES = [
   ['.claude', 'settings.local.json'],
   ['.codex', 'hooks.json'],
+  ['.agents', 'hooks.json'],
 ] as const;
 
 /**
- * Project-local settings and mail hooks (`.claude/settings.local.json`, `.codex/hooks.json`) go to
- * the node's worktree too: it is the same project, and Claude Code and Codex read them from the
- * folder the session runs in. Tracked or already-present files in the worktree are left alone.
+ * Project-local settings and mail hooks (`.claude/settings.local.json`, `.codex/hooks.json`,
+ * `.agents/hooks.json`) go to the node's worktree too: it is the same project, and Claude Code,
+ * Codex and Antigravity read them from the folder the session runs in. Tracked or already-present
+ * files in the worktree are left alone.
  */
 function copyLocalHooks(project: string, wt: NodeWorktree): number {
   let copied = 0;

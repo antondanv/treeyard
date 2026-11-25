@@ -170,7 +170,11 @@ export function statusText(s: ProjectStatus, p: Paint): string {
     brains.forEach((brain, i) => {
       const found = s.mailHook!.find((place) => place.brain === brain && place.installed);
       const install =
-        brain === 'codex' ? t('не стоит · treeyard hook codex install') : t('не стоит · treeyard hook claude install');
+        brain === 'codex'
+          ? t('не стоит · treeyard hook codex install')
+          : brain === 'antigravity'
+            ? t('не стоит · treeyard hook antigravity install')
+            : t('не стоит · treeyard hook claude install');
       const state = found ? (found.needsUpdate ? warn(t('устарел')) : ok(t('стоит'))) : '';
       const text = found
         ? `${BRAIN_LABEL[brain].padEnd(name)}${state}  ${p.dim(`${found.scope === 'user' ? t('у тебя') : t('в проекте')} · ${homeShort(found.file)}`)}`

@@ -5,11 +5,12 @@
  * The deliverer (deliver.ts) waits for the end of a busy session's turn: a letter sent in the
  * middle of a long turn is read after it. It also cannot type into the person's own terminal.
  * CLIs with lifecycle hooks or plugins can read letters earlier:
- * - `deliverHookMail` is the shared mailbox step for any CLI (Claude Code, Codex, and future
- *   Antigravity / OpenCode hooks or plugins): under the mailbox lock it takes the node's fitting
+ * - `deliverHookMail` is the shared mailbox step for any CLI (Claude Code, Codex, Antigravity,
+ *   and future OpenCode plugins): under the mailbox lock it takes the node's fitting
  *   letters, hands the formatted block to the CLI, and marks them delivered once emitted.
  * - Claude Code and Codex share the same JSON hook shape (`PostToolUse` and `UserPromptSubmit`
- *   with `hookSpecificOutput.additionalContext`), driven by `JsonHookSpec` and `deliverMidTurn`.
+ *   with `hookSpecificOutput.additionalContext`), driven by `JsonHookSpec` and `deliverMidTurn`;
+ *   Antigravity (`agy-hook.ts`) uses `PreInvocation` and `injectSteps` on top of `deliverHookMail`.
  *
  * - The shell line tests the node's inbox flag (mailbox.ts) first and starts treeyard only when a
  *   letter waits: without letters, it costs a `[ -e … ]` on each event.
@@ -53,7 +54,7 @@ export const HOOK_TIMEOUT = 10;
 
 export type HookScope = 'project' | 'user';
 export type ClaudeScope = HookScope;
-export type MailHookBrain = 'claude' | 'codex';
+export type MailHookBrain = 'claude' | 'codex' | 'antigravity';
 
 /** Claude Code's settings file: the project's local one (not in git), or the person's own. */
 export function claudeSettingsFile(scope: ClaudeScope, project: string, env: NodeJS.ProcessEnv = process.env): string {
@@ -73,7 +74,7 @@ export interface JsonHookSpec {
   badHooksError(file: string): Error;
 }
 
-function readSettings(file: string): Json {
+export function readHookJson(file: string): Json {
   let text: string;
   try {
     text = readFileSync(file, 'utf8');
@@ -121,7 +122,7 @@ function withoutOwnHooks(list: Entry[], marker: string): Entry[] {
 
 export function jsonHookState(spec: JsonHookSpec, file: string): 'absent' | 'outdated' | 'installed' {
   try {
-    const hooks = readSettings(file).hooks as Json | undefined;
+    const hooks = readHookJson(file).hooks as Json | undefined;
     const ours = EVENTS.map((event) => {
       const list = hooks?.[event];
       return Array.isArray(list) ? ownHooks(list, spec.marker) : [];
@@ -178,7 +179,7 @@ export function installJsonMailHook(
   env: NodeJS.ProcessEnv = process.env,
 ): MailHookResult {
   const file = spec.fileOf(scope, project, env);
-  const settings = readSettings(file);
+  const settings = readHookJson(file);
   if (
     settings.hooks !== undefined &&
     (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks))
@@ -218,7 +219,7 @@ export function removeJsonMailHook(
   env: NodeJS.ProcessEnv = process.env,
 ): MailHookResult {
   const file = spec.fileOf(scope, project, env);
-  const settings = readSettings(file);
+  const settings = readHookJson(file);
   const hooks = settings.hooks as Json | undefined;
   if (!hooks) return { kind: 'absent', file };
   let changed = false;
