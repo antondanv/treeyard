@@ -318,6 +318,10 @@ export const EN: Record<string, string> = {
   '{where}: «{status}» — не статус': '{where}: «{status}» is not a status',
   '{where}: who бывает: agent, human, any': '{where}: who can be: agent, human, any',
   '{where}: key «{key}» уже занят': '{where}: key «{key}» is taken already',
+  'needs задаётся один раз: needs=, needs+= или needs-=': 'needs is given once: needs=, needs+= or needs-=',
+  'needs{op}= — нужен хотя бы один id': 'needs{op}= needs at least one id',
+  'узел {id} не ждёт «{ref}»': 'node {id} does not wait for «{ref}»',
+  'needs было: {list}': 'needs was: {list}',
   '{where}: needs — строка или массив строк': '{where}: needs is a string or an array of strings',
   '{where}: children — массив узлов': '{where}: children is an array of nodes',
   '{where}: у узла внутри children свой родитель — убери parent':
