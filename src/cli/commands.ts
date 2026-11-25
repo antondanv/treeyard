@@ -277,7 +277,9 @@ function commandLines(): string {
                                            печатает их id; ошибка — не заводится ни один
   treeyard set <id> [<id>…] ключ=значение…  status, title, who, done_when, check, note (описание), waiting, until, parent,
                                            after=<id брата>|first|last (место среди братьев),
-                                           needs=<id>|../X#id (ждёт узла этого дерева или другого проекта); --project <папка> — узел там
+                                           needs=<id>|../X#id (ждёт узла этого дерева или другого проекта; задаёт список целиком
+                                           и пишет, что было), needs+=<id> — добавить связь, needs-=<id> — убрать одну;
+                                           --project <папка> — узел там
                                            несколько id — то же всем (after= ставит их подряд); ошибка — не меняется ни один
   treeyard log <id> "<текст>" [--as имя]   запись в журнал узла
                 [--status s] [--commit <ref>…]   заодно статус и коммиты (HEAD, ветка, SHA) — закрыть узел одной
@@ -446,7 +448,9 @@ function commandLines(): string {
                                            prints their ids; an error adds none
   treeyard set <id> [<id>…] key=value…     status, title, who, done_when, check, note (description), waiting, until, parent,
                                            after=<sibling id>|first|last (the place among siblings),
-                                           needs=<id>|../X#id (waits for a node of this tree or of another project); --project <dir> — a node there
+                                           needs=<id>|../X#id (waits for a node of this tree or of another project; sets the whole
+                                           list and says what it was), needs+=<id> — add a link, needs-=<id> — remove one;
+                                           --project <dir> — a node there
                                            several ids — the same to each (after= puts them one after another); an error changes none
   treeyard log <id> "<text>" [--as name]   a line in the node's journal
                 [--status s] [--commit <ref>…]   the status and commits (HEAD, a branch, a SHA) too — close a node
@@ -2236,6 +2240,8 @@ async function setCommand(args: string[]): Promise<number> {
   const ids = [...new Set((idArgs.length ? idArgs : [undefined]).map((arg) => nodeArg(tree, arg)))];
   if (pairs.length === 0) throw new UsageError('treeyard set <id> [<id>…] status=review [waiting="…"] …');
   const fields: Record<string, string> = {};
+  // `needs+=a` adds a link, `needs-=a` removes one, `needs=a` sets the whole list.
+  let needsOp: NeedsOp = 'set';
   for (const pair of pairs) {
     const cut = pair.indexOf('=');
     if (cut <= 0)
@@ -2244,9 +2250,19 @@ async function setCommand(args: string[]): Promise<number> {
           pair,
         }),
       );
-    fields[pair.slice(0, cut).trim().replace(/-/g, '_')] = pair.slice(cut + 1);
+    let key = pair.slice(0, cut).trim();
+    const op = /^needs([+-])$/.exec(key);
+    if (op) {
+      if (fields.needs !== undefined) throw new UsageError(t('needs задаётся один раз: needs=, needs+= или needs-='));
+      needsOp = op[1] === '+' ? 'add' : 'remove';
+      key = 'needs';
+    } else if (key.replace(/-/g, '_') === 'needs' && fields.needs !== undefined) {
+      throw new UsageError(t('needs задаётся один раз: needs=, needs+= или needs-='));
+    }
+    fields[key.replace(/-/g, '_')] = pair.slice(cut + 1);
   }
   const source = sourceOf(values.as);
+  const replacedNeeds = new Map<string, string>();
   for (const key of Object.keys(fields)) {
     // `order` is a stored number in steps of 10: the way to change it is a place, not a number.
     if (key === 'order') throw new UsageError(t('порядок задаётся местом, а не числом: after=<id брата>|first|last'));
@@ -2262,8 +2278,17 @@ async function setCommand(args: string[]): Promise<number> {
     throw new UsageError(t('title= — у каждого узла своё название: меняй по одному'));
   const who = fields.who === undefined ? undefined : fields.who ? whoArg(fields.who) : null;
   const status = fields.status !== undefined ? statusArg(fields.status) : undefined;
-  const refs = fields.needs !== undefined ? needsArg(tree, fields.needs) : undefined;
-  if (refs && ids.some((id) => refs.includes(`.#${id}`))) throw new UsageError(t('узел не может ждать сам себя'));
+  const refs = fields.needs !== undefined ? needsArg(tree, fields.needs, needsOp === 'remove') : undefined;
+  if (refs && needsOp !== 'remove' && ids.some((id) => refs.includes(`.#${id}`)))
+    throw new UsageError(t('узел не может ждать сам себя'));
+  if (refs && needsOp !== 'set' && refs.length === 0)
+    throw new UsageError(t('needs{op}= — нужен хотя бы один id', { op: needsOp === 'add' ? '+' : '-' }));
+  if (refs && needsOp === 'remove') {
+    for (const id of ids) {
+      const missing = refs.find((ref) => !(tree.nodes.get(id)?.needs ?? []).includes(ref));
+      if (missing) throw new UsageError(t('узел {id} не ждёт «{ref}»', { id, ref: needsText(missing) }));
+    }
+  }
   if (fields.note !== undefined && /^##\s+(?:Журнал|Journal)\s*$/m.test(fields.note))
     throw new UsageError(t('Раздел «Журнал» заполняется отдельно — убери его из описания'));
   const moves = fields.parent !== undefined || fields.after !== undefined ? planMoves(tree, ids, fields) : [];
@@ -2286,8 +2311,15 @@ async function setCommand(args: string[]): Promise<number> {
     }
     if (refs) {
       let links: ReturnType<typeof setNeeds>;
+      const before = tree.nodes.get(id)?.needs ?? [];
+      const wanted =
+        needsOp === 'add'
+          ? [...before, ...refs]
+          : needsOp === 'remove'
+            ? before.filter((ref) => !refs.includes(ref))
+            : refs;
       try {
-        links = setNeeds(tree, id, refs, source);
+        links = setNeeds(tree, id, wanted, source);
       } catch (error) {
         throw new UsageError((error as Error).message);
       }
@@ -2295,6 +2327,9 @@ async function setCommand(args: string[]): Promise<number> {
         process.stderr.write(
           t('{p1} {ref} — не найдено, связь записана\n', { p1: err.c('#ffcf70', '!'), ref: link.ref }),
         );
+      // `needs=` replaces the whole list: say what it was, so a wrong id can be put back.
+      if (needsOp === 'set' && before.length > 0 && before.join() !== (tree.nodes.get(id)?.needs ?? []).join())
+        replacedNeeds.set(id, before.map(needsText).join(', '));
     }
   }
   for (const move of moves) moveNode(tree, move.id, move.parent, move.after);
@@ -2329,6 +2364,8 @@ async function setCommand(args: string[]): Promise<number> {
     // Done turned into review is said here too: stderr is often thrown away (`2>/dev/null`).
     const note = demoted.has(id) ? ` · ${demotedNote(values.as)}` : '';
     process.stdout.write(`${node.id} · ${STATUS_LABEL[node.status]} · ${node.title}${note}\n`);
+    const was = replacedNeeds.get(id);
+    if (was) process.stdout.write(`${out.dim(t('needs было: {list}', { list: was }))}\n`);
   }
   if (status === 'done') {
     const clean = ids.filter((id) => !demoted.has(id) && isWorktreeCleanMerged(tree.project.dir, id));
@@ -2345,13 +2382,32 @@ async function setCommand(args: string[]): Promise<number> {
   return 0;
 }
 
-/** `needs=a,../X#b`: `y79a` and `#y79a` are nodes of this tree — an id prefix is enough, like in every command. */
-function needsArg(tree: Tree, value: string): string[] {
+type NeedsOp = 'set' | 'add' | 'remove';
+
+/**
+ * `needs=a,../X#b`: `y79a` and `#y79a` are nodes of this tree — an id prefix is enough, like in every command.
+ * Removing is lenient: a link to a node that is gone can still be taken off by its full id.
+ */
+function needsArg(tree: Tree, value: string, removing = false): string[] {
   return value
     .split(',')
     .map((ref) => ref.trim())
     .filter(Boolean)
-    .map((ref) => (normalizeRef(ref) === ref ? ref : `.#${nodeArg(tree, ref.replace(/^#/, ''))}`));
+    .map((ref) => {
+      if (normalizeRef(ref) === ref) return ref;
+      const id = ref.replace(/^#/, '');
+      try {
+        return `.#${nodeArg(tree, id)}`;
+      } catch (error) {
+        if (removing) return `.#${id}`;
+        throw error;
+      }
+    });
+}
+
+/** A stored `needs` ref as a person writes it: `.#y79a` is just `y79a`. */
+function needsText(ref: string): string {
+  return ref.replace(/^\.#/, '');
 }
 
 /**
