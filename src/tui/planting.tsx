@@ -13,7 +13,7 @@ import { Logo, logoSize, WORDMARK } from './logo.js';
 import { MouseProvider } from './mouse.js';
 import { paneState } from './rows.js';
 import { TerminalPane } from './terminal.js';
-import { useTerminalFocus } from './terminal-focus.js';
+import { BACKGROUND_MS, useTerminalFocus } from './terminal-focus.js';
 import { C } from './theme.js';
 
 export function PlantingApp(props: AppProps & { plantingPane: Pane }) {
@@ -27,14 +27,17 @@ export function PlantingApp(props: AppProps & { plantingPane: Pane }) {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    if (ready || !terminalFocused) return;
+    if (ready) return;
     if (findProject(props.dir) === props.dir) {
       setReady(true);
       return;
     }
-    const timer = setInterval(() => {
-      if (findProject(props.dir) === props.dir) setReady(true);
-    }, 700);
+    const timer = setInterval(
+      () => {
+        if (findProject(props.dir) === props.dir) setReady(true);
+      },
+      terminalFocused ? 700 : BACKGROUND_MS,
+    );
     return () => clearInterval(timer);
   }, [ready, props.dir, terminalFocused]);
 

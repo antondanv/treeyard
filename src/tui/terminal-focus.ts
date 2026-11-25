@@ -16,3 +16,11 @@ export function useTerminalFocus(): boolean {
   );
   return useSyncExternalStore(subscribe, snapshot, () => true);
 }
+
+/** Out of focus the screen follows the agents this often: no animation, only what changed. */
+export const BACKGROUND_MS = 2000;
+
+/** Polls often return what they returned before; equal answers must not draw a frame. */
+export function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
