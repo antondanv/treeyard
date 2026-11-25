@@ -168,7 +168,7 @@ export function createTree(dir: string, template: Template, options: CreateOptio
     dir,
     title: options.title.trim() || dir.split('/').pop() || t('Проект'),
     template: template.id,
-    brain: options.brain ?? 'claude',
+    ...(options.brain ? { brain: options.brain } : {}),
     start: 'plan',
     created: today(),
     body: projectBody(template, vars),

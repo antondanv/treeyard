@@ -26,7 +26,7 @@ folder first, too).
 
 ## Handing a node to another session
 
-- One session per node: `treeyard open <id> --bg --task "…" [--model …] [--effort …]`. The
+- One session per node: `treeyard open <id> --pane --task "…" [--brain <cli>] [--model …] [--effort …]` (Claude Code also supports `--bg` for background runs). The
   session shows in the node and can be resumed from the tree.
 - Not a built-in subagent: it inherits your `$TREEYARD_NODE`, its commits attach to your
   node, and the tree doesn't see it.

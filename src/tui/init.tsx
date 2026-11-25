@@ -8,14 +8,12 @@
  * project, done in a conversation. Or by yourself: pick a template, answer a
  * couple of questions, and the tree is there at once.
  */
-import { existsSync } from 'node:fs';
-import { basename, delimiter, join } from 'node:path';
+import { basename, join } from 'node:path';
 
-import { BRAINS } from '@antondanv/brainyard';
 import { Box, render, Text, useApp, useInput, useWindowSize } from 'ink';
 import { type ReactNode, useRef, useState } from 'react';
 
-import { BRAIN_LABEL } from '../agents/launch.js';
+import { BRAIN_LABEL, defaultBrain, isBrainInstalled } from '../agents/launch.js';
 import { type FolderFacts, folderFacts, plantingInPane } from '../agents/planting.js';
 import { holdTerminal } from '../crash.js';
 import { plural, t } from '../i18n/i18n.js';
@@ -55,11 +53,6 @@ export async function runInit(dir: string, templateId?: string): Promise<InitRes
 
 const AGENTS = BRAIN_IDS;
 
-function installed(brain: BrainId): boolean {
-  const bin = BRAINS[brain].binary;
-  return (process.env.PATH ?? '').split(delimiter).some((dir) => dir && existsSync(join(dir, bin)));
-}
-
 type Step = 'start' | 'agent' | 'questions' | 'brain' | 'pointer' | 'done';
 
 export function Wizard(props: { dir: string; templateId?: string; onDone: (result: InitResult) => void }) {
@@ -68,14 +61,14 @@ export function Wizard(props: { dir: string; templateId?: string; onDone: (resul
   const templates = listTemplates();
   const preset = props.templateId ? getTemplate(props.templateId) : undefined;
   const [facts] = useState<FolderFacts>(() => folderFacts(props.dir));
-  const [available] = useState(() => new Map(AGENTS.map((brain) => [brain, installed(brain)])));
+  const [available] = useState(() => new Map(AGENTS.map((brain) => [brain, isBrainInstalled(brain)])));
   const [template, setTemplate] = useState<Template | undefined>(preset);
-  const [agent, setAgent] = useState<BrainId>('claude');
+  const [agent, setAgent] = useState<BrainId>(() => AGENTS.find((b) => available.get(b)) ?? defaultBrain());
   const [step, setStep] = useState<Step>(preset ? 'questions' : 'start');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [title, setTitle] = useState(basename(props.dir));
   const [question, setQuestion] = useState(-1); // -1: the project's title
-  const [brain, setBrain] = useState<BrainId>('claude');
+  const [brain, setBrain] = useState<BrainId>(() => AGENTS.find((b) => available.get(b)) ?? defaultBrain());
   const targets = pointerTargets(props.dir);
   const [pointer, setPointer] = useState(true);
   const [error, setError] = useState<string | undefined>();
@@ -326,7 +319,7 @@ export function Wizard(props: { dir: string; templateId?: string; onDone: (resul
                 {t('Допишу в ')}
                 {targets.join(t(' и '))}
                 {t(
-                  ' короткий блок: где лежит дерево и как писать в него итог. Тогда и обычный запуск claude или codex в проекте будет знать про дерево.',
+                  ' короткий блок: где лежит дерево и как писать в него итог. Тогда и обычный запуск агента в проекте будет знать про дерево.',
                 )}
               </Text>
               <Box marginTop={1}>

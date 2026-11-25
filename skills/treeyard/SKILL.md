@@ -73,7 +73,7 @@ by title.
 - `treeyard find "text"` — titles, criteria, descriptions and journals of every node, done
   ones too. Instead of `grep` over `.tree/` or over `show`.
 - `treeyard status` — the project at a glance: its folder and tree, nodes by status and
-  abandoned ones, skills per CLI, the pointer in CLAUDE.md and AGENTS.md, the git hook, live
+  abandoned ones, skills per CLI, the pointer in AGENTS.md, CLAUDE.md and GEMINI.md, the git hook, live
   sessions; each problem comes with the command that fixes it. In a git worktree it names
   the main tree and the `--project` to pass. Run it when the setup looks off (a skill
   missing, commits not attaching, the tree not where you expect) instead of checking files

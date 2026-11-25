@@ -60,7 +60,7 @@ export const START_LABEL: Record<StartMode, string> = labels(() => ({
 export const START_HINT: Record<StartMode, string> = labels(() => ({
   plan: t('агент изучает и предлагает план, ничего не меняя'),
   do: t('агент сразу делает узел и проверяет критерий'),
-  goal: t('Claude работает, пока критерий не выполнен (/goal)'),
+  goal: t('агент работает автономно, пока критерий не выполнен (/goal — в Claude Code)'),
   chat: t('сессия с контекстом узла, первое сообщение — твоё'),
 }));
 
@@ -271,7 +271,7 @@ const TEXT = {
     image: 'файл.png',
     imageWhat: 'приложить к узлу картинку или скрин (например, доказательство для проверки); без файла — список',
     coordinator:
-      'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом (--bg — только Claude Code; Codex, Antigravity и OpenCode — --brain <имя> --pane вместо --bg)',
+      'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом; CLI — любой (Claude Code, Codex, Antigravity, OpenCode), для фонового режима в Claude Code есть --bg',
     follow:
       'дождаться розданных узлов, а не опрашивать show и git log: вернётся, когда узел уйдёт из «в работе», его сессия закончит ход или станет ждать человека, или тебе придёт письмо, и напечатает итог или письмо целиком; `send <id> "…"` — дописать той же сессии следующую реплику, а не открывать новую (занята — письмо в очереди, дойдёт само; `--wait` — дождаться ответа); вопрос в её диалоге — `send <id> --answer "…"` только с ответом человека',
     setMany: 'одно изменение нескольким узлам сразу (after= ставит их подряд), а не цикл',
@@ -344,7 +344,7 @@ const TEXT = {
     image: 'file.png',
     imageWhat: 'attach a picture or a screenshot to the node (evidence for review, say); without a file — the list',
     coordinator:
-      'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent (--bg is Claude Code only; for Codex, Antigravity and OpenCode use --brain <name> --pane instead of --bg)',
+      'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent; any CLI works (Claude Code, Codex, Antigravity, OpenCode), and Claude Code also supports --bg for background runs',
     follow:
       'wait for the nodes handed out instead of polling show and git log: it returns when a node leaves «active», its session ends its turn or waits for the person, or a letter comes to you, and prints the summary or the whole letter; `send <id> "…"` — write the same session its next message instead of opening a new one (busy — the letter is queued and gets there by itself; `--wait` — wait for the answer); a question in its dialog — `send <id> --answer "…"` only with the person\'s answer',
     setMany: 'the same change to several nodes at once (after= puts them one after another), not a loop',
@@ -446,7 +446,9 @@ export function contextText(tree: Tree, id: string): string {
   else lines.push(`- \`${self} diff ${node.id} --add HEAD\` — ${L.diffWhat}`);
   // Only where work is handed out: a leaf would pay for the line in every session.
   if (kids.some((kid) => kid.status !== 'done' && kid.status !== 'dropped')) {
-    lines.push(`- \`${self} open <id> [<id>…] --bg --task "…" [--model …] [--effort …]\` — ${L.coordinator}`);
+    lines.push(
+      `- \`${self} open <id> [<id>…] --pane --task "…" [--brain <cli>] [--model …] [--effort …]\` — ${L.coordinator}`,
+    );
     lines.push(`- \`${self} wait <id> [<id>…] --timeout 10m\` — ${L.follow}`);
     lines.push(`- \`${self} set <id> <id>… status=todo\` — ${L.setMany}`);
   }
@@ -569,7 +571,7 @@ const ROOT_TEXT = {
     rm: 'удалить узел, заведённый по ошибке; узел с историей не удаляют, а закрывают — `set <id> status=dropped`',
     decide: 'решение в «Решения» `.tree/tree.md` (с датой) — только когда человек так решил',
     commit: 'закоммитить файлы дерева этих узлов, README и tree.md (chore(tree): …) — вместо `git add .tree/…` руками',
-    open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом (--bg — только Claude Code; Codex, Antigravity и OpenCode — --brain <имя> --pane вместо --bg)',
+    open: 'раздать дочерний узел отдельной сессией (она видна в узле, и её можно продолжить из дерева), а не встроенным субагентом; CLI — любой (Claude Code, Codex, Antigravity, OpenCode), для фонового режима в Claude Code есть --bg',
     follow:
       'дождаться розданных узлов, а не опрашивать show и git log: вернётся, когда узел уйдёт из «в работе», его сессия закончит ход или станет ждать человека, или тебе придёт письмо, и напечатает итог или письмо целиком; `send <id> "…"` — дописать той же сессии следующую реплику, а не открывать новую (занята — письмо в очереди, дойдёт само; `--wait` — дождаться ответа); вопрос в её диалоге — `send <id> --answer "…"` только с ответом человека',
     doneWhen: 'готово, когда',
@@ -642,7 +644,7 @@ const ROOT_TEXT = {
     decide: 'a decision in «Decisions» of `.tree/tree.md` (dated) — only when the person decided so',
     commit:
       'commit the tree files of these nodes, README and tree.md (chore(tree): …) — instead of `git add .tree/…` by hand',
-    open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent (--bg is Claude Code only; for Codex, Antigravity and OpenCode use --brain <name> --pane instead of --bg)',
+    open: 'hand a child node to a separate session (it shows in the node and can be continued from the tree) instead of a built-in subagent; any CLI works (Claude Code, Codex, Antigravity, OpenCode), and Claude Code also supports --bg for background runs',
     follow:
       'wait for the nodes handed out instead of polling show and git log: it returns when a node leaves «active», its session ends its turn or waits for the person, or a letter comes to you, and prints the summary or the whole letter; `send <id> "…"` — write the same session its next message instead of opening a new one (busy — the letter is queued and gets there by itself; `--wait` — wait for the answer); a question in its dialog — `send <id> --answer "…"` only with the person\'s answer',
     doneWhen: 'done when',
@@ -834,7 +836,7 @@ export function projectContext(tree: Tree): string {
   lines.push(`- \`${self} decide "…"\` — ${L.decide}`);
   lines.push(`- \`${self} commit <id>…\` — ${L.commit}`);
   lines.push(`- \`${self} sessions\` — ${L.sessions}`);
-  lines.push(`- \`${self} open <id> [<id>…] --bg --task "…" [--model …] [--effort …]\` — ${L.open}`);
+  lines.push(`- \`${self} open <id> [<id>…] --pane --task "…" [--brain <cli>] [--model …] [--effort …]\` — ${L.open}`);
   lines.push(`- \`${self} wait <id> [<id>…] --timeout 10m\` — ${L.follow}`);
   if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);
   lines.push(`- ${T.names()}`);

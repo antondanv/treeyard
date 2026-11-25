@@ -339,9 +339,11 @@ export async function answerQuestion(
     );
   if (!sight.pane)
     throw new NotAnswered(
-      t('сессия ждёт человека не в панели — ответить можно только в ней: claude attach {short}', {
-        short: ref.id.slice(0, 8),
-      }),
+      ref.brain === 'claude'
+        ? t('сессия ждёт человека не в панели — ответить можно только в ней: claude attach {short}', {
+            short: ref.id.slice(0, 8),
+          })
+        : t('сессия ждёт человека не в панели — ответь в терминале, где она открыта'),
     );
   if (!isQuestion(sight.waitingFor))
     throw new NotAnswered(
@@ -452,9 +454,11 @@ export async function resolvePermission(
     throw new NotAnswered(t('сессия узла {id} не ждёт разрешения', { id }));
   if (!sight.pane)
     throw new NotAnswered(
-      t('сессия ждёт человека не в панели — подтвердить можно только в ней: claude attach {short}', {
-        short: ref.id.slice(0, 8),
-      }),
+      ref.brain === 'claude'
+        ? t('сессия ждёт человека не в панели — подтвердить можно только в ней: claude attach {short}', {
+            short: ref.id.slice(0, 8),
+          })
+        : t('сессия ждёт человека не в панели — подтвердить можно только в терминале, где она открыта'),
     );
   if (isQuestion(sight.waitingFor))
     throw new NotAnswered(

@@ -587,12 +587,24 @@ describe('approving and rejecting permissions from the CLI', () => {
       /не ждёт разрешения/,
     );
 
-    // Waiting outside a pane.
+    // Waiting outside a pane: Claude Code points to `claude attach`, other CLIs stay neutral.
     world.live = [live(`s-${node.id}`, 'waiting', { waitingFor: 'approve Bash' })];
     world.panes = [];
     await expect(resolvePermission(tree, node.id, 'approve', { sources: send, source: 'ты' })).rejects.toThrow(
       /не в панели.*claude attach/,
     );
+    const codexNode = addNode(tree, { title: 'Codex терминал', status: 'active' });
+    attachSession(tree, codexNode.id, { brain: 'codex', id: `s-${codexNode.id}`, mode: 'terminal' });
+    world.live = [{ ...live(`s-${codexNode.id}`, 'waiting', { waitingFor: 'approve Bash' }), brain: 'codex' }];
+    await expect(resolvePermission(tree, codexNode.id, 'approve', { sources: send, source: 'ты' })).rejects.toThrow(
+      /не в панели.*терминале/,
+    );
+    await expect(resolvePermission(tree, codexNode.id, 'approve', { sources: send, source: 'ты' })).rejects.not.toThrow(
+      /claude attach/,
+    );
+    world.live = [{ ...live(`s-${codexNode.id}`, 'waiting', { waitingFor: 'input' }), brain: 'codex' }];
+    await expect(answerQuestion(tree, codexNode.id, '1', { sources: send })).rejects.toThrow(/не в панели.*терминале/);
+    await expect(answerQuestion(tree, codexNode.id, '1', { sources: send })).rejects.not.toThrow(/claude attach/);
 
     expect(typed).toEqual([]);
   });

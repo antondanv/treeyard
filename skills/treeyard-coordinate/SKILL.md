@@ -62,7 +62,7 @@ Copy it and check it off:
 Coordinate:
 - [ ] 1. Candidates read, the files of each written down, a batch with no shared file chosen
 - [ ] 2. Plan agreed with the person: nodes, CLI (checked via treeyard limits), pane or background, model & effort (checked via treeyard models), what waits
-- [ ] 3. Sessions started: treeyard open … --pane|--bg --worktree --start do --task …
+- [ ] 3. Sessions started: treeyard open … --pane --brain <cli> --worktree --start do --task … (or --bg for Claude Code)
 - [ ] 4. Waiting: treeyard wait (or peek on a live pane: treeyard peek <id>); a letter or question you can answer → treeyard send; one only the person can → to them
 - [ ] 5. Each finished node accepted: journal, commits, diff, criterion
 - [ ] 6. Worktree branches merged one by one; checks green on the main branch after each; pane put to sleep: treeyard sleep <id>
@@ -106,10 +106,10 @@ already named the nodes to run:
 | Node | Files | Session | Model | Effort |
 |---|---|---|---|---|
 | «Quiet exit on EPIPE» | src/cli/show.ts, test/show.test.ts | Codex, pane | default | low |
-| «Node order from the CLI» | src/model/ops.ts, src/cli/set.ts | Claude Code, background | default | — |
+| «Node order from the CLI» | src/model/ops.ts, src/cli/set.ts | Antigravity, pane | default | medium |
 | «Amount from the clipboard» | src/cli/set.ts — shared with «Node order…» | after it | — | — |
 
-**Checking models and limits.** Choose the CLI, `--model` and `--effort` using Treeyard's built-in commands instead of guessing or calling Brainyard via `node -e`:
+**Checking models and limits.** Never assume a single CLI by default. Choose the CLI (`--brain`), `--model` and `--effort` from `treeyard limits` and `treeyard models` (or the person's preference) instead of guessing or calling Brainyard via `node -e`:
 
 ```sh
 treeyard limits                     # check local quota windows across all CLIs (offline: true, no network calls)
@@ -118,13 +118,13 @@ treeyard limits codex               # windows for one CLI (e.g. primary 11%, sec
 treeyard models antigravity         # models for one CLI (e.g. gemini-4-neon with low · medium · high* · xhigh)
 ```
 
-Use `treeyard limits` to pick a CLI with available quota windows (so sessions do not immediately stall in rate limits), and `treeyard models` to specify a valid model and effort level for `treeyard open … --model <model> --effort <level>`.
+Use `treeyard limits` to pick a CLI with available quota windows (so sessions do not immediately stall in rate limits), and `treeyard models` to specify a valid model and effort level for `treeyard open … --brain <cli> --model <model> --effort <level>`.
 
 Then `treeyard set <parent> status=active` if it is not active yet.
 
 ## 3. Start the sessions
 
-Two ways; the session's CLI is `--brain` (default: `brain:` in `.tree/tree.md`):
+Two ways; pass `--brain <cli>` explicitly for each session (`claude`, `codex`, `antigravity`, `opencode` — without it treeyard uses `brain:` in `.tree/tree.md`, your current session's CLI, or the first installed CLI):
 
 | Way | Command | CLIs | Works in |
 |---|---|---|---|
@@ -146,22 +146,22 @@ treeyard queue <parent> --pane --parallel 2 --start do --yes --json --task "…"
 
 It starts the open children in their order, two at a time, the next one when a node leaves
 `active` or its session ends, a node with `needs` once they are in review or done, and starts
-nothing while the CLI's window is 90% used. Run it as a background command (Codex: in a pane of
-its own, or rounds of `open`); its lines are your events: `?` asks — answer with `treeyard send`;
+nothing while the CLI's window is 90% used. Run it as a background command if your CLI supports
+them (otherwise in a pane of its own, or in rounds of `open`); its lines are your events: `?` asks — answer with `treeyard send`;
 `■` ended while still `active` — look at it; `‖` a limit or unmet `needs` — into the summary. Ctrl+C
 stops new starts; the same command again picks up the nodes at work. Accept each node as below while
-the queue goes on. Background — Claude Code without tmux, or a node whose checks must not trip over a
-neighbour's half-done edits.
+the queue goes on. `--bg` is a Claude Code-specific background option (when tmux is unavailable).
 
 ```sh
-treeyard open <a> <b> --brain codex --pane --start do --yes --json --task "…" [--model …] [--effort …]
-treeyard open <a> <b> --bg --worktree --start do --yes --json --task "…" [--model …] [--effort …]
+treeyard open <a> <b> --brain <cli> --pane --start do --yes --json --task "…" [--model …] [--effort …]
+# Claude Code also supports --bg instead of --pane:
+treeyard open <a> <b> --brain claude --bg --worktree --start do --yes --json --task "…" [--model …] [--effort …]
 ```
 
 - `--json` prints the session ids and pane names; keep them for step 4.
 - `--yes` skips the confirmation: the person gave it in step 2.
-- A CLI that asks to trust the folder (`✗ … Workspace not trusted` from Claude Code in the
-  background, a prompt in a Codex pane) — the person accepts it once; never accept it for them.
+- A CLI that asks to trust the folder (a trust prompt in a pane, or `✗ … Workspace not trusted` from
+  Claude Code in the background) — the person accepts it once; never accept it for them.
 - Codex: the person chooses once how treeyard starts it (`treeyard config codex_access`, or «,» in
   the tree). `sandbox` — its sandbox lets `treeyard send`, the tree and `git commit` through. `config`
   — as config.toml says, which by default shuts tmux and `.git`: then the task says «leave your
@@ -213,7 +213,7 @@ The prefix attaches commits through the git hook (`treeyard hook status`). No ho
 person installs it (`treeyard hook install`); until then you attach each node's commits at
 acceptance with `treeyard diff <id> --add <sha>`.
 
-**No session can start** (no tmux for a pane, no Claude Code for the background) → your CLI's
+**No session can start** (no tmux for a pane, and no background mode in the chosen CLI) → your CLI's
 own subagent, told: the node id, `treeyard show <id>` first, `--project <main folder>` on every
 treeyard command, commits as `TREEYARD_NODE=<id> git commit …`, the closing `log`. Say in the
 summary that its conversation is not in the tree.
@@ -234,9 +234,9 @@ the end of the pane's screen). A letter to you comes whole, under
 conversation again. The others get a line under «still active». Exit 124 — out of time, nothing
 needs you yet: call it again.
 
-- **Claude Code:** run it as a background command and act when it exits. **Codex, Antigravity,
-  OpenCode:** a `--timeout` under your shell's limit per command, then call it again. No shell
-  loops around treeyard, no pipes out of it.
+- Call it with a `--timeout` under your shell's limit per command and call it again on exit 124;
+  CLIs with background shell commands (such as Claude Code) can also run `wait` in the background
+  and act when it exits. No shell loops around treeyard, no pipes out of it.
 - **Peek at a live pane:** when you want to look at what a working pane is doing right now without
   attaching or waiting for the turn to end: run `treeyard peek <id> [--lines 40]`. It prints the
   session status, pane name, and the screen tail stripped of ANSI codes. No `tmux attach`, no manual
@@ -271,7 +271,8 @@ needs you yet: call it again.
   wrote to it and what it wrote back.
 - **Waits for the person** (a permission, a folder to trust, a question in a dialog): never answer
   for them — tell the person what the dialog asks; they answer in the pane
-  (`tmux -L brainyard attach -t <pane>`) or in `claude attach <id>`. A letter to such a session
+  (`tmux -L brainyard attach -t <pane>`) or in the terminal where the session is open (`claude attach <id>`
+  for a Claude Code background session). A letter to such a session
   waits until they have. If the person in this conversation directly asks you to confirm or decline
   a permission or startup dialog in a pane → `treeyard send <id> --approve [choice] --as ты` (or
   `--as you`) / `treeyard send <id> --reject --as ты` checks the dialog on the screen, presses the

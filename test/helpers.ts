@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { afterEach } from 'vitest';
 
-import { NODE_VAR, PROJECT_VAR, SESSION_VAR } from '../src/model/notes.js';
+import { AS_VAR, NODE_VAR, PROJECT_VAR, SESSION_VAR } from '../src/model/notes.js';
 import { loadTree } from '../src/model/store.js';
 import type { Tree } from '../src/model/types.js';
 import { DEFAULTS, saveSettings } from '../src/settings.js';
@@ -54,7 +54,7 @@ function cliEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
     TREEYARD_LANG: 'ru',
     NO_COLOR: '1',
   };
-  for (const key of [NODE_VAR, PROJECT_VAR, SESSION_VAR]) delete env[key];
+  for (const key of [NODE_VAR, PROJECT_VAR, SESSION_VAR, AS_VAR]) delete env[key];
   Object.assign(env, extra);
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.FORCE_COLOR;

@@ -991,7 +991,7 @@ export function PointerDialog(props: {
       <Text wrap="wrap">
         {props.gap === 'missing'
           ? t(
-              'Сессия claude или codex, открытая в проекте не из узла, видит только AGENTS.md и CLAUDE.md. Дерева там не упомянуто: агент не найдёт узел, не запишет итог и не заведёт идею.',
+              'Сессия агента, открытая в проекте не из узла, видит только AGENTS.md, CLAUDE.md или GEMINI.md. Дерева там не упомянуто: агент не найдёт узел, не запишет итог и не заведёт идею.',
             )
           : t('Блок о дереве в {files} написан старой версией treeyard — в нём нет новых правил для агентов.', {
               files: props.files.join(t(' и ')),
@@ -1328,7 +1328,7 @@ export function Palette(props: {
           }}
           active
           width={props.width - 8}
-          placeholder={t('начни печатать: название узла, «claude», «готово»…')}
+          placeholder={t('начни печатать: название узла, имя CLI, «готово»…')}
         />
       </Box>
       {matches.length === 0 ? <Text color={C.faint}>{t('ничего не нашлось')}</Text> : null}

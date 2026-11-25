@@ -1,6 +1,9 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { contextText, projectContext, selfCommand } from '../src/agents/context.js';
+import { contextText, projectContext, START_HINT, selfCommand } from '../src/agents/context.js';
+import { defaultBrain } from '../src/agents/launch.js';
 import { setLang } from '../src/i18n/i18n.js';
 import { addNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
@@ -103,5 +106,28 @@ describe('a session from the root', () => {
     expect(text).toContain(`\`${self} set <id> status=done --as you\``);
     expect(text).toContain('- Handing work to a subagent or a helper — give it the node id and `--project ');
     expect(text).toContain('- Read the output of `show` and `find` whole');
+  });
+});
+
+describe('neutral CLI defaults and wording', () => {
+  it('START_HINT.goal does not frame Claude as the default agent in either language', () => {
+    expect(START_HINT.goal).not.toMatch(/^Claude\b/);
+    setLang('en');
+    expect(START_HINT.goal).not.toMatch(/^Claude\b/);
+  });
+
+  it('defaultBrain prefers project brain, then TREEYARD_AS, then first installed CLI, then deterministic fallback', () => {
+    const emptyBin = tempDir('treeyard-empty-bin-');
+    const codexBin = tempDir('treeyard-codex-bin-');
+    writeFileSync(join(codexBin, 'codex'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+
+    // Project brain wins over TREEYARD_AS and installed binaries.
+    expect(defaultBrain('opencode', { PATH: codexBin, TREEYARD_AS: 'antigravity' })).toBe('opencode');
+    // Without project brain, current session's TREEYARD_AS wins.
+    expect(defaultBrain(undefined, { PATH: codexBin, TREEYARD_AS: 'antigravity' })).toBe('antigravity');
+    // Invalid/human TREEYARD_AS falls through to the first installed CLI on PATH.
+    expect(defaultBrain(undefined, { PATH: codexBin, TREEYARD_AS: 'ты' })).toBe('codex');
+    // Without any installed CLI, deterministic fallback keeps tests and bare setups stable.
+    expect(defaultBrain(undefined, { PATH: emptyBin })).toBe('claude');
   });
 });

@@ -129,7 +129,7 @@ describe('treeyard send from the shell', () => {
     const text = await sh('send', node.id, 'возьми шаблон из docs/', '--as', 'ты');
     expect(text.code, text.stderr).toBe(0);
     expect(text.stdout).toContain('письмо №1 в очереди: у узла нет сессии — письмо получит первая');
-    expect(text.stdout).toContain(`начать её: treeyard open ${node.id} --bg|--pane --task "…"`);
+    expect(text.stdout).toContain(`начать её: treeyard open ${node.id} --pane|--bg --task "…"`);
     const json = await sh('send', node.id, 'и без платных вызовов', '--json');
     expect(json.code).toBe(0);
     expect(JSON.parse(json.stdout)).toMatchObject({

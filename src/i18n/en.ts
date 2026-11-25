@@ -191,8 +191,8 @@ export const EN: Record<string, string> = {
   '{n} МБ': '{n} MB',
   '{n} ГБ': '{n} GB',
   'выбери одно: --pane или --bg': 'choose one: --pane or --bg',
-  'несколько узлов — только с --bg или --pane: treeyard open <id> <id>… --bg|--pane':
-    'several nodes only with --bg or --pane: treeyard open <id> <id>… --bg|--pane',
+  'несколько узлов — только с --pane или --bg: treeyard open <id> <id>… --pane|--bg':
+    'several nodes only with --pane or --bg: treeyard open <id> <id>… --pane|--bg',
   '--json — только с --pane или --bg: treeyard open <id> --pane|--bg --json':
     '--json only with --pane or --bg: treeyard open <id> --pane|--bg --json',
   '--task без текста': '--task without text',
@@ -234,7 +234,8 @@ export const EN: Record<string, string> = {
   'агент изучает и предлагает план, ничего не меняя':
     'the agent studies the node and proposes a plan, changing nothing',
   'агент сразу делает узел и проверяет критерий': 'the agent does the node right away and checks the criterion',
-  'Claude работает, пока критерий не выполнен (/goal)': 'Claude keeps working until the criterion is met (/goal)',
+  'агент работает автономно, пока критерий не выполнен (/goal — в Claude Code)':
+    'the agent works autonomously until the criterion is met (/goal — in Claude Code)',
   'сессия с контекстом узла, первое сообщение — твоё': "a session with the node's context; the first message is yours",
   'нет узла {id}': 'no node {id}',
   'в ответе агента не нашлось дерева в JSON': "no tree in JSON in the agent's answer",
@@ -826,7 +827,7 @@ export const EN: Record<string, string> = {
   'дерево — это md-файлы в .tree/, правь их чем угодно': 'the tree is md files in .tree/, edit them with anything',
   'Найти узел или действие': 'Find a node or an action',
   'перейти или сделать': 'go or do',
-  'начни печатать: название узла, «claude», «готово»…': 'start typing: a node title, «claude», «done»…',
+  'начни печатать: название узла, имя CLI, «готово»…': 'start typing: a node title, a CLI name, «done»…',
   'ничего не нашлось': 'nothing found',
   'Шаги для «{title}»': 'Steps for «{title}»',
   отметить: 'tick',
@@ -866,8 +867,8 @@ export const EN: Record<string, string> = {
   'Сказать агентам про дерево?': 'Tell agents about the tree?',
   'Допишу в ': 'I will add to ',
   ' и ': ' and ',
-  ' короткий блок: где лежит дерево и как писать в него итог. Тогда и обычный запуск claude или codex в проекте будет знать про дерево.':
-    ' a short block: where the tree is and how to write outcomes into it. Then a plain claude or codex run in the project knows about the tree too.',
+  ' короткий блок: где лежит дерево и как писать в него итог. Тогда и обычный запуск агента в проекте будет знать про дерево.':
+    ' a short block: where the tree is and how to write outcomes into it. Then a plain agent run in the project knows about the tree too.',
   'да, дописать': 'yes, add it',
   'не трогать': 'leave them alone',
   'Совет: дерево — это файлы; в git-репозитории его история сохраняется вместе с кодом.':
@@ -979,8 +980,8 @@ export const EN: Record<string, string> = {
     'no AGENTS.md, CLAUDE.md or GEMINI.md — nothing to add to',
   'блок о дереве — в {files}': 'the block about the tree is in {files}',
   'не нашёл ни Claude Code, ни Codex, ни Antigravity': 'found neither Claude Code, Codex nor Antigravity',
-  'теперь в любой папке: «посади дерево этого проекта» или /{skill} в Claude Code':
-    "now in any folder: «plant this project's tree», or /{skill} in Claude Code",
+  'теперь в любой папке: «посади дерево этого проекта» или /{skill} в твоём CLI':
+    "now in any folder: «plant this project's tree», or /{skill} in your CLI",
   'нет CLI': 'no CLI',
   'treeyard skills install — поставить во все найденные CLI': 'treeyard skills install — install into every CLI found',
   'папка проекта': 'the project folder',
@@ -1454,8 +1455,8 @@ export const EN: Record<string, string> = {
   'агенты не знают о дереве': 'agents do not know about the tree',
   'блок для агентов устарел': 'the block for agents is outdated',
   'Обновить блок о дереве?': 'Update the block about the tree?',
-  'Сессия claude или codex, открытая в проекте не из узла, видит только AGENTS.md и CLAUDE.md. Дерева там не упомянуто: агент не найдёт узел, не запишет итог и не заведёт идею.':
-    'A claude or codex session opened in the project not from a node sees only AGENTS.md and CLAUDE.md. The tree is not mentioned there: the agent will not find its node, write an outcome or add an idea.',
+  'Сессия агента, открытая в проекте не из узла, видит только AGENTS.md, CLAUDE.md или GEMINI.md. Дерева там не упомянуто: агент не найдёт узел, не запишет итог и не заведёт идею.':
+    'An agent session opened in the project not from a node sees only AGENTS.md, CLAUDE.md or GEMINI.md. The tree is not mentioned there: the agent will not find its node, write an outcome or add an idea.',
   'Блок о дереве в {files} написан старой версией treeyard — в нём нет новых правил для агентов.':
     'The block about the tree in {files} was written by an older treeyard — it lacks the newer rules for agents.',
   'Допишу в {files} короткий блок со ссылкой на скилл treeyard; остальной текст файла не трогаю.':
@@ -1551,8 +1552,6 @@ export const EN: Record<string, string> = {
   'сообщи об ошибке: {url} — приложи этот файл': 'report it at {url} — attach that file',
   'сообщи об ошибке: {url}': 'report it at {url}',
   // treeyard wait and send
-  'у узла {id} нет сессии — начни её: treeyard open {id} --bg|--pane --task "…"':
-    'node {id} has no session — start one: treeyard open {id} --bg|--pane --task "…"',
   'сессия {short} ещё работает — дождись её: treeyard wait {id}':
     'session {short} is still at work — wait for it: treeyard wait {id}',
   'фоновая сессия не продолжилась': 'the background session did not go on',
@@ -1564,7 +1563,6 @@ export const EN: Record<string, string> = {
   'письмо №{n} сессии {brain} {short}: «{text}»': 'message #{n} to session {brain} {short}: «{text}»',
   'письмо №{n}: «{text}»': 'message #{n}: «{text}»',
   'ответь в панели: tmux -L brainyard attach -t {pane}': 'answer in the pane: tmux -L brainyard attach -t {pane}',
-  'ответь в ней: claude attach {id}': 'answer in it: claude attach {id}',
   'сессия ждёт человека{why} — письмо ушло бы в её диалог; {where}':
     'the session waits for the person{why} — a message would go into its dialog; {where}',
   'treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]':
@@ -1606,8 +1604,8 @@ export const EN: Record<string, string> = {
   '№{n}': '#{n}',
   'сессия занята — придёт, когда она закончит ход': 'the session is busy — it arrives when its turn is over',
   'сессия ждёт человека — придёт, когда он ответит': 'the session waits for the person — it arrives once they answer',
-  'сессия открыта в терминале человека. В Claude Code с хуком письмо придёт с очередным запросом, иначе — после закрытия сессии':
-    "the session is open in the person's terminal. In Claude Code with the hook, the letter arrives with the next prompt. Otherwise it arrives after the session closes",
+  'сессия открыта в терминале человека. С хуком или плагином писем (Claude Code, Codex, Antigravity, OpenCode) письмо придёт с очередным запросом, иначе — после закрытия сессии':
+    "the session is open in the person's terminal. With a mail hook or plugin (Claude Code, Codex, Antigravity, OpenCode), the letter arrives with the next prompt. Otherwise it arrives after the session closes",
   'сессия ещё запускается — придёт через несколько секунд':
     'the session is still starting — it arrives in a few seconds',
   'у узла нет сессии — письмо получит первая': 'the node has no session — its first one gets the message',
@@ -1625,7 +1623,8 @@ export const EN: Record<string, string> = {
   'письмо №{n}': 'message #{n}',
   'ответить ей: tmux -L brainyard attach -t {pane}': 'answer it: tmux -L brainyard attach -t {pane}',
   'ответить ей: claude attach {id}': 'answer it: claude attach {id}',
-  'начать её: treeyard open {id} --bg|--pane --task "…"': 'start one: treeyard open {id} --bg|--pane --task "…"',
+  'ответить ей: в терминале, где открыта сессия': 'answer it: in the terminal where the session is open',
+  'начать её: treeyard open {id} --pane|--bg --task "…"': 'start one: treeyard open {id} --pane|--bg --task "…"',
   'доставит treeyard сам; посмотреть — treeyard show {id} --only mail':
     'treeyard delivers it by itself; to look — treeyard show {id} --only mail',
   'treeyard deliver [--once] [--project <папка>]': 'treeyard deliver [--once] [--project <folder>]',
@@ -1633,6 +1632,8 @@ export const EN: Record<string, string> = {
     'the session of node {id} is not waiting for an answer to a question — a plain message: treeyard send {id} "…"',
   'сессия ждёт человека не в панели — ответить можно только в ней: claude attach {short}':
     'the session waits for the person outside a pane — it can only be answered there: claude attach {short}',
+  'сессия ждёт человека не в панели — ответь в терминале, где она открыта':
+    'the session waits for the person outside a pane — answer in the terminal where it is open',
   'сессия ждёт разрешения ({why}) — его даёт только человек: tmux -L brainyard attach -t {pane}':
     'the session waits for a permission ({why}) — only the person gives it: tmux -L brainyard attach -t {pane}',
   'не вижу вариантов вопроса на экране панели {pane} — ответь в ней сам':
@@ -1642,6 +1643,8 @@ export const EN: Record<string, string> = {
   'сессия узла {id} не ждёт разрешения': 'the session of node {id} is not waiting for a permission',
   'сессия ждёт человека не в панели — подтвердить можно только в ней: claude attach {short}':
     'the session waits for the person outside a pane — it can only be confirmed there: claude attach {short}',
+  'сессия ждёт человека не в панели — подтвердить можно только в терминале, где она открыта':
+    'the session waits for the person outside a pane — it can only be confirmed in the terminal where it is open',
   'сессия ждёт ответа на вопрос ({why}), а не разрешения — используй treeyard send {id} --answer "…"':
     'the session waits for an answer to a question ({why}), not a permission — use treeyard send {id} --answer "…"',
   'не вижу диалога разрешения на экране панели {pane} — проверь в ней сам: tmux -L brainyard attach -t {pane}':
@@ -1696,8 +1699,8 @@ export const EN: Record<string, string> = {
   'у узла своя сессия — коммиты этой сессии остаются у «{at}»':
     "the node has a session of its own — this session's commits stay with «{at}»",
   // treeyard queue
-  'treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]':
-    'treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]',
+  'treeyard queue <id> [<id>…] --pane|--bg [--parallel 2] [--task "…"] [--limit 90] [--json]':
+    'treeyard queue <id> [<id>…] --pane|--bg [--parallel 2] [--task "…"] [--limit 90] [--json]',
   'выбери одно: --pane или --bg — {usage}': 'pick one: --pane or --bg — {usage}',
   'корень в очередь не ставят — назови узлы: {usage}': 'the root does not go into a queue — name the nodes: {usage}',
   '--parallel — целое от 1': '--parallel — a whole number from 1',

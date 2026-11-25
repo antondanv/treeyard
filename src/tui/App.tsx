@@ -49,6 +49,7 @@ import {
 import {
   BRAIN_LABEL,
   BRAIN_SHORT,
+  defaultBrain,
   type LaunchOptions,
   launch,
   liveById,
@@ -360,7 +361,7 @@ export function App(props: AppProps) {
   const [docs, setDocs] = useState<DocFile[] | undefined>();
   const [docsVersion, setDocsVersion] = useState(0);
   /** The models of the project's CLI, asked once the settings open. */
-  const catalog = useCatalog(tree.project.brain ?? 'claude', modal?.kind === 'settings');
+  const catalog = useCatalog(defaultBrain(tree.project.brain), modal?.kind === 'settings');
 
   const owners = sessionOwners(tree);
   const anyBusy = [...live.values()].some(
@@ -960,13 +961,13 @@ export function App(props: AppProps) {
 
   /** The project's brain and its model for agent jobs; the confirmation may pick another one for this job. */
   const assistChoice = (job: AssistJob): AssistChoice => ({
-    brain: tree.project.brain ?? 'claude',
+    brain: defaultBrain(tree.project.brain),
     ...(tree.project.assistModel ? { model: tree.project.assistModel } : {}),
     effort: ASSIST_EFFORT[job],
   });
 
   const defaults = (): LaunchOptions => ({
-    brain: tree.project.brain ?? 'claude',
+    brain: defaultBrain(tree.project.brain),
     start: rootSelected ? rootStart(tree.project.start ?? 'plan') : (tree.project.start ?? 'plan'),
     pane: hasPanes && settings().open === 'pane',
   });
@@ -974,7 +975,7 @@ export function App(props: AppProps) {
   /** The project's model and effort, when the session runs on the project's own CLI and chose none itself. */
   const withProject = (options: LaunchOptions): LaunchOptions => {
     const p = tree.project;
-    if (options.brain !== (p.brain ?? 'claude')) return options;
+    if (options.brain !== defaultBrain(p.brain)) return options;
     const out = { ...options };
     if (!out.model && p.model) out.model = p.model;
     if (!out.effort && p.effort) out.effort = p.effort;
@@ -3012,7 +3013,7 @@ export function App(props: AppProps) {
       { value: 'off', label: t('нет') },
     ];
     const p = tree.project;
-    const brain = p.brain ?? 'claude';
+    const brain = defaultBrain(p.brain);
     return [
       {
         key: 'lang',
@@ -3148,7 +3149,7 @@ export function App(props: AppProps) {
         section: t('ЭТОТ ПРОЕКТ  .tree/tree.md'),
         label: t('Мозг по умолчанию'),
         options: BRAIN_IDS.map((id) => ({ value: id, label: BRAIN_LABEL[id] })),
-        value: p.brain ?? 'claude',
+        value: defaultBrain(p.brain),
         hint: t('для c, ⏎ → новая сессия и задач агента · модель и усилие у каждого CLI свои'),
       },
       {
@@ -4037,7 +4038,7 @@ export function sessionLines(list: readonly SessionInfo[]): SessionLine[] {
 
 /** The first session of the next (or previous) CLI that has any. */
 export function nextGroup(list: readonly SessionInfo[], index: number, step: 1 | -1): number {
-  const here = BRAIN_ORDER.indexOf(list[index]?.brain ?? 'claude');
+  const here = BRAIN_ORDER.indexOf(list[index]?.brain ?? BRAIN_ORDER[0]!);
   for (let at = here + step; at >= 0 && at < BRAIN_ORDER.length; at += step) {
     const first = list.findIndex((session) => session.brain === BRAIN_ORDER[at]);
     if (first >= 0) return first;

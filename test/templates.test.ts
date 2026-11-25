@@ -37,7 +37,15 @@ describe('templates', () => {
       title: 'Пилот',
       answers: { goal: 'первый отзыв', loop: 'ссылка → отзыв' },
     });
-    expect(tree.project).toMatchObject({ title: 'Пилот', goal: 'первый отзыв', template: 'stages', brain: 'claude' });
+    expect(tree.project).toMatchObject({ title: 'Пилот', goal: 'первый отзыв', template: 'stages' });
+    expect(tree.project.brain).toBeUndefined();
+    const withBrain = createTree(tempDir(), getTemplate('stages')!, {
+      title: 'С мозгом',
+      answers: { goal: 'работает' },
+      brain: 'codex',
+      skeleton: false,
+    });
+    expect(withBrain.project.brain).toBe('codex');
     expect(tree.project.body).toContain('## Метод: Этапы');
     expect(tree.project.body).toContain('## Правила для агентов');
     // The template's own rules land under the shared ones.

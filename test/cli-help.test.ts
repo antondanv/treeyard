@@ -166,6 +166,19 @@ describe('treeyard <command> --help', () => {
     }
   }, 40_000);
 
+  it('uses neutral CLI examples in help in both languages', async () => {
+    for (const lang of ['ru', 'en'] as const) {
+      const sh = shell(tempDir(), lang);
+      const help = (await sh('help')).stdout;
+      expect(help).toContain('treeyard init --agent [--brain <cli>]');
+      expect(help).toContain('treeyard import [--brain <cli>]');
+      expect(help).toContain('treeyard open <id> <id>… --pane|--bg');
+      expect(help).toContain('treeyard queue <id> [<id>…] --pane|--bg');
+      expect(help).not.toContain('--brain claude]');
+      expect(help).not.toContain('--brain codex]');
+    }
+  }, 40_000);
+
   it('leaves what follows -- alone: it is text', async () => {
     const dir = tempDir();
     createTree(dir, getTemplate('directions')!, { title: 'Главное', answers: { goal: 'работает' }, skeleton: false });

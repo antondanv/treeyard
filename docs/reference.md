@@ -254,7 +254,7 @@ permission request also looks like work, not “waits for you”.
 
 | This project (`.tree/tree.md`) | |
 | --- | --- |
-| `brain` | the default brain: claude, codex, antigravity, opencode |
+| `brain` | the default brain: claude, codex, antigravity, opencode (unset — current session's CLI or first installed CLI) |
 | `start` | how a session starts: plan, do, goal, chat |
 | `model`, `effort` | the sessions' model and effort — picked from the list the CLI itself gives |
 | `assist_model` | the model for “break into steps” and the criterion — can be a cheaper one |
@@ -584,18 +584,16 @@ becomes the first message; `--task -` reads it from stdin; `treeyard context <id
 shows the result; with `--start goal` it becomes part of the `/goal` condition).
 `--model` and `--effort` set the model and the effort for this launch only; without them the CLI
 uses its own defaults. `--worktree` starts the session in the node's own
-[git worktree](#git-worktrees-of-nodes), in any CLI; `--no-worktree` — in the project's folder. `--bg` (Claude Code)
-starts the session in the background and returns at once; the session is saved in the node.
-With `--bg` you can name several nodes: `treeyard open a b c --bg --task "…"` checks every id
-first (a wrong one — no session at all), starts the sessions one after another with the same
-flags and prints a line per node to stdout: `✓ <id> <title> · session <session id>`. A session
-that fails to start is a `✗` line on stderr; the rest still start, and the exit code is 1.
-`--pane` takes several nodes the same way — `treeyard open a b c --brain codex --pane` — and it is
-what coordinators on Codex, Antigravity and OpenCode use, since `--bg` is Claude Code only: a
-pane in each node, a line per node `✓ <id> <title> · pane <name>`, a pane that fails to start is a
-`✗` line on stderr and the exit code is 1. With `--json`, one array on stdout (see “Sessions next to the tree”).
-Several nodes without `--bg` or `--pane` are an error: in this terminal sessions run one after
-another.
+[git worktree](#git-worktrees-of-nodes), in any CLI; `--no-worktree` — in the project's folder.
+`--pane` starts the session in a tmux pane (works in Claude Code, Codex, Antigravity and OpenCode)
+and returns at once; the session is saved in the node. With `--pane` you can name several nodes —
+`treeyard open a b c --brain <cli> --pane --task "…"` — checks every id first (a wrong one — no
+session at all), starts a pane in each node one after another with the same flags, and prints a line
+per node to stdout: `✓ <id> <title> · pane <name>`. A pane that fails to start is a `✗` line on
+stderr; the rest still start, and the exit code is 1. `--bg` (Claude Code only) works the same way
+in the background (`✓ <id> <title> · session <session id>`). With `--json`, one array on stdout (see
+“Sessions next to the tree”). Several nodes without `--pane` or `--bg` are an error: in this
+terminal sessions run one after another.
 
 A coordinator follows the nodes it handed out with two commands, without polling `show` and
 `git log` and without subagents of its own. `treeyard wait a b` waits until at least one node needs
@@ -625,9 +623,10 @@ at, replyTo}`; each node with `node`, `title`, `status`, `from` (the status when
 `entry` (`{at, who, text}`), `message` (the session's last message, `{text, source:
 "transcript"|"screen"}`, or `null` — `screen` when there was no transcript to read, the text is then
 the end of the pane's screen) and `session` (`{brain, id, mode, state, waitingFor, pane, screen}`;
-`screen` only for a session without a transcript message). Claude
-Code runs `wait` in the background and hears when it ends; a CLI without background commands calls
-it with a `--timeout` under its own limit per command.
+`screen` only for a session without a transcript message). Sessions of any CLI follow handed-out
+nodes with `wait`, `peek`, `send` and `sleep`; call `wait` with a `--timeout` under your shell's
+limit per command and run it again on exit 124 (CLIs with background shell commands, such as Claude
+Code, can also run `wait` in the background and hear when it ends).
 
 Nodes handed out in parallel should touch different files — `wait` and `queue` check that instead of
 guessing. They read every node of the project that has a worktree and is at work or in review (the
@@ -668,10 +667,11 @@ once if the session can take it, otherwise by itself as soon as it can:
 - a busy session, one waiting for the person (a permission, a question in a dialog, a startup
   dialog of trusting the folder or external `CLAUDE.md` imports — keys would
   land in it) and one open in the person's terminal — the message waits: for the end of the turn,
-  for the person's answer in the pane (`tmux -L brainyard attach -t <pane>`) or in `claude attach`,
-  or for the terminal to be closed so the session can wake in a pane. With the Claude Code and Codex
-  hooks below, the session can also receive the message alongside the person's next prompt or between
-  tool calls during a turn;
+  for the person's answer in the pane (`tmux -L brainyard attach -t <pane>`) or in the terminal where
+  the session is open (`claude attach` for a Claude Code background session),
+  or for the terminal to be closed so the session can wake in a pane. With the mail hooks and plugin
+  below (Claude Code, Codex, Antigravity, OpenCode), the session can also receive the message alongside
+  the person's next prompt or between tool calls during a turn;
 - a node with no session — the message waits for its first one: `treeyard open` and a start from
   the tree put every waiting message into its first message.
 
@@ -740,7 +740,7 @@ is correspondence between two nodes: the receiver's journal gets `message #12 fr
 next; in the receiver's conversation it arrives under the line “A message from the session of node
 «…» (id), not from the person; to answer — treeyard send <id> "…"”: an agent's message never passes
 for the person's word. A message from outside a node's session (a person in a shell) goes into the
-receiver's journal only: `message #12 to session claude 1a2b3c4d: «…»`, or `message #12: «…»` to a
+receiver's journal only: `message #12 to session <cli> 1a2b3c4d: «…»`, or `message #12: «…»` to a
 node with no session. `treeyard show <id> --only mail` — every message of the node, got `←` and sent
 `→`, whole and with its state from this machine's mailbox (“queued: …”, “delivered: …”); messages
 journals have without a mailbox (another machine, before the mailbox) — as the journal's line, no

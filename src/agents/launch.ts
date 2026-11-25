@@ -6,15 +6,24 @@
  * one key away.
  */
 import { existsSync } from 'node:fs';
-import { liveSessions, type OpenResult, open, type SessionInfo, sessions, stopSession } from '@antondanv/brainyard';
+import { delimiter, join } from 'node:path';
+import {
+  BRAINS,
+  liveSessions,
+  type OpenResult,
+  open,
+  type SessionInfo,
+  sessions,
+  stopSession,
+} from '@antondanv/brainyard';
 import { t } from '../i18n/i18n.js';
 import { senderNode } from '../model/mail.js';
 import { markDelivered } from '../model/mailbox.js';
-import { nodeEnv } from '../model/notes.js';
+import { AS_VAR, nodeEnv } from '../model/notes.js';
 import { attachSession, setStatus } from '../model/ops.js';
 import { nowIso } from '../model/time.js';
 import { holderOf } from '../model/tree.js';
-import { type BrainId, ROOT, type SessionRef, type StartMode, type Tree } from '../model/types.js';
+import { BRAIN_IDS, type BrainId, ROOT, type SessionRef, type StartMode, type Tree } from '../model/types.js';
 import {
   saveMainBaseline,
   sessionFolder,
@@ -39,6 +48,58 @@ export const BRAIN_SHORT: Record<BrainId, string> = {
   antigravity: 'agy',
   opencode: 'opencode',
 };
+
+const BIN_ENV: Record<BrainId, string> = {
+  claude: 'BRAINYARD_CLAUDE_BIN',
+  codex: 'BRAINYARD_CODEX_BIN',
+  antigravity: 'BRAINYARD_AGY_BIN',
+  opencode: 'BRAINYARD_OPENCODE_BIN',
+};
+
+function binaryExists(cmd: string, pathVar: string): boolean {
+  if (!cmd) return false;
+  if (cmd.includes('/')) return existsSync(cmd);
+  return pathVar.split(delimiter).some((dir) => dir && existsSync(join(dir, cmd)));
+}
+
+/** Whether a CLI's binary is available (respecting BRAINYARD_*_BIN overrides, then PATH). */
+export function isBrainInstalled(brain: BrainId, env: NodeJS.ProcessEnv = process.env): boolean {
+  const pathVar = env.PATH ?? '';
+  const override = env[BIN_ENV[brain]]?.trim();
+  if (override) {
+    if (override.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(override) as unknown;
+        if (Array.isArray(parsed) && typeof parsed[0] === 'string') return binaryExists(parsed[0], pathVar);
+      } catch {
+        return false;
+      }
+    }
+    return binaryExists(override, pathVar);
+  }
+  return binaryExists(BRAINS[brain].binary, pathVar);
+}
+
+/** First installed CLI found on PATH (or via BRAINYARD_*_BIN), in BRAIN_IDS order. */
+export function installedBrain(env: NodeJS.ProcessEnv = process.env): BrainId | undefined {
+  return BRAIN_IDS.find((brain) => isBrainInstalled(brain, env));
+}
+
+/** Valid BrainId from the current session's `TREEYARD_AS`, if any. */
+export function envBrain(env: NodeJS.ProcessEnv = process.env): BrainId | undefined {
+  const raw = env[AS_VAR]?.trim().toLowerCase();
+  if (!raw) return undefined;
+  return (BRAIN_IDS as readonly string[]).includes(raw) ? (raw as BrainId) : undefined;
+}
+
+/**
+ * Neutral default CLI when `--brain` is not passed:
+ * the project's `brain:`, otherwise the current session's CLI (`TREEYARD_AS`),
+ * otherwise the first installed CLI, otherwise `BRAIN_IDS[0]` as a deterministic fallback.
+ */
+export function defaultBrain(projectBrain?: BrainId, env: NodeJS.ProcessEnv = process.env): BrainId {
+  return projectBrain ?? envBrain(env) ?? installedBrain(env) ?? BRAIN_IDS[0]!;
+}
 
 /** How to open a session by hand, in the project's folder. */
 export function resumeCommand(brain: BrainId, id: string): string {

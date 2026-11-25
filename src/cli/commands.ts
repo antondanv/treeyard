@@ -49,7 +49,14 @@ import {
 } from '../agents/context.js';
 import { type Attempt, deliverAll, ensureDeliverer, runDeliverer } from '../agents/deliver.js';
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
-import { BRAIN_LABEL, type LaunchOptions, launch, projectSessions, sessionOwners } from '../agents/launch.js';
+import {
+  BRAIN_LABEL,
+  defaultBrain,
+  type LaunchOptions,
+  launch,
+  projectSessions,
+  sessionOwners,
+} from '../agents/launch.js';
 import {
   deliverOpencodeMidTurn,
   installOpencodeMailPlugin,
@@ -221,8 +228,8 @@ class UsageError extends Error {}
 function commandLines(): string {
   return pick({
     ru: `  treeyard init [--template <id>]          посадить дерево: с агентом или по шаблону (мастер)
-  treeyard init --agent [--brain codex]    агент изучит папку, задаст вопросы и посадит дерево
-  treeyard import [--brain claude]         агент молча читает план проекта и строит дерево
+  treeyard init --agent [--brain <cli>]    агент изучит папку, задаст вопросы и посадит дерево
+  treeyard import [--brain <cli>]          агент молча читает план проекта и строит дерево
   treeyard import --from-json <файл|->     посадить дерево из JSON (так сажает агент)
   treeyard status [--json] [--project <папка>]   сводка: версии, папка и дерево, узлы по статусам и брошенные,
                                            скиллы, как Codex проходит песочницу к treeyard и git, указатель, git-хук,
@@ -313,7 +320,7 @@ function commandLines(): string {
                 [--worktree|--no-worktree]   в своём git worktree узла (ветка treeyard/<id>; сессии любого CLI) или в
                                            папке проекта; без флага — в worktree узла, если он уже есть
                 [--pane|--bg --json]       для программ: JSON с id сессии (у --pane и с именем панели tmux, tmux -L brainyard)
-  treeyard open <id> <id>… --bg|--pane [--task …]   несколько узлов — только с --bg или --pane: сессия в каждом по
+  treeyard open <id> <id>… --pane|--bg [--task …]   несколько узлов — только с --pane или --bg: сессия в каждом по
                                            очереди, строка на узел (✓ id название · сессия <id> | панель <имя>);
                                            не встала — ✗ и код 1; --json — массив вместо объекта; все узлы, кроме первого,
                                            — каждый в своём worktree, первый остаётся в папке проекта
@@ -362,7 +369,7 @@ function commandLines(): string {
                                            в панели — только по прямой просьбе человека; без --as ты отказывает,
                                            проверяет диалог на экране и пишет в журнал узла, что подтверждено/отклонено
   treeyard deliver [--once]                доставить ждущие письма; обычно запускается сам из send
-  treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   очередь узлов:
+  treeyard queue <id> [<id>…] --pane|--bg [--parallel 2] [--task "…"] [--limit 90] [--json]   очередь узлов:
                                            у одного узла с детьми — его открытые дети по порядку, иначе — как названы;
                                            не больше --parallel сессий (панелей — и не больше max_panes), следующий —
                                            когда узел ушёл из «в работе» или его сессия закончилась; узел с needs —
@@ -381,8 +388,8 @@ function commandLines(): string {
                                            + treeyard и git (workspace-write, сеть и .git проекта открыты) или как в
                                            ~/.codex/config.toml; ask — спросить перед запуском; antigravity_access full|normal|ask`,
     en: `  treeyard init [--template <id>]          plant a tree: with an agent or from a template (wizard)
-  treeyard init --agent [--brain codex]    an agent studies the folder, asks questions, plants the tree
-  treeyard import [--brain claude]         an agent silently reads the project's plan and builds the tree
+  treeyard init --agent [--brain <cli>]    an agent studies the folder, asks questions, plants the tree
+  treeyard import [--brain <cli>]          an agent silently reads the project's plan and builds the tree
   treeyard import --from-json <file|->     plant a tree from JSON (how the agent plants it)
   treeyard status [--json] [--project <dir>]   a summary: versions, the folder and its tree, nodes by status and
                                            abandoned ones, skills, Codex's way through its sandbox to treeyard and git,
@@ -476,7 +483,7 @@ function commandLines(): string {
                 [--worktree|--no-worktree]   in the node's own git worktree (branch treeyard/<id>; sessions of any CLI)
                                            or in the project's folder; without a flag — in the node's worktree if it has one
                 [--pane|--bg --json]       for programs: JSON with the session id (with --pane, the tmux pane name too, tmux -L brainyard)
-  treeyard open <id> <id>… --bg|--pane [--task …]   several nodes — only with --bg or --pane: a session in each, one
+  treeyard open <id> <id>… --pane|--bg [--task …]   several nodes — only with --pane or --bg: a session in each, one
                                            after another, a line per node (✓ id title · session <id> | pane <name>);
                                            one that fails — ✗ and exit 1; --json — an array instead of an object; all nodes
                                            but the first get a worktree each, the first stays in the project's folder
@@ -527,7 +534,7 @@ function commandLines(): string {
                                            only at the person's direct request; refuses without --as you, checks the
                                            dialog on the screen and logs in the node's journal what was approved/rejected
   treeyard deliver [--once]                deliver the waiting messages; send usually starts it by itself
-  treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]   a queue of nodes:
+  treeyard queue <id> [<id>…] --pane|--bg [--parallel 2] [--task "…"] [--limit 90] [--json]   a queue of nodes:
                                            one node with children — its open children in order, otherwise as named; at
                                            most --parallel sessions (panes — and at most max_panes), the next one when a
                                            node leaves «active» or its session ends; a node with needs — when they are in
@@ -828,14 +835,17 @@ function whoArg(value: string): Who {
   throw new UsageError(t('who бывает: agent, human, any'));
 }
 
-function brainArg(value: string | undefined, fallback: BrainId): BrainId {
-  if (!value) return fallback;
+function parseBrain(value: string): BrainId {
   const v = value.toLowerCase();
   if (v === 'claude' || v === 'cc') return 'claude';
   if (v === 'codex') return 'codex';
   if (v === 'antigravity' || v === 'agy') return 'antigravity';
   if (v === 'opencode') return 'opencode';
   throw new UsageError(t('мозг бывает: claude, codex, antigravity, opencode'));
+}
+
+function brainArg(value: string | undefined, fallback: BrainId): BrainId {
+  return value ? parseBrain(value) : fallback;
 }
 
 function startArg(value: string | undefined, fallback: StartMode): StartMode {
@@ -962,7 +972,7 @@ async function initCommand(args: string[]): Promise<number> {
     yes: { type: 'boolean', short: 'y' },
   });
   const dir = process.cwd();
-  if (values.agent) return plantCommand(dir, brainArg(values.brain, 'claude'), Boolean(values.yes));
+  if (values.agent) return plantCommand(dir, brainArg(values.brain, defaultBrain()), Boolean(values.yes));
   if (findProject(dir) === dir) throw new UsageError(t('здесь уже есть дерево — treeyard, чтобы открыть'));
   if (values.template && values.goal) {
     const template = getTemplate(values.template);
@@ -975,7 +985,7 @@ async function initCommand(args: string[]): Promise<number> {
     const tree = createTree(dir, template, {
       title: values.title ?? dir.split('/').pop() ?? t('Проект'),
       answers: { goal: values.goal },
-      brain: brainArg(values.brain, 'claude'),
+      ...(values.brain ? { brain: parseBrain(values.brain) } : {}),
       // --bare: the method and the goal, without the template's example branches.
       ...(values.bare ? { skeleton: false } : {}),
     });
@@ -1103,7 +1113,7 @@ async function skillsCommand(args: string[]): Promise<number> {
           : `${out.dim(`· ${homeShort(item.path)} — ${t('уже стоит')}`)}\n`,
       );
     process.stdout.write(
-      `${t('теперь в любой папке: «посади дерево этого проекта» или /{skill} в Claude Code', {
+      `${t('теперь в любой папке: «посади дерево этого проекта» или /{skill} в твоём CLI', {
         skill: SKILL,
       })}\n`,
     );
@@ -1133,7 +1143,7 @@ async function importCommand(args: string[]): Promise<number> {
   });
   const dir = findProject() ?? process.cwd();
   const existing = findProject();
-  const brain = brainArg(values.brain, 'claude');
+  const brain = brainArg(values.brain, defaultBrain(existing ? loadTree(existing).project.brain : undefined));
   let proposal: Proposal;
   if (values['from-json']) {
     // `-`: the agent that planted it with a person passes it in one command, no file left behind.
@@ -1653,11 +1663,13 @@ async function sendCommand(args: string[]): Promise<number> {
         `  ${out.dim(
           sent.ref.mode === 'pane' && sent.ref.pane
             ? t('ответить ей: tmux -L brainyard attach -t {pane}', { pane: sent.ref.pane })
-            : t('ответить ей: claude attach {id}', { id: sent.ref.id.slice(0, 8) }),
+            : sent.ref.brain === 'claude'
+              ? t('ответить ей: claude attach {id}', { id: sent.ref.id.slice(0, 8) })
+              : t('ответить ей: в терминале, где открыта сессия'),
         )}\n`,
       );
     if (sent.held === 'none')
-      process.stdout.write(`  ${out.dim(t('начать её: treeyard open {id} --bg|--pane --task "…"', { id }))}\n`);
+      process.stdout.write(`  ${out.dim(t('начать её: treeyard open {id} --pane|--bg --task "…"', { id }))}\n`);
     else if (!replied)
       process.stdout.write(
         `  ${out.dim(t('доставит treeyard сам; посмотреть — treeyard show {id} --only mail', { id }))}\n`,
@@ -1838,7 +1850,7 @@ async function queueCommand(args: string[]): Promise<number> {
     yes: { type: 'boolean', short: 'y' },
     json: { type: 'boolean' },
   });
-  const usage = t('treeyard queue <id> [<id>…] --bg|--pane [--parallel 2] [--task "…"] [--limit 90] [--json]');
+  const usage = t('treeyard queue <id> [<id>…] --pane|--bg [--parallel 2] [--task "…"] [--limit 90] [--json]');
   if (!positionals.length) throw new UsageError(usage);
   if (values.pane === values.bg) throw new UsageError(t('выбери одно: --pane или --bg — {usage}', { usage }));
   const tree = project();
@@ -1848,7 +1860,7 @@ async function queueCommand(args: string[]): Promise<number> {
   if (!Number.isInteger(parallel) || parallel < 1) throw new UsageError(t('--parallel — целое от 1'));
   const limit = values.limit === undefined ? LIMIT * 100 : Number(values.limit);
   if (!Number.isFinite(limit) || limit <= 0 || limit > 100) throw new UsageError(t('--limit — проценты, от 1 до 100'));
-  const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
+  const brain = brainArg(values.brain, defaultBrain(tree.project.brain));
   const task = await taskArg(values.task);
   const options: LaunchOptions = {
     brain,
@@ -3372,7 +3384,7 @@ async function contextCommand(args: string[]): Promise<number> {
   });
   const tree = project();
   const id = nodeArg(tree, positionals[0]);
-  const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
+  const brain = brainArg(values.brain, defaultBrain(tree.project.brain));
   const task = await taskArg(values.task);
   const plan = sessionPlan(
     tree,
@@ -3410,11 +3422,11 @@ async function openCommand(args: string[]): Promise<number> {
   // Every id is checked before the first launch: a typo must not leave half the nodes started.
   const ids = positionals.length ? [...new Set(positionals.map((p) => nodeArg(tree, p)))] : [nodeArg(tree, undefined)];
   const id = ids[0]!;
-  const brain = brainArg(values.brain, tree.project.brain ?? 'claude');
+  const brain = brainArg(values.brain, defaultBrain(tree.project.brain));
   if (values.pane && values.bg) throw new UsageError(t('выбери одно: --pane или --bg'));
   // Sessions in this terminal hold it one after another; only a pane or the background returns at once.
   if (ids.length > 1 && !values.bg && !values.pane)
-    throw new UsageError(t('несколько узлов — только с --bg или --pane: treeyard open <id> <id>… --bg|--pane'));
+    throw new UsageError(t('несколько узлов — только с --pane или --bg: treeyard open <id> <id>… --pane|--bg'));
   // In this terminal the CLI owns stdout; only a pane or the background returns at once with something to print.
   if (values.json && !values.pane && !values.bg)
     throw new UsageError(t('--json — только с --pane или --bg: treeyard open <id> --pane|--bg --json'));
@@ -3837,7 +3849,7 @@ export async function modelsCommand(
     throw new UsageError(t('treeyard models [brain] [--json]'));
   }
   const brainTarget = positionals[0] ?? values.brain;
-  const brain = brainTarget ? brainArg(brainTarget, 'claude') : undefined;
+  const brain = brainTarget ? parseBrain(brainTarget) : undefined;
   const brains = brain ? [brain] : BRAIN_IDS;
   const results = await fetchCatalogs(brains, overrides?.modelsFn);
 
@@ -3870,7 +3882,7 @@ export async function limitsCommand(
     throw new UsageError(t('treeyard limits [brain] [--json]'));
   }
   const brainTarget = positionals[0] ?? values.brain;
-  const brain = brainTarget ? brainArg(brainTarget, 'claude') : undefined;
+  const brain = brainTarget ? parseBrain(brainTarget) : undefined;
   const brains = brain ? [brain] : BRAIN_IDS;
   const report = await fetchLimits(brains, overrides?.usageFn);
 
@@ -4070,8 +4082,13 @@ function configCommand(args: string[]): number {
   if ((PROJECT_KEYS as readonly string[]).includes(key)) {
     if (!tree) throw new UsageError(t('здесь нет дерева (.tree/) — treeyard init, чтобы посадить'));
     const p = tree.project;
-    if (key === 'brain') p.brain = brainArg(value, 'claude');
-    else if (key === 'start') p.start = startArg(value, 'plan');
+    if (key === 'brain') {
+      if (!value) {
+        process.stdout.write(`${p.brain ?? out.dim('—')}\n`);
+        return 0;
+      }
+      p.brain = parseBrain(value);
+    } else if (key === 'start') p.start = startArg(value, 'plan');
     else if (key === 'model') p.model = value || undefined;
     else if (key === 'effort') p.effort = value || undefined;
     else if (key === 'setup') p.setup = value || undefined;

@@ -38,7 +38,7 @@ Look, without asking:
   nothing, propose what to add, close or move.
 - The folder's root, `git status`, `git log --oneline -30`.
 - README, `docs/`, anything plan-like (ROADMAP, PLAN, TODO, TASKS, vision, idea,
-  scope), AGENTS.md, CLAUDE.md, manifests (`package.json`, `pyproject.toml`,
+  scope), AGENTS.md, CLAUDE.md, GEMINI.md, manifests (`package.json`, `pyproject.toml`,
   `go.mod`, `Cargo.toml`, `*.xcodeproj`), tests. Structure, headings, recent
   commits — not everything.
 
@@ -205,7 +205,7 @@ not repeat the tree. Propose the list, write after "yes":
 - **`AGENTS.md`** — up to ~60 lines, the one source of rules for every agent:
   what the project is (2–3 lines), stack, commands (install, run, test, lint),
   working rules and style, a link to `docs/vision.md`.
-- **`CLAUDE.md`** — one line `@AGENTS.md`, so the rules never drift apart in two copies.
+- **`CLAUDE.md`** (if the project uses Claude Code) — one line `@AGENTS.md`, so the rules never drift apart in two copies.
 - **`README.md`** — only if missing: 5–10 lines, how to run it.
 - **`docs/architecture.md`** — only if there is code or the stack is decided:
   modules and data flow, briefly.

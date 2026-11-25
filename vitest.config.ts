@@ -14,6 +14,8 @@ export default defineConfig({
     env: {
       TREEYARD_HOME: mkdtempSync(join(tmpdir(), 'treeyard-home-')),
       TREEYARD_LANG: 'ru',
+      // A test run started from an agent session must not inherit that session's CLI identity.
+      TREEYARD_AS: '',
       // The CLIs the tests spawn must not put skills into the person's ~/.claude, ~/.codex, ~/.gemini.
       TREEYARD_SKILLS: 'off',
       // No deliverer of letters left running after a test; the test of the deliverer turns it on.
