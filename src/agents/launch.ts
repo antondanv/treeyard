@@ -5,8 +5,8 @@
  * remembers it, so the next time you come to the node, the conversation is
  * one key away.
  */
-import { existsSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { accessSync, constants, existsSync, statSync } from 'node:fs';
+import { delimiter, extname, isAbsolute, join, resolve } from 'node:path';
 import {
   BRAINS,
   liveSessions,
@@ -49,35 +49,48 @@ export const BRAIN_SHORT: Record<BrainId, string> = {
   opencode: 'opencode',
 };
 
-const BIN_ENV: Record<BrainId, string> = {
-  claude: 'BRAINYARD_CLAUDE_BIN',
-  codex: 'BRAINYARD_CODEX_BIN',
-  antigravity: 'BRAINYARD_AGY_BIN',
-  opencode: 'BRAINYARD_OPENCODE_BIN',
-};
+const WINDOWS = process.platform === 'win32';
 
-function binaryExists(cmd: string, pathVar: string): boolean {
-  if (!cmd) return false;
-  if (cmd.includes('/')) return existsSync(cmd);
-  return pathVar.split(delimiter).some((dir) => dir && existsSync(join(dir, cmd)));
+function isExecutable(file: string): boolean {
+  try {
+    if (!statSync(file).isFile()) return false;
+    if (WINDOWS) return true;
+    accessSync(file, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** Whether a CLI's binary is available (respecting BRAINYARD_*_BIN overrides, then PATH). */
-export function isBrainInstalled(brain: BrainId, env: NodeJS.ProcessEnv = process.env): boolean {
-  const pathVar = env.PATH ?? '';
-  const override = env[BIN_ENV[brain]]?.trim();
-  if (override) {
-    if (override.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(override) as unknown;
-        if (Array.isArray(parsed) && typeof parsed[0] === 'string') return binaryExists(parsed[0], pathVar);
-      } catch {
-        return false;
-      }
-    }
-    return binaryExists(override, pathVar);
+function binaryExists(cmd: string, env: NodeJS.ProcessEnv): boolean {
+  if (!cmd) return false;
+  const exts = WINDOWS ? (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean) : [''];
+  const candidates = (base: string) => (WINDOWS && extname(base) ? [base] : exts.map((ext) => base + ext));
+  if (isAbsolute(cmd) || cmd.includes('/') || (WINDOWS && cmd.includes('\\'))) {
+    return candidates(resolve(cmd)).some(isExecutable);
   }
-  return binaryExists(BRAINS[brain].binary, pathVar);
+  const dirs = (env.PATH ?? env.Path ?? '').split(delimiter).filter(Boolean);
+  return dirs.some((dir) => candidates(join(dir, cmd)).some(isExecutable));
+}
+
+function parseEnvCommand(value: string): string[] {
+  if (value.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (Array.isArray(parsed) && parsed.every((part): part is string => typeof part === 'string')) return parsed;
+    } catch {
+      // Not JSON after all: treat it as a path, the same way Brainyard does.
+    }
+  }
+  return [value];
+}
+
+/** Whether a CLI's binary is available (respecting `BRAINYARD_<ID>_BIN`, then PATH). */
+export function isBrainInstalled(brain: BrainId, env: NodeJS.ProcessEnv = process.env): boolean {
+  const { binary, envVar } = BRAINS[brain];
+  const override = env[envVar]?.trim();
+  const [head] = override ? parseEnvCommand(override) : [binary];
+  return head ? binaryExists(head, env) : false;
 }
 
 /** First installed CLI found on PATH (or via BRAINYARD_*_BIN), in BRAIN_IDS order. */

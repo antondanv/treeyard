@@ -3,12 +3,15 @@ import { EventEmitter } from 'node:events';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BRAINS } from '@antondanv/brainyard';
 import { render } from 'ink';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { isBrainInstalled } from '../src/agents/launch.js';
 import { folderFacts, plantingPrompt, SKILL, skillBody, skillPath, skillText } from '../src/agents/planting.js';
 import { installSkills } from '../src/agents/skills.js';
 import { addDecisions } from '../src/model/root-doc.js';
 import { loadTree } from '../src/model/store.js';
+import { BRAIN_IDS } from '../src/model/types.js';
 import { DEFAULTS, resetSettings } from '../src/settings.js';
 import { pointerTargets } from '../src/templates/pointer.js';
 import { type InitResult, Wizard } from '../src/tui/init.js';
@@ -191,10 +194,12 @@ describe('the first-run wizard', () => {
   const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
   afterEach(() => vi.unstubAllEnvs());
 
-  // The menu looks for agent CLIs on PATH: these are installed, whatever this machine has.
-  function installed(agents: string[]) {
+  // The menu looks for agent CLIs via BRAINYARD_<ID>_BIN and PATH: these are installed, whatever this machine has.
+  function installed(agents: string[], envOverrides: Record<string, string> = {}) {
     const bin = tempDir('treeyard-wizard-bin-');
     for (const agent of agents) writeFileSync(join(bin, agent), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    for (const brain of BRAIN_IDS) vi.stubEnv(BRAINS[brain].envVar, '');
+    for (const [key, value] of Object.entries(envOverrides)) vi.stubEnv(key, value);
     vi.stubEnv('PATH', agents.length ? `${bin}${delimiter}${process.env.PATH}` : bin);
   }
 
@@ -251,5 +256,85 @@ describe('the first-run wizard', () => {
     expect(frame).toContain('шаблон ');
     expect(frame).not.toContain('Посадить дерево с');
     expect(result.agent).toBeUndefined();
+  });
+
+  it('sees an agent configured via BRAINYARD_<ID>_BIN even when PATH has no CLIs', async () => {
+    const bin = tempDir('treeyard-env-bin-');
+    const fakeCodex = join(bin, 'my-codex');
+    writeFileSync(fakeCodex, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    installed([], { BRAINYARD_CODEX_BIN: fakeCodex });
+    const start = await wizard([]);
+    expect(start.frame).toMatch(/Claude Code · не установлен/);
+    expect(start.frame).not.toMatch(/Codex · не установлен/);
+    const confirmed = await wizard(['\r', 'WAIT', '\r']);
+    expect(confirmed.result.agent).toBe('codex');
+  });
+
+  it('sees an agent configured via JSON array in BRAINYARD_<ID>_BIN', async () => {
+    const fixture = join(tempDir('treeyard-env-json-'), 'fake-agy.mjs');
+    writeFileSync(fixture, 'process.exit(0);\n');
+    installed([], { BRAINYARD_AGY_BIN: JSON.stringify([process.execPath, fixture]) });
+    const start = await wizard([]);
+    expect(start.frame).not.toMatch(/Antigravity · не установлен/);
+    const confirmed = await wizard(['\r', 'WAIT', '\r']);
+    expect(confirmed.result.agent).toBe('antigravity');
+  });
+
+  it('marks an agent uninstalled when BRAINYARD_<ID>_BIN points to a missing binary, even if PATH has it', async () => {
+    const bin = tempDir('treeyard-wizard-only-');
+    writeFileSync(join(bin, 'claude'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    for (const brain of BRAIN_IDS) vi.stubEnv(BRAINS[brain].envVar, '');
+    vi.stubEnv('PATH', bin);
+    vi.stubEnv('BRAINYARD_CLAUDE_BIN', 'treeyard-test-no-claude');
+    const start = await wizard([]);
+    expect(start.frame).toMatch(/Claude Code · не установлен/);
+    const { frame, result } = await wizard(['\r']);
+    expect(frame).toContain('шаблон ');
+    expect(result.agent).toBeUndefined();
+  });
+});
+
+describe('isBrainInstalled respects BRAINYARD_<ID>_BIN', () => {
+  it('resolves every brain via its BRAINYARD_<ID>_BIN path even with an empty PATH', () => {
+    const dir = tempDir('treeyard-bin-all-');
+    for (const brain of BRAIN_IDS) {
+      const bin = join(dir, `custom-${brain}`);
+      writeFileSync(bin, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      expect(isBrainInstalled(brain, { PATH: '' })).toBe(false);
+      expect(isBrainInstalled(brain, { PATH: '', [BRAINS[brain].envVar]: bin })).toBe(true);
+    }
+  });
+
+  it('resolves JSON command arrays and bare command names on PATH', () => {
+    const dir = tempDir('treeyard-bin-cmd-');
+    writeFileSync(join(dir, 'custom-runner'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    expect(
+      isBrainInstalled('claude', { PATH: '', BRAINYARD_CLAUDE_BIN: JSON.stringify([process.execPath, 'x.mjs']) }),
+    ).toBe(true);
+    expect(
+      isBrainInstalled('codex', { PATH: dir, BRAINYARD_CODEX_BIN: JSON.stringify(['custom-runner', '--flag']) }),
+    ).toBe(true);
+    expect(isBrainInstalled('opencode', { PATH: dir, BRAINYARD_OPENCODE_BIN: 'custom-runner' })).toBe(true);
+    expect(isBrainInstalled('claude', { PATH: dir, BRAINYARD_CLAUDE_BIN: '[]' })).toBe(false);
+    expect(
+      isBrainInstalled('claude', { PATH: dir, BRAINYARD_CLAUDE_BIN: JSON.stringify([process.execPath, 42]) }),
+    ).toBe(false);
+  });
+
+  it('overrides PATH when BRAINYARD_<ID>_BIN is set, and falls back only when blank', () => {
+    const dir = tempDir('treeyard-bin-override-');
+    writeFileSync(join(dir, 'claude'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    expect(isBrainInstalled('claude', { PATH: dir })).toBe(true);
+    expect(isBrainInstalled('claude', { PATH: dir, BRAINYARD_CLAUDE_BIN: 'treeyard-test-no-claude' })).toBe(false);
+    expect(isBrainInstalled('claude', { PATH: dir, BRAINYARD_CLAUDE_BIN: join(dir, 'missing') })).toBe(false);
+    expect(isBrainInstalled('claude', { PATH: dir, BRAINYARD_CLAUDE_BIN: '   ' })).toBe(true);
+  });
+
+  it('rejects directories and non-executable files just as Brainyard does', () => {
+    const dir = tempDir('treeyard-bin-exec-');
+    const plain = join(dir, 'not-exec');
+    writeFileSync(plain, '#!/bin/sh\nexit 0\n', { mode: 0o644 });
+    expect(isBrainInstalled('claude', { PATH: '', BRAINYARD_CLAUDE_BIN: dir })).toBe(false);
+    expect(isBrainInstalled('claude', { PATH: '', BRAINYARD_CLAUDE_BIN: plain })).toBe(false);
   });
 });
