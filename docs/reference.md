@@ -427,10 +427,15 @@ and supported reasoning effort levels (with default effort marked, e.g. `high*`)
 installed or returned an error, explains the reason without failing the whole command. `--json` outputs
 the clean catalog structure.
 
-`treeyard limits [brain] [--json]` reads local limit and quota windows through Brainyard without network
-calls (`offline: true`): utilization percentage, reset time, source (`cache`, `rollout`, etc.), and
-snapshot age. A window whose reset time has already passed is shown as reset (`reset at 19:00`, 0%); in `--json` it gets `expired: true`, `utilization: 0` and the stale value in `previousUtilization`. If there are no local snapshots (offline mode or missing cache), explains the reason cleanly.
-`--json` outputs the limit windows for automation.
+`treeyard limits [brain] [--json] [--offline]` shows usage percentages, reset times, sources and
+snapshot ages. By default, Brainyard reads Claude Code and Antigravity quotas via `/usage` and
+queries the quota endpoint for OpenCode Go. These checks make no model calls and have a 15-second
+timeout per CLI. Use `--offline` to read local snapshots only.
+
+Codex limits currently come from saved session rollouts. A snapshot older than one hour is marked
+stale (`limitsStale: true` in JSON). It updates when a Codex session writes new limits to its rollout.
+A window past its reset time is shown as reset at 0%. In `--json` it gets `expired: true`,
+`utilization: 0` and the last recorded value in `previousUtilization`.
 
 ## Agents and the tree
 
@@ -508,7 +513,7 @@ treeyard sessions <id> <old-id> --replace <new-id>  # repair a node's session bi
 treeyard sleep <id> [<id>…] [--force] [--json]  # put the live panes of nodes to sleep; keeps the session for waking; refuses on busy/waiting/attached without --force
 treeyard peek <id> [--lines N] [--json]        # peek at a node's live pane screen: session status, pane name and the last N lines (default 25) without ANSI
 treeyard models [brain] [--json]               # models and effort levels for CLIs (id, label, efforts)
-treeyard limits [brain] [--json]               # local limit windows without network calls (offline: true)
+treeyard limits [brain] [--json] [--offline]   # quota windows via Brainyard, --offline reads local snapshots
 treeyard status                                 # a summary: versions, tree, nodes, skills, Codex's way to treeyard and git, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
 treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md (what it says — below)

@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline';
 
 import { parseArgs } from 'node:util';
 
-import { type Catalog, listPanes, setPaneSession, type UsageReport } from '@antondanv/brainyard';
+import { type Catalog, listPanes, setPaneSession, type usage } from '@antondanv/brainyard';
 
 import {
   ACCESS_HINT,
@@ -202,7 +202,7 @@ import {
   worktreeState,
   worktreesOf,
 } from '../worktree.js';
-import { fetchCatalogs, fetchLimits, limitsText, modelsText, settleExpired } from './models-text.js';
+import { annotateLimits, fetchCatalogs, fetchLimits, limitsText, modelsText } from './models-text.js';
 import {
   foundJson,
   fullTreeJson,
@@ -348,8 +348,8 @@ function commandLines(): string {
                                            или отсутствующей панели — понятное сообщение
   treeyard models [brain] [--json]         модели и уровни effort для CLI (claude, codex, antigravity, opencode);
                                            id, название (если отличается) и усилия (отмечено по умолчанию); --json — структура
-  treeyard limits [brain] [--json]         локальные окна лимитов CLI через Brainyard без вызовов сети (offline);
-                                           процент использования, время сброса, источник и возраст снимка
+  treeyard limits [brain] [--json] [--offline]   окна лимитов CLI через Brainyard без вызова модели;
+                                           до 15 с на каждую сетевую проверку, --offline — только локальные снимки
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   ждать, пока узел уйдёт из «в работе» или его сессия
                                            закончит ход, будет ждать человека или закончится; печатает статус, последнюю
                                            запись журнала, сессию и её последнее сообщение целиком — вопрос или итог
@@ -519,8 +519,8 @@ function commandLines(): string {
                                            pane — a clear message
   treeyard models [brain] [--json]         models and effort levels of the CLIs (claude, codex, antigravity, opencode);
                                            shows id, label (if different) and efforts (default marked); --json — clean structure
-  treeyard limits [brain] [--json]         local limit windows of the CLIs via Brainyard without network calls (offline);
-                                           utilization percentage, reset time, source and snapshot age
+  treeyard limits [brain] [--json] [--offline]   CLI limit windows via Brainyard without model calls;
+                                           up to 15 s per online quota check, --offline reads local snapshots only
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   wait until a node leaves «active» or its session
                                            ends its turn, waits for the person or ends; prints the status, the last journal
                                            entry, the session and its last message whole — a question or a summary from
@@ -4173,30 +4173,31 @@ export async function modelsCommand(
 export async function limitsCommand(
   args: string[],
   overrides?: {
-    usageFn?: (options: { brains: BrainId[]; limit: number; offline: boolean }) => Promise<UsageReport>;
+    usageFn?: typeof usage;
     now?: number;
   },
 ): Promise<number> {
   const { values, positionals } = parse(args, {
     json: { type: 'boolean', default: false },
     brain: { type: 'string' },
+    offline: { type: 'boolean', default: false },
   });
   if (positionals.length > 1) {
-    throw new UsageError(t('treeyard limits [brain] [--json]'));
+    throw new UsageError(t('treeyard limits [brain] [--json] [--offline]'));
   }
   const brainTarget = positionals[0] ?? values.brain;
   const brain = brainTarget ? parseBrain(brainTarget) : undefined;
   const brains = brain ? [brain] : BRAIN_IDS;
-  const report = await fetchLimits(brains, overrides?.usageFn);
+  const report = await fetchLimits(brains, values.offline, overrides?.usageFn);
   const now = overrides?.now ?? Date.now();
-  report.brains = settleExpired(report.brains, now);
 
   if (values.json) {
+    const annotated = annotateLimits(report.brains, now);
     if (brain) {
-      const single = report.brains.find((b) => b.brain === brain) ?? report.brains[0];
+      const single = annotated.find((b) => b.brain === brain) ?? annotated[0];
       process.stdout.write(`${JSON.stringify(single, null, 2)}\n`);
     } else {
-      process.stdout.write(`${JSON.stringify(report.brains, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify(annotated, null, 2)}\n`);
     }
   } else {
     process.stdout.write(`${limitsText(report.brains, out, now)}\n`);

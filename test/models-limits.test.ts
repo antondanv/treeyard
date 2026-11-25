@@ -180,6 +180,17 @@ describe('modelsText formatting', () => {
 });
 
 describe('limitsText formatting', () => {
+  it('shows Antigravity utilization by model group and window', () => {
+    const limits = [
+      { window: 'weekly', group: 'Gemini Models', label: 'Weekly Limit Remaining', utilization: 0.98 },
+      { window: 'weekly', group: 'Claude and GPT models', label: 'Weekly Limit Remaining', utilization: 0.01 },
+    ];
+    const text = limitsText([{ ...sampleUsageBrains[2]!, limits, limitsSource: 'cli' }], mockPaint);
+    expect(text).toMatch(/Gemini Models · weekly\s+98%/);
+    expect(text).toMatch(/Claude and GPT models · weekly\s+1%/);
+    expect(text).not.toContain('Remaining');
+  });
+
   it('formats limit windows, percentage, reset time, source and age', () => {
     const text = limitsText(sampleUsageBrains, mockPaint, Date.parse('2026-11-25T10:30:00Z'));
 
@@ -197,6 +208,7 @@ describe('limitsText formatting', () => {
     expect(text).toContain('11%');
     expect(text).toContain('secondary');
     expect(text).toContain('80%');
+    expect(text).not.toContain('снимок устарел');
 
     // Offline / unavailable
     expect(text).toContain('Antigravity');
@@ -213,8 +225,13 @@ describe('limitsText formatting', () => {
     expect(text).not.toContain('100%');
     expect(text).toMatch(/primary\s+0% · сброшено в \d\d:\d\d/);
     expect(text).toMatch(/secondary\s+80% · сброс в \d\d\.\d\d \d\d:\d\d/);
+    expect(text).toContain('снимок устарел');
+    expect(text).toContain('Снимок обновится, когда сессия Codex запишет новые лимиты в rollout.');
     setLang('en');
-    expect(limitsText(sampleUsageBrains, mockPaint, now)).toMatch(/reset at \d\d:\d\d/);
+    const en = limitsText(sampleUsageBrains, mockPaint, now);
+    expect(en).toMatch(/reset at \d\d:\d\d/);
+    expect(en).toContain('stale snapshot');
+    expect(en).toContain('The snapshot updates when a Codex session writes new limits to its rollout.');
   });
 
   it('formats limit windows in English', () => {
@@ -281,18 +298,20 @@ describe('fetchCatalogs and fetchLimits', () => {
     expect(res[1]?.error).toBe('codex crash');
   });
 
-  it('fetchLimits passes offline: true and limit: 0 to usageFn', async () => {
+  it('passes a quota timeout and leaves model calls disabled', async () => {
     const mockUsageFn = vi.fn(async (_opts) => ({
       brains: sampleUsageBrains,
       sessions: [],
       checkedAt: '2026-11-25T12:00:00Z',
     }));
 
-    const report = await fetchLimits(['claude', 'antigravity'], mockUsageFn);
+    const report = await fetchLimits(['claude', 'antigravity'], false, mockUsageFn);
     expect(mockUsageFn).toHaveBeenCalledWith({
       brains: ['claude', 'antigravity'],
       limit: 0,
-      offline: true,
+      live: false,
+      offline: false,
+      timeoutMs: 15_000,
     });
     expect(report.brains).toHaveLength(4);
   });
@@ -411,7 +430,9 @@ describe('limitsCommand unit tests', () => {
     expect(mockUsageFn).toHaveBeenCalledWith({
       brains: BRAIN_IDS,
       limit: 0,
-      offline: true,
+      live: false,
+      offline: false,
+      timeoutMs: 15_000,
     });
     const out = capturedStdout.join('');
     expect(out).toContain('Claude Code');
@@ -432,7 +453,9 @@ describe('limitsCommand unit tests', () => {
     expect(mockUsageFn).toHaveBeenCalledWith({
       brains: ['claude'],
       limit: 0,
-      offline: true,
+      live: false,
+      offline: false,
+      timeoutMs: 15_000,
     });
     const out = capturedStdout.join('');
     expect(out).toContain('Claude Code');
@@ -472,6 +495,18 @@ describe('limitsCommand unit tests', () => {
     await expect(limitsCommand(['unknown-cli'])).rejects.toThrow('мозг бывает: claude, codex, antigravity, opencode');
   });
 
+  it.each([
+    ['2026-11-25T11:00:00.000Z', undefined],
+    ['2026-11-25T11:00:00.001Z', true],
+  ])('reports Codex snapshot staleness at %s in offline JSON', async (time, stale) => {
+    const usageFn = vi.fn(async () => ({ brains: sampleUsageBrains, sessions: [], checkedAt: '' }));
+    await limitsCommand(['--offline', '--json'], { usageFn, now: Date.parse(time) });
+    expect(usageFn).toHaveBeenCalledWith(expect.objectContaining({ offline: true, live: false }));
+    const [claude, codex] = JSON.parse(capturedStdout.join(''));
+    expect(claude.limitsStale).toBeUndefined();
+    expect(codex.limitsStale).toBe(stale);
+  });
+
   it('throws UsageError on extra positionals', async () => {
     await expect(limitsCommand(['codex', 'extra'])).rejects.toThrow('treeyard limits [brain] [--json]');
   });
@@ -486,12 +521,16 @@ describe('CLI subshell execution', () => {
     expect(res.stdout).toContain('модели и уровни effort для CLI');
   });
 
-  it('treeyard limits --help prints English help', async () => {
-    const sh = shell('en');
+  it.each([
+    ['en', 'without model calls', '--offline reads local snapshots only'],
+    ['ru', 'без вызова модели', '--offline — только локальные снимки'],
+  ] as const)('treeyard limits --help prints %s help', async (lang, model, offline) => {
+    const sh = shell(lang);
     const res = await sh('limits', '--help');
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain('treeyard limits [brain] [--json]');
-    expect(res.stdout).toContain('local limit windows of the CLIs');
+    expect(res.stdout).toContain('treeyard limits [brain] [--json] [--offline]');
+    expect(res.stdout).toContain(model);
+    expect(res.stdout).toContain(offline);
   });
 
   it('treeyard models with invalid brain exits with code 2 and usage error', async () => {
@@ -508,9 +547,9 @@ describe('CLI subshell execution', () => {
     expect(res.stderr).toContain('мозг бывает: claude, codex, antigravity, opencode');
   });
 
-  it('treeyard limits --json runs offline and outputs valid JSON without network calls', async () => {
+  it('treeyard limits --offline --json outputs valid JSON without network calls', async () => {
     const sh = shell('en');
-    const res = await sh('limits', '--json');
+    const res = await sh('limits', '--offline', '--json');
     expect(res.code).toBe(0);
     const parsed = JSON.parse(res.stdout);
     expect(Array.isArray(parsed)).toBe(true);

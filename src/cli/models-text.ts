@@ -1,13 +1,12 @@
 /**
  * `treeyard models` and `treeyard limits` as text: available models with reasoning
- * effort levels and local quota/limit windows without network calls.
+ * effort levels and subscription quota windows.
  */
 import {
   type BrainUsage,
   models as brainyardModels,
   usage as brainyardUsage,
   type Catalog,
-  type UsageReport,
 } from '@antondanv/brainyard';
 
 import { BRAIN_LABEL } from '../agents/launch.js';
@@ -39,15 +38,17 @@ export async function fetchCatalogs(
   );
 }
 
-/** Read local limit snapshots without making network requests. */
-export async function fetchLimits(
-  brains: readonly BrainId[],
-  usageFn: (options: { brains: BrainId[]; limit: number; offline: boolean }) => Promise<UsageReport> = brainyardUsage,
-): Promise<UsageReport> {
+const QUOTA_TIMEOUT_MS = 15_000;
+const CODEX_SNAPSHOT_MAX_AGE_MS = 60 * 60 * 1000;
+
+/** Keep inference disabled and let Brainyard cancel quota requests at their timeout. */
+export function fetchLimits(brains: readonly BrainId[], offline: boolean, usageFn = brainyardUsage) {
   return usageFn({
-    brains: brains as BrainId[],
+    brains,
     limit: 0,
-    offline: true,
+    live: false,
+    offline,
+    timeoutMs: QUOTA_TIMEOUT_MS,
   });
 }
 
@@ -108,9 +109,9 @@ function sourceLabel(source: string | null): string {
   }
 }
 
-function ageLabel(observedAt: string | null): string {
+function ageLabel(observedAt: string | null, now: number): string {
   if (!observedAt) return '';
-  const a = ago(observedAt);
+  const a = ago(observedAt, now);
   if (!a) return '';
   return a === t('только что') || a === t('вчера') ? a : t('{age} назад', { age: a });
 }
@@ -126,7 +127,7 @@ function unavailableText(b: BrainUsage): string {
     return t('лимиты не поддерживаются');
   }
   if (b.limitsUnavailable === 'failed') {
-    return b.detail ? t('ошибка: {detail}', { detail: b.detail }) : t('не удалось прочитать локальные лимиты');
+    return b.detail ? t('ошибка: {detail}', { detail: b.detail }) : t('не удалось прочитать лимиты');
   }
   return b.detail ?? t('нет локальных данных');
 }
@@ -135,27 +136,34 @@ function unavailableText(b: BrainUsage): string {
  * A window whose reset time has passed is already reset: show 0% and mark it,
  * keeping the stale value as `previousUtilization` (snapshots are not refreshed offline).
  */
-export function settleExpired(brains: readonly BrainUsage[], now = Date.now()): BrainUsage[] {
+export function annotateLimits(
+  brains: readonly BrainUsage[],
+  now = Date.now(),
+): (BrainUsage & { limitsStale?: true })[] {
   return brains.map((b) => {
     if (!b.limits) return b;
-    // Already settled windows stay as they are, so a second pass keeps `previousUtilization`.
     const limits = b.limits.map((w) =>
-      w.resetsAt && w.resetsAt * 1000 <= now && !(w as { expired?: boolean }).expired
+      w.resetsAt && w.resetsAt * 1000 <= now
         ? { ...w, utilization: 0, expired: true, previousUtilization: w.utilization }
         : w,
     );
-    return { ...b, limits };
+    const stale =
+      b.brain === 'codex' &&
+      b.limitsSource === 'rollout' &&
+      b.limitsObservedAt !== null &&
+      now - Date.parse(b.limitsObservedAt) > CODEX_SNAPSHOT_MAX_AGE_MS;
+    return stale ? { ...b, limits, limitsStale: true } : { ...b, limits };
   });
 }
 
 /** Format local limit windows into text: CLI name, metadata, windows, percentages, reset time. */
 export function limitsText(rawBrains: readonly BrainUsage[], p: Paint, now = Date.now()): string {
-  const brains = settleExpired(rawBrains, now);
+  const brains = annotateLimits(rawBrains, now);
   const blocks: string[] = [];
   for (const b of brains) {
     const src = sourceLabel(b.limitsSource);
-    const age = ageLabel(b.limitsObservedAt);
-    const metaParts = [src, age].filter(Boolean);
+    const age = ageLabel(b.limitsObservedAt, now);
+    const metaParts = [src, age, b.limitsStale ? t('снимок устарел') : ''].filter(Boolean);
     const meta = metaParts.length ? p.dim(` · ${metaParts.join(' · ')}`) : '';
     const header = `${p.bold(BRAIN_LABEL[b.brain])}${meta}`;
     const lines: string[] = [header];
@@ -163,9 +171,13 @@ export function limitsText(rawBrains: readonly BrainUsage[], p: Paint, now = Dat
     if (!b.limits || b.limits.length === 0) {
       lines.push(`  ${p.dim(unavailableText(b))}`);
     } else {
-      const maxWindow = Math.max(...b.limits.map((w) => (w.label ?? w.window).length));
-      for (const w of b.limits) {
-        const windowName = (w.label ?? w.window).padEnd(maxWindow);
+      // Antigravity labels remaining quota, but Brainyard gives us the fraction used.
+      const names = b.limits.map((w) =>
+        b.brain === 'antigravity' ? [w.group, w.window].filter(Boolean).join(' · ') : (w.label ?? w.window),
+      );
+      const maxWindow = Math.max(...names.map((name) => name.length));
+      for (const [index, w] of b.limits.entries()) {
+        const windowName = names[index]!.padEnd(maxWindow);
         const pct = Math.round(w.utilization * 100);
         const pctText = `${pct}%`.padStart(4);
         const coloredPct = pct >= 90 ? p.c('#ff7b72', pctText) : pct >= 75 ? p.c('#ffcf70', pctText) : pctText;
@@ -175,6 +187,9 @@ export function limitsText(rawBrains: readonly BrainUsage[], p: Paint, now = Dat
         const resetText = expired ? t('сброшено в {time}', { time }) : t('сброс в {time}', { time });
         const reset = w.resetsAt ? p.dim(` · ${resetText}`) : '';
         lines.push(`  ${windowName}  ${coloredPct}${reset}`);
+      }
+      if (b.limitsStale) {
+        lines.push(`  ${p.dim(t('Снимок обновится, когда сессия Codex запишет новые лимиты в rollout.'))}`);
       }
     }
     blocks.push(lines.join('\n'));
