@@ -3,12 +3,13 @@ id: a3gp
 title: Antigravity путает сессии при старте
 parent: 9xem
 order: 240
-status: active
+status: review
 done_when: "treeyard open и queue нескольких узлов на Antigravity: каждая панель получает свой разговор — на Brainyard 0.3.3 (свои логи у запусков); проверено живьём на временной копии дерева: 3 узла одним open → 3 разных id, у каждого разговор своей папки, дерево показывает их состояние; неверно привязанную сессию узла можно исправить командой treeyard (справка на обоих языках), а не правкой .tree; тесты; npm run typecheck, npm test, lint, build"
 needs:
   - ../Brainyard#5jrn
 commits:
   - 46c4cb2a84f83ba44f51d6fa092915ac56d59b37
+  - aa26ffbdf65b986a75808c381e6e5bafdb9a4f6a
 sessions:
   - brain: codex
     id: 01a213dd-ede5-7300-ab62-e7f472a32ad4
@@ -18,7 +19,7 @@ sessions:
     mode: pane
     pane: codex-a7ca384d
 created: 2026-11-25
-updated: 2026-11-25T21:00:43+03:00
+updated: 2026-11-25T21:13:54+03:00
 ---
 
 25.11, живьём: open wak4 b379 u285 xvxd --brain antigravity --pane --worktree запустил 4 agy в одну секунду (20:16:30). Antigravity пишет лог cli-<секунда>.log — четыре процесса писали в один файл, в нём уцелели workspaceDirs только папки xvxd и только разговор 46e97fab (на деле «Тихий выход на EPIPE»). У новых разговоров workspace_uris в conversation_summaries.db пустой, поэтому Brainyard (agyLogWorkspaces) сопоставил 46e97fab с папкой xvxd: узел «Мастер не видит агента по переменной» получил чужую сессию, три других остались pane:… без id, TUI видит «работает» только у одного. Верно по заголовкам: wak4 → 146cfeaa, b379 → ccd69399, u285 → 46e97fab, xvxd → 45038e85.
@@ -30,3 +31,8 @@ updated: 2026-11-25T21:00:43+03:00
 - 2026-11-25 21:00 · агент · привязан коммит 46c4cb2a84f83ba44f51d6fa092915ac56d59b37
 - 2026-11-25 21:00 · codex · новая сессия в панели (do)
 - 2026-11-25 21:00 · codex · к работе → в работе
+- 2026-11-25 21:09 · ты · разрешение подтверждено: approval — «1. Yes, proceed (y)»
+- 2026-11-25 21:11 · codex · привязан коммит aa26ffbdf65b986a75808c381e6e5bafdb9a4f6a
+- 2026-11-25 21:11 · codex · Коммит aa26ffb. На Brainyard 0.3.3 TUI берёт ID Antigravity из лога конкретной панели. treeyard sessions <id> <old-id> --replace <new-id> заменяет ошибочный ID или pane:…, обновляет живую панель и журнал. Справка и справочники проверены на русском и английском. На фейковом agy с реальным tmux open и queue запустили по три узла: три отдельных лога и ID, sessions --json сопоставил их с нужными панелями и worktree, wait --json показал busy для всех трёх. На временном дереве TUI 100×30 показал «работает агентов: 3» и сохранил три правильные привязки. npm run typecheck && npm test && npm run lint && npm run build прошли с доступом к ps: 109 файлов, 1095 тестов. Живой прогон на настоящем Antigravity оставлен координатору для приёмки по договорённости.
+- 2026-11-25 21:11 · codex · в работе → на проверке
+- 2026-11-25 21:13 · агент · Принято (координатор): aa26ffb на main + 46c4cb2 (Brainyard 0.3.3). Живьём на временном дереве: open трёх узлов на Antigravity в одну секунду (21:12:08) → три лога cli-…-agy-<панель>.log, в каждом свой разговор; после settle у узлов 645dc18d, 43c896dc, 45b3d67d — каждый совпадает с логом своей панели. treeyard sessions <id> <old> --replace <new> отказывает на чужом id и пишет замену в журнал; им же исправлены «Мастер не видит агента по переменной» (46e97fab → 45038e85), «Тихий выход на EPIPE» (pane: → 46e97fab), «Уборка worktree закрытых узлов» (pane: → 146cfeaa). На main: typecheck, lint, build — чисто, npm test 1086/1086. Осталось: ничего.

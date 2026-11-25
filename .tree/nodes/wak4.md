@@ -9,7 +9,7 @@ commits:
   - 54f75d4c9f31f4f4e59a8fc19c6471abb167f255
 sessions:
   - brain: antigravity
-    id: pane:agy-ac70dad3
+    id: 146cfeaa-a7b6-4b19-a7e0-b5742461f1d7
     name: Treeyard · Уборка worktree закрытых узлов
     started: 2026-11-25T20:16:30+03:00
     opened: 2026-11-25T20:16:30+03:00
@@ -17,7 +17,7 @@ sessions:
     pane: agy-ac70dad3
     dir: /Users/antondanilov/Projects/Treeyard.worktrees/wak4
 created: 2026-11-25
-updated: 2026-11-25T20:53:20+03:00
+updated: 2026-11-25T21:13:40+03:00
 closed: 2026-11-25
 ---
 
@@ -38,3 +38,4 @@ closed: 2026-11-25
 - 2026-11-25 20:40 · агент · Принято (координатор): 54f75d4 влит в main; worktree rm принимает несколько id, --done и --dry-run, set status=done подсказывает уборку; на main: test/worktree-rm, worktree, i18n, cli-help — 48/48, typecheck, biome — чисто; живьём worktree rm --done --dry-run → «закрытых узлов с worktree нет». Замечание: три ветки rm (один id, несколько, --done) почти дублируют друг друга — при следующей правке свести в одну. Осталось: ничего.
 - 2026-11-25 20:40 · агент · Сессия узла из-за одновременного запуска осталась без id (см. «Antigravity путает сессии при старте»); по заголовку её разговор в Antigravity — 146cfeaa. Панель усыплена с --force.
 - 2026-11-25 20:53 · ты · на проверке → готово
+- 2026-11-25 21:13 · агент · исправлена привязка сессии: pane:agy-ac70dad3 → 146cfeaa-a7b6-4b19-a7e0-b5742461f1d7

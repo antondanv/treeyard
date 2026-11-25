@@ -3,10 +3,18 @@ id: jtdv
 title: Свежие лимиты в limits
 parent: 9xem
 order: 250
-status: todo
+status: active
 done_when: "treeyard limits по умолчанию берёт свежие окна: у Claude Code и Antigravity — через их /usage в Brainyard (без вызова модели), у Codex — свежим способом без вызова модели, если он есть (проверить /status и app-server; нужна правка — в ../Brainyard отдельным узлом), иначе снимок старше часа помечен как устаревший; --offline — только локальные снимки, как сейчас; таймаут, чтобы команда не висела без сети; справка на обоих языках; тесты; npm run typecheck, npm test, lint, build"
+sessions:
+  - brain: codex
+    id: 01a213ea-4470-79e2-98af-598d26186b3d
+    name: Treeyard · Свежие лимиты в limits
+    started: 2026-11-25T21:14:07+03:00
+    opened: 2026-11-25T21:14:07+03:00
+    mode: pane
+    pane: codex-a72eae43
 created: 2026-11-25
-updated: 2026-11-25T20:54:30+03:00
+updated: 2026-11-25T21:14:11+03:00
 ---
 
 Человек 25.11: «эти данные кодекса устарели» — treeyard limits показал Codex по снимку 10-часовой давности и «нет данных» у Antigravity. Brainyard usage() без offline за ~10 с дал живые окна: Antigravity Gemini неделя 98% / 5 ч 86%, Claude Code 5 ч 83% / неделя 11%. У Codex окна только из rollout последней сессии.
@@ -15,3 +23,5 @@ updated: 2026-11-25T20:54:30+03:00
 
 - 2026-11-25 20:53 · агент · завёл узел
 - 2026-11-25 20:54 · агент · Человек 25.11, приложение Codex (план Plus): 5 ч — осталось 99%, неделя — осталось 25%. treeyard limits в это время показывал по снимку rollout 10-часовой давности: primary 0% (сброшено), secondary 62% — неделя на деле занята на 75%.
+- 2026-11-25 21:14 · codex · новая сессия в панели (do)
+- 2026-11-25 21:14 · codex · к работе → в работе
