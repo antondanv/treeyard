@@ -3,7 +3,7 @@ id: ahhv
 title: Worktree для любого CLI
 parent: "7997"
 order: 130
-status: review
+status: done
 done_when: "treeyard open <id> --worktree работает для Claude Code, Codex, OpenCode и Antigravity: treeyard сам заводит git worktree с веткой узла (имя с id узла) и запускает в нём сессию, команды treeyard из неё пишут основное дерево; коммиты ветки узла видны в узле и в treeyard diff без хука и без --add; queue и open нескольких узлов заводят worktree сами, одна сессия остаётся в основной папке; worktree и ветка видны в узле (show, TUI); подготовка из настроек проекта — команда setup и копия неотслеживаемых файлов по .worktreeinclude; убрать worktree treeyard не даёт, пока в нём незакоммиченные правки или невлитые коммиты; справка и docs/reference на обоих языках; тесты; живьём на пробных узлах Codex и OpenCode в своих worktree"
 for:
   - .#8cbz
@@ -20,7 +20,8 @@ sessions:
     opened: 2026-11-23T23:06:47+03:00
     mode: background
 created: 2026-11-23
-updated: 2026-11-23T23:39:04+03:00
+updated: 2026-11-25T20:15:36+03:00
+closed: 2026-11-25
 ---
 
 Человек 23.11: добавить реализацию worktree, посмотреть https://github.com/exit-0-run/treeyard. Сейчас --worktree только у Claude Code (флаг его CLI), сессии Codex, OpenCode и Antigravity правят одну папку. exit-0-run сам пишет: до ~5 агентов на одной машине хватает обычных worktree — их и берём, а у него идеи: подготовка (setup, copy по .worktreeinclude, teardown), «не терять работу» (Claude Code #46444: уборка worktree стёрла 10 дней незакоммиченного), хук WorktreeCreate у Claude Code — его worktree можно завести через treeyard.
@@ -41,3 +42,4 @@ updated: 2026-11-23T23:39:04+03:00
 - 2026-11-23 23:32 · агент · в работе → на проверке
 - 2026-11-23 23:37 · агент · привязан коммит ed5aea36bc8ea4423f4eed7438ff68ac8a72e62f
 - 2026-11-23 23:39 · агент · Принято (координатор): ветка worktree-jazzy-tinkering-conway влита в main без конфликтов; доведено то, что сессия оставила координатору (ed5aea3): письма продолжают уснувшую и фоновую сессию в её worktree (sessionFolder в deliver.ts), treeyard status видит живые сессии в worktree узлов, treeyard config из worktree читает основное дерево; песочница Codex открывает .tree проекта (f8433f4, у «Доступа Codex»). npm run typecheck, lint — чисто; npm test 866/866 на main; build. Скилл treeyard-coordinate про --worktree и влив — в «Ответе на письмо». Живьём на Codex и OpenCode в своих worktree — в «Мультиагентной пробе».
+- 2026-11-25 20:15 · ты · на проверке → готово
