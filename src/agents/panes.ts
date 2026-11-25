@@ -11,9 +11,11 @@
 import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  capturePane,
   closePane,
   findPaneSession,
   listPanes,
+  liveSessions,
   type PaneInfo,
   paneMemory,
   panesAvailable,
@@ -35,6 +37,8 @@ import { saveMainBaseline, sessionFolder, sessionPlace, worktreeDirs, worktreeNo
 import { fullAccess } from './access.js';
 import { sessionPlan } from './context.js';
 import type { LaunchOptions } from './launch.js';
+import { withPaneIdle } from './pane-idle.js';
+import { type ObserveSources, observe, sessionSight, type World } from './wait.js';
 
 export { panesAvailable };
 
@@ -379,4 +383,209 @@ export function formatMemory(bytes: number | undefined): string {
   return t('{n} ГБ', {
     n: (mb / 1024).toFixed(1),
   });
+}
+
+export type SleepStatus =
+  | 'slept'
+  | 'already_sleeping'
+  | 'no_pane'
+  | 'busy'
+  | 'waiting'
+  | 'attached'
+  | 'pending'
+  | 'failed';
+
+export interface SleepResult {
+  node: string;
+  title: string;
+  ok: boolean;
+  status: SleepStatus;
+  pane: string | null;
+  session: string | null;
+  message?: string;
+  error?: string;
+}
+
+export interface SleepSources extends ObserveSources {
+  closePane?: typeof closePane;
+  findPaneSession?: typeof findPaneSession;
+}
+
+export const DEFAULT_SLEEP_SOURCES: SleepSources = {
+  live: () => liveSessions({ all: true, panes: {} }),
+  panes: () => listPanes(),
+  paneSession: async (pane) => (await findPaneSession(pane))?.id,
+  idle: (panes, live) => withPaneIdle(panes, live),
+  capture: (pane) => capturePane(pane),
+  closePane: (pane) => closePane(pane),
+  findPaneSession: (pane) => findPaneSession(pane),
+};
+
+export interface SleepPaneOptions {
+  force?: boolean;
+  sources?: SleepSources;
+  world?: World;
+}
+
+/**
+ * Puts a node's live pane to sleep from the CLI: closes tmux process,
+ * leaving the session in the node for waking and continuation.
+ * Refuses if the pane is busy, waiting for user, attached or pending (without force).
+ */
+export async function sleepNodePane(tree: Tree, id: string, options: SleepPaneOptions = {}): Promise<SleepResult> {
+  const node = holderOf(tree, id);
+  if (!node) {
+    return {
+      node: id,
+      title: '',
+      ok: false,
+      status: 'failed',
+      pane: null,
+      session: null,
+      error: t('нет узла {id}', { id }),
+    };
+  }
+
+  const sources = options.sources ?? DEFAULT_SLEEP_SOURCES;
+  const world = options.world ?? (await observe(tree.project.dir, sources));
+  const found = nodePane(node, world.panes);
+
+  if (!found) {
+    const sleeping = sleepingRef(node, world.panes);
+    if (sleeping) {
+      return {
+        node: id,
+        title: node.title,
+        ok: true,
+        status: 'already_sleeping',
+        pane: null,
+        session: sleeping.id,
+        message: t('панель уже спит'),
+      };
+    }
+    return {
+      node: id,
+      title: node.title,
+      ok: true,
+      status: 'no_pane',
+      pane: null,
+      session: null,
+      message: t('нет живой панели'),
+    };
+  }
+
+  const { ref, pane } = found;
+
+  // Try to settle pending session ID before closing so conversation can be resumed
+  if (isPending(ref)) {
+    await settlePending(tree, world.panes);
+    if (isPending(ref)) {
+      const findFn = sources.findPaneSession ?? findPaneSession;
+      const resolvedId =
+        pane.sessionId ?? world.paneSessions.get(pane.pane) ?? (await findFn(pane).catch(() => undefined))?.id;
+      if (resolvedId) {
+        await setPaneSession(pane.pane, resolvedId).catch(() => false);
+        ref.id = resolvedId;
+        attachSession(tree, node.id, ref);
+      }
+    }
+  }
+
+  if (isPending(ref) && !options.force) {
+    return {
+      node: id,
+      title: node.title,
+      ok: false,
+      status: 'pending',
+      pane: pane.pane,
+      session: null,
+      error: t('у сессии ещё нет id в CLI — без --force не закрываю'),
+    };
+  }
+
+  if (pane.attached && !options.force) {
+    return {
+      node: id,
+      title: node.title,
+      ok: false,
+      status: 'attached',
+      pane: pane.pane,
+      session: isPending(ref) ? null : ref.id,
+      error: t('к панели подключён терминал — без --force не закрываю'),
+    };
+  }
+
+  const sight = sessionSight(ref, world);
+  if (sight.state === 'busy' && !options.force) {
+    return {
+      node: id,
+      title: node.title,
+      ok: false,
+      status: 'busy',
+      pane: pane.pane,
+      session: isPending(ref) ? null : ref.id,
+      error: t('панель сейчас работает — без --force не закрываю'),
+    };
+  }
+
+  if (sight.state === 'waiting' && !options.force) {
+    return {
+      node: id,
+      title: node.title,
+      ok: false,
+      status: 'waiting',
+      pane: pane.pane,
+      session: isPending(ref) ? null : ref.id,
+      error: t('панель ждёт человека — без --force не закрываю'),
+    };
+  }
+
+  const closeFn = sources.closePane ?? closePane;
+  const closed = await closeFn(pane.pane);
+  if (!closed) {
+    return {
+      node: id,
+      title: node.title,
+      ok: false,
+      status: 'failed',
+      pane: pane.pane,
+      session: isPending(ref) ? null : ref.id,
+      error: t('не удалось закрыть панель {pane}', { pane: pane.pane }),
+    };
+  }
+
+  return {
+    node: id,
+    title: node.title,
+    ok: true,
+    status: 'slept',
+    pane: pane.pane,
+    session: isPending(ref) ? null : ref.id,
+    message: t('панель {pane} уснула', { pane: pane.pane }),
+  };
+}
+
+/**
+ * Puts several nodes' live panes to sleep in one batch.
+ */
+export async function sleepNodePanes(
+  tree: Tree,
+  ids: readonly string[],
+  options: SleepPaneOptions = {},
+): Promise<SleepResult[]> {
+  const sources = options.sources ?? DEFAULT_SLEEP_SOURCES;
+  const world = options.world ?? (await observe(tree.project.dir, sources));
+  const results: SleepResult[] = [];
+  let currentWorld = world;
+  for (const id of ids) {
+    const res = await sleepNodePane(tree, id, { ...options, sources, world: currentWorld });
+    results.push(res);
+    if (res.ok && res.status === 'slept' && res.pane) {
+      currentWorld = {
+        ...currentWorld,
+        panes: currentWorld.panes.filter((p) => p.pane !== res.pane),
+      };
+    }
+  }
+  return results;
 }
