@@ -12,8 +12,8 @@ const DOWN = '\u001b[B';
 const RIGHT = '\u001b[C';
 const LEFT = '\u001b[D';
 const downs = (n: number) => Array.from({ length: n }, () => DOWN);
-/** Rows of the settings screen before «Мозг по умолчанию»: language … status order … live, panes, notes, skills. */
-const BRAIN_ROW = 15;
+/** Rows of the settings screen before «Мозг по умолчанию»: language … status order … live, panes, launch memory, notes, skills. */
+const BRAIN_ROW = 16;
 /** Rows before «Модель сессий»: the brain and the start come after them. */
 const MODEL_ROW = BRAIN_ROW + 2;
 
@@ -160,7 +160,8 @@ describe('models come from the CLI, not from typing', () => {
   it('the menu of a node starts OpenCode with O', async () => {
     const tree = sample();
     const menu = await snapshot(tree.project.dir, { columns: 110, rows: 40, keys: ['\r'] });
-    expect(menu).toMatch(/▶ OpenCode · план\s+O/);
+    // The line says how it would start: the default start, and where (no tmux here — this terminal).
+    expect(menu).toMatch(/▶ OpenCode · план · в терминале\s+O/);
     const confirm = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['\r', 'O'] });
     expect(confirm).toContain('OpenCode · в этом терминале');
   });
