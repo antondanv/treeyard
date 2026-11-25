@@ -415,6 +415,17 @@ waiting for the person (`waiting`), it includes the command to attach. When the 
 node has no live pane, it reports that politely (exit code 0; in `--json`, `live: false, pane: null, screen: []`)
 with hints on how to continue or inspect the journal. If the node does not exist, it exits with code 1.
 
+`treeyard models [brain] [--json]` shows available models and their effort levels for a CLI (`claude`,
+`codex`, `antigravity` / `agy`, `opencode`) or for all four CLIs: prints model id, label (if different),
+and supported reasoning effort levels (with default effort marked, e.g. `high*`). If a CLI is not
+installed or returned an error, explains the reason without failing the whole command. `--json` outputs
+the clean catalog structure.
+
+`treeyard limits [brain] [--json]` reads local limit and quota windows through Brainyard without network
+calls (`offline: true`): utilization percentage, reset time, source (`cache`, `rollout`, etc.), and
+snapshot age. If there are no local snapshots (offline mode or missing cache), explains the reason cleanly.
+`--json` outputs the limit windows for automation.
+
 ## Agents and the tree
 
 A session from a node gets a short context: the path from the root (why this), the
@@ -489,6 +500,8 @@ treeyard worktree                               # the nodes' worktrees: folder, 
 treeyard sessions                               # the folder's sessions in every CLI, “no node” — past the tree, ▣ — a live pane (--json: pane)
 treeyard sleep <id> [<id>…] [--force] [--json]  # put the live panes of nodes to sleep; keeps the session for waking; refuses on busy/waiting/attached without --force
 treeyard peek <id> [--lines N] [--json]        # peek at a node's live pane screen: session status, pane name and the last N lines (default 25) without ANSI
+treeyard models [brain] [--json]               # models and effort levels for CLIs (id, label, efforts)
+treeyard limits [brain] [--json]               # local limit windows without network calls (offline: true)
 treeyard status                                 # a summary: versions, tree, nodes, skills, Codex's way to treeyard and git, pointer, hook, sessions, GitHub; a command for every problem (--json)
 treeyard context <id>                           # exactly what an agent gets
 treeyard pointer                                # the block about the tree in AGENTS.md / CLAUDE.md (what it says — below)

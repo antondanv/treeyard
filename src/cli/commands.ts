@@ -13,6 +13,8 @@ import { createInterface } from 'node:readline';
 
 import { parseArgs } from 'node:util';
 
+import type { Catalog, UsageReport } from '@antondanv/brainyard';
+
 import {
   ACCESS_HINT,
   ACCESS_LABEL,
@@ -137,7 +139,7 @@ import {
 import { staleOf } from '../model/stale.js';
 import { parseStatus, parseStatuses, UnknownStatus } from '../model/status-words.js';
 import { findProject, loadTree, nodePath, writeProject } from '../model/store.js';
-import { ago, nowIso, today } from '../model/time.js';
+import { ago, clockOf, nowIso, today } from '../model/time.js';
 import { isLongTitle } from '../model/titles.js';
 import {
   childrenOf,
@@ -151,6 +153,7 @@ import {
   type StatusOrderName,
 } from '../model/tree.js';
 import {
+  BRAIN_IDS,
   type BrainId,
   ROOT,
   type SessionRef,
@@ -187,6 +190,7 @@ import {
   worktreeState,
   worktreesOf,
 } from '../worktree.js';
+import { fetchCatalogs, fetchLimits, limitsText, modelsText } from './models-text.js';
 import {
   foundJson,
   fullTreeJson,
@@ -324,6 +328,10 @@ function commandLines(): string {
   treeyard peek <id> [--lines N] [--json] [--project <папка>]   заглянуть на экран живой панели узла: статус сессии, имя
                                            панели и последние N строк экрана (по умолчанию 25) без ANSI-кодов; для спящей
                                            или отсутствующей панели — понятное сообщение
+  treeyard models [brain] [--json]         модели и уровни effort для CLI (claude, codex, antigravity, opencode);
+                                           id, название (если отличается) и усилия (отмечено по умолчанию); --json — структура
+  treeyard limits [brain] [--json]         локальные окна лимитов CLI через Brainyard без вызовов сети (offline);
+                                           процент использования, время сброса, источник и возраст снимка
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   ждать, пока узел уйдёт из «в работе» или его сессия
                                            закончит ход, будет ждать человека или закончится; печатает статус, последнюю
                                            запись журнала, сессию и её последнее сообщение целиком — вопрос или итог
@@ -484,6 +492,10 @@ function commandLines(): string {
   treeyard peek <id> [--lines N] [--json] [--project <dir>]   peek at a node's live pane screen: session status, pane name
                                            and the last N lines (default 25) without ANSI codes; for a sleeping or missing
                                            pane — a clear message
+  treeyard models [brain] [--json]         models and effort levels of the CLIs (claude, codex, antigravity, opencode);
+                                           shows id, label (if different) and efforts (default marked); --json — clean structure
+  treeyard limits [brain] [--json]         local limit windows of the CLIs via Brainyard without network calls (offline);
+                                           utilization percentage, reset time, source and snapshot age
   treeyard wait <id> [<id>…] [--all] [--timeout 10m] [--json]   wait until a node leaves «active» or its session
                                            ends its turn, waits for the person or ends; prints the status, the last journal
                                            entry, the session and its last message whole — a question or a summary from
@@ -691,6 +703,10 @@ async function main(argv: string[]): Promise<number> {
       return sleepCommand(rest);
     case 'peek':
       return peekCommand(rest);
+    case 'models':
+      return modelsCommand(rest);
+    case 'limits':
+      return limitsCommand(rest);
     case 'github':
       return githubCommand(rest);
     case 'config':
@@ -1935,15 +1951,6 @@ function queueLine(event: QueueEvent, p: typeof out): string {
       )}`;
     }
   }
-}
-
-/** `18:40`, or `24.11 18:40` for another day. */
-function clockOf(ms: number): string {
-  const at = new Date(ms);
-  const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
-  return at.toDateString() === new Date().toDateString()
-    ? time
-    : `${String(at.getDate()).padStart(2, '0')}.${String(at.getMonth() + 1).padStart(2, '0')} ${time}`;
 }
 
 /**
@@ -3815,6 +3822,68 @@ export async function peekCommand(args: string[]): Promise<number> {
   }
 
   process.stdout.write(peekText(result, out));
+  return 0;
+}
+
+export async function modelsCommand(
+  args: string[],
+  overrides?: { modelsFn?: (brain: BrainId) => Promise<Catalog> },
+): Promise<number> {
+  const { values, positionals } = parse(args, {
+    json: { type: 'boolean', default: false },
+    brain: { type: 'string' },
+  });
+  if (positionals.length > 1) {
+    throw new UsageError(t('treeyard models [brain] [--json]'));
+  }
+  const brainTarget = positionals[0] ?? values.brain;
+  const brain = brainTarget ? brainArg(brainTarget, 'claude') : undefined;
+  const brains = brain ? [brain] : BRAIN_IDS;
+  const results = await fetchCatalogs(brains, overrides?.modelsFn);
+
+  if (values.json) {
+    if (brain) {
+      const single = results[0]!;
+      const data = single.catalog ?? { brain: single.brain, error: single.error, models: [] };
+      process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+    } else {
+      const data = results.map((r) => r.catalog ?? { brain: r.brain, error: r.error, models: [] });
+      process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+    }
+  } else {
+    process.stdout.write(`${modelsText(results, out)}\n`);
+  }
+  return 0;
+}
+
+export async function limitsCommand(
+  args: string[],
+  overrides?: {
+    usageFn?: (options: { brains: BrainId[]; limit: number; offline: boolean }) => Promise<UsageReport>;
+  },
+): Promise<number> {
+  const { values, positionals } = parse(args, {
+    json: { type: 'boolean', default: false },
+    brain: { type: 'string' },
+  });
+  if (positionals.length > 1) {
+    throw new UsageError(t('treeyard limits [brain] [--json]'));
+  }
+  const brainTarget = positionals[0] ?? values.brain;
+  const brain = brainTarget ? brainArg(brainTarget, 'claude') : undefined;
+  const brains = brain ? [brain] : BRAIN_IDS;
+  const report = await fetchLimits(brains, overrides?.usageFn);
+
+  if (values.json) {
+    if (brain) {
+      const single = report.brains.find((b) => b.brain === brain) ?? report.brains[0];
+      process.stdout.write(`${JSON.stringify(single, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${JSON.stringify(report.brains, null, 2)}\n`);
+    }
+  } else {
+    process.stdout.write(`${limitsText(report.brains, out)}\n`);
+  }
   return 0;
 }
 

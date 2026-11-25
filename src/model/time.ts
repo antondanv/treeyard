@@ -25,6 +25,14 @@ export function stamp(date = new Date()): string {
   return `${today(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** `18:40`, or `24.11 18:40` for another day. */
+export function clockOf(ms: number, now = Date.now()): string {
+  const at = new Date(ms);
+  const current = new Date(now);
+  const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  return at.toDateString() === current.toDateString() ? time : `${pad(at.getDate())}.${pad(at.getMonth() + 1)} ${time}`;
+}
+
 /** «только что», «5 мин», «3 ч», «вчера», «4 дн», «12.08». */
 export function ago(value: string | number | undefined, now = Date.now()): string {
   if (value === undefined) return '';

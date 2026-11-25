@@ -48,6 +48,8 @@ const COMMANDS = [
   'sessions',
   'sleep',
   'peek',
+  'models',
+  'limits',
   'wait',
   'send',
   'deliver',

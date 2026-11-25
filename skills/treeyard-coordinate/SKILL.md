@@ -61,7 +61,7 @@ Copy it and check it off:
 ```
 Coordinate:
 - [ ] 1. Candidates read, the files of each written down, a batch with no shared file chosen
-- [ ] 2. Plan agreed with the person: nodes, CLI, pane or background, model, what waits
+- [ ] 2. Plan agreed with the person: nodes, CLI (checked via treeyard limits), pane or background, model & effort (checked via treeyard models), what waits
 - [ ] 3. Sessions started: treeyard open … --pane|--bg --worktree --start do --task …
 - [ ] 4. Waiting: treeyard wait (or peek on a live pane: treeyard peek <id>); a letter or question you can answer → treeyard send; one only the person can → to them
 - [ ] 5. Each finished node accepted: journal, commits, diff, criterion
@@ -103,11 +103,22 @@ remove the conflict, they move it to the merge.
 The project's rule is a plan first. Show the person a table and wait for a yes, unless they
 already named the nodes to run:
 
-| Node | Files | Session | Model |
-|---|---|---|---|
-| «Quiet exit on EPIPE» | src/cli/show.ts, test/show.test.ts | Codex, pane | default |
-| «Node order from the CLI» | src/model/ops.ts, src/cli/set.ts | Claude Code, background | default |
-| «Amount from the clipboard» | src/cli/set.ts — shared with «Node order…» | after it | — |
+| Node | Files | Session | Model | Effort |
+|---|---|---|---|---|
+| «Quiet exit on EPIPE» | src/cli/show.ts, test/show.test.ts | Codex, pane | default | low |
+| «Node order from the CLI» | src/model/ops.ts, src/cli/set.ts | Claude Code, background | default | — |
+| «Amount from the clipboard» | src/cli/set.ts — shared with «Node order…» | after it | — | — |
+
+**Checking models and limits.** Choose the CLI, `--model` and `--effort` using Treeyard's built-in commands instead of guessing or calling Brainyard via `node -e`:
+
+```sh
+treeyard limits                     # check local quota windows across all CLIs (offline: true, no network calls)
+treeyard models                     # check available models and supported effort levels across CLIs
+treeyard limits codex               # windows for one CLI (e.g. primary 11%, secondary 62%)
+treeyard models antigravity         # models for one CLI (e.g. gemini-4-neon with low · medium · high* · xhigh)
+```
+
+Use `treeyard limits` to pick a CLI with available quota windows (so sessions do not immediately stall in rate limits), and `treeyard models` to specify a valid model and effort level for `treeyard open … --model <model> --effort <level>`.
 
 Then `treeyard set <parent> status=active` if it is not active yet.
 
