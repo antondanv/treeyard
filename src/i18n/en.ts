@@ -1731,7 +1731,21 @@ export const EN: Record<string, string> = {
   'первый узел — в папке проекта, остальные — каждый в своём git worktree':
     "the first node stays in the project's folder, the others get a git worktree each",
   'в worktree узла, ветка {branch}': "in the node's worktree, branch {branch}",
-  'treeyard worktree [add|setup|rm <id>] [--json]': 'treeyard worktree [add|setup|rm <id>] [--json]',
+  'treeyard worktree [add|setup <id> | rm <id>…|--done [--dry-run]] [--json]':
+    'treeyard worktree [add|setup <id> | rm <id>…|--done [--dry-run]] [--json]',
+  'выбери одно: id узлов или --done': 'choose one: node ids or --done',
+  'у корня нет worktree': 'the root has no worktree',
+  'уберёт worktree, ветка {branch}': 'would remove worktree, branch {branch}',
+  'коммитов у узла: {n}': 'node commits: {n}',
+  'закрытых узлов с worktree нет': 'no closed nodes have a worktree',
+  'оставит: {why}': 'would keep: {why}',
+  'оставлен: {why}': 'kept: {why}',
+  'убрано: {removed} · оставлено: {kept}': 'removed: {removed} · kept: {kept}',
+  'уберёт: {removed} · оставит: {kept}': 'would remove: {removed} · would keep: {kept}',
+  'worktree влит и чист — убрать: treeyard worktree rm {id}':
+    'worktree is merged and clean — remove: treeyard worktree rm {id}',
+  'worktree влиты и чисты — убрать: treeyard worktree rm {ids}':
+    'worktrees are merged and clean — remove: treeyard worktree rm {ids}',
   'worktree у узлов нет — treeyard open <id> --worktree или treeyard worktree add <id>':
     'no node has a worktree — treeyard open <id> --worktree or treeyard worktree add <id>',
   'worktree заводят узлу, а не корню — {usage}': 'a worktree is made for a node, not the root — {usage}',

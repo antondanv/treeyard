@@ -887,6 +887,20 @@ export function blockers(state: WorktreeState): string[] {
   return out;
 }
 
+/** Standing worktrees whose node is closed (`done` or `dropped`). */
+export function closedWorktrees(tree: Tree): NodeWorktree[] {
+  return worktreesOf(tree.project.dir).filter((wt) => {
+    const status = tree.nodes.get(wt.id)?.status;
+    return status === 'done' || status === 'dropped';
+  });
+}
+
+/** Whether a node has a standing worktree with nothing uncommitted and no unmerged commits. */
+export function isWorktreeCleanMerged(project: string, id: string): boolean {
+  const wt = worktreeFor(project, id);
+  return wt ? blockers(worktreeState(project, wt)).length === 0 : false;
+}
+
 export class WorktreeBusy extends Error {
   constructor(readonly reasons: string[]) {
     super(reasons.join('; '));

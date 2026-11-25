@@ -459,7 +459,7 @@ treeyard set <id> after=<sibling id>|first|last # the place among siblings; with
 treeyard set <a> <b> <c> status=todo            # several nodes: the same change to each (after=<id> puts them one after another); an error changes none
 treeyard set <id> status=waiting waiting="no server" until="a VPS is up"
 treeyard set <id> status=review                 # the agent; “done” is set by a person
-treeyard set <id> status=done --as you          # only at the person's word; from an agent (or --as not a person) done turns into review — the output line says so
+treeyard set <id> status=done --as you          # only at the person's word; from an agent (or --as not a person) done turns into review — the output line says so; a node with a merged, clean worktree hints `treeyard worktree rm <id>`
 treeyard log <id> "what is done; what is left"
 treeyard log <id> "summary, evidence" --status review --commit HEAD   # closing in one command: the entry, the status and the commits (--commit a b, --commit a,b)
 treeyard log <id> --fix "corrected text"        # replace your own last entry (its time stays; status changes and commits are not touched)
@@ -811,8 +811,13 @@ alike: treeyard makes the worktree itself, not the CLI.
   worktree stays, and `treeyard worktree setup <id>` or the next launch runs it again.
 - **Work is not lost.** `treeyard worktree rm <id>` removes the folder and the branch only when
   nothing is uncommitted and the main folder's branch has all the commits of the node's branch; or it
-  says what is left, and a session still open there keeps it too. There is no `--force`: it is for
-  git (`git worktree remove`) and for the person.
+  says what is left, and a session still open there keeps it too. Passing several ids
+  (`treeyard worktree rm a b c`) prints a line per node, does not let a refusal on one stop the rest,
+  and exits with 1 if any was refused. `treeyard worktree rm --done` removes clean, merged worktrees
+  of every closed node (`done` or `dropped`) and reports what was removed, what was kept and why;
+  `--dry-run` only shows what would be removed or kept without changing anything. Closing a node with
+  `treeyard set <id> status=done` hints `treeyard worktree rm <id>` when its worktree is merged and
+  clean. There is no `--force`: it is for git (`git worktree remove`) and for the person.
 - **In the tree.** `treeyard show <id>` and `show --json` give the folder, the branch and what it
   holds (`commits: 3 · not merged: 3 · not committed: 2`); the node card shows the branch and the
   folder; the launch window (`o`) has a «Worktree» row for every brain. Panes and sessions in a
@@ -825,7 +830,8 @@ treeyard open a b c --brain opencode --pane          # a in the project's folder
 treeyard worktree                                    # the list with what each holds (--json)
 treeyard worktree add <id>                           # make one without a session; prints the folder
 treeyard worktree setup <id>                         # copy by .worktreeinclude and run setup again
-treeyard worktree rm <id>                            # only when nothing would be lost
+treeyard worktree rm <id> [<id>…]                    # only when nothing would be lost (several ids — a line each)
+treeyard worktree rm --done [--dry-run]              # clean, merged worktrees of closed nodes (--dry-run only shows)
 ```
 
 Undo (`u`) brings back only your own changes: if an agent has already edited the same
