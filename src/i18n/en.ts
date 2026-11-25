@@ -1790,4 +1790,5 @@ export const EN: Record<string, string> = {
   'не удалось прочитать локальные лимиты': 'failed to read local limits',
   'нет локальных данных': 'no local data',
   'сброс в {time}': 'resets at {time}',
+  'сброшено в {time}': 'reset at {time}',
 };

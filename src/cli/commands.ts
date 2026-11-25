@@ -197,7 +197,7 @@ import {
   worktreeState,
   worktreesOf,
 } from '../worktree.js';
-import { fetchCatalogs, fetchLimits, limitsText, modelsText } from './models-text.js';
+import { fetchCatalogs, fetchLimits, limitsText, modelsText, settleExpired } from './models-text.js';
 import {
   foundJson,
   fullTreeJson,
@@ -3872,6 +3872,7 @@ export async function limitsCommand(
   args: string[],
   overrides?: {
     usageFn?: (options: { brains: BrainId[]; limit: number; offline: boolean }) => Promise<UsageReport>;
+    now?: number;
   },
 ): Promise<number> {
   const { values, positionals } = parse(args, {
@@ -3885,6 +3886,8 @@ export async function limitsCommand(
   const brain = brainTarget ? parseBrain(brainTarget) : undefined;
   const brains = brain ? [brain] : BRAIN_IDS;
   const report = await fetchLimits(brains, overrides?.usageFn);
+  const now = overrides?.now ?? Date.now();
+  report.brains = settleExpired(report.brains, now);
 
   if (values.json) {
     if (brain) {
@@ -3894,7 +3897,7 @@ export async function limitsCommand(
       process.stdout.write(`${JSON.stringify(report.brains, null, 2)}\n`);
     }
   } else {
-    process.stdout.write(`${limitsText(report.brains, out)}\n`);
+    process.stdout.write(`${limitsText(report.brains, out, now)}\n`);
   }
   return 0;
 }
