@@ -34,10 +34,10 @@ Coordinators break these most often.
    commits are the node's, and you merge the branch (step 6). A git worktree treeyard did not make
    (Claude Code's own `claude --worktree`) has `.tree/` as a copy: every command there carries
    `--project <main folder>`.
-5. **A commit made for a node carries that node:** `TREEYARD_NODE=<id> git commit …` — in your
-   commits and in every session's. Your own `$TREEYARD_NODE` would attach a fix, a squash or a
-   merge resolution to your node; Claude Code's background service hands every `--bg` session
-   the environment of the first one it started.
+5. **Your own commits for a child node carry that node:** `TREEYARD_NODE=<id> git commit …`.
+   Without it, your `$TREEYARD_NODE` would attach a fix, a squash or a merge resolution to
+   your own node. Sessions started by `treeyard open` (pane or `--bg`) carry their own
+   `$TREEYARD_NODE` and commit normally.
 6. **Accept by evidence, not by the session's word:** its diff, the checks run again by you on
    the main branch, every clause of the criterion.
 7. **Statuses:** the sessions and you set `review`; `done` — only the person.
@@ -178,8 +178,6 @@ You are one of the sessions handed out by the coordinator of «<parent title>».
 Next to you: «<A>» — src/a.ts, test/a.test.ts; «<B>» — src/b.ts.
 Change only the files of your node; commit only your own files, by path.
 <where you work — one of the two blocks below>
-Commit as TREEYARD_NODE=<your node's id> git commit … — the variable in your environment may
-be another node's.
 A check fails in a neighbour's files — don't fix it, say so in your summary.
 Don't wait for a plan approval: do the node and check its criterion.
 Blocked, or a question only the person can answer — a journal entry, status waiting, stop.
@@ -209,9 +207,9 @@ You work in a git worktree: .tree/ there is a copy. Run every treeyard command w
 --project <main folder>. Don't commit .tree/.
 ```
 
-The prefix attaches commits through the git hook (`treeyard hook status`). No hook → the
-person installs it (`treeyard hook install`); until then you attach each node's commits at
-acceptance with `treeyard diff <id> --add <sha>`.
+Each session's `$TREEYARD_NODE` attaches its commits through the git hook (`treeyard hook status`).
+No hook → the person installs it (`treeyard hook install`); until then you attach each node's
+commits at acceptance with `treeyard diff <id> --add <sha>`.
 
 **No session can start** (no tmux for a pane, and no background mode in the chosen CLI) → your CLI's
 own subagent, told: the node id, `treeyard show <id>` first, `--project <main folder>` on every
