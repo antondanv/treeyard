@@ -9,6 +9,7 @@ import { journalEntries } from '../src/model/journal.js';
 import {
   addLinkedNode,
   linksOf,
+  needsName,
   normalizeRef,
   parseRef,
   refTo,
@@ -161,6 +162,39 @@ describe('links between trees', () => {
 });
 
 describe('needs inside one tree', () => {
+  it('names a node of the same tree by its id in the tree row, another project by its title', () => {
+    const { here, there } = neighbours();
+    const target = addNode(here, { title: 'Цель' });
+    const away = addNode(there, { title: 'Чужой' });
+    const waiter = addNode(here, { title: 'Ждущий' });
+    const same = setNeeds(here, waiter.id, [target.id], 'test');
+    expect(same.map(needsName)).toEqual([target.id]);
+
+    const rowFor = (links: typeof same) =>
+      render(
+        <TreeRow
+          row={{
+            node: waiter,
+            depth: 0,
+            hasChildren: false,
+            expanded: false,
+            last: true,
+            guides: [],
+            held: false,
+            match: true,
+          }}
+          selected={false}
+          width={70}
+          badges={{ live: [], frame: 0, needs: links }}
+        />,
+      ).lastFrame();
+    expect(rowFor(same)).toContain(`→ ${target.id} ○`);
+    expect(rowFor(same)).not.toContain('→ Treeyard');
+
+    const other = setNeeds(here, waiter.id, [target.id, `../Brainyard#${away.id}`], 'test');
+    expect(other.map(needsName)).toEqual([target.id, 'Brainyard']);
+  });
+
   it('reads a bare id and #id as .#id, and leaves other refs alone', () => {
     expect(normalizeRef('y79a')).toBe('.#y79a');
     expect(normalizeRef(' #y79a ')).toBe('.#y79a');
@@ -249,7 +283,8 @@ describe('treeyard set needs= inside one tree', () => {
     expect(bare.stderr).toBe('');
     expect(loadTree(here.project.dir).nodes.get(waiter.id)!.needs).toEqual([`.#${target.id}`]);
     expect((await sh('show', waiter.id)).stdout).toContain('ждёт: ○ Treeyard › Цель · к работе');
-    expect((await sh('show')).stdout).toContain('→ Treeyard ○');
+    expect((await sh('show')).stdout).toContain(`→ ${target.id} ○`);
+    expect((await sh('show')).stdout).not.toContain('→ Treeyard');
 
     expect((await sh('set', waiter.id, 'needs=')).code).toBe(0);
     expect(loadTree(here.project.dir).nodes.get(waiter.id)!.needs).toBeUndefined();
