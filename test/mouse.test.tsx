@@ -318,6 +318,9 @@ describe('mouse in a session panel', () => {
     await until(() => app.screen().includes('печатаешь в Claude Code'));
     await app.click('Pane work', { nth: 0 });
     await until(() => !app.screen().includes('печатаешь в Claude Code'));
+    // The frame is drawn before React gives the tree its keys back (an effect): a key pressed that early
+    // is lost, and `p` never hides the pane. A person cannot click that fast; wait for the effect, as after ⌃Q.
+    await pause(100);
     await app.click('p скрыть');
     await until(() => !app.screen().includes('hello from the CLI'));
     expect(app.screen()).not.toContain('печатаешь в Claude Code');
