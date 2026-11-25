@@ -5,7 +5,8 @@
  * in its `.tree/tree.md` instead, next to the tree.
  *
  * `TREEYARD_LANG=ru` overrides the language for one run, `TREEYARD_SKILLS=off`
- * the setting `skills` (see `skillsAuto`).
+ * the setting `skills` (see `skillsAuto`), `TREEYARD_UPDATES=off` the setting `updates`
+ * (see `updatesOn` in update-check.ts).
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -53,6 +54,8 @@ export interface Settings {
   codexAccess: CodexAccess | '';
   /** treeyard puts its skills into the CLIs by itself and keeps them at its version. */
   skills: boolean;
+  /** Tell when a newer treeyard is in npm: the answer is cached for a day, asked in the background. */
+  updates: boolean;
   /** Whose memory of the last launches the menu and `treeyard open` use: each project's own or one for all. */
   launchMemory: MemoryScope;
 }
@@ -87,6 +90,7 @@ export const DEFAULTS: Settings = {
   antigravityAccess: '',
   codexAccess: '',
   skills: true,
+  updates: true,
   launchMemory: 'project',
 };
 
@@ -137,6 +141,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     const codex = data.codex_access ?? data.codexAccess;
     if (codex === 'sandbox' || codex === 'config') settings.codexAccess = codex;
     if (typeof data.skills === 'boolean') settings.skills = data.skills;
+    if (typeof data.updates === 'boolean') settings.updates = data.updates;
     const memory = data.launch_memory ?? data.launchMemory;
     if ((MEMORY_SCOPES as readonly unknown[]).includes(memory)) settings.launchMemory = memory as MemoryScope;
   } catch {

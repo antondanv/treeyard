@@ -183,6 +183,7 @@ import { createTree, getTemplate, listTemplates } from '../templates/templates.j
 import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
 import type { Leftover } from '../uninstall.js';
+import { updateNotice } from '../update-check.js';
 import { WATCH_VERSION, watchTree } from '../watch.js';
 import {
   blockers,
@@ -661,7 +662,8 @@ async function main(argv: string[]): Promise<number> {
   if (skillsNote && command !== undefined) process.stderr.write(`${err.dim(skillsNote)}\n`);
   switch (command) {
     case undefined:
-      return openTui(skillsNote);
+      // Only a person at a terminal hears of a new version; the toast carries it with the skills note.
+      return openTui([process.stdout.isTTY ? updateLine() : '', skillsNote].filter(Boolean).join(' · '));
     case 'init':
       return initCommand(rest);
     case 'import':
@@ -755,6 +757,11 @@ async function main(argv: string[]): Promise<number> {
     case '-v':
     case 'version':
       process.stdout.write(`${VERSION}\n`);
+      // For a person at a terminal only: a script reading the version sees nothing else.
+      if (process.stdout.isTTY && process.stderr.isTTY) {
+        const update = updateLine();
+        if (update) process.stderr.write(`${err.dim(update)}\n`);
+      }
       return 0;
     default:
       throw unknownCommand(command);
@@ -1099,7 +1106,22 @@ async function statusCommand(args: string[]): Promise<number> {
   if (owner && place.worktree) place = { ...place, project: owner };
   const status = await projectStatus(place);
   process.stdout.write(values.json ? `${JSON.stringify(status, null, 2)}\n` : `${statusText(status, out)}\n`);
+  if (!values.json) {
+    const update = updateLine();
+    if (update) process.stdout.write(`${out.c('#ffcf70', update)}\n`);
+  }
   return 0;
+}
+
+/** «A newer treeyard is out» with the command that installs it; empty when it is not, or the check is off. */
+function updateLine(): string {
+  const notice = updateNotice({ current: VERSION });
+  if (!notice) return '';
+  return t('Вышел treeyard {latest} (стоит {current}) · обновить: {command}', {
+    latest: notice.latest,
+    current: notice.current,
+    command: notice.command,
+  });
 }
 
 /** Adds (or refreshes) the block about the tree in AGENTS.md, CLAUDE.md and GEMINI.md. */
@@ -4340,6 +4362,7 @@ const GLOBAL_KEYS = [
   'antigravityAccess',
   'codexAccess',
   'skills',
+  'updates',
 ] as const;
 /** Keys in settings.json and on the command line, where they differ from the code. */
 const SNAKE: Record<string, string> = {
