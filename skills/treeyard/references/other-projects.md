@@ -17,12 +17,11 @@ sets your node `done`. If you did its work yourself, close it right away with
 
 ## Git worktrees
 
-In a git worktree, `.tree/` is the branch's copy; the person sees the main tree.
-In a worktree treeyard made — or in a session opened from a node, which carries
-`$TREEYARD_PROJECT` — treeyard commands write to the main tree by themselves. In another
-git worktree, `treeyard status` names the main tree and the `--project <main folder>` to
-pass to `show`, `find`, `add`, `log`, `set` and `diff` (`git worktree list` prints the main
-folder first, too).
+In any git worktree of the project — one treeyard made, Claude Code's own, `git worktree add` —
+treeyard commands read and write the main tree the person sees, found through git's common dir;
+the branch's `.tree/` is a copy nobody reads. Only `--project .` (or the worktree's path) targets
+that copy, and a worktree whose main folder has no tree keeps its own. `treeyard status` names
+the tree in use.
 
 ## Handing a node to another session
 

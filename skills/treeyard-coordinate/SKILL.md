@@ -31,9 +31,9 @@ Coordinators break these most often.
    itself, next to the others. Several nodes in one `open` or `queue`, or `--worktree` (any CLI),
    and treeyard gives each node but one its own git worktree `<project>.worktrees/<id>` on the
    branch `treeyard/<id>`: treeyard commands there write the main tree by themselves, the branch's
-   commits are the node's, and you merge the branch (step 6). A git worktree treeyard did not make
-   (Claude Code's own `claude --worktree`) has `.tree/` as a copy: every command there carries
-   `--project <main folder>`.
+   commits are the node's, and you merge the branch (step 6). Any other git worktree of the
+   project (Claude Code's own `claude --worktree`, `git worktree add`) reaches the main tree the
+   same way, through git's common dir.
 5. **Your own commits for a child node carry that node:** `TREEYARD_NODE=<id> git commit …`.
    Without it, your `$TREEYARD_NODE` would attach a fix, a squash or a merge resolution to
    your own node. Sessions started by `treeyard open` (pane or `--bg`) carry their own
@@ -203,8 +203,7 @@ Commit there; don't commit .tree/.
 Claude Code's own worktree (`claude --worktree`, not treeyard's):
 
 ```text
-You work in a git worktree: .tree/ there is a copy. Run every treeyard command with
---project <main folder>. Don't commit .tree/.
+You work in a git worktree; treeyard commands there write the main tree. Don't commit .tree/.
 ```
 
 Each session's `$TREEYARD_NODE` attaches its commits through the git hook (`treeyard hook status`).
@@ -278,9 +277,8 @@ needs you yet: call it again.
   question the person answered to you in your conversation →
   `treeyard send <id> --answer "<choice or their text>"` passes it into the dialog; it refuses a
   permission.
-- **Done without review** (ended, the node still `active`): a background session's summary may sit
-  in its worktree's copy — `treeyard show <id> --journal 5 --project <worktree>`. Finish a small
-  rest yourself, or `treeyard send <id> "What is left: …"`.
+- **Done without review** (ended, the node still `active`): finish a small rest yourself, or
+  `treeyard send <id> "What is left: …"`.
 - **`waiting`:** read why. What only the person can give goes into the summary; a mistake in
   your task → `treeyard set <id> status=active` and `treeyard send <id> "…"` with the task fixed.
 
