@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { installAgyMailHook } from '../src/agents/agy-hook.js';
 import { installCodexMailHook } from '../src/agents/codex-hook.js';
 import { installMailHook } from '../src/agents/turn-hook.js';
 import { addNode, attachCommits } from '../src/model/ops.js';
@@ -124,12 +125,16 @@ describe('a worktree of a node', () => {
       readFileSync(join(main, '.claude', 'settings.local.json'), 'utf8'),
     );
 
-    // A Codex hook installed later reaches an existing worktree via `prepareAgain` and stays out of git status.
+    // Codex and Antigravity hooks installed later reach an existing worktree via `prepareAgain` and stay out of git status.
     installCodexMailHook('project', main);
+    installAgyMailHook('project', main);
     const refreshed = await prepareAgain(tree, a);
-    expect(refreshed.copied).toBe(1);
+    expect(refreshed.copied).toBe(2);
     expect(readFileSync(join(made.worktree.path, '.codex', 'hooks.json'), 'utf8')).toBe(
       readFileSync(join(main, '.codex', 'hooks.json'), 'utf8'),
+    );
+    expect(readFileSync(join(made.worktree.path, '.agents', 'hooks.json'), 'utf8')).toBe(
+      readFileSync(join(main, '.agents', 'hooks.json'), 'utf8'),
     );
     expect(worktreeState(main, made.worktree).dirty).toEqual([]);
   });

@@ -25,6 +25,13 @@ import {
   needsAccessChoice,
 } from '../agents/access.js';
 import {
+  agyMailHookPlaces,
+  deliverAgyMidTurn,
+  installAgyMailHook,
+  parseAgyHookInput,
+  removeAgyMailHook,
+} from '../agents/agy-hook.js';
+import {
   codexMailHookPlaces,
   deliverCodexMidTurn,
   installCodexMailHook,
@@ -269,8 +276,11 @@ function commandLines(): string {
                                            настройки: .claude/settings.local.json в проекте или с --user глобально
   treeyard hook codex install|remove|status [--user]    хуки Codex для писем сессиям узлов (одобрить при старте или в /hooks)
                                            настройки: .codex/hooks.json в проекте или с --user в ~/.codex/hooks.json
+  treeyard hook antigravity install|remove|status [--user]   хук Antigravity для писем сессиям узлов (алиас: agy)
+                                           PreInvocation — вместе с запросом и посреди хода
+                                           настройки: .agents/hooks.json в проекте или с --user в ~/.gemini/config/hooks.json
   treeyard uninstall [--settings] [--dry-run]   убрать всё, что treeyard поставил вне .tree: скиллы из папок CLI
-                                           и проекта, хуки post-commit, Claude Code и Codex (здесь и в известных проектах);
+                                           и проекта, хуки post-commit, Claude Code, Codex и Antigravity (здесь и в известных проектах);
                                            --settings — и ~/.treeyard; --dry-run — только показать; .tree/ и блок в AGENTS.md остаются
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   что получит агент
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
@@ -416,8 +426,11 @@ function commandLines(): string {
                                            settings: .claude/settings.local.json in the project or global with --user
   treeyard hook codex install|remove|status [--user]    Codex hooks for letters to node sessions (trust once at start or /hooks)
                                            settings: .codex/hooks.json in the project or ~/.codex/hooks.json with --user
+  treeyard hook antigravity install|remove|status [--user]   Antigravity hook for letters to node sessions (alias: agy)
+                                           PreInvocation delivers with the prompt and during the turn
+                                           settings: .agents/hooks.json in the project or ~/.gemini/config/hooks.json with --user
   treeyard uninstall [--settings] [--dry-run]   remove all treeyard put outside .tree: skills from the CLIs' folders
-                                           and the project, post-commit, Claude Code and Codex hooks (here and in known projects);
+                                           and the project, post-commit, Claude Code, Codex and Antigravity hooks (here and in known projects);
                                            --settings — ~/.treeyard too; --dry-run — only show; .tree/ and the AGENTS.md block stay
   treeyard context <id> [--start plan|do|goal|chat] [--task "…"]   what an agent gets
   treeyard open <id> [--brain claude|codex|antigravity|opencode] [--pane|--bg] [--start …] [--yes]
@@ -2946,6 +2959,7 @@ async function uninstallCommand(args: string[]): Promise<number> {
     if (item.kind === 'hook') return t('хук post-commit');
     if (item.kind === 'claude-hook') return t('хук Claude Code для писем');
     if (item.kind === 'codex-hook') return t('хук Codex для писем');
+    if (item.kind === 'agy-hook') return t('хук Antigravity для писем');
     if (item.kind === 'merge') return t('драйвер слияния обзора дерева');
     if (item.kind === 'settings') return t('настройки treeyard');
     if (item.kind === 'crashes') return t('журналы падений treeyard');
@@ -3137,11 +3151,70 @@ async function codexHookCommand(args: string[]): Promise<number> {
   return 0;
 }
 
+/**
+ * The Antigravity hook that hands waiting letters to a session before each model call
+ * (agents/agy-hook.ts): `install | remove | status` are the person's; `mail` is what Antigravity runs.
+ */
+async function agyHookCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, { user: { type: 'boolean' } });
+  const [action, ...extra] = positionals;
+  if (action === 'mail' && !extra.length) {
+    try {
+      await deliverAgyMidTurn(process.env, parseAgyHookInput(await readHookStdin()));
+    } catch {
+      // A letter that could not be printed stays queued for the next delivery attempt.
+    }
+    return 0;
+  }
+  if (!['install', 'remove', 'status'].includes(action ?? '') || extra.length)
+    throw new UsageError(t('treeyard hook antigravity install | remove | status [--user]'));
+  const dir = projectDir();
+  const scope = values.user ? 'user' : 'project';
+  const where = (file: string) => homeShort(file);
+  if (action === 'status') {
+    const places = agyMailHookPlaces(dir);
+    for (const place of places) {
+      const file = where(place.file);
+      const label = place.scope === 'project' ? t('в проекте') : t('у тебя');
+      const state = place.needsUpdate
+        ? t('обновить хук в {file} — treeyard hook antigravity install{p1}', {
+            file,
+            p1: place.scope === 'user' ? ' --user' : '',
+          })
+        : place.installed
+          ? t('хук стоит: {file}', { file })
+          : t('хука нет: {file}', { file });
+      process.stdout.write(`${label}: ${state}\n`);
+    }
+    if (!places.some((place) => place.installed))
+      process.stdout.write(
+        `${t('поставить — treeyard hook antigravity install (только для проекта) или с --user (для всех проектов и worktree)')}\n`,
+      );
+    return 0;
+  }
+  const result = action === 'install' ? installAgyMailHook(scope, dir) : removeAgyMailHook(scope, dir);
+  const file = where(result.file);
+  const text = {
+    installed: t('хук поставлен: {file}', { file }),
+    updated: t('хук обновлён: {file}', { file }),
+    already: t('хук уже стоит: {file}', { file }),
+    removed: t('хук убран: {file}', { file }),
+    absent: t('хука нет: {file}', { file }),
+  }[result.kind];
+  process.stdout.write(`${text}\n`);
+  if (action === 'install' && result.kind !== 'already')
+    process.stdout.write(
+      `${t('сессии Antigravity из узлов получат письма вместе с запросом и посреди хода. Убрать хук — treeyard hook antigravity remove{p1}', { p1: scope === 'user' ? ' --user' : '' })}\n`,
+    );
+  return 0;
+}
+
 /** The post-commit hook: installed by a person, run by git (`post-commit`) after each commit. */
 function hookCommand(args: string[]): number | Promise<number> {
   const [action, ...extra] = args;
   if (action === 'claude') return claudeHookCommand(extra);
   if (action === 'codex') return codexHookCommand(extra);
+  if (action === 'antigravity' || action === 'agy') return agyHookCommand(extra);
   if (action === 'post-commit') {
     // Called by git; whatever goes wrong, the commit stays untouched.
     try {

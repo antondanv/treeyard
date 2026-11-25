@@ -65,6 +65,7 @@ describe('treeyard uninstall', () => {
     chmodSync(hook, 0o755);
     expect((await here.sh('hook', 'install')).code).toBe(0);
     expect((await here.sh('hook', 'codex', 'install')).code).toBe(0);
+    expect((await here.sh('hook', 'antigravity', 'install')).code).toBe(0);
     expect((await other.sh('hook', 'install')).code).toBe(0);
     // `show` there remembered the project: its hook is found from here.
     expect((await other.sh('show')).code).toBe(0);
@@ -95,6 +96,7 @@ describe('treeyard uninstall', () => {
     expect(dry.stdout).toContain('скилл treeyard · папка проекта');
     expect(dry.stdout.split('хук post-commit').length - 1).toBe(2);
     expect(dry.stdout).toContain('хук Codex для писем');
+    expect(dry.stdout).toContain('хук Antigravity для писем');
     expect(dry.stdout).not.toContain('настройки treeyard');
     expect(dry.stdout).toContain('.tree/ и блок о дереве');
     for (const skills of dirs) expect(readdirSync(skills).filter((name) => name !== 'mine').length).toBe(3);
@@ -114,6 +116,7 @@ describe('treeyard uninstall', () => {
     // Only treeyard's block left the person's hook; the hook it wrote alone is gone whole.
     expect(readFileSync(hook, 'utf8')).toBe('#!/bin/sh\necho mine\n');
     expect(existsSync(join(here.dir, '.codex', 'hooks.json'))).toBe(false);
+    expect(existsSync(join(here.dir, '.agents', 'hooks.json'))).toBe(false);
     expect(existsSync(otherHook)).toBe(false);
     // The tree and the settings stay.
     expect(readFileSync(join(here.dir, '.tree', 'tree.md'), 'utf8')).toBe(tree);

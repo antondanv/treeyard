@@ -485,9 +485,10 @@ describe('the shell line of the hook', () => {
 describe('treeyard hook claude', () => {
   it('puts the hook in, shows it in status and takes it out', async () => {
     const dir = tempDir();
+    const home = tempDir('treeyard-home-');
     const own = tempDir('treeyard-claude-');
     const codexOwn = tempDir('treeyard-codex-');
-    const sh = treeyardIn(dir, { CLAUDE_CONFIG_DIR: own, CODEX_HOME: codexOwn });
+    const sh = treeyardIn(dir, { HOME: home, CLAUDE_CONFIG_DIR: own, CODEX_HOME: codexOwn });
     expect((await sh('init', '--template', 'directions', '--goal', 'всё работает')).code).toBe(0);
     // The tree's folder by its real path (/private/var on macOS).
     const real = realpathSync(dir);
@@ -516,6 +517,8 @@ describe('treeyard hook claude', () => {
       { brain: 'claude', scope: 'user', file: join(own, 'settings.json'), installed: false },
       { brain: 'codex', scope: 'project', file: join(real, '.codex', 'hooks.json'), installed: false },
       { brain: 'codex', scope: 'user', file: join(codexOwn, 'hooks.json'), installed: false },
+      { brain: 'antigravity', scope: 'project', file: join(real, '.agents', 'hooks.json'), installed: false },
+      { brain: 'antigravity', scope: 'user', file: join(home, '.gemini', 'config', 'hooks.json'), installed: false },
     ]);
 
     expect((await sh('hook', 'claude', 'remove')).stdout).toContain('хук убран');

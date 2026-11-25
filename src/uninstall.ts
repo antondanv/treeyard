@@ -8,6 +8,7 @@
 import { existsSync, lstatSync, readdirSync, rmdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { type AgyScope, agyMailHookPlaces, removeAgyMailHook } from './agents/agy-hook.js';
 import { allMailHookPlaces, type CodexScope, removeCodexMailHook } from './agents/codex-hook.js';
 import { PROJECT_SKILLS, shippedSkills, skillHomes, skillsRoot } from './agents/skills.js';
 import { type ClaudeScope, removeMailHook } from './agents/turn-hook.js';
@@ -29,6 +30,8 @@ export type Leftover =
   | { kind: 'claude-hook'; path: string; scope: ClaudeScope; folder: string }
   /** The Codex hook for letters in a project's `.codex/hooks.json` or in `$CODEX_HOME/hooks.json`. */
   | { kind: 'codex-hook'; path: string; scope: CodexScope; folder: string }
+  /** The Antigravity hook for letters in a project's `.agents/hooks.json` or in `~/.gemini/config/hooks.json`. */
+  | { kind: 'agy-hook'; path: string; scope: AgyScope; folder: string }
   /** The overview's merge driver in a repository's config (`.tree/.gitattributes` stays with the tree). */
   | { kind: 'merge'; path: string; folder: string }
   /** settings.json or projects.json in treeyard's home folder. */
@@ -89,11 +92,11 @@ export function leftovers(options: UninstallOptions): Leftover[] {
   }
   const mailFolders = [...folders, ...folders.flatMap((folder) => worktreeDirs(folder))];
   for (const folder of mailFolders)
-    for (const place of allMailHookPlaces(folder, env)) {
+    for (const place of [...allMailHookPlaces(folder, env), ...agyMailHookPlaces(folder, env)]) {
       if (!place.installed || seen.has(place.file)) continue;
       seen.add(place.file);
       out.push({
-        kind: place.brain === 'codex' ? 'codex-hook' : 'claude-hook',
+        kind: place.brain === 'codex' ? 'codex-hook' : place.brain === 'antigravity' ? 'agy-hook' : 'claude-hook',
         path: place.file,
         scope: place.scope,
         folder,
@@ -143,6 +146,9 @@ export function uninstall(options: UninstallOptions): Removed[] {
       } else if (item.kind === 'codex-hook') {
         // Only our entry: the rest of Codex's hooks.json is the person's.
         removeCodexMailHook(item.scope, item.folder, env);
+      } else if (item.kind === 'agy-hook') {
+        // Only our entry: the rest of Antigravity's hooks.json is the person's.
+        removeAgyMailHook(item.scope, item.folder, env);
       } else if (item.kind === 'merge') {
         if (!removeMergeDriver(item.folder)) throw new Error(t('git config не убрал драйвер'));
       } else {

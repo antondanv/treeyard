@@ -12,6 +12,7 @@ import { join, relative, resolve, sep } from 'node:path';
 
 import { VERSION as BRAINYARD_VERSION, liveSessions, type SessionInfo } from '@antondanv/brainyard';
 
+import { agyMailHookPlaces } from './agents/agy-hook.js';
 import { configLines, reach, readSandbox } from './agents/codex-config.js';
 import { allMailHookPlaces } from './agents/codex-hook.js';
 import { BRAIN_LABEL } from './agents/launch.js';
@@ -227,7 +228,7 @@ export interface ProjectStatus {
   codex?: CodexStatus;
   pointer?: PointerStatus[];
   hook?: HookInfo;
-  /** The Claude Code and Codex hooks that hand letters to a session: in the project and in the person's settings. */
+  /** The Claude Code, Codex and Antigravity hooks that hand letters to a session: in the project and in the person's settings. */
   mailHook?: MailHookPlace[];
   sessions?: LiveSession[];
   panes?: PaneSummary[];
@@ -386,7 +387,7 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     ...(codex ? { codex } : {}),
     pointer: pointerStates(place.folder),
     hook: hookInfo(place.folder),
-    mailHook: allMailHookPlaces(tree.project.dir, env),
+    mailHook: [...allMailHookPlaces(tree.project.dir, env), ...agyMailHookPlaces(tree.project.dir, env)],
     sessions,
     panes: paneList,
     github,
