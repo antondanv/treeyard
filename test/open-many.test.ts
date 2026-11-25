@@ -105,7 +105,7 @@ describe('open <id> <id>… --bg', () => {
     const { nodes, sh, launches } = setup(['Бот', 'Сайт']);
     const res = await sh('open', ...nodes.map((n) => n.id), '--yes');
     expect(res.code).toBe(2);
-    expect(res.stderr).toContain('несколько узлов — только с --bg или --pane');
+    expect(res.stderr).toContain('несколько узлов — только с --pane или --bg');
     expect(launches()).toEqual([]);
   });
 
