@@ -5,7 +5,8 @@
 # (.claude/skills) and Codex (.agents/skills) find project skills.
 #
 # usage: test/skill-evals/fixture.sh <empty folder outside any repository>
-# then run an agent in <folder>/tipcalc with a clean environment, for example:
+# scripts/skill-evals.mjs builds it, runs every scenario on the models you name and prints the
+# rules they break. By hand, run an agent in <folder>/tipcalc with a clean environment:
 #   env -i HOME="$HOME" USER="$USER" PATH="$PATH" TREEYARD_HOME=<folder>/home \
 #     claude -p "<query>" --model haiku --add-dir <folder>/money --output-format stream-json --verbose
 set -euo pipefail

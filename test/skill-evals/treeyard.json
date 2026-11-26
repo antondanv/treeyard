@@ -12,7 +12,16 @@
       "Commits its own files by path, then finishes with one treeyard log <id> \"…\" --status review --commit HEAD carrying the evidence",
       "Adds the clipboard idea with a 2–6 word title and --status idea, without implementing it",
       "Never edits .tree/ by hand and never sets done; no node ids in the reply"
-    ]
+    ],
+    "expect": {
+      "status": { "Флаг --version": "review" },
+      "run": [
+        { "in": "tipcalc", "cmd": "node bin/tip.js --version", "includes": "0.3.0" },
+        { "in": "tipcalc", "cmd": "npm test --silent" }
+      ],
+      "newIdea": true,
+      "commits": ["tipcalc"]
+    }
   },
   {
     "id": "thanks-is-not-close",
@@ -20,18 +29,21 @@
     "skills": ["treeyard"],
     "query": "Отлично, спасибо!",
     "files": [],
-    "expected_behavior": ["Changes no status; the node stays in review"]
+    "expected_behavior": ["Changes no status; the node stays in review"],
+    "expect": { "status": { "Флаг --version": "review" } }
   },
   {
     "id": "close-on-request",
     "follows": "thanks-is-not-close",
     "skills": ["treeyard"],
+    "asks": ["close"],
     "query": "Закрой этот узел.",
     "files": [],
     "expected_behavior": [
       "Runs treeyard set <id> status=done --as ты for that node only",
       "Confirms by the node's title"
-    ]
+    ],
+    "expect": { "status": { "Флаг --version": "done" }, "newlyDone": ["Флаг --version"] }
   },
   {
     "id": "cause-in-another-project",
@@ -43,12 +55,14 @@
       "Finds «Копейки округляются правильно» and the cause in ../money/src/round.js (Math.floor)",
       "Does not edit ../money; if it records the fix, it does so with treeyard add … --project ../money --for <id>",
       "Explains the cause and asks before fixing"
-    ]
+    ],
+    "expect": { "untouched": ["money"] }
   },
   {
     "id": "fix-in-another-project",
     "follows": "cause-in-another-project",
     "skills": ["treeyard"],
+    "asks": ["fix-other-project"],
     "query": "Почини сам, там, где ошибка.",
     "files": [],
     "expected_behavior": [
@@ -56,7 +70,17 @@
       "Fixes round2 in money following money/AGENTS.md: a test on x.xx5 boundaries, npm test there",
       "Commits in money's repository and closes the shared node with treeyard set <id> status=done --project ../money",
       "Adds a regression test in tipcalc, commits, and finishes the tipcalc node with treeyard log <id> \"…\" --status review --commit HEAD"
-    ]
+    ],
+    "expect": {
+      "status": { "Копейки округляются правильно": "review" },
+      "run": [
+        { "in": "tipcalc", "cmd": "node bin/tip.js 10.05 --percent 10", "includes": "tip 1.01" },
+        { "in": "money", "cmd": "npm test --silent" },
+        { "in": "tipcalc", "cmd": "npm test --silent" }
+      ],
+      "newNodeIn": ["money"],
+      "commits": ["tipcalc", "money"]
+    }
   },
   {
     "id": "no-node-fits",
@@ -67,6 +91,16 @@
       "Loads the treeyard skill before the first command",
       "Writes nothing into «Показать друзьям в кафе» or any other node whose criterion does not cover the task",
       "Treats it as a small task: does it without a node and says it stays outside the tree"
-    ]
+    ],
+    "expect": {
+      "treeUnchanged": true,
+      "run": [
+        {
+          "in": "tipcalc",
+          "cmd": "git diff --stat $(git rev-list --max-parents=0 HEAD) -- README.md",
+          "includes": "README.md"
+        }
+      ]
+    }
   }
 ]
