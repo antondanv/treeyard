@@ -21,10 +21,12 @@ import {
   rememberLaunch,
 } from '../src/launch-memory.js';
 import { addNode } from '../src/model/ops.js';
+import { loadTree, writeProject } from '../src/model/store.js';
+import { DEFAULT_START } from '../src/model/types.js';
 import { DEFAULTS, loadSettings, resetSettings, saveSettings, updateSettings } from '../src/settings.js';
 import { type LaunchEntry, NodeMenu, SettingsDialog } from '../src/tui/dialogs.js';
 import { snapshot } from '../src/tui/snapshot.js';
-import { emptyTree, tempDir } from './helpers.js';
+import { emptyTree, tempDir, treeyardIn } from './helpers.js';
 
 afterEach(() => {
   cleanup();
@@ -254,9 +256,10 @@ describe('the node menu', () => {
     const at = (text: string) => lines.findIndex((line) => line.includes(text));
     expect(lines[at('Новая сессия') + 1]).toContain('▶ Antigravity · делать · gemini-3 · high · в панели · worktree');
     expect(at('▶ Claude Code · план · opus · low · в терминале')).toBeGreaterThan(at('▶ Antigravity'));
-    expect(at('▶ Claude Code в фоне · план · opus · low')).toBe(at('▶ Claude Code · план') + 1);
-    expect(at('▶ Codex · план · в панели')).toBeGreaterThan(at('▶ Claude Code в фоне'));
+    expect(at('▶ Codex · план · в панели')).toBeGreaterThan(at('▶ Claude Code'));
     expect(at('▶ OpenCode')).toBeGreaterThan(at('▶ Codex'));
+    // The background is chosen in «⚙ Настроить запуск…», not by an item of its own.
+    expect(lines.join('\n')).not.toContain('Claude Code в фоне');
   });
 
   it('keeps every hotkey with its CLI, in any order', async () => {
@@ -274,15 +277,13 @@ describe('the node menu', () => {
       expect(choice, key).toMatchObject({ kind: 'new', options: { brain } });
       app.unmount();
     }
-    // b is Claude Code in the background, with Claude's own settings.
+    // b belongs to no item of the menu any more.
     const { app, onChoose } = menu(entries);
     await pause();
     app.stdin.write('b');
     await pause();
-    expect(onChoose.mock.calls[0]?.[0]).toEqual({
-      kind: 'new',
-      options: { brain: 'claude', start: 'plan', background: true, pane: false, model: 'opus', effort: 'low' },
-    });
+    expect(onChoose).not.toHaveBeenCalled();
+    app.unmount();
   });
 
   it('starts the remembered launch as it was, with ⏎ on the first item', async () => {
@@ -294,26 +295,22 @@ describe('the node menu', () => {
     app.unmount();
   });
 
-  it('when Claude Code ran in the background last, c and b both start it there', async () => {
+  it('when Claude Code ran in the background last, it stands on top «в фоне» and c starts it there', async () => {
     const background: LaunchEntry[] = [
       { remembered: true, options: { brain: 'claude', start: 'do', background: true, pane: false, model: 'opus' } },
-      { remembered: false, options: { brain: 'codex', start: 'plan' } },
-      { remembered: false, options: { brain: 'antigravity', start: 'plan' } },
-      { remembered: false, options: { brain: 'opencode', start: 'plan' } },
+      { remembered: false, options: { brain: 'codex', start: 'do' } },
+      { remembered: false, options: { brain: 'antigravity', start: 'do' } },
+      { remembered: false, options: { brain: 'opencode', start: 'do' } },
     ];
-    const { app } = menu(background);
+    const { app, onChoose } = menu(background);
     await pause();
     const frame = app.lastFrame() ?? '';
     expect(frame).toContain('▶ Claude Code · делать · opus · в фоне');
     expect(frame).not.toContain('Claude Code в фоне');
-    for (const key of ['c', 'b']) {
-      const { app: other, onChoose } = menu(background);
-      await pause();
-      other.stdin.write(key);
-      await pause();
-      expect(onChoose.mock.calls[0]?.[0].options).toMatchObject({ brain: 'claude', background: true });
-      other.unmount();
-    }
+    app.stdin.write('c');
+    await pause();
+    expect(onChoose.mock.calls[0]?.[0].options).toMatchObject({ brain: 'claude', background: true, model: 'opus' });
+    app.unmount();
   });
 
   it('fits a narrow screen: the line is clipped, the hotkeys stay', async () => {
@@ -345,8 +342,9 @@ describe('in the whole TUI', () => {
     const frame = await snapshot(tree.project.dir, { columns: 100, rows: 30, keys: ['2', '\r'] });
     const lines = frame.split('\n');
     const at = (text: string) => lines.findIndex((line) => line.includes(text));
-    expect(at('▶ Claude Code · план')).toBeGreaterThan(-1);
-    expect(at('▶ Codex · план')).toBeGreaterThan(at('▶ Claude Code'));
+    // A new project starts sessions with «делать»: the template writes it into tree.md.
+    expect(at('▶ Claude Code · делать')).toBeGreaterThan(-1);
+    expect(at('▶ Codex · делать')).toBeGreaterThan(at('▶ Claude Code'));
   });
 });
 
@@ -384,5 +382,38 @@ describe('the setting', () => {
     );
     await pause();
     expect(app.lastFrame()).toMatch(/Память запусков\s+у проекта\s+общая для всех проектов/);
+  });
+});
+
+describe('a session starts with «делать» unless the project says otherwise', () => {
+  it('a new tree writes it into tree.md', () => {
+    expect(DEFAULT_START).toBe('do');
+    expect(emptyTree().project.start).toBe('do');
+  });
+
+  it('a project without a start: context, config and the TUI default agree', async () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Узел' });
+    delete tree.project.start;
+    writeProject(tree.project);
+    expect(loadTree(tree.project.dir).project.start).toBeUndefined();
+    const cli = treeyardIn(tree.project.dir);
+    expect((await cli('context', node.id)).stdout).toContain('# Первое сообщение (do)');
+    expect((await cli('context', node.id, '--start', 'plan')).stdout).toContain('# Первое сообщение (plan)');
+    // The settings screen stands on «Как начинать сессию» (found on the screen, not counted) and explains «делать».
+    const down = '\u001b[B';
+    const rows = (await snapshot(tree.project.dir, { columns: 120, rows: 70, keys: [','] }))
+      .split('\n')
+      .map((line) => /^\s*│ (?:❯| ) (\S.*?)(?:\s{2,}|\s*│)/.exec(line)?.[1])
+      .filter((text) => text !== undefined);
+    const at = rows.indexOf('Как начинать сессию');
+    expect(at).toBeGreaterThan(0);
+    const frame = await snapshot(tree.project.dir, {
+      columns: 130,
+      rows: 36,
+      keys: [',', ...Array.from({ length: at }, () => down)],
+    });
+    expect(frame).toMatch(/Как начинать сессию\s+план\s+делать/);
+    expect(frame).toContain('агент сразу делает узел');
   });
 });

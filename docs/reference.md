@@ -107,19 +107,20 @@ current is left alone.
   Ideas · `5` Sessions — this folder's sessions, grouped by Claude Code, Codex,
   Antigravity, OpenCode (`← →` between them) · `6` Journal — what happened in the tree.
 
-<img src="screenshot-menu.png" width="860" alt="Enter on a node: a menu with a new session — Claude Code, Claude Code in the background, Codex, Antigravity, OpenCode, set up the launch — and agent tasks without a session: break into steps, write a “done when”, run the check, node diffs, what the agent gets">
+<img src="screenshot-menu.png" width="860" alt="Enter on a node: a menu with a new session — the CLI launched last with its settings on top, then Claude Code, Codex, Antigravity, OpenCode, set up the launch — and agent tasks without a session: break into steps, write a “done when”, run the check, node diffs, what the agent gets">
 
 **The last launch comes first.** Under “New session” the menu puts the CLI you launched last on
 top, with exactly how it started: how (plan, do, `/goal`, chat), model, effort, where (pane,
 this terminal, background) and a worktree — the line shows all of it. Below are the other CLIs,
 each with the settings of *its own* last launch, the most recently used first; one never
-launched stays with the defaults (the project's `start`, its model and effort if it is the
-project's own CLI, `open` for the place). Launch Claude Code on a model and an effort, then
+launched stays with the defaults (the project's `start` — “do” unless the project says
+otherwise —, its model and effort if it is the project's own CLI, `open` for the place). Launch Claude Code on a model and an effort, then
 Antigravity: Antigravity is on top and Claude Code below with its own settings. A launch through
 “⚙ Set up the launch…” is remembered the same way, and the form opens with the last launch. The
-hotkeys stay with their CLIs in any order: `c` Claude Code, `b` Claude Code in the background,
-`x` Codex, `g` Antigravity, `O` OpenCode (when Claude Code ran in the background last, `c` and
-`b` are the same item). The memory is the project's own by default; the setting `launch_memory`
+hotkeys stay with their CLIs in any order: `c` Claude Code, `x` Codex, `g` Antigravity,
+`O` OpenCode. The background is chosen only in “⚙ Set up the launch…” (Claude Code, “Where”): the
+launch is remembered like any other, and then Claude Code on top of the menu says “in the
+background” and `c` starts it there. The memory is the project's own by default; the setting `launch_memory`
 (`,` → “Launch memory”) makes it one for all projects. A launch with `--task` (a coordinator's
 assignment) is not remembered.
 
@@ -154,7 +155,7 @@ meaning. Russian text in search, forms and agent panes is typed as usual.
 | `:` or `⌃K` | palette: find any node or action by words |
 | `/` | filter the tree by title |
 | `⏎` | everything about the node: resume a session, start a new one, an agent without a session, the check |
-| `c` `b` | Claude Code for the node (in a pane, with tmux) · in the background |
+| `c` | Claude Code for the node, as it last started (in a pane, with tmux, unless it ran elsewhere) |
 | `f` `F` `x` `p` | the session on the right: type into it · full screen · put to sleep · hide (more below) |
 | `a` `A` | a new node inside · beside — on a line at the bottom; long text wraps and stays visible (`tab` — with a criterion) |
 | `r` `e` `E` | rename · the node's fields and description · the node in your editor |
@@ -281,7 +282,7 @@ permission request also looks like work, not “waits for you”.
 | This project (`.tree/tree.md`) | |
 | --- | --- |
 | `brain` | the default brain: claude, codex, antigravity, opencode (unset — current session's CLI or first installed CLI) |
-| `start` | how a session starts: plan, do, goal, chat |
+| `start` | how a session starts: plan, do, goal, chat (default — do) |
 | `model`, `effort` | the sessions' model and effort — picked from the list the CLI itself gives |
 | `assist_model` | the model for “break into steps” and the criterion — can be a cheaper one |
 | `setup` | a command that prepares a new [worktree of a node](#git-worktrees-of-nodes): `npm install`, a build…; `treeyard config setup "npm ci"` |
@@ -391,7 +392,7 @@ just closes: the CLI doesn't keep an empty conversation, and there would be noth
 wake.
 
 In the Sessions tab (`5`) select a session and press `x` — that very session falls asleep,
-even if its pane is hidden or it was started in the background with `b`. Claude Code
+even if its pane is hidden or it was started in the background. Claude Code
 background sessions stop with its own `stop` command; the conversation and its node stay.
 The list shows `☾ sleeping`, and `⏎` resumes the same conversation. Putting a working
 session to sleep by hand stops it. A session open full screen or in another terminal —

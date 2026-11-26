@@ -84,7 +84,7 @@ describe('TUI', () => {
     const { tree } = sample();
     const frame = await shot(tree.project.dir, [ENTER], 30);
     expect(frame).toContain('Новая сессия');
-    expect(frame).toContain('▶ Claude Code · план');
+    expect(frame).toContain('▶ Claude Code · делать');
     expect(frame).toContain('✂ Разбить на шаги');
     expect(frame).toContain('$ Запустить проверку · true');
   });

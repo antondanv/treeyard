@@ -165,6 +165,7 @@ import {
 import {
   BRAIN_IDS,
   type BrainId,
+  DEFAULT_START,
   ROOT,
   type SessionRef,
   START_MODES,
@@ -1914,7 +1915,7 @@ async function queueCommand(args: string[]): Promise<number> {
   const options: LaunchOptions = {
     brain,
     // Nobody approves a plan in a queue: its sessions do the node.
-    start: startArg(values.start, 'do'),
+    start: startArg(values.start, DEFAULT_START),
     ...(values.bg ? { background: true } : { pane: true }),
     ...(values.model ? { model: values.model } : {}),
     ...(values.effort ? { effort: values.effort } : {}),
@@ -3502,7 +3503,7 @@ async function contextCommand(args: string[]): Promise<number> {
   const plan = sessionPlan(
     tree,
     id,
-    startArg(values.start, tree.project.start ?? 'plan'),
+    startArg(values.start, tree.project.start ?? DEFAULT_START),
     brain,
     task,
     senderNode(tree),
@@ -3544,7 +3545,7 @@ async function openCommand(args: string[]): Promise<number> {
   const picked = openOptions(
     {
       ...(values.brain ? { brain } : {}),
-      ...(values.start ? { start: startArg(values.start, 'plan') } : {}),
+      ...(values.start ? { start: startArg(values.start, DEFAULT_START) } : {}),
       ...(values.bg ? { background: true } : {}),
       ...(values.pane ? { pane: true } : {}),
       ...(values.model ? { model: values.model } : {}),
@@ -3552,7 +3553,7 @@ async function openCommand(args: string[]): Promise<number> {
       ...('worktree' in wish ? { worktree: wish.worktree } : {}),
     },
     memory,
-    { brain, start: tree.project.start ?? 'plan' },
+    { brain, start: tree.project.start ?? DEFAULT_START },
     panesAvailable(),
   );
   // Sessions in this terminal hold it one after another; only a pane or the background returns at once.
@@ -4491,7 +4492,7 @@ function configCommand(args: string[]): number {
         return 0;
       }
       p.brain = parseBrain(value);
-    } else if (key === 'start') p.start = startArg(value, 'plan');
+    } else if (key === 'start') p.start = startArg(value, DEFAULT_START);
     else if (key === 'model') p.model = value || undefined;
     else if (key === 'effort') p.effort = value || undefined;
     else if (key === 'setup') p.setup = value || undefined;

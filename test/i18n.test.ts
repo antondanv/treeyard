@@ -175,7 +175,7 @@ describe('the TUI in English and with confirmations', () => {
     const frame = await snapshot(tree.project.dir, { columns: 110, rows: 30, keys: ['c'] });
     expect(frame).toContain('Запустить сессию?');
     expect(frame).toContain('Claude Code · в этом терминале');
-    expect(frame).toContain('план — агент изучает');
+    expect(frame).toContain('делать — агент сразу делает');
     expect(frame).toContain('Первое сообщение');
     expect(frame).toContain('! больше не спрашивать');
   });

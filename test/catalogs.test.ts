@@ -172,14 +172,15 @@ describe('models come from the CLI, not from typing', () => {
     const confirm = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['o', LEFT, '\r'] });
     expect(confirm).toContain('Запустить сессию?');
     expect(confirm).toContain('OpenCode · в этом терминале');
-    expect(confirm).toContain('Работаем над узлом');
+    // The default start is «делать»: the first message tells the agent to do the node.
+    expect(confirm).toContain('Сделай узел');
   });
 
   it('the menu of a node starts OpenCode with O', async () => {
     const tree = sample();
     const menu = await snapshot(tree.project.dir, { columns: 110, rows: 40, keys: ['\r'] });
     // The line says how it would start: the default start, and where (no tmux here — this terminal).
-    expect(menu).toMatch(/▶ OpenCode · план · в терминале\s+O/);
+    expect(menu).toMatch(/▶ OpenCode · делать · в терминале\s+O/);
     const confirm = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['\r', 'O'] });
     expect(confirm).toContain('OpenCode · в этом терминале');
   });
@@ -212,7 +213,8 @@ describe('a burst of keys lands where it was meant to', () => {
 
   it('the launch form: arrows after arrows, then Enter — and it asks before starting', async () => {
     const tree = sample();
-    const burst = `${DOWN}${DOWN}${RIGHT}${RIGHT}${RIGHT}\r`;
+    // «Как начать» starts on «делать»: two steps to the right is «просто открыть».
+    const burst = `${DOWN}${DOWN}${RIGHT}${RIGHT}\r`;
     const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['o', burst] });
     expect(frame).toContain('Запустить сессию?');
     expect(frame).toContain('Claude Code · в этом терминале');
@@ -221,9 +223,15 @@ describe('a burst of keys lands where it was meant to', () => {
 
   it('a menu: down and Enter pick the next item; a second Enter does not start anything', async () => {
     const tree = sample();
-    const next = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['\r', `${DOWN}\r`] });
+    // Codex asks for its rights before the first launch: here they are already chosen.
+    const next = await snapshot(tree.project.dir, {
+      columns: 110,
+      rows: 34,
+      keys: ['\r', `${DOWN}\r`],
+      settings: { codexAccess: 'config' },
+    });
     expect(next).toContain('Запустить сессию?');
-    expect(next).toContain('в фоне, сам по себе');
+    expect(next).toContain('Codex · в этом терминале');
     // Menu, its first item, and a third Enter right after: the confirmation is still there.
     const twice = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['\r', '\r', '\r'] });
     expect(twice).toContain('Запустить сессию?');

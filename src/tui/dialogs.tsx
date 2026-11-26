@@ -436,18 +436,13 @@ const WHERE_LABEL: Record<LaunchWhere, () => string> = {
 };
 
 /** What a launch comes with, in a line: «делать · opus · high · в панели · worktree». */
-export function launchSummary(options: LaunchOptions, withWhere = true): string {
+export function launchSummary(options: LaunchOptions): string {
   const parts: string[] = [START_LABEL[options.start]];
   if (options.model) parts.push(options.model);
   if (options.effort) parts.push(options.effort);
-  if (withWhere) parts.push(WHERE_LABEL[whereOf(options)]());
+  parts.push(WHERE_LABEL[whereOf(options)]());
   if (options.worktree) parts.push('worktree');
   return parts.join(' · ');
-}
-
-/** Claude Code in the background: what its entry says, but away from the terminal and without a chat. */
-export function inBackground(options: LaunchOptions): LaunchOptions {
-  return { ...options, background: true, pane: false, start: options.start === 'chat' ? 'do' : options.start };
 }
 
 /** A launch as a menu item: the CLI, then its settings dimmed; clipped to `room` so a narrow menu stays tidy. */
@@ -501,7 +496,6 @@ export function NodeMenu(props: {
     const { brain } = options;
     const hint =
       index === 0 && remembered ? t('как в прошлый раз') : remembered ? t('его последний запуск') : t('по умолчанию');
-    const background = brain === 'claude' && options.background;
     items.push(
       launchItem(
         `new:${brain}`,
@@ -511,35 +505,16 @@ export function NodeMenu(props: {
         hint,
         options.start,
         room,
-        {
-          ...(index === 0 ? { section: t('Новая сессия') } : {}),
-          // Claude Code's last launch was in the background: its own «в фоне» item below is the same, so b picks this one.
-          ...(background ? { alias: 'b' } : {}),
-        },
+        index === 0 ? { section: t('Новая сессия') } : {},
       ),
     );
-    if (brain === 'claude' && !background) {
-      // The place is the item's whole point: it need not repeat in the line.
-      const away = inBackground(options);
-      items.push(
-        launchItem(
-          'new:claude:bg',
-          'b',
-          t('Claude Code в фоне'),
-          launchSummary(away, false),
-          t('работает сам, а ты — в дереве; на узле появится индикатор'),
-          away.start,
-          room,
-        ),
-      );
-    }
   });
   items.push(
     {
       key: 'configure',
       hotkey: 'o',
       label: t('⚙ Настроить запуск…'),
-      hint: t('мозг, модель, усилие, как начать, worktree — и он станет последним запуском'),
+      hint: t('мозг, модель, усилие, как начать, панель, терминал или фон, worktree — и он станет последним запуском'),
     },
     {
       key: 'split',
@@ -605,10 +580,9 @@ export function NodeMenu(props: {
       if (choice) props.onChoose(choice);
       return;
     }
-    const [, brain, bg] = key.split(':') as [string, BrainId, string | undefined];
+    const brain = key.split(':')[1] as BrainId;
     const entry = launches.find((launch) => launch.options.brain === brain);
-    if (!entry) return;
-    props.onChoose({ kind: 'new', options: bg === 'bg' ? inBackground(entry.options) : entry.options });
+    if (entry) props.onChoose({ kind: 'new', options: entry.options });
   };
   return (
     <Frame
@@ -1224,7 +1198,7 @@ const help = (): [string, [string, string][]][] => [
     t('Агенты'),
     [
       ['⏎', t('сессии, агент, проверка')],
-      ['c  b', t('Claude Code в панели · в фоне')],
+      ['c', t('Claude Code по узлу — как в прошлый раз')],
       ['S', t('агент разбивает узел на шаги')],
       ['t', t('запустить проверку узла')],
       ['⏎ p', t('что получит агент')],
