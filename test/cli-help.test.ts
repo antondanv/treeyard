@@ -133,16 +133,26 @@ describe('treeyard <command> --help', () => {
 
   it('works for every command, and together they are the whole list of the general help', async () => {
     const sh = shell(tempDir(), 'en');
-    const [general, ...each] = await Promise.all([sh('help'), ...COMMANDS.map((command) => sh(command, '--help'))]);
+    const general = await sh('help');
+    expect(general.code, general.stderr).toBe(0);
     const known = new Set<string>();
-    each.forEach((result, i) => {
-      expect(result.code, COMMANDS[i]).toBe(0);
-      expect(result.stdout, COMMANDS[i]).toContain(`  treeyard ${COMMANDS[i]}`);
-      for (const line of result.stdout.split('\n')) known.add(line);
-    });
-    expect(commandBlock(general!.stdout).length).toBeGreaterThan(COMMANDS.length);
-    for (const line of commandBlock(general!.stdout)) expect(known, line).toContain(line);
-  }, 60_000);
+    // Each command starts Node with the TypeScript loader. Limit how many compete for the runner.
+    const batchSize = 4;
+    for (let start = 0; start < COMMANDS.length; start += batchSize) {
+      const commands = COMMANDS.slice(start, start + batchSize);
+      await Promise.all(
+        commands.map(async (command) => {
+          const result = await sh(command, '--help');
+          expect(result.code, `${command}: ${result.stderr}`).toBe(0);
+          expect(result.stdout, command).toContain(`  treeyard ${command}`);
+          for (const line of result.stdout.split('\n')) known.add(line);
+        }),
+      );
+    }
+    const lines = commandBlock(general.stdout);
+    expect(lines.length).toBeGreaterThan(COMMANDS.length);
+    for (const line of lines) expect(known, line).toContain(line);
+  }, 90_000);
 
   it('knows the aliases, and treeyard help <command> says the same', async () => {
     const sh = shell(tempDir(), 'en');
