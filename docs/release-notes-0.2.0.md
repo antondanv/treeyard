@@ -1,6 +1,6 @@
 # Treeyard 0.2.0
 
-*Draft of the release notes. Changes since 0.1.1 (7 October 2026).*
+*Released 26 November 2026. Changes since 0.1.1 (7 October 2026).*
 
 0.1.1 was a tree and a launcher: you planted goals and opened agent sessions from them. 0.2.0
 lets one session hand nodes out to others, follow them and talk to them. Each node can get
