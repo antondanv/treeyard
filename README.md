@@ -8,6 +8,9 @@ plan, hand out the tasks and accept the work.**
 Planning, building and managing a project in one terminal — on top of Claude Code, Codex,
 Antigravity and OpenCode.
 
+A goal graph with dependencies · several agents at once · mail between agents · a git
+worktree per node
+
 [![CI](https://github.com/antondanv/treeyard/actions/workflows/ci.yml/badge.svg)](https://github.com/antondanv/treeyard/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@antondanv/treeyard?color=6d7dfc)](https://www.npmjs.com/package/@antondanv/treeyard)
 ![node](https://img.shields.io/badge/node-%E2%89%A522-3c873a)

@@ -8,6 +8,9 @@
 Планируешь, разрабатываешь и ведёшь проект в одном терминале — поверх Claude Code, Codex,
 Antigravity и OpenCode.
 
+Граф целей с зависимостями · несколько агентов сразу · почта между агентами · свой
+worktree у каждого узла
+
 [![CI](https://github.com/antondanv/treeyard/actions/workflows/ci.yml/badge.svg)](https://github.com/antondanv/treeyard/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@antondanv/treeyard?color=6d7dfc)](https://www.npmjs.com/package/@antondanv/treeyard)
 ![node](https://img.shields.io/badge/node-%E2%89%A522-3c873a)
