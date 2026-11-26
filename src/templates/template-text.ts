@@ -1,6 +1,6 @@
 /**
  * The part of `tree.md` a template wrote rather than the person: the method's description,
- * «Как держим дерево», the line about the skill, the preface of «Решения», and the old agents'
+ * «How we keep the tree», the line about the skill, the preface of «Decisions», and the old agents'
  * rules. A node session gets its tree's rules without them — the skill teaches the same, and
  * the method's text (the «Now» tab, a weekly look at «Waiting») is for the person — so its
  * context keeps only what the person added. Matched line by line, word for word.
@@ -38,7 +38,7 @@ function templateLines(): Set<string> {
 
 /**
  * The rules without the template's text; a heading whose section is left empty goes too, and
- * a «Метод: …» heading with nothing of the person's under it.
+ * a «Method: …» heading with nothing of the person's under it.
  */
 export function ownRules(rules: string): string {
   const known = templateLines();
@@ -46,7 +46,7 @@ export function ownRules(rules: string): string {
     .split('\n')
     .filter((line) => !line.trim() || /^#/.test(line) || !(known.has(norm(line)) || SKILL_LINE.test(line)));
   // Drop a heading with nothing under it: blank lines up to the end or a heading of its level or higher.
-  const level = (line: string) => /^(#{1,6}) /.exec(line)?.[1]!.length ?? 0;
+  const level = (line: string) => /^(#{1,6}) /.exec(line)?.[1]?.length ?? 0;
   const out: string[] = [];
   for (let i = 0; i < kept.length; i++) {
     const line = kept[i]!;
