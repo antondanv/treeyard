@@ -15,7 +15,7 @@
     "opencode",
     "vibe-coding"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Anton Danilov",
   "homepage": "https://github.com/antondanv/treeyard#readme",
   "repository": {
@@ -40,7 +40,8 @@
     "templates",
     "skills",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "engines": {
     "node": ">=22"

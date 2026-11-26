@@ -151,4 +151,4 @@ of your own, plant one in a scratch folder.
 ## License
 
 By contributing, you agree that your contribution is released under the project's
-[MIT license](LICENSE).
+[Apache License 2.0](LICENSE).
