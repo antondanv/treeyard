@@ -77,6 +77,9 @@ a shorter form that it can't get wrong.
 
 ## In the TUI
 
+- **`c` is the agent menu.** `c` used to start Claude Code right away; now it opens the list
+  of CLIs: the one launched last on top with its settings, the others below. `c` `⏎` repeats
+  the last launch.
 - **The last launch comes first.** The node menu remembers how you launched each CLI
   (model, effort, start, place, worktree), and `treeyard open` with no flags does the same.
   `launch_memory` chooses whether this is per project or global.
