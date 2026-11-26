@@ -24,7 +24,7 @@ import { addNode } from '../src/model/ops.js';
 import { loadTree, writeProject } from '../src/model/store.js';
 import { DEFAULT_START } from '../src/model/types.js';
 import { DEFAULTS, loadSettings, resetSettings, saveSettings, updateSettings } from '../src/settings.js';
-import { type LaunchEntry, NodeMenu, SettingsDialog } from '../src/tui/dialogs.js';
+import { AgentMenu, type LaunchEntry, NodeMenu, SettingsDialog } from '../src/tui/dialogs.js';
 import { snapshot } from '../src/tui/snapshot.js';
 import { emptyTree, tempDir, treeyardIn } from './helpers.js';
 
@@ -322,6 +322,55 @@ describe('the node menu', () => {
   });
 });
 
+describe('the agent menu (c)', () => {
+  function agentMenu(launches: LaunchEntry[], onChoose = vi.fn(), width = 110) {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Узел' });
+    const app = render(
+      <AgentMenu node={node} width={width} launches={launches} onChoose={onChoose} onCancel={() => {}} />,
+    );
+    return { app, onChoose };
+  }
+
+  it('is the launch section of the node’s menu: the same lines, in the same order', async () => {
+    const { app } = agentMenu(entries);
+    const node = menu(entries);
+    await pause();
+    const lines = (frame: string | undefined) =>
+      (frame ?? '').split('\n').filter((line) => /▶ (Claude Code|Antigravity|Codex|OpenCode)|⚙ Настроить/.test(line));
+    expect(lines(app.lastFrame())).toHaveLength(5);
+    expect(lines(app.lastFrame())).toEqual(lines(node.app.lastFrame()));
+    expect(app.lastFrame()).toContain('Агент · Узел');
+  });
+
+  it('⏎ repeats the last launch; the CLI’s hotkeys and «o» keep their meaning', async () => {
+    const first = agentMenu(entries);
+    await pause();
+    first.app.stdin.write('\r');
+    await pause();
+    expect(first.onChoose.mock.calls[0]?.[0]).toEqual({ kind: 'new', options: entries[0]!.options });
+    first.app.unmount();
+    for (const [key, brain] of [
+      ['c', 'claude'],
+      ['x', 'codex'],
+      ['g', 'antigravity'],
+      ['O', 'opencode'],
+    ] as const) {
+      const { app, onChoose } = agentMenu(entries);
+      await pause();
+      app.stdin.write(key);
+      await pause();
+      expect(onChoose.mock.calls[0]?.[0], key).toMatchObject({ kind: 'new', options: { brain } });
+      app.unmount();
+    }
+    const { app, onChoose } = agentMenu(entries);
+    await pause();
+    app.stdin.write('o');
+    await pause();
+    expect(onChoose.mock.calls[0]?.[0]).toEqual({ kind: 'configure' });
+  });
+});
+
 describe('in the whole TUI', () => {
   it('puts the CLI launched last on top of the node’s menu', async () => {
     const tree = emptyTree();
@@ -334,6 +383,38 @@ describe('in the whole TUI', () => {
     const at = (text: string) => lines.findIndex((line) => line.includes(text));
     expect(at('▶ Antigravity · план')).toBeGreaterThan(-1);
     expect(at('▶ Claude Code · делать · opus · high')).toBeGreaterThan(at('▶ Antigravity'));
+  });
+
+  it('c on a node opens the agent menu; c ⏎ repeats the last launch', async () => {
+    const tree = emptyTree();
+    addNode(tree, { title: 'Узел' });
+    const dir = tree.project.dir;
+    rememberLaunch(dir, { brain: 'claude', start: 'do', model: 'opus', effort: 'high' }, 'project', T1);
+    rememberLaunch(dir, { brain: 'antigravity', start: 'plan' }, 'project', T2);
+    const settings = { antigravityAccess: 'full' as const };
+    const menu = await snapshot(dir, { columns: 130, rows: 36, keys: ['2', 'c'], settings });
+    expect(menu).toContain('Агент · Узел');
+    const lines = menu.split('\n');
+    const at = (text: string) => lines.findIndex((line) => line.includes(text));
+    expect(at('▶ Antigravity · план')).toBeGreaterThan(-1);
+    expect(at('▶ Claude Code · делать · opus · high')).toBeGreaterThan(at('▶ Antigravity'));
+    expect(menu).not.toContain('Сессии узла');
+    // ⏎ on the top item: the confirmation of the last launch, with its settings.
+    const confirm = await snapshot(dir, { columns: 130, rows: 36, keys: ['2', 'c', '\r'], settings });
+    expect(confirm).toContain('Запустить сессию?');
+    expect(confirm).toContain('Antigravity · в этом терминале');
+    expect(confirm).toContain('план — агент изучает');
+  });
+
+  it('the footer and the keys help call c «агент», not a CLI', async () => {
+    const tree = emptyTree();
+    addNode(tree, { title: 'Узел' });
+    const footer = await snapshot(tree.project.dir, { columns: 130, rows: 36, keys: ['2'] });
+    expect(footer).toMatch(/c агент/);
+    expect(footer).not.toMatch(/c claude/);
+    const help = await snapshot(tree.project.dir, { columns: 130, rows: 40, keys: ['?'] });
+    expect(help).toContain('агент: меню запуска, ⏎ — как в прошлый раз');
+    expect(help).not.toContain('Claude Code по узлу');
   });
 
   it('a project that never launched anything lists Claude Code first, with the project’s defaults', async () => {

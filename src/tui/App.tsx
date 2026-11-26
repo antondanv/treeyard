@@ -160,6 +160,7 @@ import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './co
 import { NodeDetails, ProjectDetails, SessionDetails } from './details.js';
 import {
   AccessDialog,
+  AgentMenu,
   CheckDialog,
   ConfirmAssist,
   ConfirmDelete,
@@ -234,6 +235,8 @@ type Modal =
   | { kind: 'waiting'; node: string }
   | { kind: 'status'; node: string }
   | { kind: 'menu'; node: string }
+  /** `c` on a node: which agent starts the session — the launch section of the node's menu. */
+  | { kind: 'agent'; node: string }
   | { kind: 'launch'; node: string; options?: LaunchOptions }
   | { kind: 'delete'; node: string }
   | { kind: 'context'; node: string }
@@ -1010,10 +1013,6 @@ export function App(props: AppProps) {
     });
   };
 
-  /** Claude Code as it ran last time, or by default: what `c` starts. */
-  const claudeLaunch = (): LaunchOptions =>
-    launchEntries().find((entry) => entry.options.brain === 'claude')?.options ?? defaultLaunch('claude');
-
   /** How a session starts when nothing else is said: as the last launch did, else by the project's defaults. */
   const defaults = (): LaunchOptions => {
     const last = lastLaunch(launchMemory());
@@ -1616,11 +1615,11 @@ export function App(props: AppProps) {
       needs: 'node',
       run: () => current && setModal({ kind: 'menu', node: current.id }),
     },
-    claude: {
-      label: t('Claude Code по узлу'),
+    agent: {
+      label: t('Агент по узлу'),
       keys: 'c',
       needs: 'node',
-      run: () => current && request({ kind: 'new', node: current.id, options: claudeLaunch() }),
+      run: () => current && setModal({ kind: 'agent', node: current.id }),
     },
     launch: {
       label: t('Настроить запуск сессии'),
@@ -1833,7 +1832,7 @@ export function App(props: AppProps) {
   };
 
   const KEY_ACTIONS: Record<string, string> = {
-    c: 'claude',
+    c: 'agent',
     o: 'launch',
     S: 'split',
     t: 'check',
@@ -2746,6 +2745,17 @@ export function App(props: AppProps) {
                 .filter((node) => node.status === modalNode.status)
                 .at(-1)?.id !== modalNode.id
             }
+            onCancel={close}
+            onChoose={(choice) => onMenu(modalNode.id, choice)}
+          />
+        );
+      case 'agent':
+        if (!modalNode) return null;
+        return (
+          <AgentMenu
+            node={modalNode}
+            width={w}
+            launches={launchEntries()}
             onCancel={close}
             onChoose={(choice) => onMenu(modalNode.id, choice)}
           />
@@ -3998,7 +4008,7 @@ function Hints(props: {
                     ['V', t('дифы')],
                     ['K J', t('приоритет')],
                     [',', t('настройки')],
-                    ['c', 'claude'],
+                    ['c', t('агент')],
                     ['a', t('добавить')],
                     ['r', t('имя')],
                     ['d', t('готово')],

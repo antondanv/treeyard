@@ -143,6 +143,8 @@ describe('Codex access before its first launch', () => {
     expect(app.lastFrame()).not.toContain('Как запускать Codex из дерева?');
     await key('\u001b');
     await key('c');
+    await wait('Новая сессия');
+    await key('\r');
     await wait('Запустить сессию?');
     expect(app.lastFrame()).not.toContain('Как запускать');
   });

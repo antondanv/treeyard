@@ -172,7 +172,8 @@ describe('the TUI in English and with confirmations', () => {
 
   it('asks before a session starts: who, where, how and the first message', async () => {
     const tree = sample();
-    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 30, keys: ['c'] });
+    // c opens the agent menu, ⏎ on its top item starts the launch.
+    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 30, keys: ['c', '\r'] });
     expect(frame).toContain('Запустить сессию?');
     expect(frame).toContain('Claude Code · в этом терминале');
     expect(frame).toContain('делать — агент сразу делает');
@@ -192,7 +193,7 @@ describe('the TUI in English and with confirmations', () => {
     const frame = await snapshot(tree.project.dir, {
       columns: 110,
       rows: 30,
-      keys: ['c'],
+      keys: ['c', '\r'],
       settings: { confirm: false },
     });
     expect(frame).not.toContain('Запустить сессию?');
@@ -200,7 +201,7 @@ describe('the TUI in English and with confirmations', () => {
 
   it('«!» in the confirmation turns confirmations off for good', async () => {
     const tree = sample();
-    await snapshot(tree.project.dir, { columns: 110, rows: 30, keys: ['c', '!'] });
+    await snapshot(tree.project.dir, { columns: 110, rows: 30, keys: ['c', '\r', '!'] });
     expect(loadSettings().confirm).toBe(false);
   });
 

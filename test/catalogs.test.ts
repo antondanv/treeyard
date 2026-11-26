@@ -146,7 +146,7 @@ describe('models come from the CLI, not from typing', () => {
     tree.project.model = 'sonnet';
     tree.project.effort = 'high';
     writeProject(tree.project);
-    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 30, keys: ['c'] });
+    const frame = await snapshot(tree.project.dir, { columns: 110, rows: 30, keys: ['c', '\r'] });
     expect(frame).toContain('Запустить сессию?');
     expect(frame).toContain('sonnet · усилие high');
   });

@@ -118,9 +118,11 @@ otherwise —, its model and effort if it is the project's own CLI, `open` for t
 Antigravity: Antigravity is on top and Claude Code below with its own settings. A launch through
 “⚙ Set up the launch…” is remembered the same way, and the form opens with the last launch. The
 hotkeys stay with their CLIs in any order: `c` Claude Code, `x` Codex, `g` Antigravity,
-`O` OpenCode. The background is chosen only in “⚙ Set up the launch…” (Claude Code, “Where”): the
-launch is remembered like any other, and then Claude Code on top of the menu says “in the
-background” and `c` starts it there. The memory is the project's own by default; the setting `launch_memory`
+`O` OpenCode. On a node, `c` — “agent” in the footer — opens exactly this list in a menu of its
+own, without the rest of the node's menu: `c` `⏎` repeats the last launch, a CLI's key starts
+that CLI, `o` is “⚙ Set up the launch…”. The background is chosen only in “⚙ Set up the launch…”
+(Claude Code, “Where”): the launch is remembered like any other, and then Claude Code on top of
+the list says “in the background” and `⏎` starts it there. The memory is the project's own by default; the setting `launch_memory`
 (`,` → “Launch memory”) makes it one for all projects. A launch with `--task` (a coordinator's
 assignment) is not remembered.
 
@@ -155,7 +157,7 @@ meaning. Russian text in search, forms and agent panes is typed as usual.
 | `:` or `⌃K` | palette: find any node or action by words |
 | `/` | filter the tree by title |
 | `⏎` | everything about the node: resume a session, start a new one, an agent without a session, the check |
-| `c` | Claude Code for the node, as it last started (in a pane, with tmux, unless it ran elsewhere) |
+| `c` | the agent for the node: a menu of CLIs, the one launched last on top with its settings — `c` `⏎` repeats that launch |
 | `f` `F` `x` `p` | the session on the right: type into it · full screen · put to sleep · hide (more below) |
 | `a` `A` | a new node inside · beside — on a line at the bottom; long text wraps and stays visible (`tab` — with a criterion) |
 | `r` `e` `E` | rename · the node's fields and description · the node in your editor |
