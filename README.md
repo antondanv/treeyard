@@ -16,7 +16,7 @@ worktree per node
 ![node](https://img.shields.io/badge/node-%E2%89%A522-3c873a)
 [![license](https://img.shields.io/badge/license-Apache_2.0-blue)](LICENSE)
 
-**English** · [Русский](README.ru.md)
+**English** · [Русский](README.ru.md) · [treeyard.ru](https://treeyard.ru)
 
 https://github.com/user-attachments/assets/e2f796e4-2617-4ba7-97e9-ef8ba56e2ed3
 
