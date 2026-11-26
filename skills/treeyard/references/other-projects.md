@@ -1,4 +1,4 @@
-# Other projects, worktrees, other sessions
+# Other projects and worktrees
 
 ## Another project's tree
 
@@ -23,12 +23,8 @@ the branch's `.tree/` is a copy nobody reads. Only `--project .` (or the worktre
 that copy, and a worktree whose main folder has no tree keeps its own. `treeyard status` names
 the tree in use.
 
-## Handing a node to another session
+## Other sessions
 
-- One session per node: `treeyard open <id> --pane --task "…" [--brain <cli>] [--model …] [--effort …]` (Claude Code also supports `--bg` for background runs). The
-  session shows in the node and can be resumed from the tree.
-- Not a built-in subagent: it inherits your `$TREEYARD_NODE`, its commits attach to your
-  node, and the tree doesn't see it.
-- Any helper still gets the node id and `--project <main folder>`.
-- Coordinating several nodes at once is the job of the `treeyard-coordinate` skill, if it
-  is installed.
+Handing nodes to other sessions, waiting for them and writing to them is the
+`treeyard-coordinate` skill. Whatever you hand work to — a session or a subagent — gets the
+node id and `--project <main folder>` for its treeyard commands.

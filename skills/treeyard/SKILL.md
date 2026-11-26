@@ -223,8 +223,9 @@ The change belongs to `../X` (a library, a sibling repository):
    nobody comes to X's tree to accept it; the person reviews your own node.
 3. Back on your node: check its criterion and finish as usual.
 
-Reading and writing another tree, git worktrees, handing a node to another session — see
-[references/other-projects.md](references/other-projects.md).
+Reading and writing another tree and git worktrees — see
+[references/other-projects.md](references/other-projects.md). Handing nodes to other sessions —
+the `treeyard-coordinate` skill.
 
 ## Keeping the tree in order
 
