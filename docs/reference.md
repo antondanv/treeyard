@@ -514,6 +514,7 @@ treeyard rm <id>                                # delete a node added by mistake
 treeyard decide "SQLite, not Postgres: one user" # a dated line in «Decisions» of .tree/tree.md; without text — the list (--json)
 treeyard goal "Ten strangers order from us"     # the tree's goal in .tree/tree.md, only that line changes; without text — print it (--json)
 treeyard rules --from - < rules.md              # the rules (tree.md without «Decisions»); the header and «Decisions» stay; without --from — print them (--json)
+treeyard rules --upgrade                        # take the old template's lines out of «Rules for agents»: the skill holds them now
 treeyard image <id> shot.png --note "…"         # a picture for the node (a screenshot, proof)
 treeyard diff <id> --add HEAD                   # attach your commit to the node for review
 treeyard commit <id> [<id>…]                    # commit the tree files of these nodes, README, tree.md and .gitattributes (chore(tree): …); never code, other nodes or the index of others
@@ -926,6 +927,13 @@ pointer` writes it between `<!-- treeyard -->` markers, so it is replaced, not d
 project has no block (or an old one), `treeyard status` says so, and the TUI shows «agents do not
 know about the tree» next to the project's name: `!` or a click offers to write it.
 
+A tree planted before 0.2.0 also carries the old template's «Rules for agents» in
+`.tree/tree.md` (plan first, `set status=review`): they repeat the `treeyard` skill and
+disagree with it, and a node session reads both. `treeyard status` counts those lines, the TUI
+shows «the rules for agents are outdated» — `!` takes them out in the same step as the block.
+`treeyard rules --upgrade` does the same from the shell: only the template's lines go, matched
+word for word; your own lines and the method's rules stay, and a second run changes nothing.
+
 | Problem | Command |
 |---|---|
 | no tree | `treeyard init` |
@@ -933,6 +941,7 @@ know about the tree» next to the project's name: `!` or a click offers to write
 | a skill is missing or outdated | `treeyard skills install` |
 | no block about the tree, or an outdated one | `treeyard pointer` |
 | no AGENTS.md, CLAUDE.md or GEMINI.md | `touch AGENTS.md && treeyard pointer` |
+| «Rules for agents» from an old template | `treeyard rules --upgrade` |
 | no git hook | `treeyard hook install`; hooks inside the repository — `echo '…' >> <post-commit>` |
 | no `gh`, not logged in, no access to boards | `brew install gh`, `gh auth login`, `gh auth refresh -s project` |
 | statuses that have not reached GitHub | `treeyard github sync` |

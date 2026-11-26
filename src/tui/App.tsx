@@ -115,6 +115,7 @@ import {
   WHO_LABEL,
 } from '../model/ops.js';
 import { GLYPH } from '../model/overview.js';
+import { rulesOf, writeRules } from '../model/root-doc.js';
 import { staleOf } from '../model/stale.js';
 import { loadTree, treeStamp, writeProject } from '../model/store.js';
 import { ago, duration } from '../model/time.js';
@@ -153,6 +154,7 @@ import {
   type TreeNode,
 } from '../model/types.js';
 import { MAX_PANES, type MemoryScope, SLEEP_AFTER, STALE_AFTER, settings, updateSettings } from '../settings.js';
+import { legacyAgentRules, upgradeAgentRules } from '../templates/legacy-rules.js';
 import { plantPointer, pointerGap } from '../templates/pointer.js';
 import { catalogHint, effortOptions, effortsFor, fitChoice, fitEffort, modelOptions, useCatalog } from './catalogs.js';
 import { editText, type KeyHint, KeyHints, PromptLine, promptLayout } from './components/controls.js';
@@ -365,6 +367,9 @@ export function App(props: AppProps) {
   const [branch, setBranch] = useState<string | undefined>();
   /** Sessions opened outside the tree read only the agent files: is the block about the tree in them? */
   const [pointerNeeded, setPointerNeeded] = useState(() => pointerGap(props.dir));
+  // A tree planted before the skill still carries the template's old agents' rules: offered with the block.
+  const legacyRules = useMemo(() => legacyAgentRules(rulesOf(tree.project.body)).length, [tree.project.body]);
+  const agentsNeed = Boolean(pointerNeeded || legacyRules);
   /** The project's documents for the root's card; read again after the documents window closes. */
   const [docs, setDocs] = useState<DocFile[] | undefined>();
   const [docsVersion, setDocsVersion] = useState(0);
@@ -1813,7 +1818,7 @@ export function App(props: AppProps) {
       label: t('Сказать агентам про дерево: блок в AGENTS.md'),
       keys: '!',
       run: () => {
-        if (pointerNeeded) setModal({ kind: 'pointer' });
+        if (agentsNeed) setModal({ kind: 'pointer' });
         else say(t('агентам уже сказано про дерево'));
       },
     },
@@ -2132,7 +2137,7 @@ export function App(props: AppProps) {
       if (key.escape && job?.cancel) return job.cancel();
       if (key.escape && filter) return setFilter('');
       if (input === '!' && tree.problems.length > 0) return setModal({ kind: 'problems' });
-      if (input === '!' && pointerNeeded) return setModal({ kind: 'pointer' });
+      if (input === '!' && agentsNeed) return setModal({ kind: 'pointer' });
 
       if (view === 'sessions') {
         if (key.upArrow || input === 'k') return moveCursor(-1);
@@ -2599,19 +2604,29 @@ export function App(props: AppProps) {
           />
         );
       case 'pointer':
-        if (!pointerNeeded) return null;
+        if (!agentsNeed) return null;
         return (
           <PointerDialog
-            gap={pointerNeeded.kind}
-            files={pointerNeeded.files}
+            gap={pointerNeeded?.kind}
+            files={pointerNeeded?.files ?? []}
+            rules={legacyRules}
             width={w}
             onCancel={close}
             onConfirm={() => {
               close();
               try {
-                const files = plantPointer(props.dir);
-                setPointerNeeded(pointerGap(props.dir));
-                say(t('блок о дереве — в {files}', { files: files.join(t(' и ')) }));
+                const done: string[] = [];
+                if (pointerNeeded) {
+                  const files = plantPointer(props.dir);
+                  setPointerNeeded(pointerGap(props.dir));
+                  done.push(t('блок о дереве — в {files}', { files: files.join(t(' и ')) }));
+                }
+                if (legacyRules) {
+                  writeRules(props.dir, upgradeAgentRules(rulesOf(tree.project.body)));
+                  reload();
+                  done.push(t('правила для агентов — ссылкой на скилл'));
+                }
+                say(done.join(' · '));
               } catch (error) {
                 say((error as Error).message, C.bad);
               }
@@ -3436,11 +3451,15 @@ export function App(props: AppProps) {
           {branch ? <Text color={C.faint}>{`  ⎇ ${branch}`}</Text> : null}
         </Text>
         {/* Next to the title: on a narrow screen it is cut first and never pushes the right side out. */}
-        {pointerNeeded ? (
+        {agentsNeed ? (
           <Box flexShrink={4} marginLeft={2}>
             <Clickable active={listKeys} onClick={(click) => click.double || actions.pointer!.run()}>
               <Text color={C.warn} wrap="truncate-end">
-                {pointerNeeded.kind === 'missing' ? t('агенты не знают о дереве') : t('блок для агентов устарел')}
+                {pointerNeeded?.kind === 'missing'
+                  ? t('агенты не знают о дереве')
+                  : pointerNeeded
+                    ? t('блок для агентов устарел')
+                    : t('правила для агентов устарели')}
                 {' (!)'}
               </Text>
             </Clickable>

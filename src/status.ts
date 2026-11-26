@@ -34,12 +34,14 @@ import {
 } from './github.js';
 import { t } from './i18n/i18n.js';
 import { homeShort } from './model/notes.js';
+import { rulesOf } from './model/root-doc.js';
 import { staleNodes } from './model/stale.js';
 import { findProject, loadTree } from './model/store.js';
 import { duration } from './model/time.js';
 import { sessionHolders, sessionOwners } from './model/tree.js';
 import { type BrainId, ROOT, STATUSES, type Status, type Tree } from './model/types.js';
 import { settings, skillsAuto } from './settings.js';
+import { legacyAgentRules } from './templates/legacy-rules.js';
 import { type PointerStatus, pointerStates } from './templates/pointer.js';
 import { worktreeDirs } from './worktree.js';
 
@@ -228,6 +230,8 @@ export interface ProjectStatus {
   /** Present when Codex is installed or the person chose how to start it. */
   codex?: CodexStatus;
   pointer?: PointerStatus[];
+  /** Lines of «Правила для агентов» an old template wrote: the skill holds them now, and the two disagree. */
+  legacyRules?: number;
   hook?: HookInfo;
   /** The Claude Code, Codex, Antigravity and OpenCode hooks and plugins that hand letters to a session. */
   mailHook?: MailHookPlace[];
@@ -378,6 +382,7 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
   });
 
   const codex = codexInfo(tree.project.dir, skills, env);
+  const legacyRules = legacyAgentRules(rulesOf(tree.project.body)).length;
   // In the order of the text, so `--json` reads the same way.
   const status: ProjectStatus = {
     ...head,
@@ -387,6 +392,7 @@ export async function projectStatus(place: Place, deps: StatusDeps = {}): Promis
     skillsAuto: skillsOn,
     ...(codex ? { codex } : {}),
     pointer: pointerStates(place.folder),
+    ...(legacyRules ? { legacyRules } : {}),
     hook: hookInfo(place.folder),
     mailHook: [
       ...allMailHookPlaces(tree.project.dir, env),
@@ -505,6 +511,15 @@ export function problemsOf(status: ProjectStatus, place: Place): Problem[] {
         fix: 'treeyard pointer',
       });
   }
+
+  if (status.legacyRules)
+    out.push({
+      kind: 'rules-legacy',
+      what: t('в «Правилах для агентов» строки старого шаблона ({n}): они повторяют скилл treeyard и спорят с ним', {
+        n: status.legacyRules,
+      }),
+      fix: 'treeyard rules --upgrade',
+    });
 
   if (status.hook?.state === 'missing')
     out.push({

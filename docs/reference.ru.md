@@ -534,6 +534,7 @@ treeyard rm <id>                                # удалить узел, за�
 treeyard decide "SQLite, а не Postgres: один пользователь"   # строка с датой в «Решения» .tree/tree.md; без текста — список (--json)
 treeyard goal "Десять незнакомых людей заказывают у нас"   # цель дерева в .tree/tree.md, меняется только эта строка; без текста — напечатать (--json)
 treeyard rules --from - < rules.md              # правила (tree.md без «Решения»); шапка и «Решения» не меняются; без --from — напечатать (--json)
+treeyard rules --upgrade                        # убрать из «Правил для агентов» строки старого шаблона: их теперь держит скилл
 treeyard image <id> shot.png --note "…"         # приложить к узлу картинку (скриншот, доказательство)
 treeyard diff <id> --add HEAD                   # привязать свой коммит к узлу, чтобы его проверили
 treeyard commit <id> [<id>…]                    # закоммитить файлы дерева этих узлов, README, tree.md и .gitattributes (chore(tree): …); код, другие узлы и чужой индекс не берёт
@@ -930,6 +931,13 @@ treeyard worktree rm --done [--dry-run]              # чистые и влит�
 старый), об этом говорит `treeyard status`, а в TUI рядом с названием проекта стоит «агенты не
 знают о дереве»: `!` или клик предлагает его дописать.
 
+В дереве, посаженном до 0.2.0, ещё лежат «Правила для агентов» из старого шаблона в
+`.tree/tree.md` («сначала план», `set status=review`): они повторяют скилл `treeyard` и спорят
+с ним, а сессия из узла читает и то и другое. `treeyard status` считает эти строки, в TUI
+появляется «правила для агентов устарели» — `!` убирает их заодно с блоком. Из shell то же
+делает `treeyard rules --upgrade`: уходят только строки шаблона, совпавшие слово в слово; твои
+строки и правила метода остаются, повторный запуск ничего не меняет.
+
 | Проблема | Команда |
 |---|---|
 | нет дерева | `treeyard init` |
@@ -937,6 +945,7 @@ treeyard worktree rm --done [--dry-run]              # чистые и влит�
 | скилла нет или он устарел | `treeyard skills install` |
 | нет блока о дереве или он устарел | `treeyard pointer` |
 | нет ни AGENTS.md, ни CLAUDE.md, ни GEMINI.md | `touch AGENTS.md && treeyard pointer` |
+| «Правила для агентов» из старого шаблона | `treeyard rules --upgrade` |
 | нет git-хука | `treeyard hook install`; хуки лежат в репозитории — `echo '…' >> <post-commit>` |
 | нет `gh`, он не вошёл, нет доступа к доскам | `brew install gh`, `gh auth login`, `gh auth refresh -s project` |
 | статусы не дошли до GitHub | `treeyard github sync` |

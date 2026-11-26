@@ -173,6 +173,7 @@ import {
 import { rememberProject, seenProjects } from '../projects.js';
 import { MAX_PANES, orderOf, SLEEP_AFTER, settings, settingsPath, skillsAuto, updateSettings } from '../settings.js';
 import { locate, projectStatus } from '../status.js';
+import { legacyAgentRules, upgradeAgentRules } from '../templates/legacy-rules.js';
 import { createTree, getTemplate, listTemplates } from '../templates/templates.js';
 import { commitTree, treeChanges, treeMessage } from '../tree-commit.js';
 import { inlineMark, WORDMARK } from '../tui/logo.js';
@@ -293,6 +294,8 @@ function commandLines(): string {
   treeyard rules [--from <файл|->] [--json] [--project <папка>]   правила дерева: .tree/tree.md без «Решения» — метод,
                                            как держим дерево, правила для агентов; --from — записать новые (шапка и
                                            «Решения» не меняются; решения — treeyard decide)
+  treeyard rules --upgrade                 убрать из «Правил для агентов» строки старого шаблона — их теперь держит
+                                           скилл treeyard; свои строки и правила метода остаются
   treeyard commit [<id>…] [-m "…"]         закоммитить файлы дерева этих узлов, README и tree.md (chore(tree): …);
                                            код, другие узлы и чужой индекс не берёт; без id — узел этой сессии
   treeyard image <id> [файл…|--paste] [--note "…"]…   картинки узла: список, приложить файлы или из буфера;
@@ -465,6 +468,8 @@ function commandLines(): string {
   treeyard rules [--from <file|->] [--json] [--project <dir>]   the tree's rules: .tree/tree.md without «Decisions» —
                                            the method, how the tree is kept, rules for agents; --from — write new ones
                                            (the header and «Decisions» stay; decisions — treeyard decide)
+  treeyard rules --upgrade                 take the old template's lines out of «Rules for agents» — the treeyard
+                                           skill holds them now; your own lines and the method's rules stay
   treeyard commit [<id>…] [-m "…"]         commit the tree files of these nodes, README and tree.md (chore(tree): …);
                                            never the code, other nodes or what others staged; no ids — this session's node
   treeyard image <id> [file…|--paste] [--note "…"]…   a node's pictures: the list, attach files or the clipboard;
@@ -3003,15 +3008,37 @@ function goalCommand(args: string[]): number {
 /**
  * `treeyard rules [--from <file|->]`: the rules of the tree — the body of `.tree/tree.md`
  * without «Решения» (those are `decide`'s); with `--from`, new ones — the header and «Решения» stay.
+ * `--upgrade` takes out the agents' rules an old template wrote, now held by the skill.
  */
 async function rulesCommand(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, {
     json: { type: 'boolean' },
     from: { type: 'string' },
+    upgrade: { type: 'boolean' },
     project: { type: 'string' },
   });
   if (positionals.length) throw new UsageError(t('правила — из файла или stdin: treeyard rules --from <файл|->'));
   const dir = projectDir(values.project);
+  if (values.upgrade) {
+    if (values.from !== undefined) throw new UsageError(t('--upgrade и --from вместе не бывают: выбери одно'));
+    const before = rulesOf(loadTree(dir).project.body);
+    const removed = legacyAgentRules(before).length;
+    if (removed) rootEdit(() => writeRules(dir, upgradeAgentRules(before)));
+    if (values.json) {
+      const rules = rulesOf(loadTree(dir).project.body);
+      process.stdout.write(`${JSON.stringify({ removed, rules }, null, 2)}\n`);
+    } else
+      process.stdout.write(
+        `${
+          removed
+            ? t('из «Правил для агентов» убрано строк старого шаблона: {n} — теперь их держит скилл treeyard', {
+                n: removed,
+              })
+            : t('в «Правилах для агентов» нет строк старого шаблона — менять нечего')
+        }\n`,
+      );
+    return 0;
+  }
   if (values.from !== undefined) {
     const rules = (await textFrom(values.from)).trim();
     if (!rules) throw new UsageError(t('правила пустые — нечего записать'));

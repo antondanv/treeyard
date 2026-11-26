@@ -1838,4 +1838,16 @@ export const EN: Record<string, string> = {
   'нет локальных данных': 'no local data',
   'сброс в {time}': 'resets at {time}',
   'сброшено в {time}': 'reset at {time}',
+  '--upgrade и --from вместе не бывают: выбери одно': '--upgrade and --from do not go together: pick one',
+  'из «Правил для агентов» убрано строк старого шаблона: {n} — теперь их держит скилл treeyard':
+    'lines of the old template taken out of «Rules for agents»: {n} — the treeyard skill holds them now',
+  'в «Правилах для агентов» нет строк старого шаблона — менять нечего':
+    'no lines of the old template in «Rules for agents» — nothing to change',
+  'в «Правилах для агентов» строки старого шаблона ({n}): они повторяют скилл treeyard и спорят с ним':
+    '«Rules for agents» has lines of the old template ({n}): they repeat the treeyard skill and disagree with it',
+  'правила для агентов устарели': 'the rules for agents are outdated',
+  'правила для агентов — ссылкой на скилл': 'the rules for agents point to the skill',
+  'Обновить правила для агентов?': 'Update the rules for agents?',
+  'В «Правилах для агентов» (.tree/tree.md) строк из шаблона старой версии: {n}. Их теперь держит скилл treeyard, и старые с ним спорят. Уберу их и поставлю ссылку на скилл; твои строки и правила метода останутся.':
+    "«Rules for agents» (.tree/tree.md) has {n} lines from an old version's template. The treeyard skill holds them now, and the old ones disagree with it. I will take them out and point to the skill; your own lines and the method's rules stay.",
 };

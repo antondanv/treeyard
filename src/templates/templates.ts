@@ -8,7 +8,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
-import { lang, t } from '../i18n/i18n.js';
+import { type Lang, lang, t } from '../i18n/i18n.js';
 import { addNode } from '../model/ops.js';
 import { writeOverview } from '../model/overview.js';
 import { loadTree, TREE_DIR, writeProject } from '../model/store.js';
@@ -50,10 +50,10 @@ export interface Template {
 }
 
 /** The templates shipped with treeyard: two levels up from this module, in `src/` and in `dist/` alike. */
-export function builtinDir(): string {
+export function builtinDir(language: Lang = lang()): string {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'templates');
   // English templates live in `templates/en/`; Russian ones at the top.
-  return lang() === 'en' ? join(root, 'en') : root;
+  return language === 'en' ? join(root, 'en') : root;
 }
 
 /** Your own templates: `~/.treeyard/templates/*.yaml`. */
@@ -110,7 +110,12 @@ function readTemplate(path: string, source: 'builtin' | 'user'): Template {
 
 /** The rules every tree shares, whatever the template. */
 export function commonText(): string {
-  return readFileSync(join(builtinDir(), '_common.md'), 'utf8').trim();
+  return commonTextIn(lang());
+}
+
+/** The shared rules in a given language: an old tree is upgraded in its own language, not the interface's. */
+export function commonTextIn(language: Lang): string {
+  return readFileSync(join(builtinDir(language), '_common.md'), 'utf8').trim();
 }
 
 /** Values for `{{…}}`: the answers plus phrases that read well when an answer is missing. */

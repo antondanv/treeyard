@@ -1061,10 +1061,15 @@ export function ConfirmDelete(props: {
 
 // ── The block about the tree in the agent files ─────────────────────────────
 
-/** Sessions opened outside the tree read only AGENTS.md and the like: offer to write the block there. */
+/**
+ * Sessions opened outside the tree read only AGENTS.md and the like: offer to write the block there.
+ * A tree planted before the skill also gets its old agents' rules taken out of tree.md, in the same step.
+ */
 export function PointerDialog(props: {
-  gap: 'missing' | 'outdated';
+  gap?: 'missing' | 'outdated';
   files: string[];
+  /** Lines of the old template in «Правила для агентов»; 0 — nothing to take out. */
+  rules?: number;
   width: number;
   onConfirm: () => void;
   onCancel: () => void;
@@ -1074,29 +1079,47 @@ export function PointerDialog(props: {
     if (key.escape || shortcut === 'n') return props.onCancel();
     if (key.return || shortcut === 'y' || input === 'д') return props.onConfirm();
   });
+  const files = props.files.join(t(' и '));
+  const title =
+    props.gap === 'missing'
+      ? t('Сказать агентам про дерево?')
+      : props.gap
+        ? t('Обновить блок о дереве?')
+        : t('Обновить правила для агентов?');
   return (
-    <Frame
-      title={props.gap === 'missing' ? t('Сказать агентам про дерево?') : t('Обновить блок о дереве?')}
-      width={props.width}
-    >
-      <Text wrap="wrap">
-        {props.gap === 'missing'
-          ? t(
-              'Сессия агента, открытая в проекте не из узла, видит только AGENTS.md, CLAUDE.md или GEMINI.md. Дерева там не упомянуто: агент не найдёт узел, не запишет итог и не заведёт идею.',
-            )
-          : t('Блок о дереве в {files} написан старой версией treeyard — в нём нет новых правил для агентов.', {
-              files: props.files.join(t(' и ')),
-            })}
-      </Text>
-      <Text wrap="wrap">
-        {t('Допишу в {files} короткий блок со ссылкой на скилл treeyard; остальной текст файла не трогаю.', {
-          files: props.files.join(t(' и ')),
-        })}
-      </Text>
+    <Frame title={title} width={props.width}>
+      {props.gap === 'missing' ? (
+        <Text wrap="wrap">
+          {t(
+            'Сессия агента, открытая в проекте не из узла, видит только AGENTS.md, CLAUDE.md или GEMINI.md. Дерева там не упомянуто: агент не найдёт узел, не запишет итог и не заведёт идею.',
+          )}
+        </Text>
+      ) : props.gap ? (
+        <Text wrap="wrap">
+          {t('Блок о дереве в {files} написан старой версией treeyard — в нём нет новых правил для агентов.', {
+            files,
+          })}
+        </Text>
+      ) : null}
+      {props.gap ? (
+        <Text wrap="wrap">
+          {t('Допишу в {files} короткий блок со ссылкой на скилл treeyard; остальной текст файла не трогаю.', {
+            files,
+          })}
+        </Text>
+      ) : null}
+      {props.rules ? (
+        <Text wrap="wrap">
+          {t(
+            'В «Правилах для агентов» (.tree/tree.md) строк из шаблона старой версии: {n}. Их теперь держит скилл treeyard, и старые с ним спорят. Уберу их и поставлю ссылку на скилл; твои строки и правила метода останутся.',
+            { n: props.rules },
+          )}
+        </Text>
+      ) : null}
       <KeyHints
         wrap
         hints={[
-          { key: '⏎', label: t('дописать'), color: C.brand },
+          { key: '⏎', label: props.gap ? t('дописать') : t('обновить'), color: C.brand },
           { key: 'esc', label: t('позже'), color: C.dim },
         ]}
       />
