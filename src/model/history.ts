@@ -129,6 +129,35 @@ export function isOwnLine(text: string): boolean {
   return isCreationLine(text) || isStatusChange(text) || BARE.test(text) || OWN_LINES.some((line) => line.test(text));
 }
 
+const LETTER_LINES = [
+  LETTER_FROM,
+  LETTER_TO,
+  LETTER_SESSION,
+  LETTER_SHELL,
+  LETTER_ANSWER,
+  LETTER_APPROVE,
+  LETTER_REJECT,
+  OLD_LETTER_FROM,
+  OLD_LETTER_TO,
+  OLD_LETTER_SESSION,
+]
+  .flatMap((key) => [key, EN[key] ?? key])
+  .map((template) => new RegExp(`^${literal(template).replace(/\\\{\w+\\\}/g, '.*')}$`));
+// A session started: `новая сессия в панели (do)`, `… (plan) в worktree treeyard/k3f9`.
+const SESSION_LINES = ['новая сессия в панели ({p2})', 'новая сессия {how} ({p2})']
+  .flatMap((key) => [key, EN[key] ?? key])
+  .map((template) => new RegExp(`^${literal(template).replace(/\\\{\w+\\\}/g, '.*')}`));
+
+/**
+ * treeyard's bookkeeping: a status change, a commit or a picture attached, a link, a session
+ * started. A node's context shows the status, the links and the pictures by themselves, so these
+ * lines only take the place of what someone wrote. Letters carry words, so they are not this.
+ */
+export function isBookkeeping(text: string): boolean {
+  if (LETTER_LINES.some((line) => line.test(text))) return false;
+  return isOwnLine(text) || SESSION_LINES.some((line) => line.test(text));
+}
+
 /** The last entry `source` wrote by hand — the one `log --fix` corrects — and its place in the journal. */
 export function lastOwnEntry(body: string, source: string): { index: number; entry: Entry } | undefined {
   const lines = journalEntries(body);

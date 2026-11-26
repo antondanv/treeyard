@@ -8,7 +8,7 @@
 import type { Lang } from '../i18n/i18n.js';
 import { commonTextIn } from './templates.js';
 
-const LEGACY_LINES = [
+export const LEGACY_LINES = [
   // _common.md, ru
   '- Ты работаешь над одним узлом дерева. Держись его; путь от корня объясняет, зачем он нужен.',
   '- Сначала разберись и предложи план; меняй файлы, когда план понятен.',
@@ -40,7 +40,7 @@ const norm = (line: string) => line.trim().replace(/\s+/g, ' ');
 const LEGACY = new Set(LEGACY_LINES.map(norm));
 
 const HEADING = /^## (Правила для агентов|Rules for agents)[ \t]*$/m;
-const SKILL_LINE = /скилле `treeyard`|`treeyard` skill/;
+export const SKILL_LINE = /скилле `treeyard`|`treeyard` skill/;
 
 interface Section {
   start: number;

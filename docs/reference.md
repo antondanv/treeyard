@@ -470,9 +470,13 @@ A window past its reset time is shown as reset at 0%. In `--json` it gets `expir
 
 ## Agents and the tree
 
-A session from a node gets a short context: the path from the root (why this), the
-criterion, the neighbours, the latest journal entries and the project's rules — everything
-`show` would print, so the agent does not read its node again. How to keep the tree comes
+A session from a node gets a short context: the path from the root (why this: the parent in
+its own words, further up the criteria), the criterion, the open neighbours and children (the
+finished ones as a count), the latest journal entries someone wrote (status changes, commits
+and session starts are left out — the header shows them), and the project's rules without the
+template's own text (the method's description, «How we keep the tree») — what the person
+added stays. That is everything the work needs from `show`, so the agent does not read its
+node again. How to keep the tree comes
 once, from the `treeyard` skill: when the session's CLI has it, the context only points to
 it and keeps the session's own facts (the git hook, `--project <main folder>` for a
 subagent, open children → `treeyard-coordinate`) and the rules whose breach cannot be

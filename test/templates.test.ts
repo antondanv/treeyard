@@ -104,6 +104,7 @@ describe('what an agent gets', () => {
       check: 'pytest tests/media -q',
     });
     addNode(tree, { title: 'Обложки', parent: media.id, status: 'done' });
+    addNode(tree, { title: 'Озвучка', parent: media.id });
     const text = contextText(tree, video.id);
     expect(text).toContain(`## Твой узел: Вертикальный ролик (\`${video.id}\`)`);
     expect(text).toContain('Путь: Тест › Медиа-цех › Вертикальный ролик');
@@ -111,7 +112,9 @@ describe('what an agent gets', () => {
     expect(text).toContain('Проверка: `pytest tests/media -q`');
     expect(text).toContain('Медиа-цех');
     expect(text).toContain('Картинки и ролики.');
-    expect(text).toContain('Соседи: ✓ Обложки');
+    // Open siblings only: a finished one is history, not work next to this node.
+    expect(text).toMatch(/Соседи: ○ Озвучка \(\w+, к работе\)\n/);
+    expect(text).not.toContain('Обложки');
     expect(text).toMatch(/log .* --status review --commit HEAD/);
   });
 

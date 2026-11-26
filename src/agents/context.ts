@@ -10,6 +10,7 @@ import { hookInstalled } from '../commit-hook.js';
 import { uncommittedPaths } from '../git.js';
 import { labels, pick, plural, t } from '../i18n/i18n.js';
 import { activity } from '../model/activity.js';
+import { isBookkeeping, parseEntry } from '../model/history.js';
 import { imagePath, listImages } from '../model/images.js';
 import { description, journalEntries } from '../model/journal.js';
 import { type Link, linkLabel, linksOf } from '../model/links.js';
@@ -31,6 +32,7 @@ import { today } from '../model/time.js';
 import { actionable, childrenOf, pathTo, progress, summarize, waitingNodes } from '../model/tree.js';
 import { type BrainId, ROOT, type StartMode, type Tree, type TreeNode } from '../model/types.js';
 import { loadSettings } from '../settings.js';
+import { ownRules } from '../templates/template-text.js';
 import { accessOf, fullAccess } from './access.js';
 import { skillStates } from './skills.js';
 
@@ -221,11 +223,13 @@ const TEXT = {
     hard: (self: string, id: string, title: string) =>
       `\`.tree/\` — только командами; закончил — после своего коммита \`${self} log ${id} "итог и доказательства" --status review --commit HEAD\`; «готово» — только по прямой просьбе человека; человеку узлы называй по названию («${title}»), id — только в командах.`,
     hookOn: 'Git-хук стоит: коммиты этой сессии привязываются к узлу сами.',
-    noteShort: (self: string) => `Неудобство самого treeyard, а не задача проекта — \`${self} note "…"\`.`,
     kidsShort: 'Открытых детей узла раздают отдельным сессиям — скилл `treeyard-coordinate`.',
     journalMore: (shown: number, total: number, self: string, id: string) =>
       `Последнее в журнале узла (${shown} из ${total}; раньше — \`${self} show ${id} --journal all\`):`,
     noReread: 'Всё, что напечатал бы `show` этого узла, — выше: заново его не читай.',
+    doneCount: (n: number) => `готово: ${n}`,
+    helperShort: (dir: string, id: string) =>
+      `Субагенту или помощнику — id узла (\`${id}\`) и \`--project ${dir}\` для команд treeyard.`,
     goal: 'Цель проекта',
     node: 'Твой узел',
     path: 'Путь',
@@ -238,7 +242,6 @@ const TEXT = {
     until: 'вернуться, когда',
     journal: 'Последнее в журнале узла:',
     why: '## Зачем — выше по дереву',
-    project: 'Проект',
     near: '## Что рядом',
     under: 'Под узлом',
     siblings: 'Соседи',
@@ -303,12 +306,13 @@ const TEXT = {
     hard: (self: string, id: string, title: string) =>
       `\`.tree/\` — by commands only; finished — after your own commit \`${self} log ${id} "summary and evidence" --status review --commit HEAD\`; "done" only when the person asks directly; name nodes to the person by title («${title}»), ids go in commands only.`,
     hookOn: "The git hook is in place: this session's commits attach to the node by themselves.",
-    noteShort: (self: string) =>
-      `Something in treeyard itself gets in the way, not a project task — \`${self} note "…"\`.`,
     kidsShort: "The node's open children are handed to separate sessions — the `treeyard-coordinate` skill.",
     journalMore: (shown: number, total: number, self: string, id: string) =>
       `Latest in the node journal (${shown} of ${total}; older — \`${self} show ${id} --journal all\`):`,
     noReread: 'Everything `show` would print for this node is above: do not read it again.',
+    doneCount: (n: number) => `done: ${n}`,
+    helperShort: (dir: string, id: string) =>
+      `A subagent or a helper gets the node id (\`${id}\`) and \`--project ${dir}\` for treeyard commands.`,
     goal: 'Project goal',
     node: 'Your node',
     path: 'Path',
@@ -321,7 +325,6 @@ const TEXT = {
     until: 'come back when',
     journal: 'Latest in the node journal:',
     why: '## Why — up the tree',
-    project: 'Project',
     near: '## Around it',
     under: 'Under the node',
     siblings: 'Siblings',
@@ -437,7 +440,8 @@ export function contextText(tree: Tree, id: string, help: TreeHelp = 'commands')
       lines.push(`- \`${path}\`${image.note ? ` — ${image.note}` : ''}`);
     }
   }
-  const entries = journalEntries(node.body);
+  // What someone wrote: status changes, commits, links and session starts are in the header already.
+  const entries = journalEntries(node.body).filter((line) => !isBookkeeping(parseEntry(line).text));
   const journal = entries.slice(-6);
   // Saying what is left out is what spares a `show` of the node "just in case".
   const journalTitle =
@@ -445,30 +449,33 @@ export function contextText(tree: Tree, id: string, help: TreeHelp = 'commands')
   if (journal.length > 0) lines.push('', journalTitle, ...journal.map((line) => `- ${line}`));
   lines.push('');
 
+  // The parent says why in its own words; further up the criterion is enough. The goal is above.
   const above = path.slice(0, -1).reverse();
-  if (above.length > 0 || project.goal) {
+  if (above.length > 0) {
     lines.push(L.why, '');
-    for (const step of above) {
-      const why = firstParagraph(description(step.body), 300);
+    above.forEach((step, depth) => {
+      const why = depth === 0 ? firstParagraph(description(step.body), 300) : '';
       let line = `- ${step.title} (\`${step.id}\`, ${STATUS_LABEL[step.status]})`;
       if (why) line += `: ${why}`;
-      if (step.doneWhen) line += ` ${L.doneWhen}: ${step.doneWhen}`;
+      if (step.doneWhen) line += `${why ? ' ' : ' — '}${L.doneWhen}: ${clip(step.doneWhen, depth === 0 ? 400 : 200)}`;
       lines.push(line);
-    }
-    if (project.goal) lines.push(`- ${L.project}: ${project.goal}`);
+    });
     lines.push('');
   }
 
-  const siblings = childrenOf(tree, node.parent).filter((other) => other.id !== node.id);
+  // Finished siblings alone say nothing about this node's work.
+  const siblings = childrenOf(tree, node.parent).filter((other) => other.id !== node.id && isOpen(other));
   const kids = childrenOf(tree, node.id);
   if (siblings.length > 0 || kids.length > 0) {
     lines.push(L.near, '');
-    if (kids.length > 0) lines.push(`${L.under}: ${kids.map(brief).join(' · ')}`);
-    if (siblings.length > 0) lines.push(`${L.siblings}: ${siblings.slice(0, 12).map(brief).join(' · ')}`);
+    if (kids.length > 0) lines.push(`${L.under}: ${around(kids, L.doneCount)}`);
+    if (siblings.length > 0) lines.push(`${L.siblings}: ${around(siblings)}`);
     lines.push('');
   }
 
-  const rules = project.body.trim();
+  // With the skill (or for a one-off job) the template's own text goes: the skill teaches it,
+  // and the method's description is the person's. What the person wrote stays.
+  const rules = help === 'commands' ? project.body.trim() : ownRules(project.body);
   if (rules) lines.push(L.rules, '', clip(rules, 6000), '');
 
   if (help === 'none') return lines.join('\n').trimEnd();
@@ -481,8 +488,7 @@ export function contextText(tree: Tree, id: string, help: TreeHelp = 'commands')
     lines.push(`- ${L.hard(self, node.id, node.title)}`);
     if (hookInstalled(project.dir)) lines.push(`- ${L.hookOn}`);
     if (openKids) lines.push(`- ${L.kidsShort}`);
-    if (loadSettings().notes) lines.push(`- ${L.noteShort(self)}`);
-    lines.push(`- ${L.helper(quote(project.dir), node.id)}`);
+    lines.push(`- ${L.helperShort(quote(project.dir), node.id)}`);
     return lines.join('\n');
   }
 
@@ -902,7 +908,6 @@ export function projectContext(tree: Tree, help: TreeHelp = 'commands'): string 
     lines.push(T.howHeading, '', L.skillHow);
     if (self !== 'treeyard') lines.push(T.selfIs(self));
     lines.push(`- ${T.names()}`);
-    if (loadSettings().notes) lines.push(`- ${T.noteShort(self)}`);
     lines.push(`- ${T.helper(quote(project.dir))}`);
     return lines.join('\n');
   }
@@ -927,6 +932,18 @@ export function projectContext(tree: Tree, help: TreeHelp = 'commands'): string 
   lines.push(`- ${T.helper(quote(project.dir))}`);
   return lines.join('\n');
 }
+
+/** Open neighbours one by one, finished ones as a count: what is done nearby is history, not work. */
+function around(nodes: TreeNode[], doneCount?: (n: number) => string): string {
+  const open = nodes.filter(isOpen);
+  const parts = open.slice(0, 12).map(brief);
+  if (open.length > 12) parts.push(`… ${open.length - 12}`);
+  const finished = nodes.length - open.length;
+  if (finished && doneCount) parts.push(doneCount(finished));
+  return parts.join(' · ');
+}
+
+const isOpen = (node: TreeNode) => node.status !== 'done' && node.status !== 'dropped';
 
 /** A neighbour in one line: the status as a word too — agents do not read glyphs. */
 function brief(node: TreeNode): string {

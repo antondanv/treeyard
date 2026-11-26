@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { contextText, projectContext, START_HINT, selfCommand, sessionPlan, treeHelp } from '../src/agents/context.js';
 import { defaultBrain } from '../src/agents/launch.js';
 import { setLang } from '../src/i18n/i18n.js';
-import { addNode, logToNode } from '../src/model/ops.js';
+import { addNode, attachCommit, logToNode, setStatus } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
+import { ownRules } from '../src/templates/template-text.js';
 import { createTree, getTemplate } from '../src/templates/templates.js';
 import { emptyTree, tempDir } from './helpers.js';
 
@@ -177,6 +178,84 @@ describe('a session whose CLI has the treeyard skill', () => {
     expect(treeHelp('codex', project, env)).toBe('commands');
     // OpenCode has no skills: it always gets the list.
     expect(treeHelp('opencode', project, env)).toBe('commands');
+  });
+});
+
+// Every line of a node session's context is paid for in every session: only what helps the work.
+describe('nothing but what the work needs', () => {
+  it('the journal shows what someone wrote, not treeyard’s bookkeeping', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Оплата картой' });
+    logToNode(tree, node.id, 'Человек 26.11: только карты, без СБП');
+    setStatus(tree, node.id, 'active');
+    attachCommit(tree, node.id, 'a'.repeat(40));
+    logToNode(tree, node.id, 'новая сессия в панели (do) в worktree treeyard/x', 'claude');
+    for (const text of ['skill', 'commands'] as const) {
+      const ctx = contextText(tree, node.id, text);
+      expect(ctx).toContain('Человек 26.11: только карты, без СБП');
+      expect(ctx).not.toContain('привязан коммит');
+      expect(ctx).not.toContain('новая сессия в панели');
+      expect(ctx).not.toContain('завёл узел');
+      expect(ctx).not.toMatch(/· к работе → в работе/);
+    }
+  });
+
+  it('letters in the journal stay: they carry words', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Оплата картой' });
+    logToNode(tree, node.id, 'письмо №3 от «Координатор»: «без платных вызовов»', 'агент');
+    expect(contextText(tree, node.id, 'skill')).toContain('без платных вызовов');
+  });
+
+  it('the goal once, the parent in its words, further up only the criterion', () => {
+    const tree = emptyTree();
+    const top = addNode(tree, { title: 'Релиз', body: 'Длинная история релиза.', doneWhen: 'опубликован' });
+    const mid = addNode(tree, {
+      title: 'Проверка пакета',
+      parent: top.id,
+      body: 'Последний шаг.',
+      doneWhen: 'CI зелёный',
+    });
+    const node = addNode(tree, { title: 'Тест мыши', parent: mid.id });
+    const text = contextText(tree, node.id, 'skill');
+    expect(text.split('всё работает')).toHaveLength(2);
+    expect(text).toContain(`- Проверка пакета (\`${mid.id}\`, к работе): Последний шаг. Готово, когда: CI зелёный`);
+    expect(text).toContain(`- Релиз (\`${top.id}\`, к работе) — Готово, когда: опубликован`);
+    expect(text).not.toContain('Длинная история релиза');
+  });
+
+  it('children: the open ones by name, the finished as a count; finished siblings not at all', () => {
+    const tree = emptyTree();
+    const parent = addNode(tree, { title: 'Родитель' });
+    const node = addNode(tree, { title: 'Узел', parent: parent.id });
+    addNode(tree, { title: 'Готовый сосед', parent: parent.id, status: 'done' });
+    addNode(tree, { title: 'Готовый ребёнок', parent: node.id, status: 'done' });
+    addNode(tree, { title: 'Открытый ребёнок', parent: node.id });
+    const text = contextText(tree, node.id, 'skill');
+    expect(text).toMatch(/Под узлом: ○ Открытый ребёнок \(\w+, к работе\) · готово: 1/);
+    expect(text).not.toContain('Готовый сосед');
+    expect(text).not.toMatch(/^Соседи:/m);
+  });
+
+  it('the tree’s rules without the template’s text; the person’s lines and decisions stay', () => {
+    const dir = tempDir();
+    createTree(dir, getTemplate('stages')!, { title: 'Тест', answers: { goal: 'всё' }, skeleton: false });
+    const tree = loadTree(dir);
+    const own = ownRules(`${tree.project.body}\n- Деплой — только через make deploy.`);
+    expect(own).not.toContain('## Как держим дерево');
+    expect(own).not.toContain('скилле `treeyard`');
+    expect(own).not.toContain('Одна строка — одно решение');
+    // The method's own agents' rule is the method, not the skill: it stays, under its heading.
+    expect(own).toContain('## Правила для агентов\n\n- Этап закрыт');
+    expect(own).toContain('- Деплой — только через make deploy.');
+    const node = addNode(tree, { title: 'Узел' });
+    expect(contextText(tree, node.id, 'skill')).not.toContain('## Как держим дерево');
+    // Without the skill the agent learns the tree from these rules, so they stay whole.
+    expect(contextText(tree, node.id, 'commands')).toContain('## Как держим дерево');
+  });
+
+  it('keeps a heading whose content sits under a subheading', () => {
+    expect(ownRules('## Своё\n\n### Деплой\n\n- make deploy')).toBe('## Своё\n\n### Деплой\n\n- make deploy');
   });
 });
 
