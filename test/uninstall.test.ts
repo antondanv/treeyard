@@ -134,7 +134,8 @@ describe('treeyard uninstall', () => {
     expect(existsSync(env.TREEYARD_HOME)).toBe(false);
     expect((await here.sh('uninstall')).stdout).toContain('убирать нечего');
     expect(lstatSync(join(here.dir, '.tree')).isDirectory()).toBe(true);
-  });
+    // Fourteen CLI runs from source: 12–20 s on CI runners.
+  }, 60_000);
 
   it('is in the help and refuses unknown options', async () => {
     const sh = treeyardIn(tempDir(), { TREEYARD_SKILLS: 'off' });

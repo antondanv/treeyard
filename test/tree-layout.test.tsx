@@ -253,5 +253,7 @@ describe('tree beside an open agent session', () => {
         }
       }
     },
+    // Rendering and resizing the pane can exceed the default timeout on a busy CI runner.
+    40_000,
   );
 });

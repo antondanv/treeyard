@@ -415,6 +415,8 @@ function runHook(env: NodeJS.ProcessEnv, path: string, stdin: string) {
       (error, stdout, stderr) =>
         done({ code: error ? Number((error as { code?: number }).code ?? 1) : 0, stdout, stderr }),
     );
+    // A hook that decides from its environment alone exits before reading stdin.
+    child.stdin?.on('error', () => {});
     child.stdin?.end(stdin);
   });
 }

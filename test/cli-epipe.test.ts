@@ -145,7 +145,7 @@ describe('quiet exit on EPIPE', () => {
     const results = await Promise.all(cases.map(({ args }) => runIntoClosedPipe(dir, home, args)));
     results.forEach((result, index) => {
       const label = cases[index]!.args.join(' ');
-      expect(result.code, label).toBe(0);
+      expect(result.code, `${label}: ${result.stderr}`).toBe(0);
       expect(result.signal, label).toBeNull();
       expect(result.stderr, label).toBe('');
       expect(result.firstLine, label).toMatch(cases[index]!.firstLine);
