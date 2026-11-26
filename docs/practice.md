@@ -31,8 +31,9 @@ different ways to grow the tree; the rules below are shared by all of them.
    agent won't do them for you, but it will prepare everything so your step takes 20
    minutes.
 
-6. **Understand first, then plan, then code.** A new session starts with a plan by
-   default: the agent studies the code and proposes, you agree (Explore → Plan → Code).
+6. **Understand first, then plan, then code.** When a task is not clear yet, start the
+   session with “plan”: the agent studies the code and proposes, you agree
+   (Explore → Plan → Code). By default a session starts with “do”.
 
 7. **An agent doesn't mark "done" itself.** It marks "review" and shows evidence: a
    command and its output, a screenshot. "Done" is set by a human or by a separate

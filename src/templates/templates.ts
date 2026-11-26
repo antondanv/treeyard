@@ -13,7 +13,7 @@ import { addNode } from '../model/ops.js';
 import { writeOverview } from '../model/overview.js';
 import { loadTree, TREE_DIR, writeProject } from '../model/store.js';
 import { today } from '../model/time.js';
-import { type BrainId, type Project, ROOT, type Status, type Tree, type Who } from '../model/types.js';
+import { type BrainId, DEFAULT_START, type Project, ROOT, type Status, type Tree, type Who } from '../model/types.js';
 
 export interface TemplateQuestion {
   key: string;
@@ -169,7 +169,7 @@ export function createTree(dir: string, template: Template, options: CreateOptio
     title: options.title.trim() || dir.split('/').pop() || t('Проект'),
     template: template.id,
     ...(options.brain ? { brain: options.brain } : {}),
-    start: 'plan',
+    start: DEFAULT_START,
     created: today(),
     body: projectBody(template, vars),
     sessions: [],

@@ -145,6 +145,7 @@ import {
 import {
   BRAIN_IDS,
   type BrainId,
+  DEFAULT_START,
   ROOT,
   type SessionRef,
   type StartMode,
@@ -166,7 +167,6 @@ import {
   type ConfirmRow,
   CriterionDialog,
   HelpDialog,
-  inBackground,
   type LaunchEntry,
   LaunchForm,
   NodeForm,
@@ -978,7 +978,7 @@ export function App(props: AppProps) {
   /** What a CLI that was never launched starts with: the project's defaults, the project's model and effort if it is the project's own CLI. */
   const defaultLaunch = (brain: BrainId): LaunchOptions => {
     const p = tree.project;
-    const start = p.start ?? 'plan';
+    const start = p.start ?? DEFAULT_START;
     const options: LaunchOptions = {
       brain,
       start: brain !== 'claude' && start === 'goal' ? 'do' : start,
@@ -1622,14 +1622,6 @@ export function App(props: AppProps) {
       needs: 'node',
       run: () => current && request({ kind: 'new', node: current.id, options: claudeLaunch() }),
     },
-    background: {
-      label: t('Claude Code в фоне'),
-      keys: 'b',
-      needs: 'node',
-      run: () => {
-        if (current) request({ kind: 'new', node: current.id, options: inBackground(claudeLaunch()) });
-      },
-    },
     launch: {
       label: t('Настроить запуск сессии'),
       keys: 'o',
@@ -1842,7 +1834,6 @@ export function App(props: AppProps) {
 
   const KEY_ACTIONS: Record<string, string> = {
     c: 'claude',
-    b: 'background',
     o: 'launch',
     S: 'split',
     t: 'check',
@@ -3239,8 +3230,8 @@ export function App(props: AppProps) {
           value: mode,
           label: START_LABEL[mode],
         })),
-        value: p.start ?? 'plan',
-        hint: START_HINT[p.start ?? 'plan'],
+        value: p.start ?? DEFAULT_START,
+        hint: START_HINT[p.start ?? DEFAULT_START],
       },
       {
         key: 'model',

@@ -541,7 +541,6 @@ export const EN: Record<string, string> = {
   '✓ «{title}» готово · u — отменить': '✓ «{title}» done · u to undo',
   'Всё про узел: сессии, агент, проверка': 'Everything about the node: sessions, agent, check',
   'Claude Code по узлу': 'Claude Code on the node',
-  'Claude Code в фоне': 'Claude Code in the background',
   'Настроить запуск сессии': 'Set up a session launch',
   'Разбить на шаги (агент)': 'Break into steps (agent)',
   'Сформулировать «готово, когда» (агент)': 'Write a "done when" (agent)',
@@ -785,11 +784,9 @@ export const EN: Record<string, string> = {
   'Статус · {title}': 'Status · {title}',
   выбрать: 'choose',
   'буква — сразу': 'a letter — at once',
-  'работает сам, а ты — в дереве; на узле появится индикатор':
-    'works on its own while you stay in the tree; the node shows its state',
   '⚙ Настроить запуск…': '⚙ Set up the launch…',
-  'мозг, модель, усилие, как начать, worktree — и он станет последним запуском':
-    'brain, model, effort, how to start, worktree — and it becomes the last launch',
+  'мозг, модель, усилие, как начать, панель, терминал или фон, worktree — и он станет последним запуском':
+    'brain, model, effort, how to start, pane, terminal or background, worktree — and it becomes the last launch',
   'как в прошлый раз': 'as last time',
   'его последний запуск': 'its last launch',
   'Агент без сессии': 'Agent without a session',
@@ -960,7 +957,7 @@ export const EN: Record<string, string> = {
   'шире · уже': 'wider · narrower',
   колесо: 'wheel',
   'история · PgUp PgDn, End — к вводу': 'history · PgUp PgDn, End — back to input',
-  'Claude Code в панели · в фоне': 'Claude Code in a pane · in the background',
+  'Claude Code по узлу — как в прошлый раз': 'Claude Code on the node — as last time',
   'тихо {ago}': 'quiet {ago}',
   свободна: 'free',
   панель: 'pane',

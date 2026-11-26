@@ -115,6 +115,9 @@ export type StartMode = 'plan' | 'do' | 'goal' | 'chat';
 
 export const START_MODES: readonly StartMode[] = ['plan', 'do', 'goal', 'chat'];
 
+/** How a session starts when the project does not say: the agent does the node. */
+export const DEFAULT_START: StartMode = 'do';
+
 export interface Tree {
   project: Project;
   nodes: Map<string, TreeNode>;

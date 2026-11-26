@@ -133,7 +133,8 @@ describe('the job runs on the chosen agent; the project keeps its own', () => {
 
   it('the criterion: Antigravity, and the next job starts from the project defaults again', async () => {
     const { tree, settings } = sample();
-    const menu = [`\r`, DOWN.repeat(7), '\r'];
+    // Four CLIs, «set up the launch», «break into steps», then «criterion».
+    const menu = [`\r`, DOWN.repeat(6), '\r'];
     await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: [...menu, LEFT, LEFT, ...idle, '\r'] });
     expect(backend.run.mock.calls[0]![0]).toMatchObject({ brain: 'antigravity' });
     expect(backend.run.mock.calls[0]![0]).not.toHaveProperty('model');
