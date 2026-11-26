@@ -37,7 +37,8 @@ folder with code it reads the code, the documents and the history first; then it
 questions and writes the tree only after your “yes”. Or on your own, from a template: a
 couple of questions, and the tree is ready.
 
-Once the tree is open: `c` starts Claude Code on the selected node, `?` shows all the
+Once the tree is open, `c` opens the agent menu: the one you launched last on top, with the
+same settings, the other CLIs below; `c` `⏎` repeats the last launch. `?` shows all the
 keys, `,` opens the settings (the language, the theme and the rest). Other ways in:
 
 ```sh
@@ -49,14 +50,16 @@ treeyard import                            # the agent quietly reads the project
 **Contents**
 
 - [What it is and why you'd want it](#what-it-is-and-why-youd-want-it)
+- [What it looks like](#what-it-looks-like)
 - [How you work with it](#how-you-work-with-it)
+- [Several agents at once](#several-agents-at-once)
 - [What agents are allowed to do](#what-agents-are-allowed-to-do)
 - [The vibe-coding practices built in](#the-vibe-coding-practices-built-in)
 - [When to use it and when not](#when-to-use-it-and-when-not)
 - [In numbers](#in-numbers)
 - [Why I built it](#why-i-built-it)
 - [Documentation](#documentation)
-- [Development](#development)
+- [Contributing](#contributing)
 
 ## What it is and why you'd want it
 
@@ -122,11 +125,34 @@ journal, and one list shows everything you can do right now.
 That is Agent-Driven Development: you plan, the agents build, and you manage the project
 and accept the work.
 
+## What it looks like
+
+Scroll sideways.
+
+<!-- The non-breaking spaces under each caption keep the columns wide: GitHub squeezes images in a table to the page's width, and this way the row scrolls sideways instead. -->
+<table>
+<tr>
+<td><img src="docs/screenshot-agents.png" width="800" alt="Three agents at once: Claude Code writes the checkout in a pane to the right of the tree, Codex waits for an answer on the subscription node, Claude Code works in the background on the emails node; the header says “agents working: 2, waiting for you: 1”"></td>
+<td><img src="docs/screenshot-mail.png" width="800" alt="The coordinator node's card: messages to the sessions of “Subscription” and “Order emails” and a reply from one of them; one message was typed into its pane, another waits until Codex gets an answer from the person"></td>
+<td><img src="docs/screenshot-worktree.png" width="800" alt="The card of “Checkout with Stripe”: a worktree on the branch treeyard/&lt;id&gt; in ~/Projects/larchwood-roasters.worktrees, a Claude Code session working for 25 minutes"></td>
+<td><img src="docs/screenshot-agent.png" width="800" alt="The agent menu on c: Claude Code on top with the last launch's settings — plan, opus, high, in a pane; below it Codex, Antigravity, OpenCode and “Set up the launch…”"></td>
+<td><img src="docs/screenshot-menu.png" width="800" alt="The node's menu on Enter: a new session of any CLI, agent tasks without a session — break into steps, write a “done when”, run the check, node diffs"></td>
+</tr>
+<tr>
+<td>Three agents at once: one in a pane, one waiting for you, one in the background<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td>Messages between sessions: which one arrived and which one waits<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td>A node gets its own git worktree and branch; the tree stays one<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td><code>c</code> — the agent menu, the last launch on top with all its settings<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td><code>⏎</code> — everything about the node: sessions, agent tasks, the check, diffs<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+</tr>
+</table>
+
 ## How you work with it
 
 1. **Now** (`2`) lists everything you can do right now, across all branches. Pick a node.
-2. `c` opens a Claude Code session for it, in a pane next to the tree; `⏎` — every action,
-   other agents among them.
+2. `c` opens the agent menu: the one you launched last on top, with its settings, the other
+   CLIs below. Pick one, and its session for the node opens in a pane next to the tree;
+   `c` `⏎` repeats the last launch.
 3. The agent gets the node's context, studies the code and proposes a plan. You agree; it
    works.
 4. When the task is finished, the agent sets **in review** and shows proof: a command and
@@ -135,6 +161,58 @@ and accept the work.
    another branch.
 6. A new idea on the way — `a`, as an idea. Once a week, look through **Waiting** (`3`):
    has the condition come?
+
+## Several agents at once
+
+When there is a lot to do, one session can become the coordinator. Tell it “do the
+subscription branch”, and it hands the nodes to other sessions, watches them, answers their
+questions and accepts the work. You see all of it in the tree: who is working, who is
+waiting for you, who is done.
+
+### The coordinator
+
+- The `treeyard-coordinate` skill teaches an agent this job. It picks nodes that touch
+  different files, opens them in panes or in the background
+  (`treeyard open a b c --pane --task "…"`), waits (`treeyard wait`), accepts the work by its
+  diff and its checks, merges the branches and moves the nodes to review.
+- `treeyard queue` starts a branch's nodes in turn, no more than a set number at once. A node
+  with `needs` starts only once the nodes it depends on are in review or done. When the
+  subscription window is nearly used up, the queue waits for it to reset.
+- When two active nodes change the same file, `wait` and `queue` notice and tell both
+  sessions.
+
+### Messages between sessions
+
+- `treeyard send <node> "…"` writes to the node's session that is already open instead of
+  starting a new one. A free session gets the message at once, a sleeping one wakes up, a
+  busy one gets it after its turn. With a hook installed (`treeyard hook claude install`;
+  Codex, Antigravity and OpenCode have one too) it arrives even mid-turn, between two tool
+  calls.
+- `--wait` waits for the answer. Answering an agent's question or permission request
+  (`--answer`, `--approve`, `--reject`) is yours alone: another agent's message doesn't pass
+  for your word.
+- Every message stays a line in both nodes' journals, and the node's card shows whether it
+  arrived or still waits. If two agents start bouncing messages with no work in between,
+  treeyard holds back the next one after six in a row.
+
+### A git worktree per node
+
+`treeyard open <id> --worktree` (or the same box in the launch form) opens a session of any
+CLI in a git worktree of its own, on the branch `treeyard/<id>`. Agents don't get in each
+other's way in one folder, the branch's commits count as the node's commits, and there is
+still one tree for everyone. `treeyard worktree rm --done` removes the merged worktrees of
+closed nodes. Branches that touch different nodes merge without conflicts in the tree's
+overview: `.tree/README.md` has a merge driver of its own.
+
+### Agents know about the tree on their own
+
+- The `treeyard`, `treeyard-init` and `treeyard-coordinate` skills are installed into Claude
+  Code, Codex and Antigravity and updated along with treeyard. Even a plain `claude` started
+  in the project's folder knows how to keep the tree.
+- `treeyard status` shows the whole setup on one screen: the tree, the skills, the hooks, live
+  sessions. Each problem comes with the command that fixes it.
+- The commit hook (`treeyard hook install`) attaches a session's commits to its node by
+  itself.
 
 ## What agents are allowed to do
 
@@ -239,7 +317,23 @@ my own projects this way, Treeyard itself included.
 
 In the terminal: `?` shows all the keys, `treeyard help` all the commands.
 
-## Development
+## Contributing
+
+Treeyard is made by one person, and help is welcome. Issues and pull requests are fine in
+English or in Russian.
+
+- Found a bug — open an [issue](https://github.com/antondanv/treeyard/issues/new?template=bug_report.yml):
+  the form asks for the versions and the setup; you tell what you did, what you expected and
+  what happened.
+- A typo, an obvious bug or a missing test can come straight as a pull request.
+- A new feature or different behaviour — talk it over in an
+  [issue](https://github.com/antondanv/treeyard/issues/new?template=feature_request.yml)
+  first. The project has a direction ([docs/vision.md](docs/vision.md)), and a short talk
+  saves a pull request that won't be merged.
+- Leave `.tree/` out of pull requests: it is the maintainer's working plan and gets updated
+  separately.
+
+Build and check the project:
 
 ```sh
 git clone https://github.com/antondanv/treeyard && cd treeyard
@@ -254,7 +348,8 @@ FORCE_COLOR=2 npx tsx scripts/screenshot.ts ../my-app shot.png 130x36   # a PNG 
 Sessions, panes and models go through [Brainyard](https://github.com/antondanv/brainyard)
 (`@antondanv/brainyard`), one layer for every agent CLI.
 
-How to send a change or report a bug — in the [contributing guide](CONTRIBUTING.md).
+The rest — how to name branches and commits, what to write in a pull request, how to check
+what a person sees — is in the [contributing guide](CONTRIBUTING.md).
 
 ## License
 
