@@ -3,7 +3,7 @@ title: Treeyard
 goal: Соло-разработчик ведёт свои проекты с агентами через дерево и доводит их до проверки в жизни, а не до вечного «код готов, проект стоит»
 template: directions
 brain: claude
-start: plan
+start: do
 created: 2026-10-02
 sessions:
   - brain: claude
