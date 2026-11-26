@@ -27,6 +27,27 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build
-      - name: The built CLI starts
-        run: node dist/cli/main.js --version
+      - name: The packed CLI installs and opens trees
+        run: |
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          version=$(node -p "require('./package.json').version")
+          tarball=$(npm pack --silent --pack-destination "$work")
+          npm install --prefix "$work/current" --no-save --no-audit --no-fund "$work/$tarball"
+          npm install --prefix "$work/previous" --no-save --no-audit --no-fund @antondanv/treeyard@0.1.1
+
+          export HOME="$work/home" TREEYARD_HOME="$work/settings" TREEYARD_LANG=en
+          unset CLAUDE_CONFIG_DIR CODEX_HOME XDG_CONFIG_HOME
+          mkdir -p "$HOME/.claude" "$work/new-tree" "$work/old-tree"
+          current="$work/current/node_modules/.bin/treeyard"
+          previous="$work/previous/node_modules/.bin/treeyard"
+
+          test "$("$current" --version)" = "$version"
+          "$current" skills install
+          test -f "$HOME/.claude/skills/treeyard/SKILL.md"
+          test -f "$HOME/.claude/skills/treeyard-coordinate/SKILL.md"
+          test -f "$HOME/.claude/skills/treeyard-init/SKILL.md"
+          (cd "$work/new-tree" && "$current" init --template directions --goal 'Check a new tree')
+          test -f "$work/new-tree/.tree/tree.md"
+          (cd "$work/old-tree" && "$previous" init --template directions --goal 'Check a 0.1.1 tree')
+          (cd "$work/old-tree" && "$current" show --all)

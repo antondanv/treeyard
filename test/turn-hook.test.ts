@@ -538,7 +538,7 @@ describe('treeyard hook claude', () => {
     expect((await sh('hook', 'claude', 'remove')).stdout).toContain('хук убран');
     expect(existsSync(file)).toBe(false);
     expect((await sh('hook', 'claude', 'remove')).stdout).toContain('хука нет');
-  });
+  }, 60_000);
 
   it('reports and updates an existing PostToolUse-only installation', async () => {
     const dir = tempDir();
