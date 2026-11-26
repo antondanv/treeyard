@@ -85,7 +85,9 @@ describe('templates in English', () => {
     const dir = tempDir();
     const tree = createTree(dir, getTemplate('stages')!, { title: 'Pilot', answers: { goal: 'the first review' } });
     expect(tree.project.body).toContain('## Method: Stages');
-    expect(tree.project.body).toMatch(/## Rules for agents[\s\S]*Conventional Commits[^\n]*\n- A stage is closed/);
+    expect(tree.project.body).toMatch(
+      /## Rules for agents\n\nHow to keep the tree is in the `treeyard` skill[^\n]*\n\n- A stage is closed/,
+    );
     expect([...tree.nodes.values()].map((node) => node.title)).toContain('Stage 0 — Skeleton');
     expect([...tree.nodes.values()].find((node) => node.title === 'Stage 3 — Launch')?.doneWhen).toBe(
       'the first review',

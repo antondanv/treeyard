@@ -19,7 +19,8 @@ with. Statuses: `idea` `todo` `active` `waiting` `review` `done` `dropped`. Who:
 
 Agents break these most often. Follow them even when the task looks too small.
 
-1. **Before work**, find the task's node in `treeyard show` and tell the person which it is.
+1. **Before work**, know the task's node and tell the person which it is: a session opened
+   from a node already has it in its context; otherwise find it in `treeyard show`.
 2. **Read `treeyard show` whole.** Never pipe it into `head`, `tail`, `grep` or `sed`, not
    even after `2>&1`. Too long → `--brief`, `--journal N` or `--only journal,sessions`;
    several nodes → one call; looking for something → `treeyard find "…"`.
@@ -37,7 +38,11 @@ Agents break these most often. Follow them even when the task looks too small.
 ## Start: find the node
 
 **Opened from a node?** The first message or the system context says "You are working on a
-node…" or «Ты работаешь над узлом…», and `$TREEYARD_NODE` holds its id. That is the node.
+node…" or «Ты работаешь над узлом…», and `$TREEYARD_NODE` holds its id. That is the node,
+and the context already holds what `show` would print: the criterion, the description, the
+path, the neighbours and the latest journal entries; the status is already `active`. Don't
+read the node again with `show` or its file — only `treeyard show <id> --journal all` when
+the context says older entries are left out and you need them. Go to the work.
 
 **Otherwise:**
 
@@ -200,7 +205,8 @@ overview; a hand edit skips them. Reading the files is fine.
   session. If the project commits its tree (`git log --oneline -- .tree`), commit yours with
   `treeyard commit <id> [<id>…]` — the named nodes, README and tree.md, nothing else; with no
   clear habit, leave it to the person and say so. Never `git add .tree/…` by hand.
-- A session opened from a node with the hook installed (`treeyard status` shows it)
+- A session opened from a node with the hook installed (its context says so; elsewhere
+  `treeyard status` shows it)
   attaches its commits by itself; otherwise `--commit HEAD` in the closing `log`, or
   `treeyard diff <id> --add HEAD`.
 - Push, PR, merge — only when the person asks.

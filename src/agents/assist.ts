@@ -54,7 +54,7 @@ export interface AssistOptions extends AssistChoice {
 
 export function splitPrompt(tree: Tree, id: string): string {
   const existing = childrenOf(tree, id).map((node) => `- ${node.title}`);
-  return `${contextText(tree, id)}
+  return `${contextText(tree, id, 'none')}
 
 ---
 
@@ -84,7 +84,7 @@ Answer ONLY with JSON in a \`\`\`json block:`,
 }
 
 export function criterionPrompt(tree: Tree, id: string): string {
-  return `${contextText(tree, id)}
+  return `${contextText(tree, id, 'none')}
 
 ---
 

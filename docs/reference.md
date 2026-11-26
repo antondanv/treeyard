@@ -469,11 +469,15 @@ A window past its reset time is shown as reset at 0%. In `--json` it gets `expir
 ## Agents and the tree
 
 A session from a node gets a short context: the path from the root (why this), the
-criterion, the neighbours, the project's rules and the tree's commands. The commands end
-with the rules agents broke most often, the same from a node and from the root: name nodes
-to the person by title, ids only in commands; read `show` whole (`--brief`, `--journal N`)
-instead of cutting it; give a subagent the node id and `--project <main folder>`; status
-done only when the person asks for it in the conversation (`--as you`). Agents write back
+criterion, the neighbours, the latest journal entries and the project's rules — everything
+`show` would print, so the agent does not read its node again. How to keep the tree comes
+once, from the `treeyard` skill: when the session's CLI has it, the context only points to
+it and keeps the session's own facts (the git hook, `--project <main folder>` for a
+subagent, open children → `treeyard-coordinate`) and the rules whose breach cannot be
+undone: `.tree/` by commands only, finish with `log … --status review --commit HEAD`, done
+only when the person asks, nodes named by title. Without the skill (OpenCode, a skill not
+installed) the context carries the tree's commands instead. The first message only says
+what to do — plan, do, or `/goal` with the criterion as its condition. Agents write back
 with the same commands a person uses:
 
 ```sh

@@ -48,8 +48,11 @@ describe('templates', () => {
     expect(withBrain.project.brain).toBe('codex');
     expect(tree.project.body).toContain('## Метод: Этапы');
     expect(tree.project.body).toContain('## Правила для агентов');
-    // The template's own rules land under the shared ones.
-    expect(tree.project.body).toMatch(/Conventional Commits[^\n]*\n- Этап закрыт/);
+    // The template's own rules land under the line that sends to the skill; the skill's own rules are not copied.
+    expect(tree.project.body).toMatch(
+      /## Правила для агентов\n\nКак вести дерево — в скилле `treeyard`[^\n]*\n\n- Этап закрыт/,
+    );
+    expect(tree.project.body).not.toContain('treeyard set <id> status=review');
     const top = childrenOf(tree, ROOT).map((node) => node.title);
     expect(top).toEqual([
       'Этап 0 — Каркас',

@@ -39,7 +39,6 @@ import {
 } from '../agents/assist.js';
 import { type CheckResult, runCheck } from '../agents/check.js';
 import {
-  contextText,
   ROOT_START_HINT,
   ROOT_START_LABEL,
   rootStart,
@@ -2811,7 +2810,7 @@ export function App(props: AppProps) {
         if (!modalNode) return null;
         const plan = sessionPlan(tree, modalNode.id, defaults().start, defaults().brain);
         const text = t('{p1}\n\n# Первое сообщение ({start})\n\n{p3}', {
-          p1: contextText(tree, modalNode.id),
+          p1: plan.system,
           start: plan.start,
           p3: plan.prompt ?? '—',
         });

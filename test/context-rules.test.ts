@@ -1,11 +1,11 @@
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { contextText, projectContext, START_HINT, selfCommand } from '../src/agents/context.js';
+import { contextText, projectContext, START_HINT, selfCommand, sessionPlan, treeHelp } from '../src/agents/context.js';
 import { defaultBrain } from '../src/agents/launch.js';
 import { setLang } from '../src/i18n/i18n.js';
-import { addNode } from '../src/model/ops.js';
+import { addNode, logToNode } from '../src/model/ops.js';
 import { loadTree } from '../src/model/store.js';
 import { createTree, getTemplate } from '../src/templates/templates.js';
 import { emptyTree, tempDir } from './helpers.js';
@@ -91,7 +91,9 @@ describe('a session from the root', () => {
     expect(text).toContain(
       '- Человеку узлы называй по названию, а id — только в командах, даже не в скобках рядом с названием',
     );
-    expect(text).toContain(`\`${self} set <id> status=done --as ты\`: решение его`);
+    // Once, in «Your role»: the command list does not repeat it.
+    const whole = projectContext(tree);
+    expect(whole.split(`\`${self} set <id> status=done --as ты\`: решение его`)).toHaveLength(2);
     expect(text).toContain(
       `- Отдаёшь работу субагенту или помощнику — передай ему id узла и \`--project ${tree.project.dir}\``,
     );
@@ -103,9 +105,99 @@ describe('a session from the root', () => {
     setLang('en');
     const text = commands(projectContext(emptyTree()));
     expect(text).toContain('- Name nodes to the person by their title; ids go in commands only');
-    expect(text).toContain(`\`${self} set <id> status=done --as you\``);
+    expect(projectContext(emptyTree())).toContain(`\`${self} set <id> status=done --as you\``);
     expect(text).toContain('- Handing work to a subagent or a helper — give it the node id and `--project ');
     expect(text).toContain('- Read the output of `show` and `find` whole');
+  });
+});
+
+// With the skill at hand the context only points to it: one copy of the rules, not three.
+describe('a session whose CLI has the treeyard skill', () => {
+  it('gets the node and its own facts, not the command list the skill already holds', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Оплата картой', doneWhen: 'платёж проходит' });
+    const text = contextText(tree, node.id, 'skill');
+
+    expect(text).not.toMatch(/^## Команды дерева$/m);
+    expect(text).toContain('## Работа с деревом');
+    expect(text).toContain('Как вести дерево — в скилле `treeyard`: загрузи его до первой команды.');
+    expect(text).toContain('заново его не читай');
+    // The rules whose breach cannot be undone stay, for a session that skips the skill.
+    expect(text).toContain(`\`${self} log ${node.id} "итог и доказательства" --status review --commit HEAD\``);
+    expect(text).toContain('«готово» — только по прямой просьбе человека');
+    expect(text).toContain('человеку узлы называй по названию («Оплата картой»)');
+    expect(text).toContain(`\`--project ${tree.project.dir}\``);
+    expect(text).not.toContain(`show ${node.id} --brief`);
+    expect(text.length).toBeLessThan(contextText(tree, node.id, 'commands').length - 2000);
+  });
+
+  it('says where the older journal entries are when it shows only the last ones', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Оплата картой' });
+    for (let i = 1; i <= 8; i++) logToNode(tree, node.id, `шаг ${i}`);
+    const text = contextText(tree, node.id, 'skill');
+    expect(text).toMatch(
+      new RegExp(
+        `Последнее в журнале узла \\(6 из \\d+; раньше — \`${self.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} show ${node.id} --journal all\`\\)`,
+      ),
+    );
+    expect(text).toContain('шаг 8');
+  });
+
+  it('from the root: the skills instead of the command list, the done rule once', () => {
+    const tree = emptyTree();
+    addNode(tree, { title: 'Оплата картой' });
+    const text = projectContext(tree, 'skill');
+    expect(text).not.toMatch(/^## Команды дерева$/m);
+    expect(text).toContain('в скилле `treeyard`, как раздавать узлы сессиям — в `treeyard-coordinate`');
+    expect(text.split('--as ты')).toHaveLength(2);
+  });
+
+  it('a one-off job gets the node and no tree rules at all', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Оплата картой' });
+    const text = contextText(tree, node.id, 'none');
+    expect(text).toContain('## Твой узел: Оплата картой');
+    expect(text).not.toContain('## Работа с деревом');
+    expect(text).not.toMatch(/^## Команды дерева$/m);
+  });
+
+  it('treeHelp: the skill where the CLI has it, the command list elsewhere', () => {
+    const home = tempDir('treeyard-skill-home-');
+    const project = tempDir('treeyard-skill-project-');
+    const env = { HOME: home };
+    expect(treeHelp('claude', project, env)).toBe('commands');
+    mkdirSync(join(home, '.claude', 'skills', 'treeyard'), { recursive: true });
+    writeFileSync(join(home, '.claude', 'skills', 'treeyard', 'SKILL.md'), '---\nname: treeyard\n---\nold copy\n');
+    // An outdated copy still teaches the tree.
+    expect(treeHelp('claude', project, env)).toBe('skill');
+    expect(treeHelp('codex', project, env)).toBe('commands');
+    // OpenCode has no skills: it always gets the list.
+    expect(treeHelp('opencode', project, env)).toBe('commands');
+  });
+});
+
+describe('the first message', () => {
+  it('does not repeat the criterion the context holds; /goal keeps it and finishes in one command', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Оплата картой', doneWhen: 'платёж проходит', check: 'npm test' });
+    const doPrompt = sessionPlan(tree, node.id, 'do', 'codex').prompt!;
+    expect(doPrompt).toBe(
+      `Сделай узел «Оплата картой» (${node.id}) — доведи его до критерия и закончи доказательствами и статусом review.`,
+    );
+    const plan = sessionPlan(tree, node.id, 'plan', 'codex').prompt!;
+    expect(plan).not.toContain('платёж проходит');
+    expect(plan).not.toContain('журнал');
+    const goal = sessionPlan(tree, node.id, 'goal', 'claude').prompt!;
+    expect(goal).toContain('платёж проходит');
+    expect(goal).toContain(`log ${node.id} "…" --status review --commit HEAD`);
+    expect(goal).not.toContain('status=review');
+  });
+
+  it('without a criterion asks to agree one first', () => {
+    const tree = emptyTree();
+    const node = addNode(tree, { title: 'Оплата картой' });
+    expect(sessionPlan(tree, node.id, 'do', 'codex').prompt).toContain('сначала сформулируй его и согласуй со мной');
   });
 });
 

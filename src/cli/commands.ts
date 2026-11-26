@@ -39,14 +39,7 @@ import {
   installCodexMailHook,
   removeCodexMailHook,
 } from '../agents/codex-hook.js';
-import {
-  contextText,
-  ROOT_START_HINT,
-  ROOT_START_LABEL,
-  START_HINT,
-  START_LABEL,
-  sessionPlan,
-} from '../agents/context.js';
+import { ROOT_START_HINT, ROOT_START_LABEL, START_HINT, START_LABEL, sessionPlan } from '../agents/context.js';
 import { type Attempt, deliverAll, ensureDeliverer, runDeliverer } from '../agents/deliver.js';
 import { countNodes, type Proposal, parseProposal, plant, proposeTree } from '../agents/importer.js';
 import {
@@ -3510,7 +3503,7 @@ async function contextCommand(args: string[]): Promise<number> {
   );
   process.stdout.write(
     t('{p1}\n\n# Первое сообщение ({start})\n\n{p3}\n', {
-      p1: contextText(tree, id),
+      p1: plan.system,
       start: plan.start,
       p3: plan.prompt ?? '—',
     }),

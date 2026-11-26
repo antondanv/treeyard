@@ -32,6 +32,7 @@ import { actionable, childrenOf, pathTo, progress, summarize, waitingNodes } fro
 import { type BrainId, ROOT, type StartMode, type Tree, type TreeNode } from '../model/types.js';
 import { loadSettings } from '../settings.js';
 import { accessOf, fullAccess } from './access.js';
+import { skillStates } from './skills.js';
 
 export interface SessionPlan {
   /** The session's name: in Claude Code's `/resume`, agent view and the terminal title. */
@@ -144,10 +145,12 @@ function basePlan(tree: Tree, id: string, start: StartMode, brain: BrainId, hasT
   const mode: StartMode = start === 'goal' && (brain !== 'claude' || !node.doneWhen) ? 'do' : start;
   const plan: SessionPlan = {
     name: sessionName(tree, node),
-    system: contextText(tree, id),
+    system: contextText(tree, id, treeHelp(brain, tree.project.dir)),
     start: mode,
     ...fullAccess(brain, tree.project.dir),
   };
+  // The node, its criterion and its check are in the system context already: the first
+  // message only says what to do with them.
   const title = `«${node.title}» (${node.id})`;
   const check = node.check ? `\`${node.check}\`` : '';
   const self = selfCommand();
@@ -161,15 +164,15 @@ function basePlan(tree: Tree, id: string, start: StartMode, brain: BrainId, hasT
   if (mode === 'plan') {
     plan.prompt = pick({
       ru:
-        `Работаем над узлом ${title}. Изучи, что уже есть в коде и в журнале узла, и предложи план, ` +
+        `Работаем над узлом ${title}. Изучи код, сколько нужно, и предложи план, ` +
         (node.doneWhen
-          ? `как довести узел до критерия «${node.doneWhen}».`
-          : 'как его сделать. У узла нет критерия готовности — предложи его первым пунктом.') +
+          ? 'как довести узел до его критерия.'
+          : 'как его сделать. Критерия у узла нет — предложи его первым пунктом.') +
         ' Ничего не меняй, пока я не соглашусь с планом.',
       en:
-        `We are working on node ${title}. Look at what is already in the code and in the node's journal, and propose a plan ` +
+        `We are working on node ${title}. Look into the code as much as you need and propose a plan ` +
         (node.doneWhen
-          ? `to bring the node to its criterion «${node.doneWhen}».`
+          ? 'to bring the node to its criterion.'
           : 'to do it. The node has no "done when" yet — propose one as the first item.') +
         ' Change nothing until I agree with the plan.',
     });
@@ -177,32 +180,31 @@ function basePlan(tree: Tree, id: string, start: StartMode, brain: BrainId, hasT
   } else if (mode === 'do') {
     plan.prompt = pick({
       ru:
-        `Сделай узел ${title}.` +
+        `Сделай узел ${title}` +
         (node.doneWhen
-          ? ` Готово, когда: «${node.doneWhen}».`
-          : ' Критерия у узла нет — сначала сформулируй его и запиши.') +
-        (check ? ` Проверка: ${check}.` : '') +
-        ' Когда закончишь — проверь критерий, покажи доказательства, поставь узлу статус review и запиши итог в журнал.',
+          ? ' — доведи его до критерия и закончи доказательствами и статусом review.'
+          : '. Критерия у узла нет — сначала сформулируй его и согласуй со мной.'),
       en:
-        `Do node ${title}.` +
-        (node.doneWhen ? ` Done when: «${node.doneWhen}».` : ' The node has no criterion — write one down first.') +
-        (check ? ` Check: ${check}.` : '') +
-        ' When you finish, check the criterion, show the evidence, set the node to review and write a summary to its journal.',
+        `Do node ${title}` +
+        (node.doneWhen
+          ? ' — bring it to its criterion and finish with the evidence and status review.'
+          : '. The node has no criterion — write one first and agree it with me.'),
     });
   } else if (mode === 'goal') {
+    // /goal checks its condition on its own: the condition has to carry the criterion itself.
     plan.prompt = pick({
       ru:
         `/goal Узел ${title} выполнен: ${node.doneWhen}.` +
         (check
           ? ` Команда ${check} проходит, и её вывод показан в разговоре.`
           : ' Доказательство показано в разговоре.') +
-        ` Узлу поставлен статус review командой \`${self} set ${node.id} status=review\`, итог записан в журнал.`,
+        ` Работа закоммичена, итог и статус review записаны командой \`${self} log ${node.id} "…" --status review --commit HEAD\`.`,
       en:
         `/goal Node ${title} is done: ${node.doneWhen}.` +
         (check
           ? ` The command ${check} passes and its output is shown in the conversation.`
           : ' The evidence is shown in the conversation.') +
-        ` The node is set to review with \`${self} set ${node.id} status=review\`, and a summary is in its journal.`,
+        ` The work is committed, and the summary and status review are written with \`${self} log ${node.id} "…" --status review --commit HEAD\`.`,
     });
   }
   return plan;
@@ -211,9 +213,19 @@ function basePlan(tree: Tree, id: string, start: StartMode, brain: BrainId, hasT
 const TEXT = {
   ru: {
     heading: '# Ты работаешь над узлом дерева проекта',
-    intro: (title: string) =>
-      `Проект «${title}» ведётся деревом целей (treeyard). Дерево лежит в \`.tree/\`: ` +
-      'обзор всего дерева — `.tree/README.md`, каждый узел — `.tree/nodes/<id>.md`.',
+    intro: (title: string) => `Проект «${title}» ведётся деревом целей (treeyard) в \`.tree/\`.`,
+    howHeading: '## Работа с деревом',
+    skillHow:
+      'Как вести дерево — в скилле `treeyard`: загрузи его до первой команды. Всё, что напечатал бы `show` этого узла, — выше: заново его не читай.',
+    selfIs: (self: string) => `Команда treeyard здесь — \`${self}\`.`,
+    hard: (self: string, id: string, title: string) =>
+      `\`.tree/\` — только командами; закончил — после своего коммита \`${self} log ${id} "итог и доказательства" --status review --commit HEAD\`; «готово» — только по прямой просьбе человека; человеку узлы называй по названию («${title}»), id — только в командах.`,
+    hookOn: 'Git-хук стоит: коммиты этой сессии привязываются к узлу сами.',
+    noteShort: (self: string) => `Неудобство самого treeyard, а не задача проекта — \`${self} note "…"\`.`,
+    kidsShort: 'Открытых детей узла раздают отдельным сессиям — скилл `treeyard-coordinate`.',
+    journalMore: (shown: number, total: number, self: string, id: string) =>
+      `Последнее в журнале узла (${shown} из ${total}; раньше — \`${self} show ${id} --journal all\`):`,
+    noReread: 'Всё, что напечатал бы `show` этого узла, — выше: заново его не читай.',
     goal: 'Цель проекта',
     node: 'Твой узел',
     path: 'Путь',
@@ -283,9 +295,20 @@ const TEXT = {
   },
   en: {
     heading: '# You are working on a node of the project tree',
-    intro: (title: string) =>
-      `Project «${title}» is run as a goal tree (treeyard). The tree is in \`.tree/\`: ` +
-      'the whole tree at a glance — `.tree/README.md`, each node — `.tree/nodes/<id>.md`.',
+    intro: (title: string) => `Project «${title}» is run as a goal tree (treeyard) in \`.tree/\`.`,
+    howHeading: '## Working with the tree',
+    skillHow:
+      'How to keep the tree is in the `treeyard` skill: load it before the first command. Everything `show` would print for this node is above: do not read it again.',
+    selfIs: (self: string) => `The treeyard command here is \`${self}\`.`,
+    hard: (self: string, id: string, title: string) =>
+      `\`.tree/\` — by commands only; finished — after your own commit \`${self} log ${id} "summary and evidence" --status review --commit HEAD\`; "done" only when the person asks directly; name nodes to the person by title («${title}»), ids go in commands only.`,
+    hookOn: "The git hook is in place: this session's commits attach to the node by themselves.",
+    noteShort: (self: string) =>
+      `Something in treeyard itself gets in the way, not a project task — \`${self} note "…"\`.`,
+    kidsShort: "The node's open children are handed to separate sessions — the `treeyard-coordinate` skill.",
+    journalMore: (shown: number, total: number, self: string, id: string) =>
+      `Latest in the node journal (${shown} of ${total}; older — \`${self} show ${id} --journal all\`):`,
+    noReread: 'Everything `show` would print for this node is above: do not read it again.',
     goal: 'Project goal',
     node: 'Your node',
     path: 'Path',
@@ -357,8 +380,27 @@ const TEXT = {
   },
 };
 
-export function contextText(tree: Tree, id: string): string {
-  if (id === ROOT) return projectContext(tree);
+/**
+ * Where a session learns how to keep the tree. `skill` — its CLI has the `treeyard` skill, so
+ * the context only points there: a second copy of the rules costs every session and drifts
+ * from the first. `commands` — no skill to point to (OpenCode, a skill not installed): the
+ * command list stays. `none` — a one-off job that answers in JSON and never touches the tree.
+ */
+export type TreeHelp = 'skill' | 'commands' | 'none';
+
+export function treeHelp(brain: BrainId, project: string, env: NodeJS.ProcessEnv = process.env): TreeHelp {
+  // An outdated copy still teaches the tree; a missing one would leave the session without rules.
+  const has = skillStates(project, env).some(
+    (state) =>
+      state.skill === 'treeyard' &&
+      state.brain === brain &&
+      (state.state === 'installed' || state.state === 'outdated'),
+  );
+  return has ? 'skill' : 'commands';
+}
+
+export function contextText(tree: Tree, id: string, help: TreeHelp = 'commands'): string {
+  if (id === ROOT) return projectContext(tree, help);
   const node = tree.nodes.get(id);
   if (!node) throw new Error(t('нет узла {id}', { id }));
   const L = pick(TEXT);
@@ -395,8 +437,12 @@ export function contextText(tree: Tree, id: string): string {
       lines.push(`- \`${path}\`${image.note ? ` — ${image.note}` : ''}`);
     }
   }
-  const journal = journalEntries(node.body).slice(-6);
-  if (journal.length > 0) lines.push('', L.journal, ...journal.map((line) => `- ${line}`));
+  const entries = journalEntries(node.body);
+  const journal = entries.slice(-6);
+  // Saying what is left out is what spares a `show` of the node "just in case".
+  const journalTitle =
+    entries.length > journal.length ? L.journalMore(journal.length, entries.length, self, node.id) : L.journal;
+  if (journal.length > 0) lines.push('', journalTitle, ...journal.map((line) => `- ${line}`));
   lines.push('');
 
   const above = path.slice(0, -1).reverse();
@@ -425,8 +471,23 @@ export function contextText(tree: Tree, id: string): string {
   const rules = project.body.trim();
   if (rules) lines.push(L.rules, '', clip(rules, 6000), '');
 
+  if (help === 'none') return lines.join('\n').trimEnd();
+  const openKids = kids.some((kid) => kid.status !== 'done' && kid.status !== 'dropped');
+  if (help === 'skill') {
+    // Only what the skill cannot know: this session's facts, plus the few rules whose breach
+    // cannot be undone, for a session that skips the skill anyway.
+    lines.push(L.howHeading, '', L.skillHow);
+    if (self !== 'treeyard') lines.push(L.selfIs(self));
+    lines.push(`- ${L.hard(self, node.id, node.title)}`);
+    if (hookInstalled(project.dir)) lines.push(`- ${L.hookOn}`);
+    if (openKids) lines.push(`- ${L.kidsShort}`);
+    if (loadSettings().notes) lines.push(`- ${L.noteShort(self)}`);
+    lines.push(`- ${L.helper(quote(project.dir), node.id)}`);
+    return lines.join('\n');
+  }
+
   lines.push(L.commands, '');
-  lines.push(`${L.command} \`${self}\`.`);
+  lines.push(`${L.command} \`${self}\`. ${L.noReread}`);
   lines.push(`- \`${self} show ${node.id} --brief\` — ${L.show}; \`${self} show\` — ${L.showAll}`);
   lines.push(`- \`${self} show --status review,idea --under <id>\` — ${L.showStatus}`);
   lines.push(`- \`${self} find "${L.findWhat}"\` — ${L.find}`);
@@ -445,7 +506,7 @@ export function contextText(tree: Tree, id: string): string {
   if (hookInstalled(project.dir)) lines.push(`- \`${self} diff ${node.id} --add <ref>\` — ${L.diffAuto}`);
   else lines.push(`- \`${self} diff ${node.id} --add HEAD\` — ${L.diffWhat}`);
   // Only where work is handed out: a leaf would pay for the line in every session.
-  if (kids.some((kid) => kid.status !== 'done' && kid.status !== 'dropped')) {
+  if (openKids) {
     lines.push(
       `- \`${self} open <id> [<id>…] --pane --task "…" [--brain <cli>] [--model …] [--effort …]\` — ${L.coordinator}`,
     );
@@ -487,7 +548,7 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
   const name = `${tree.project.title} · ${ROOT_START_LABEL[mode]}`;
   const plan: SessionPlan = {
     name: name.length > 64 ? `${name.slice(0, 63)}…` : name,
-    system: projectContext(tree),
+    system: projectContext(tree, treeHelp(brain, tree.project.dir)),
     start: mode,
     ...fullAccess(brain, tree.project.dir),
   };
@@ -501,7 +562,7 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
   if (mode === 'plan') {
     plan.prompt = pick({
       ru:
-        `Проведи ревью всего дерева проекта «${tree.project.title}». Пройди узлы (\`${selfCommand()} show <id> --brief\`, файлы .tree/nodes/), ` +
+        `Проведи ревью всего дерева проекта «${tree.project.title}». Пройди узлы (дерево с критериями — в контексте, подробности — \`${selfCommand()} show <id…> --brief\`), ` +
         'загляни в код и git log, сколько нужно, и найди, что в дереве криво: узлы без «готово, когда» или с критерием, ' +
         'который нельзя увидеть или запустить; переростки, которые пора разбить; названия-абзацы (длиннее 60 символов или с деталями вместо ' +
         'сути) — сократи до 2–6 слов, подробности в описание: `set <id> title="…" note="…"` (note заменяет описание целиком — не потеряй старое); ' +
@@ -515,7 +576,7 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
         'Потом находки по важности — у каждой команда treeyard, которая её исправит. Ничего не меняй, пока я не соглашусь; ' +
         'после согласия выполни команды и покажи, что вышло.',
       en:
-        `Review the whole tree of project «${tree.project.title}». Go through the nodes (\`${selfCommand()} show <id> --brief\`, the files in .tree/nodes/), ` +
+        `Review the whole tree of project «${tree.project.title}». Go through the nodes (the tree with its criteria is in the context, details — \`${selfCommand()} show <id…> --brief\`), ` +
         'look into the code and git log as much as you need, and find what is crooked in the tree: nodes without "done when" or with ' +
         'a criterion nobody can see or run; nodes grown too big to be one session; paragraph titles (over 60 characters, or details instead of ' +
         'the gist) — cut to 2–6 words, details into the description: `set <id> title="…" note="…"` (note replaces the whole description — keep the old text); ' +
@@ -549,6 +610,8 @@ const ROOT_TEXT = {
     ],
     doneRule: (self: string) =>
       `Статус done ставит человек. Если он в этом разговоре прямо просит закрыть узлы — \`${self} set <id> status=done --as ты\`: решение его, ты исполняешь. Без такой просьбы — только review.`,
+    skillHow:
+      'Как вести дерево — в скилле `treeyard`, как раздавать узлы сессиям — в `treeyard-coordinate`: загрузи нужный до первой команды. Дерево выше — то, что напечатал бы `show`.',
     tree: '## Дерево сейчас',
     tally: (s: ReturnType<typeof summarize>) =>
       `Готово ${s.done} из ${s.total} · в работе ${s.active} · на проверке ${s.review} · ждут ${s.waiting} · идей ${s.ideas}`,
@@ -621,6 +684,8 @@ const ROOT_TEXT = {
     ],
     doneRule: (self: string) =>
       `Status done is set by a person. If they ask you right in this conversation to close nodes — \`${self} set <id> status=done --as you\`: the decision is theirs, you carry it out. Without such a request — review only.`,
+    skillHow:
+      'How to keep the tree is in the `treeyard` skill, how to hand nodes to sessions — in `treeyard-coordinate`: load the one you need before the first command. The tree above is what `show` would print.',
     tree: '## The tree now',
     tally: (s: ReturnType<typeof summarize>) =>
       `Done ${s.done} of ${s.total} · in progress ${s.active} · in review ${s.review} · waiting ${s.waiting} · ideas ${s.ideas}`,
@@ -685,7 +750,7 @@ const ROOT_TEXT = {
 };
 
 /** What a session from the root gets: the whole tree, what moves and what stands, the rules, the commands. */
-export function projectContext(tree: Tree): string {
+export function projectContext(tree: Tree, help: TreeHelp = 'commands'): string {
   const L = pick(ROOT_TEXT);
   const T = pick(TEXT);
   const { project } = tree;
@@ -823,6 +888,17 @@ export function projectContext(tree: Tree): string {
   const rules = project.body.trim();
   if (rules) lines.push(L.rules, '', clip(rules, 6000), '');
 
+  if (help === 'none') return lines.join('\n').trimEnd();
+  if (help === 'skill') {
+    // The done rule is already in «Your role»; the rest is the session's own facts.
+    lines.push(T.howHeading, '', L.skillHow);
+    if (self !== 'treeyard') lines.push(T.selfIs(self));
+    lines.push(`- ${T.names()}`);
+    if (loadSettings().notes) lines.push(`- ${T.noteShort(self)}`);
+    lines.push(`- ${T.helper(quote(project.dir))}`);
+    return lines.join('\n');
+  }
+
   lines.push(L.commands, '');
   lines.push(`${L.command} \`${self}\`.`);
   lines.push(`- \`${self} show\` — ${L.show}`);
@@ -841,7 +917,6 @@ export function projectContext(tree: Tree): string {
   if (loadSettings().notes) lines.push(`- \`${self} note "${T.note}"\` — ${T.noteWhat}`);
   lines.push(`- ${T.names()}`);
   lines.push(`- ${T.helper(quote(project.dir))}`);
-  lines.push(`- ${L.doneRule(self)}`);
   return lines.join('\n');
 }
 

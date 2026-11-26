@@ -216,11 +216,11 @@ function projectBody(template: Template, vars: Record<string, string>): string {
   const common = commonText();
   const method = fill(template.method, vars);
   const rules = fill(template.rules, vars);
-  // The template's own rules go under the shared rules for agents.
+  // The template's own rules go under the shared rules for agents, after the line that sends to the skill.
   const withRules = rules
     ? common.replace(
-        /(## (?:Правила для агентов|Rules for agents)\n\n(?:- .*\n)+)/,
-        (section) => `${section}${rules}\n`,
+        /(## (?:Правила для агентов|Rules for agents)\n\n(?:.+\n)+)/,
+        (section) => `${section}\n${rules}\n`,
       )
     : common;
   return `${t('## Метод: {name}', { name: template.name })}\n\n${method}\n\n${withRules}\n`;

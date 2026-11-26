@@ -18,9 +18,6 @@ method: |
   When a direction is blocked by something outside, its node is "waiting" with a reason and a condition to come back, and work goes on in the others.
   The "Now" tab shows everything you can do right now, across all directions at once.
   Once a week — go through "Waiting": has the condition to come back happened?
-rules: |
-  - Before you start, check whether the node or its direction waits for something outside.
-  - If a task is blocked by something outside, do not work around it with a hack: set "waiting" and say what is needed from a person.
 nodes:
   - title: Product
     who: agent
