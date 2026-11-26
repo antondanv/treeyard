@@ -474,6 +474,75 @@ function launchItem(
   };
 }
 
+/**
+ * The launch section of a menu: one item per CLI — the one launched last on top with all its
+ * settings, the others with their own last launch or the defaults — and «Настроить запуск…».
+ * The node's menu and the agent menu (`c`) both show it, so the two cannot drift apart.
+ */
+export function launchItems(launches: LaunchEntry[], width: number): MenuItem[] {
+  // The frame, the cursor and the hotkey take 8 columns of the menu's width.
+  const room = width - 8;
+  const items = launches.map(({ options, remembered }, index) => {
+    const { brain } = options;
+    const hint =
+      index === 0 && remembered ? t('как в прошлый раз') : remembered ? t('его последний запуск') : t('по умолчанию');
+    return launchItem(
+      `new:${brain}`,
+      BRAIN_HOTKEY[brain],
+      BRAIN_LABEL[brain],
+      launchSummary(options),
+      hint,
+      options.start,
+      room,
+      index === 0 ? { section: t('Новая сессия') } : {},
+    );
+  });
+  items.push({
+    key: 'configure',
+    hotkey: 'o',
+    label: t('⚙ Настроить запуск…'),
+    hint: t('мозг, модель, усилие, как начать, панель, терминал или фон, worktree — и он станет последним запуском'),
+  });
+  return items;
+}
+
+/** What picking an item of `launchItems` means; undefined for the other items. */
+export function launchPick(key: string, launches: LaunchEntry[]): SessionChoice | undefined {
+  if (key === 'configure') return { kind: 'configure' };
+  if (!key.startsWith('new:')) return undefined;
+  const entry = launches.find((launch) => launch.options.brain === key.slice('new:'.length));
+  return entry ? { kind: 'new', options: entry.options } : undefined;
+}
+
+/** `c` on a node: which agent starts the session — the launch section of the node's menu, by itself. */
+export function AgentMenu(props: {
+  node: TreeNode;
+  width: number;
+  launches: LaunchEntry[];
+  onChoose: (choice: SessionChoice) => void;
+  onCancel: () => void;
+}) {
+  const items = launchItems(props.launches, props.width);
+  return (
+    <Frame
+      title={t('Агент · {title}', { title: props.node.title })}
+      width={props.width}
+      footer={[{ key: '⏎', label: t('выбрать') }, { label: t('буква — сразу') }, { key: 'esc', label: t('закрыть') }]}
+      color={C.agent}
+    >
+      <Menu
+        items={items}
+        active
+        onPick={(key) => {
+          const choice = launchPick(key, props.launches);
+          if (choice) props.onChoose(choice);
+        }}
+        onCancel={props.onCancel}
+      />
+    </Frame>
+  );
+}
+
 export function NodeMenu(props: {
   node: TreeNode;
   width: number;
@@ -490,32 +559,8 @@ export function NodeMenu(props: {
 }) {
   const { node, launches } = props;
   const items: MenuItem[] = sessionItems(node, props, t('Сессии узла'));
-  // The frame, the cursor and the hotkey take 8 columns of the menu's width.
-  const room = props.width - 8;
-  launches.forEach(({ options, remembered }, index) => {
-    const { brain } = options;
-    const hint =
-      index === 0 && remembered ? t('как в прошлый раз') : remembered ? t('его последний запуск') : t('по умолчанию');
-    items.push(
-      launchItem(
-        `new:${brain}`,
-        BRAIN_HOTKEY[brain],
-        BRAIN_LABEL[brain],
-        launchSummary(options),
-        hint,
-        options.start,
-        room,
-        index === 0 ? { section: t('Новая сессия') } : {},
-      ),
-    );
-  });
   items.push(
-    {
-      key: 'configure',
-      hotkey: 'o',
-      label: t('⚙ Настроить запуск…'),
-      hint: t('мозг, модель, усилие, как начать, панель, терминал или фон, worktree — и он станет последним запуском'),
-    },
+    ...launchItems(launches, props.width),
     {
       key: 'split',
       hotkey: 's',
@@ -564,7 +609,6 @@ export function NodeMenu(props: {
   );
   const pick = (key: string) => {
     if (
-      key === 'configure' ||
       key === 'split' ||
       key === 'criterion' ||
       key === 'check' ||
@@ -580,9 +624,8 @@ export function NodeMenu(props: {
       if (choice) props.onChoose(choice);
       return;
     }
-    const brain = key.split(':')[1] as BrainId;
-    const entry = launches.find((launch) => launch.options.brain === brain);
-    if (entry) props.onChoose({ kind: 'new', options: entry.options });
+    const choice = launchPick(key, launches);
+    if (choice) props.onChoose(choice);
   };
   return (
     <Frame
@@ -1198,7 +1241,7 @@ const help = (): [string, [string, string][]][] => [
     t('Агенты'),
     [
       ['⏎', t('сессии, агент, проверка')],
-      ['c', t('Claude Code по узлу — как в прошлый раз')],
+      ['c', t('агент: меню запуска, ⏎ — как в прошлый раз')],
       ['S', t('агент разбивает узел на шаги')],
       ['t', t('запустить проверку узла')],
       ['⏎ p', t('что получит агент')],
