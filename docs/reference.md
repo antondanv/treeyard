@@ -138,7 +138,9 @@ after «by», «until», «before», «deadline», «до», «к» in the title
 such as «28.08 Review» is not a deadline; a milestone is a node whose title starts with
 «Milestone» or «Веха»); waiting nodes whose date in «come back when» has passed (there a date
 counts without a word before it; a date without a year falls after the day the node went to
-waiting). A review gives
+waiting). What to look for and how to report it is `references/tree-order.md` of the
+`treeyard` skill — the same steps when you ask a plain `claude` or `codex` for a review; a CLI
+without the skill (OpenCode) gets the checklist in the first message. A review gives
 its findings and `treeyard` commands first, and changes only after you agree. In a
 conversation the first message is yours: ask about the status, open or close nodes. The
 project's sessions are kept in `.tree/tree.md`, shown in the root's menu and in the

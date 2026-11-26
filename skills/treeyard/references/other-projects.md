@@ -2,7 +2,8 @@
 
 ## Another project's tree
 
-The commands take `--project <folder>`, relative to this project:
+The commands take `--project <folder>`, relative to this project. Where the other project lies
+— `treeyard projects`: the folders with a tree on this machine, freshest first.
 
 - `treeyard show --project ../X` — its open tree; `treeyard show <id> --project ../X --brief`
 - `treeyard log <id> "…" --project ../X` — a journal entry there

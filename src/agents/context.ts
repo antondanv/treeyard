@@ -546,9 +546,10 @@ export const ROOT_START_HINT: Record<StartMode, string> = labels(() => ({
 function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = false): SessionPlan {
   const mode = rootStart(start);
   const name = `${tree.project.title} · ${ROOT_START_LABEL[mode]}`;
+  const help = treeHelp(brain, tree.project.dir);
   const plan: SessionPlan = {
     name: name.length > 64 ? `${name.slice(0, 63)}…` : name,
-    system: projectContext(tree, treeHelp(brain, tree.project.dir)),
+    system: projectContext(tree, help),
     start: mode,
     ...fullAccess(brain, tree.project.dir),
   };
@@ -559,7 +560,14 @@ function projectPlan(tree: Tree, start: StartMode, brain: BrainId, hasTask = fal
       en: '\n\nThis is a project conversation. Wait for my question; until then do not start a review or run commands. You may briefly say you are ready to discuss the project.',
     });
   }
-  if (mode === 'plan') {
+  if (mode === 'plan' && help === 'skill') {
+    // How to review is the skill's reference; the message only asks for it and holds the edits back.
+    plan.prompt = pick({
+      ru: `Проведи ревью всего дерева проекта «${tree.project.title}» по справке \`references/tree-order.md\` скилла \`treeyard\`. Ничего не меняй, пока я не соглашусь; после согласия выполни команды и покажи, что вышло.`,
+      en: `Review the whole tree of project «${tree.project.title}» following \`references/tree-order.md\` of the \`treeyard\` skill. Change nothing until I agree; after that run the commands and show what came of them.`,
+    });
+    if (planMode(brain)) plan.permissionMode = 'plan';
+  } else if (mode === 'plan') {
     plan.prompt = pick({
       ru:
         `Проведи ревью всего дерева проекта «${tree.project.title}». Пройди узлы (дерево с критериями — в контексте, подробности — \`${selfCommand()} show <id…> --brief\`), ` +
@@ -611,7 +619,7 @@ const ROOT_TEXT = {
     doneRule: (self: string) =>
       `Статус done ставит человек. Если он в этом разговоре прямо просит закрыть узлы — \`${self} set <id> status=done --as ты\`: решение его, ты исполняешь. Без такой просьбы — только review.`,
     skillHow:
-      'Как вести дерево — в скилле `treeyard`, как раздавать узлы сессиям — в `treeyard-coordinate`: загрузи нужный до первой команды. Дерево выше — то, что напечатал бы `show`.',
+      'Как вести дерево — в скилле `treeyard` (ревью и «где проект сейчас» — его справка `references/tree-order.md`), как раздавать узлы сессиям — в `treeyard-coordinate`: загрузи нужный до первой команды. Дерево выше — то, что напечатал бы `show`.',
     tree: '## Дерево сейчас',
     tally: (s: ReturnType<typeof summarize>) =>
       `Готово ${s.done} из ${s.total} · в работе ${s.active} · на проверке ${s.review} · ждут ${s.waiting} · идей ${s.ideas}`,
@@ -685,7 +693,7 @@ const ROOT_TEXT = {
     doneRule: (self: string) =>
       `Status done is set by a person. If they ask you right in this conversation to close nodes — \`${self} set <id> status=done --as you\`: the decision is theirs, you carry it out. Without such a request — review only.`,
     skillHow:
-      'How to keep the tree is in the `treeyard` skill, how to hand nodes to sessions — in `treeyard-coordinate`: load the one you need before the first command. The tree above is what `show` would print.',
+      'How to keep the tree is in the `treeyard` skill (a review and "where the project stands" — its `references/tree-order.md`), how to hand nodes to sessions — in `treeyard-coordinate`: load the one you need before the first command. The tree above is what `show` would print.',
     tree: '## The tree now',
     tally: (s: ReturnType<typeof summarize>) =>
       `Done ${s.done} of ${s.total} · in progress ${s.active} · in review ${s.review} · waiting ${s.waiting} · ideas ${s.ideas}`,

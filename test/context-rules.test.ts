@@ -149,7 +149,10 @@ describe('a session whose CLI has the treeyard skill', () => {
     addNode(tree, { title: 'Оплата картой' });
     const text = projectContext(tree, 'skill');
     expect(text).not.toMatch(/^## Команды дерева$/m);
-    expect(text).toContain('в скилле `treeyard`, как раздавать узлы сессиям — в `treeyard-coordinate`');
+    expect(text).toContain(
+      'в скилле `treeyard` (ревью и «где проект сейчас» — его справка `references/tree-order.md`)',
+    );
+    expect(text).toContain('как раздавать узлы сессиям — в `treeyard-coordinate`');
     expect(text.split('--as ты')).toHaveLength(2);
   });
 

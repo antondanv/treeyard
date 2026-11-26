@@ -55,7 +55,7 @@ describe('agent context asks for a short title', () => {
     const text = projectContext(tree);
     expect(text).toContain('add "Короткое название" --parent <id> --done-when "…" --note "…"');
     expect(text).toContain('суть в 2–6 словах, до 60 символов');
-    const review = sessionPlan(tree, ROOT, 'plan', 'claude').prompt!;
+    const review = sessionPlan(tree, ROOT, 'plan', 'opencode').prompt!;
     expect(review).toContain('названия-абзацы');
     expect(review).toContain('сократи до 2–6 слов');
     expect(review).toContain('set <id> title="…" note="…"');
@@ -64,7 +64,7 @@ describe('agent context asks for a short title', () => {
   it('a review of the root in English', () => {
     setLang('en');
     const tree = emptyTree();
-    const review = sessionPlan(tree, ROOT, 'plan', 'claude').prompt!;
+    const review = sessionPlan(tree, ROOT, 'plan', 'opencode').prompt!;
     expect(review).toContain('paragraph titles');
     expect(review).toContain('cut to 2–6 words');
   });

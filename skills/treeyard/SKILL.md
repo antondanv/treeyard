@@ -58,8 +58,9 @@ the context says older entries are left out and you need them. Go to the work.
    - none fits, a small task (a question, a typo, a README line) → do it without a node and
      tell the person it stays outside the tree.
 
-**Before changing anything:** if the node or its branch is `waiting`, somebody else is on it
-(`active`, a live session in `show`), or the criterion is unclear — say so first. Then
+**Before changing anything:** if the node or its branch is `waiting`, a node it `needs` is not
+yet in review or done, somebody else is on it (`active`, a live session in `show`), or the
+criterion is unclear — say so first. Then
 `treeyard set <id> status=active` (a session opened from a node already has it).
 
 **Stick to the node.** The criterion is the scope; the path from the root is the why.
@@ -170,6 +171,21 @@ treeyard add "Short title" --parent <id> --status idea --note "what, where, why"
 - An inconvenience of treeyard itself rather than of the project → `treeyard note "…"`
   (works once the person has set where notes go).
 
+## Dependencies between nodes
+
+A node that cannot start before another one is done — the client before its API, the code
+before the migration it needs — gets a link, not a sentence in its note:
+`treeyard set <id> needs=<other id>`. `needs+=<id>` adds one link and keeps the others,
+`needs-=<id>` removes one, `needs=` replaces the whole list (it prints what was there). New
+nodes with their links in one call: `add --parent <id> --from-json -`, where a `key` names a
+node of the batch for the `needs` of the others.
+
+- `show` prints the links both ways: «waits for» and «needed for», with their statuses.
+- `treeyard queue` starts a node only once what it needs is in review or done.
+- Only the order among siblings, with nothing to wait for → `set <id> after=<sibling>`, not
+  `needs`.
+- A node of another project → `needs=../X#<id>` (see «Another project»).
+
 ## Talking to the person
 
 Answer in the person's language. Name nodes by their exact title in quotes; a long title
@@ -233,7 +249,10 @@ While working, notice what is crooked around your node — an oversized node, a 
 criterion, a parent whose children are all done, a duplicate, a stale `active` or
 `waiting`, a long title — and point it out by title with the command that fixes it. Run
 such a command after the person agrees; nodes you added in this session you may fix freely.
-What to look for and the commands — see [references/tree-order.md](references/tree-order.md).
+
+Asked for a review of the tree, or where the project stands and where it stopped — follow
+[references/tree-order.md](references/tree-order.md): what to read, what to look for and the
+command for each finding.
 
 ## Commands
 
@@ -243,6 +262,7 @@ What to look for and the commands — see [references/tree-order.md](references/
 - `treeyard set <id> status=active` · `status=todo`; several ids — the same to each
 - `treeyard set <id> status=waiting waiting="…" until="…"` — blocked
 - `treeyard set <id> title="…" done_when="…" note="…" parent=<id> after=<id>` — change a node
+- `treeyard set <id> needs+=<id>` · `needs-=<id>` · `needs=<id>,<id>` — dependencies
 - `treeyard log <id> "…"` — a journal entry; `--status review --commit HEAD` — finish;
   `--fix "…"` — correct your last entry
 - `treeyard add "Title" --parent <id> --status idea --note "…"` — a side idea

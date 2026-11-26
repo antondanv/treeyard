@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { projectContext, sessionPlan } from '../src/agents/context.js';
 import { uncommittedPaths } from '../src/git.js';
@@ -19,7 +19,7 @@ import {
   waitingSince,
 } from '../src/model/review.js';
 import { ROOT, type Status, type Tree } from '../src/model/types.js';
-import { emptyTree } from './helpers.js';
+import { emptyTree, tempDir } from './helpers.js';
 
 beforeEach(() => setLang('ru'));
 
@@ -288,9 +288,10 @@ describe('the root review context', () => {
       expect(text).not.toContain(heading);
   });
 
+  // OpenCode has no skills: its review prompt carries the whole checklist.
   it('the review prompt names the checks and the sections, in both languages', () => {
     const tree = emptyTree();
-    const ru = sessionPlan(tree, ROOT, 'plan', 'claude').prompt!;
+    const ru = sessionPlan(tree, ROOT, 'plan', 'opencode').prompt!;
     expect(ru).toContain('родителей и вехи, у которых все дети готовы');
     expect(ru).toContain('открытые узлы под закрытыми ветками');
     expect(ru).toContain('«на проверке», а код не закоммичен');
@@ -298,7 +299,7 @@ describe('the root review context', () => {
     expect(ru).toContain('«Сроки прошли»');
     expect(ru).toContain('«Ждёт, а дата возврата прошла»');
     setLang('en');
-    const en = sessionPlan(tree, ROOT, 'plan', 'claude').prompt!;
+    const en = sessionPlan(tree, ROOT, 'plan', 'opencode').prompt!;
     expect(en).toContain('parents and milestones whose children are all done');
     expect(en).toContain('open nodes under closed branches');
     expect(en).toContain('"in review" with the code not committed');
@@ -360,5 +361,23 @@ describe('in review with uncommitted code', () => {
     node(tree, 'На проверке', 'review');
     expect(uncommittedPaths(tree.project.dir)).toEqual([]);
     expect(projectContext(tree)).not.toContain('не закоммичен');
+  });
+
+  describe('with the treeyard skill at hand', () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    it('the review prompt sends to the skill’s reference instead of retelling it', () => {
+      const claude = tempDir('treeyard-claude-home-');
+      mkdirSync(join(claude, 'skills', 'treeyard'), { recursive: true });
+      writeFileSync(join(claude, 'skills', 'treeyard', 'SKILL.md'), '---\nname: treeyard\n---\n');
+      vi.stubEnv('CLAUDE_CONFIG_DIR', claude);
+      const tree = emptyTree();
+      const plan = sessionPlan(tree, ROOT, 'plan', 'claude');
+      expect(plan.prompt).toBe(
+        'Проведи ревью всего дерева проекта «Тест» по справке `references/tree-order.md` скилла `treeyard`. Ничего не меняй, пока я не соглашусь; после согласия выполни команды и покажи, что вышло.',
+      );
+      expect(plan.permissionMode).toBe('plan');
+      expect(plan.system).toContain('его справка `references/tree-order.md`');
+    });
   });
 });
