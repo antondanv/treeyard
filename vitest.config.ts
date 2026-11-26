@@ -8,6 +8,8 @@ export default defineConfig({
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     setupFiles: ['test/setup.ts'],
     testTimeout: 20_000,
+    // Integration suites open extra Node processes and tmux clients beyond their own workers.
+    ...(process.env.CI ? { maxWorkers: 3 } : {}),
     // Never the person's own ~/.treeyard: tests see the defaults. Model lists come
     // from Brainyard's built-in ones, not from the Codex, Antigravity and OpenCode installed here.
     // Russian, the source language, for the CLIs the tests spawn too (see test/setup.ts).

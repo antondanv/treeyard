@@ -123,6 +123,9 @@ describe.skipIf(!hasTmux)('planting in a real terminal from an empty folder', ()
           await term('send-keys', '-t', `=${name}:`, 'F');
           await until(async () => (await screen(name)).includes('⌃Q — обратно к дереву'));
           expect(existsSync(join(dir, '.tree'))).toBe(false);
+          // Let the nested tmux client settle after drawing its first status line.
+          await until(async () => (await listPanes({ socket: panes })).some((pane) => pane.attached));
+          await pause(150);
           await term('send-keys', '-t', `=${name}:`, 'C-q');
           await until(async () => (await screen(name)).includes('Разговор справа'));
           await pause(100);
