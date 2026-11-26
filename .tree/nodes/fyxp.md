@@ -3,7 +3,7 @@ id: fyxp
 title: Правила совместной работы
 parent: 9xem
 order: 100
-status: review
+status: done
 done_when: "CONTRIBUTING.md и CONTRIBUTING.ru.md: как собрать и проверить проект (typecheck, test, lint, build), ветки и Conventional Commits, как оформить PR и issue, нести ли в PR правки .tree; шаблоны PR и issue в .github; README ссылается на правила"
 commits:
   - 73d944b2d985df50383a682fc60e20f7e6ea6a4b
@@ -18,7 +18,8 @@ sessions:
     pane: claude-23c33be9
     dir: /Users/antondanilov/Projects/Treeyard.worktrees/fyxp
 created: 2026-11-16
-updated: 2026-11-26T00:57:20+03:00
+updated: 2026-11-26T10:27:51+03:00
+closed: 2026-11-26
 ---
 
 Человек 16.11.2026: в релиз 0.2.0 — правила совместной работы, оформление PR и т. д. Сейчас в репозитории нет ни CONTRIBUTING, ни шаблонов PR/issue.
@@ -33,3 +34,4 @@ updated: 2026-11-26T00:57:20+03:00
 - 2026-11-26 00:55 · claude · в работе → на проверке
 - 2026-11-26 00:57 · агент · привязан коммит 6b9783a522cdcf2641afc013ccdc684c7a601f4b
 - 2026-11-26 00:57 · агент · Принято (координатор): влит в main; CONTRIBUTING.md и CONTRIBUTING.ru.md (одна структура: с чего начать, сборка, проверки, код, ветки и Conventional Commits, PR, issue, что делать с .tree/), шаблоны PR и issue в .github/; факты сверены (скрипты test:watch и format есть, CI — ubuntu и macos × Node 22 и 24). Ссылку на правила в разделе «Разработка» обоих README добавил координатор. test/docs и npm-readme — 16/16. Осталось: ничего.
+- 2026-11-26 10:27 · ты · на проверке → готово

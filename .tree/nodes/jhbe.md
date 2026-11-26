@@ -3,7 +3,7 @@ id: jhbe
 title: Имя панели в open и sessions
 parent: y5ss
 order: 30
-status: review
+status: done
 done_when: treeyard open <id> --pane --json печатает id сессии и имя панели tmux; у сессий в treeyard sessions --json есть поле pane; тесты; справка и docs RU/EN
 commits:
   - 0ea21f74c853154c06de952386508d16592345eb
@@ -17,7 +17,8 @@ sessions:
     mode: pane
     pane: claude-0a46abdb
 created: 2026-11-11
-updated: 2026-11-12T14:37:49+03:00
+updated: 2026-11-12T14:38:15+03:00
+closed: 2026-11-12
 ---
 
 Чтобы веб знал, к какой панели tmux -L brainyard подключать терминал в браузере.
@@ -32,3 +33,4 @@ updated: 2026-11-12T14:37:49+03:00
 - 2026-11-12 14:33 · агент · в работе → на проверке
 - 2026-11-12 14:37 · агент · привязан коммит 4fd79926ad6a384cb1be33853a406c20d00104d5
 - 2026-11-12 14:37 · агент · Живые тесты и для Codex, и для Antigravity (test/pane-json-tmux.test.ts, заменители test/fixtures/codex-cli.mjs и agy-cli.mjs пишут rollout в CODEX_HOME и history.jsonl в HOME теста, как настоящие CLI; у каждого случая свой сервер tmux): open --brain codex|antigravity --pane --json → id null и панель этого CLI; sessions --json находит сессию по панели (id с экрана заменителя), узел, offTree false; текст — ▣ <панель>; дерево остаётся с pane:…; после закрытия сервера pane null. Теперь вживую проверены все четыре CLI (Claude — panes-tmux, OpenCode — opencode-tmux). Проверка: typecheck, npm test 566/566, lint, build.
+- 2026-11-12 14:38 · ты · на проверке → готово

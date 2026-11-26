@@ -2,7 +2,7 @@
 id: nzag
 title: "Окно «Документы»: поиск по тексту всех .md проекта"
 parent: b2qk
-order: 250
+order: 170
 status: idea
 created: 2026-10-05
 updated: 2026-11-08T12:20:07+03:00

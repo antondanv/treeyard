@@ -3,7 +3,7 @@ id: zwwp
 title: Доступ Codex к treeyard и git
 parent: 5byq
 order: 20
-status: review
+status: done
 done_when: "treeyard один раз спрашивает, как запускать Codex из дерева, как для Antigravity: «песочница + treeyard и git» (workspace-write с network_access и .git проекта в writable_roots, остальное из config.toml) или «как в config.toml»; выбор — в treeyard config и настройках TUI; treeyard status для Codex без доступа подсказывает строки config.toml; справка и docs/reference на обоих языках; живьём на пробном узле Codex в панели сам делает treeyard send и git commit"
 for:
   - .#8cbz
@@ -21,7 +21,8 @@ sessions:
     opened: 2026-11-23T23:06:46+03:00
     mode: background
 created: 2026-11-23
-updated: 2026-11-23T23:38:52+03:00
+updated: 2026-11-24T12:56:31+03:00
+closed: 2026-11-24
 ---
 
 Проба 23.11 (codex sandbox, Codex 0.170): по умолчанию сокет tmux и .git — Operation not permitted; с -c sandbox_workspace_write.network_access=true tmux доступен; с writable_roots=[<проект>/.git] запись в .git проходит; ~/.treeyard из песочницы не пишется — ящик держать в папке проекта.
@@ -43,3 +44,4 @@ updated: 2026-11-23T23:38:52+03:00
 - 2026-11-23 23:33 · агент · привязан коммит 417404c702570bcae157b65c65223f781fc7c1ea
 - 2026-11-23 23:34 · агент · Принято (координатор): ветка worktree-whimsical-percolating-widget влита в main (417404c, конфликт в send.ts — оставлен ящик писем, fullAccess(brain, dir) перенесён в deliver.ts); npm run typecheck, lint — чисто, npm test 826/826 на main, build. Только свои файлы, .tree/ не коммитился. Живая проверка (Codex в панели сам делает treeyard send и git commit) — в «Мультиагентной пробе на четырёх CLI»: нужен выбор человека codex_access.
 - 2026-11-23 23:38 · агент · привязан коммит f8433f4a45252a5798a2a81ecc44c02dc105e9e8
+- 2026-11-24 12:56 · ты · на проверке → готово

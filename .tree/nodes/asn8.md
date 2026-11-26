@@ -2,7 +2,7 @@
 id: asn8
 title: Токены узла и лимиты агентов в дереве (usage() Brainyard)
 parent: b2qk
-order: 130
+order: 110
 status: idea
 who: agent
 done_when: "В карточке узла и в treeyard show — токены (и $, если цена модели известна) по сессиям узла и сумма; в шапке TUI — лимиты Claude и Codex (5 ч и неделя) из usage() Brainyard без платных вызовов (live: false); перед запуском при лимите выше 90% окно запуска об этом говорит; на копии дерева видно на 130×36 и 100×30"

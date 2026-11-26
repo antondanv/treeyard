@@ -3,7 +3,7 @@ id: 6kay
 title: --json для open --bg
 parent: "7997"
 order: 70
-status: review
+status: done
 done_when: treeyard open a b c --bg --json печатает в stdout JSON [{node, brain, id, startedAt, warnings, error}] по строке на узел (один узел — объект, как у --pane); не вставший — с error; код 0/1; тесты, справка и docs RU/EN
 commits:
   - 0eb912f976f280d35a1087f346094a6405a7fa47
@@ -16,7 +16,8 @@ sessions:
     mode: pane
     pane: claude-0e95a97b
 created: 2026-11-17
-updated: 2026-11-17T12:03:06+03:00
+updated: 2026-11-17T12:03:50+03:00
+closed: 2026-11-17
 ---
 
 Машинный вывод treeyard open <id>… --bg --json: [{node, brain, id, startedAt, warnings, error}] — для программ и координаторов; сейчас --json только у --pane, а --bg печатает строки ✓/✗. Из узла ba3x (17.11.2026).
@@ -29,3 +30,4 @@ updated: 2026-11-17T12:03:06+03:00
 - 2026-11-17 12:02 · агент · привязан коммит 0eb912f976f280d35a1087f346094a6405a7fa47
 - 2026-11-17 12:03 · агент · open <id>… --bg --json: stdout — только JSON, один узел — объект, несколько — массив {node, brain, id, startedAt, warnings} (без pane); не вставший — {id:null, startedAt:null, error}, ✗ в stderr и код 1 как раньше; --json без --pane/--bg — по-прежнему ошибка (текст обновлён). Правки: src/cli/commands.ts (startedBackground, openInBackground), en.ts, справка, docs/reference RU/EN. Тесты в test/open-many.test.ts (+3: массив из трёх, один узел — объект, сбой среднего с error) через фикстуру фонового Claude. typecheck, lint, build — 0; npm test 636 passed. С настоящим Claude не гонял: ветка запуска та же, что проверена в ba3x. Осталось: ничего по критерию.
 - 2026-11-17 12:03 · агент · в работе → на проверке
+- 2026-11-17 12:03 · ты · на проверке → готово

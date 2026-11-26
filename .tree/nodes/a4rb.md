@@ -3,7 +3,7 @@ id: a4rb
 title: Stdin из медленного пайпа
 parent: y5ss
 order: 30
-status: review
+status: done
 done_when: "add --from-json -, import --from-json - и --task - (open, context) читают stdin потоком: (sleep 1; echo '[{\"title\":\"проба\"}]') | treeyard add --from-json - --parent <id> сажает узел без EAGAIN, так же context <id> --task -; тесты на поздний stdin для add и --task; readFileSync(0) в src/ не осталось; typecheck, test, lint, build зелёные"
 commits:
   - 9e6a34336cebbebebf133358a74807aa8d3f6929
@@ -16,7 +16,8 @@ sessions:
     mode: pane
     pane: claude-f8279855
 created: 2026-11-12
-updated: 2026-11-12T15:21:14+03:00
+updated: 2026-11-12T15:21:52+03:00
+closed: 2026-11-12
 ---
 
 add --from-json - и open --task - читают stdin через readFileSync(0): если пишущий ещё не успел записать (медленный пайп, программа-родитель), команда падает с «✗ EAGAIN: resource temporarily unavailable, read». Повтор: (sleep 1; echo '[{"title":"проба"}]') | treeyard add --from-json - --parent <id>. В rules --from - это уже решено потоковым чтением (textFrom в src/cli/commands.ts) — перевести на него и эти две команды, с тестом на поздний stdin как в test/root-doc.test.ts.
@@ -31,3 +32,4 @@ add --from-json - и open --task - читают stdin через readFileSync(0)
 - 2026-11-12 15:16 · агент · в работе → на проверке
 - 2026-11-12 15:20 · агент · привязан коммит 55c2f68eec990e78d33510eeb50d337d96209c71
 - 2026-11-12 15:21 · агент · убрана привязка коммита 55c2f68eec990e78d33510eeb50d337d96209c71
+- 2026-11-12 15:21 · ты · на проверке → готово

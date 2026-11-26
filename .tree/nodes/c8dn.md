@@ -2,7 +2,7 @@
 id: c8dn
 title: Экран панели по событиям tmux
 parent: b2qk
-order: 300
+order: 190
 status: idea
 created: 2026-11-22
 updated: 2026-11-22T11:42:54+03:00

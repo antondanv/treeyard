@@ -2,7 +2,7 @@
 id: 6hmk
 title: Посмотреть zellij и определить лучше ли он чем tmux для триярда
 parent: b2qk
-order: 90
+order: 50
 status: done
 created: 2026-10-03
 updated: 2026-11-23T16:47:28+03:00

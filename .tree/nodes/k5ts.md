@@ -2,8 +2,8 @@
 id: k5ts
 title: Скиллы ставятся сами
 parent: 9xem
-order: 40
-status: review
+order: 20
+status: done
 who: agent
 done_when: "В папке с деревом основные скиллы treeyard доступны агенту в любой сессии без ручного treeyard skills install: ставятся при init и запуске treeyard, обновляются с новой версией, выключаются настройкой; treeyard status показывает, где они стоят; проверено в Claude Code, Codex и Antigravity"
 commits:
@@ -17,7 +17,8 @@ sessions:
     mode: pane
     pane: claude-6df1d0e4
 created: 2026-11-08
-updated: 2026-11-22T12:46:38+03:00
+updated: 2026-11-22T12:51:11+03:00
+closed: 2026-11-22
 ---
 
 Человек 08.11.2026: есть дерево в проекте — есть и основные скиллы, автоматически. Куда ставить — в личные папки CLI или в папку проекта — решить в узле.
@@ -34,3 +35,4 @@ updated: 2026-11-22T12:46:38+03:00
 - 2026-11-22 12:46 · агент · картинка добавлена: 001.png — Настройки (,), 100×30: строка «Скиллы в CLI» — ставить сами / вручную
 - 2026-11-22 12:46 · агент · Решение: скиллы ставятся в личные папки CLI (~/.claude/skills, ~/.codex/skills, ~/.gemini/config/skills), не в проект: в репозитории нет копий, которые надо коммитить и держать в версии, а treeyard-init нужен и там, где дерева ещё нет. Копии, которые проект уже держит (.claude/skills, .agents/skills), обновляются, но не заводятся. Сделано (ac0244d): autoInstallSkills (src/agents/skills.ts) на init, запуске treeyard и любой команде в папке с деревом; status, skills и config ничего не пишут; ставит все три скилла папкой, подменяет атомарно; ссылку и папку без прав на запись не трогает; Antigravity — только по его папкам в ~/.gemini; о записи говорит строкой (в TUI — подсказкой); проверка стоит 0,7 мс. Настройка skills: treeyard config skills off|on, строка «Скиллы в CLI» в «,»; TREEYARD_SKILLS=off — на один запуск, в тестах. treeyard status и skills показывают, где стоят, и строку «ставятся и обновляются сами… / сами не ставятся». Справочник ru/en. Доказательства: npm test 720/720 (test/skills-auto.test.ts: init ставит во все три CLI, любая команда обновляет устаревший, status не пишет, skills off не ставит, ссылка цела, Gemini CLI ≠ Antigravity), typecheck, lint, build. Живая проверка на этой машине (скиллы в резерве): убрал 9 папок → treeyard init во временной папке → «скиллы treeyard 0.1.1 — в Claude Code, Codex, Antigravity», копии побайтно как в резерве. В папке с одним .tree/ обычные сессии: Claude Code 2.1.330 — init.skills [treeyard, treeyard-coordinate, treeyard-init], цитирует правило 2; Codex 0.170 — три скилла из ~/.codex/skills/…/SKILL.md, правило 2; Antigravity 1.5.14 — три скилла из ~/.gemini/config/skills/…, правило 2. Устаревшая копия в ~/.claude: status — «устарел», treeyard show — «в Claude Code», копия снова как выпущенная; в TUI (tmux, отдельный сокет) — подсказка «скиллы treeyard 0.1.1 — в Codex…». Снимок настроек — 001.png. Осталось: ничего.
 - 2026-11-22 12:46 · агент · в работе → на проверке
+- 2026-11-22 12:51 · ты · на проверке → готово
