@@ -53,6 +53,12 @@ a shorter form that it can't get wrong.
 
 ## The tree knows more, agents type less
 
+- **A node session's context is half as long.** It holds the node, the path, the neighbours,
+  the journal and the project's rules — everything `show` would print, so the agent no longer
+  reads its node again. How to keep the tree comes once, from the skill: the context points to
+  it and keeps only the session's own facts and the rules whose breach cannot be undone. Where
+  there is no skill (OpenCode) the context still lists the commands. «Rules for agents» in new
+  trees point to the skill too instead of retelling it.
 - The agents learn the tree by themselves. The `treeyard`, `treeyard-init` and
   `treeyard-coordinate` skills install into Claude Code, Codex and Antigravity, and each new
   version of treeyard updates them, so a plain `claude` or `codex` started in the project
@@ -130,11 +136,16 @@ the first run:
    it by hand: `treeyard config skills off`, then `treeyard skills install` when you want it.
 2. **The block in AGENTS.md is shorter now.** The TUI header says it is outdated: press `!`,
    or run `treeyard pointer`, and commit the change.
-3. **`.tree/.gitattributes` appears** with the first write to the tree (the merge driver for
+3. **The old «Rules for agents» go away.** Trees from 0.1 carry the template's rules in
+   `.tree/tree.md`, which the skill holds now and which disagree with it ("plan first",
+   `set status=review`). The TUI header says «the rules for agents are outdated»: `!` takes them
+   out with the block, from the shell — `treeyard rules --upgrade`. Your own lines and the
+   method's rules stay. Commit `.tree/tree.md`.
+4. **`.tree/.gitattributes` appears** with the first write to the tree (the merge driver for
    the overview). Commit it with the tree, for example with `treeyard commit`.
-4. **Optional:** `treeyard hook install` (commits attach to nodes by themselves) and
+5. **Optional:** `treeyard hook install` (commits attach to nodes by themselves) and
    `treeyard hook claude install` (or `codex`, `antigravity`, `opencode`) for messages during
    a turn. A running session may need a restart to load the hook.
-5. **Check:** `treeyard status` shows what is set up and what to fix.
+6. **Check:** `treeyard status` shows what is set up and what to fix.
 
 The full reference: [docs/reference.md](reference.md).
