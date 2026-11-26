@@ -258,7 +258,7 @@ describe('the node menu', () => {
     expect(at('▶ Claude Code · план · opus · low · в терминале')).toBeGreaterThan(at('▶ Antigravity'));
     expect(at('▶ Codex · план · в панели')).toBeGreaterThan(at('▶ Claude Code'));
     expect(at('▶ OpenCode')).toBeGreaterThan(at('▶ Codex'));
-    // The background is chosen in «⚙ Настроить запуск…», not by an item of its own.
+    // The background is chosen in «⚙ Set up the launch…», not by an item of its own.
     expect(lines.join('\n')).not.toContain('Claude Code в фоне');
   });
 
@@ -423,7 +423,7 @@ describe('in the whole TUI', () => {
     const frame = await snapshot(tree.project.dir, { columns: 100, rows: 30, keys: ['2', '\r'] });
     const lines = frame.split('\n');
     const at = (text: string) => lines.findIndex((line) => line.includes(text));
-    // A new project starts sessions with «делать»: the template writes it into tree.md.
+    // A new project starts sessions with «do»: the template writes it into tree.md.
     expect(at('▶ Claude Code · делать')).toBeGreaterThan(-1);
     expect(at('▶ Codex · делать')).toBeGreaterThan(at('▶ Claude Code'));
   });
@@ -481,7 +481,7 @@ describe('a session starts with «делать» unless the project says otherwi
     const cli = treeyardIn(tree.project.dir);
     expect((await cli('context', node.id)).stdout).toContain('# Первое сообщение (do)');
     expect((await cli('context', node.id, '--start', 'plan')).stdout).toContain('# Первое сообщение (plan)');
-    // The settings screen stands on «Как начинать сессию» (found on the screen, not counted) and explains «делать».
+    // The settings screen stands on «How sessions start» (found on the screen, not counted) and explains «do».
     const down = '\u001b[B';
     const rows = (await snapshot(tree.project.dir, { columns: 120, rows: 70, keys: [','] }))
       .split('\n')

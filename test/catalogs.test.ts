@@ -172,7 +172,7 @@ describe('models come from the CLI, not from typing', () => {
     const confirm = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['o', LEFT, '\r'] });
     expect(confirm).toContain('Запустить сессию?');
     expect(confirm).toContain('OpenCode · в этом терминале');
-    // The default start is «делать»: the first message tells the agent to do the node.
+    // The default start is «do»: the first message tells the agent to do the node.
     expect(confirm).toContain('Сделай узел');
   });
 
@@ -213,7 +213,7 @@ describe('a burst of keys lands where it was meant to', () => {
 
   it('the launch form: arrows after arrows, then Enter — and it asks before starting', async () => {
     const tree = sample();
-    // «Как начать» starts on «делать»: two steps to the right is «просто открыть».
+    // «How to start» starts on «do»: two steps to the right is «just open».
     const burst = `${DOWN}${DOWN}${RIGHT}${RIGHT}\r`;
     const frame = await snapshot(tree.project.dir, { columns: 110, rows: 34, keys: ['o', burst] });
     expect(frame).toContain('Запустить сессию?');

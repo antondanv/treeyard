@@ -117,7 +117,7 @@ export async function waitReply(dir: string, sent: MailItem, options: ReplyOptio
   }
 }
 
-/** A choice of a dialog, as its screen shows it: `❯ 2. зелёный`. */
+/** A choice of a dialog, as its screen shows it: `❯ 2. green`. */
 export interface DialogOption {
   n: number;
   label: string;
@@ -398,7 +398,7 @@ export interface PermissionResolved {
   option?: DialogOption;
   /** Which key confirmed the action. */
   key: 'enter' | 'escape';
-  /** What the session waited for (`approve Bash`, `доверие к папке`, …). */
+  /** What the session waited for (`approve Bash`, `folder trust`, …). */
   waitingFor?: string;
   pane: string;
   /** The end of the screen after the key was sent. */

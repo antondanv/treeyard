@@ -90,7 +90,7 @@ export function staleNodes(
   return out.sort((a, b) => a.stale.since - b.stale.since);
 }
 
-/** «без сессии 14 ч» */
+/** «no session for 14 h» */
 export function staleLabel(stale: Stale): string {
   return t('без сессии {time}', { time: duration(0, stale.hours * 3_600_000) });
 }

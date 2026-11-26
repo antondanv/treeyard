@@ -14,7 +14,7 @@ export const OPEN: ReadonlySet<Status> = new Set(['todo', 'active', 'review']);
 /**
  * Ready-made orders of statuses among siblings, top to bottom. Within one
  * status the order is yours (`order`); the done ones gather in the
- * «Готовые · N» group wherever `done` stands.
+ * «Done · N» group wherever `done` stands.
  */
 export const STATUS_ORDERS = {
   'active-first': ['active', 'review', 'todo', 'waiting', 'idea', 'done', 'dropped'],
@@ -351,7 +351,7 @@ export function sessionOwners(tree: Tree): Map<string, string> {
   return owners;
 }
 
-/** How far back «мимо дерева» is counted: milestone 1 asks for two weeks of sessions from nodes. */
+/** How far back «outside the tree» is counted: milestone 1 asks for two weeks of sessions from nodes. */
 export const OFF_TREE_DAYS = 14;
 
 interface SessionLike {
@@ -382,7 +382,7 @@ export function offTreeTally(
   return { total: recent.length, off: recent.filter((s) => offTree(s, owners)).length };
 }
 
-/** «за 14 дней: 12 сессий, мимо дерева — 3» — the milestone-1 check in one line. */
+/** «14 days: 12 sessions, outside the tree — 3» — the milestone-1 check in one line. */
 export function offTreeLine(tally: { total: number; off: number }): string {
   return t('за {days} дней: {total}, мимо дерева — {off}', {
     days: OFF_TREE_DAYS,

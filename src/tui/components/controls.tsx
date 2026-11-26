@@ -57,7 +57,7 @@ export function Frame(props: {
   );
 }
 
-/** A key and what it does: `⏎ открыть`. Without a key it is a plain note. A click on it presses the key. */
+/** A key and what it does: `⏎ open`. Without a key it is a plain note. A click on it presses the key. */
 export interface KeyHint {
   key?: string;
   label?: string;
@@ -118,7 +118,7 @@ export function KeyHints(props: { hints: KeyHint[]; active?: boolean; keyColor?:
   useClick(
     ref,
     (click) => {
-      // A habitual double click must not press «d готово» twice.
+      // A habitual double click must not press «d done» twice.
       if (click.double || click.y !== 0) return;
       const at = hintAt(props.hints, click.x);
       if (at) run(at.hint, at.x);

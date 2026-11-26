@@ -6,7 +6,7 @@ import type { ProjectStatus } from '../src/status.js';
 import { legacyAgentRules, upgradeAgentRules } from '../src/templates/legacy-rules.js';
 import { emptyTree, treeyardIn } from './helpers.js';
 
-// «Правила для агентов» exactly as a tree planted by 0.1.1 from «Направления» has them,
+// «Rules for agents» exactly as a tree planted by 0.1.1 from «Directions» has them,
 // plus a line of the person's own and a rule of another method.
 const treeFile = (dir: string) => join(dir, '.tree', 'tree.md');
 

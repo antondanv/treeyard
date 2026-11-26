@@ -100,7 +100,7 @@ function withTask(plan: SessionPlan, task?: string): SessionPlan {
 function coordinatorLine(coordinator: TreeNode, brain: BrainId): string {
   const self = selfCommand();
   const title = `«${coordinator.title}» (${coordinator.id})`;
-  // Codex in its own sandbox («как в config.toml») may not reach the tree: the question is its last message.
+  // Codex in its own sandbox («as in config.toml») may not reach the tree: the question is its last message.
   if (brain === 'codex' && accessOf('codex') !== 'sandbox')
     return pick({
       ru: `Тебя запустила сессия узла ${title} и ждёт тебя через \`${self} wait\`. Вопрос, на который ответит только она, — \`${self} send ${coordinator.id} "…"\`, затем закончи ход: ответ придёт следующим сообщением. Команда упала (песочница) — задай вопрос последним сообщением и закончи ход.`,

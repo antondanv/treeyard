@@ -54,7 +54,7 @@ describe('statuses as words', () => {
     const whole = (await sh('show')).stdout;
     expect(whole).toMatch(new RegExp(`◐ Ветка {2}${parent.id} {2}в работе`));
     expect(whole).toMatch(/◎ Внутри {2}\w+ {2}на проверке/);
-    // A waiting node keeps one «ждёт», with its reason.
+    // A waiting node keeps one «waiting», with its reason.
     expect(whole).toMatch(/Стоит {2}\w+ {2}ждёт: сервер/);
     expect((await sh('show', parent.id)).stdout).toMatch(/◎ Внутри {2}\w+ {2}на проверке/);
   }, 40_000);

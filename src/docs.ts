@@ -1,5 +1,5 @@
 /**
- * The project's Markdown documents, for the root's «Документы» window: which
+ * The project's Markdown documents, for the root's «Project documents» window: which
  * ones there are, and reading and saving one. Git decides what belongs to the
  * project (tracked and new files, not ignored ones); without Git the folder
  * is walked. Nodes and the generated overview are the tree, not documents.
@@ -99,7 +99,7 @@ export function sortDocs<T extends { path: string }>(docs: T[]): T[] {
   });
 }
 
-/** The window «Документы» and `treeyard docs` list the same files in the same order, from here. */
+/** The «Project documents» window and `treeyard docs` list the same files in the same order, from here. */
 export async function projectDocs(dir: string): Promise<DocFile[]> {
   const found = (await gitPaths(dir)) ?? walkPaths(dir);
   const paths = new Set(found.filter((path) => !inTree(path)));

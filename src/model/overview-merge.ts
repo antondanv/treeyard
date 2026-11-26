@@ -4,7 +4,7 @@
  * counters at the top, a parent's progress — and a line-by-line merge conflicts every time.
  *
  * The overview carries everything it is drawn from: each node's line has its status, title,
- * parent (the indent), place among siblings, «ты» and what it waits for. So the three versions
+ * parent (the indent), place among siblings, «you» and what it waits for. So the three versions
  * are read back into nodes, merged node by node, and the overview is drawn again: counters and
  * progress come out right for the merged tree. A version that does not read back into exactly
  * itself (another format, a hand edit) is not guessed at: the caller falls back to git.

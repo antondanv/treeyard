@@ -1,6 +1,6 @@
 /**
  * What the journal says about itself: which entries record a status change
- * (`в работе → на проверке`) and which ones treeyard wrote on its own — the
+ * (`active → in review`) and which ones treeyard wrote on its own — the
  * rest is what a person or an agent wrote, and only that can be corrected.
  */
 import { EN } from '../i18n/en.js';
@@ -11,7 +11,7 @@ import type { Status } from './types.js';
 export interface Entry {
   /** `2026-11-08 12:19`. */
   when: string;
-  /** Who wrote it: `ты`, `агент`, `claude`… */
+  /** Who wrote it: `you`, `agent`, `claude`… */
   source: string;
   text: string;
 }
@@ -27,7 +27,7 @@ const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const LABELS = ALL_LABELS.map(literal).join('|');
 const CHANGE = new RegExp(`^(?:${LABELS}) → (?:${LABELS})(?:$|: |\\. )`);
 
-/** `в работе → на проверке`, `к работе → ждёт: сервер`, `… → готово. проверка прошла`. */
+/** `active → in review`, `todo → waiting: server`, `… → done. the check passed`. */
 export function isStatusChange(text: string): boolean {
   return CHANGE.test(text);
 }
@@ -41,11 +41,11 @@ export function statusHistory(body: string): string[] {
 export interface StatusStep {
   /** `2026-11-08 12:19`, local time as the journal has it; none for a line without a stamp. */
   at?: string;
-  /** `ты`, `агент`, `claude`…; none for a line without a stamp. */
+  /** `you`, `agent`, `claude`…; none for a line without a stamp. */
   who?: string;
   from: Status;
   to: Status;
-  /** What follows the change: why it waits (`ждёт: сервер`) or a sentence (`готово. проверка прошла`). */
+  /** What follows the change: why it waits (`waiting: server`) or a sentence (`done. the check passed`). */
   comment?: string;
 }
 
@@ -143,7 +143,7 @@ const LETTER_LINES = [
 ]
   .flatMap((key) => [key, EN[key] ?? key])
   .map((template) => new RegExp(`^${literal(template).replace(/\\\{\w+\\\}/g, '.*')}$`));
-// A session started: `новая сессия в панели (do)`, `… (plan) в worktree treeyard/k3f9`.
+// A session started: `new session in a pane (do)`, `… (plan) in worktree treeyard/k3f9`.
 const SESSION_LINES = ['новая сессия в панели ({p2})', 'новая сессия {how} ({p2})']
   .flatMap((key) => [key, EN[key] ?? key])
   .map((template) => new RegExp(`^${literal(template).replace(/\\\{\w+\\\}/g, '.*')}`));

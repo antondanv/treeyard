@@ -1,6 +1,6 @@
 /**
  * Letters between the sessions of nodes (`treeyard send`). A letter is a journal entry on both
- * ends — «письмо №12 от «A»» on the node that got it, «письмо №12 узлу «B»» on the node whose
+ * ends — «letter №12 from «A»» on the node that got it, «letter №12 to node «B»» on the node whose
  * session sent it — so the tree shows the correspondence in the CLI and the TUI, in git too. The
  * whole text and whether it has reached the session yet live in the mailbox (mailbox.ts), per
  * machine; the journal line carries the letter's number, which joins the two.
@@ -224,7 +224,7 @@ export function mailOf(tree: Tree, node: TreeNode): Letter[] {
   return letters.sort((a, b) => a.at.localeCompare(b.at));
 }
 
-/** Who the letter went to or came from: «узлу «Сайт»», «от «Бот»», «от агента в сессию claude 1a2b3c4d». */
+/** Who the letter went to or came from: «to node «Site»», «from «Bot»», «from an agent to session claude 1a2b3c4d». */
 export function letterPeer(letter: Letter): string {
   if (letter.direction === 'out') return t('узлу «{peer}»', { peer: letter.peer ?? '' });
   if (letter.peer) return t('от «{peer}»', { peer: letter.peer });
@@ -254,7 +254,7 @@ export const DELIVERY_TEXT: Record<Delivery, string> = labels(() => ({
   prompt: t('вместе с запросом'),
 }));
 
-/** `в очереди: сессия занята — …` or `доставлено: набрано в панели`; nothing without the mailbox. */
+/** `queued: the session is busy — …` or `delivered: typed into the pane`; nothing without the mailbox. */
 export function letterState(letter: Pick<Letter, 'state' | 'held' | 'heldFor' | 'how'>): string {
   if (letter.state === 'delivered')
     return letter.how ? t('доставлено: {how}', { how: DELIVERY_TEXT[letter.how] }) : t('доставлено');
@@ -264,13 +264,13 @@ export function letterState(letter: Pick<Letter, 'state' | 'held' | 'heldFor' | 
   return t('в очереди: {why}', { why: `${HOLD_TEXT[letter.held]}${why}` });
 }
 
-/** `← №12 от «Бот»: «текст»` — the arrow says the direction: ← got, → sent. */
+/** `← №12 from «Bot»: «text»` — the arrow says the direction: ← got, → sent. */
 export function letterText(letter: Letter): string {
   const n = letter.n === undefined ? '' : `${t('№{n}', { n: letter.n })} `;
   return `${letter.direction === 'out' ? '→' : '←'} ${n}${letterPeer(letter)}${answers(letter)}: «${letter.text}»`;
 }
 
-/** ` (ответ на №12)` for an answer; nothing otherwise. */
+/** ` (answer to №12)` for an answer; nothing otherwise. */
 export function answers(letter: Pick<Letter, 'replyTo'>): string {
   return letter.replyTo ? ` (${t('ответ на №{n}', { n: letter.replyTo })})` : '';
 }

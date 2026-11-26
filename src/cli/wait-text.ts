@@ -95,7 +95,7 @@ export function inboxBlock(letter: InboxLetter, p: Paint): string {
 }
 
 /**
- * Two nodes that change one file: «A» и «B» правят один файл: путь — a line per file, the rest
+ * Two nodes that change one file: «A» and «B» change one file: path — a line per file, the rest
  * counted. Shared by `wait` and `queue`.
  */
 export function overlapLines(aTitle: string, bTitle: string, files: readonly string[]): string[] {

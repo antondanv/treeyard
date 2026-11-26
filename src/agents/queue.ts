@@ -1,7 +1,7 @@
 /**
  * `treeyard queue`: the coordinator's queue, kept by treeyard instead of the coordinator's chat.
  * Nodes start one after another, at most `parallel` at a time; the next one starts when a running
- * node leaves «в работе» or its session ends. A node that needs another node of the tree waits for
+ * node leaves active or its session ends. A node that needs another node of the tree waits for
  * it to reach review or done. When the CLI's subscription window is nearly used up, nothing new
  * starts until the window resets. Running it again picks up the nodes already at work, so «stop
  * starting» is Ctrl+C and «go on» is the same command.
@@ -31,7 +31,7 @@ import {
 export type QueueEvent =
   | { type: 'start'; node: string; title: string; session: string | null; pane: string | null }
   | { type: 'fail'; node: string; title: string; error: string }
-  /** The node left «в работе», or its session ended without leaving it: its slot is free. */
+  /** The node left active, or its session ended without leaving it: its slot is free. */
   | { type: 'done'; node: string; title: string; status: Status; ended: boolean }
   /** Its session ended its turn or waits for the person while the node is still at work. */
   | { type: 'asks'; node: string; title: string; state: 'idle' | 'waiting'; waitingFor?: string }
@@ -46,7 +46,7 @@ export type QueueEvent =
   | { type: 'end'; started: number; finished: number; blocked: number; stopped: boolean };
 
 export interface QueueSources extends WaitSources {
-  /** Starts a session in the node; the node is «в работе» after it. */
+  /** Starts a session in the node; the node is active after it. */
   start(tree: Tree, id: string, options: LaunchOptions): Promise<{ session?: string; pane?: string }>;
   /** The CLI's subscription windows; null when it has none to tell. */
   limits(brain: BrainId): Promise<LimitWindow[] | null>;
@@ -110,7 +110,7 @@ export async function runQueue(dir: string, ids: readonly string[], options: Que
   const emit = options.onEvent;
   const order = queueNodes(sources.load(dir), ids);
   const from = new Map<string, Status>();
-  /** Nodes whose session ended while they stayed «в работе»: done for the queue. */
+  /** Nodes whose session ended while they stayed active: done for the queue. */
   const ended = new Set<string>();
   const asked = new Map<string, string>();
   const worked = new Set<string>();
@@ -181,7 +181,7 @@ export async function runQueue(dir: string, ids: readonly string[], options: Que
           }
         } else asked.delete(sight.id);
       }
-      // Left «в работе» since the last look: its slot is free.
+      // Left active since the last look: its slot is free.
       for (const node of nodes)
         if (from.get(node.id) === 'active' && node.status !== 'active' && !ended.has(node.id)) {
           from.set(node.id, node.status);

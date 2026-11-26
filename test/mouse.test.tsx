@@ -331,7 +331,7 @@ describe('mouse in a session panel', () => {
 describe('key hints as buttons', () => {
   it('finds the hint under the pointer and the key it types', () => {
     const hints = [{ key: '⏎', label: 'открыть' }, { label: 'буква — сразу' }, { key: '< >', press: ['<', '>'] }];
-    // `⏎ открыть · буква — сразу · < >`
+    // `⏎ open · letter — at once · < >`
     expect(hintAt(hints, 0)?.hint).toBe(hints[0]);
     expect(hintAt(hints, 9)).toBeUndefined();
     expect(hintPress(hintAt(hints, 4)!.hint, 4)).toBe('\r');

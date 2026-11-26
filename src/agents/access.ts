@@ -157,7 +157,7 @@ export function accessQuestion(brain: BrainId): AccessQuestion {
   };
 }
 
-/** What a session of this CLI may do, started in this permission mode: the «Права» row before a launch. */
+/** What a session of this CLI may do, started in this permission mode: the «Access» row before a launch. */
 export function accessText(brain: BrainId, permissionMode?: string): string {
   if (permissionMode === 'bypassPermissions') return t('полный доступ: команды, файлы и сеть без подтверждений');
   if (permissionMode === 'plan')

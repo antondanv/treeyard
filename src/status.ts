@@ -230,7 +230,7 @@ export interface ProjectStatus {
   /** Present when Codex is installed or the person chose how to start it. */
   codex?: CodexStatus;
   pointer?: PointerStatus[];
-  /** Lines of «Правила для агентов» an old template wrote: the skill holds them now, and the two disagree. */
+  /** Lines of «Rules for agents» an old template wrote: the skill holds them now, and the two disagree. */
   legacyRules?: number;
   hook?: HookInfo;
   /** The Claude Code, Codex, Antigravity and OpenCode hooks and plugins that hand letters to a session. */

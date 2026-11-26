@@ -87,7 +87,7 @@ export const SEND_SOURCES: SendSources = DELIVER_SOURCES;
 
 export interface SendOptions {
   size?: PaneSize;
-  /** Who writes, for the journal: the agent's name or «ты». */
+  /** Who writes, for the journal: the agent's name or «you». */
   source?: string;
   /** The node whose session writes (see `senderNode`): the letter goes into its journal too. */
   sender?: TreeNode | undefined;

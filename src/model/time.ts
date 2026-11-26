@@ -33,7 +33,7 @@ export function clockOf(ms: number, now = Date.now()): string {
   return at.toDateString() === current.toDateString() ? time : `${pad(at.getDate())}.${pad(at.getMonth() + 1)} ${time}`;
 }
 
-/** «только что», «5 мин», «3 ч», «вчера», «4 дн», «12.08». */
+/** «just now», «5 min», «3 h», «yesterday», «4 d», «12.08». */
 export function ago(value: string | number | undefined, now = Date.now()): string {
   if (value === undefined) return '';
   const time = typeof value === 'number' ? value : Date.parse(value);
@@ -59,7 +59,7 @@ export function ago(value: string | number | undefined, now = Date.now()): strin
   return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}${date.getFullYear() === current.getFullYear() ? '' : `.${date.getFullYear()}`}`;
 }
 
-/** How long something has been going on: «12 мин», «3 ч», «5 дн». */
+/** How long something has been going on: «12 min», «3 h», «5 d». */
 export function duration(fromValue: string | number | undefined, now = Date.now()): string {
   if (fromValue === undefined) return '';
   const from = typeof fromValue === 'number' ? fromValue : Date.parse(fromValue);

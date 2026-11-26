@@ -75,7 +75,7 @@ export interface TreeNode {
   updated?: string;
   /** YYYY-MM-DD it became done or dropped. */
   closed?: string;
-  /** Markdown after the front matter: description, notes, `## Журнал`. */
+  /** Markdown after the front matter: description, notes, `## Journal`. */
   body: string;
   /** Front matter keys this version does not know: kept as they are. */
   extra: Record<string, unknown>;

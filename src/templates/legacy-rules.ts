@@ -1,5 +1,5 @@
 /**
- * «Правила для агентов» as the templates wrote them before the `treeyard` skill took them over
+ * «Rules for agents» as the templates wrote them before the `treeyard` skill took them over
  * (0.1.0–0.1.1). A tree planted then still carries them, and a node session reads them next to
  * the skill: two copies that disagree («plan first» against a session started to do the node,
  * `set status=review` against one `log … --status review`). Recognised line by line, verbatim,
@@ -78,7 +78,7 @@ function skillParagraph(language: Lang): string {
 }
 
 /**
- * The rules with the old template's lines taken out of «Правила для агентов» and the line about
+ * The rules with the old template's lines taken out of «Rules for agents» and the line about
  * the skill in their place; the same text when there was nothing to take out.
  */
 export function upgradeAgentRules(rules: string): string {

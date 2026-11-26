@@ -998,7 +998,7 @@ export function worktreeNote(wt: NodeWorktree, project: string): string {
   });
 }
 
-/** `коммитов: 3 · не влито: 3 · не закоммичено: 2` — what the worktree holds, in a few words. */
+/** `commits: 3 · not merged: 3 · uncommitted: 2` — what the worktree holds, in a few words. */
 export function stateText(state: WorktreeState): string {
   const parts = [t('коммитов: {n}', { n: state.commits.length })];
   if (state.unmerged.length) parts.push(t('не влито: {n}', { n: state.unmerged.length }));

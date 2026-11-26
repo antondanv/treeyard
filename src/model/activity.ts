@@ -10,7 +10,7 @@ export interface Event {
   node: TreeNode;
   /** `2026-10-01 23:14`, as written; may be a bare date. */
   when: string;
-  /** Who wrote it: `ты`, `claude`, `агент`… */
+  /** Who wrote it: `you`, `claude`, `agent`… */
   who: string;
   text: string;
   /** Sort key. */

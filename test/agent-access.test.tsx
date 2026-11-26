@@ -130,7 +130,7 @@ describe('Antigravity access before its first launch', () => {
     await wait('Новая сессия');
     await key('\r');
     await wait('Запустить сессию?');
-    // «делать» is the default start: no plan mode, Claude Code's own rules apply.
+    // «do» is the default start: no plan mode, Claude Code's own rules apply.
     expect(app.lastFrame()).toMatch(/Права\s+как в настройках Claude Code/);
     await key('\u001b');
     await key('\u0012');

@@ -68,7 +68,7 @@ export function longTitles(tree: Tree): TreeNode[] {
 export interface Deadline {
   /** YYYY-MM-DD. */
   date: string;
-  /** The words it was found in: «до 2026-10-16». */
+  /** The words it was found in: «by 2026-10-16». */
   text: string;
 }
 
@@ -92,8 +92,8 @@ const EN_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep'
 const EN_MONTH = String.raw`(?=(${EN_MONTHS.join('|')}))(?:january|february|march|april|may|june|july|august|september|october|november|december|sept|${EN_MONTHS.join('|')})\.?`;
 
 /**
- * A date only counts after a word that makes it a deadline: «28.08 Сквозная проверка» is when
- * the work happened, «до 95 с» is no date at all. A date without a year falls on or after
+ * A date only counts after a word that makes it a deadline: «28.08 End-to-end check» is when
+ * the work happened, «by 95 s» is no date at all. A date without a year falls on or after
  * the day the node was created.
  */
 const BY = String.raw`(?<![\p{L}\p{N}])(?:до|к|не позже|не позднее|срок|дедлайн|by|before|until|till|due(?: by)?|deadline|no later than)\s*[:—–-]?\s*`;
@@ -143,7 +143,7 @@ export function deadlineIn(text: string, base: string): Deadline | undefined {
   return latestDate(text, DEADLINE, base);
 }
 
-/** The latest date in a «come back when»: «2026-12-01», «после 20.11», «ответят к 1 декабря». */
+/** The latest date in a «come back when»: «2026-12-01», «after 20.11», «they answer by December 1». */
 export function comeBackIn(text: string, base: string): Deadline | undefined {
   return latestDate(text, COME_BACK, base);
 }

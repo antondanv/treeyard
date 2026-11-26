@@ -1,6 +1,6 @@
 /**
  * Notes: one line about what gets in the way, written from any project into
- * the «Замечания» branch of one tree (the `notes` setting) without leaving
+ * the «Notes» branch of one tree (the `notes` setting) without leaving
  * the work. A note says where it came from — the project and the node whose
  * session wrote it — so the review knows what was being done at the time.
  */
@@ -95,7 +95,7 @@ export function noteOrigin(
   return { project: tree.project.title, ...(node ? { node } : {}) };
 }
 
-/** `my-app › «Закрыть один узел» (k3f9)`, or just the project. */
+/** `my-app › «Close one node» (k3f9)`, or just the project. */
 export function originText(origin: NoteOrigin): string {
   if (!origin.node) return origin.project;
   return `${origin.project} › «${origin.node.title}» (${origin.node.id})`;
@@ -103,7 +103,7 @@ export function originText(origin: NoteOrigin): string {
 
 const BRANCH_TITLES = ['замечания', 'notes'];
 
-/** The «Замечания» branch, the one at the top first; planted when the tree has none. */
+/** The «Notes» branch, the one at the top first; planted when the tree has none. */
 export function notesBranch(tree: Tree): TreeNode {
   const named = [...tree.nodes.values()].filter((node) => BRANCH_TITLES.includes(node.title.trim().toLowerCase()));
   const found = named.find((node) => node.parent === ROOT) ?? named[0];
@@ -116,7 +116,7 @@ export function notesBranch(tree: Tree): TreeNode {
   });
 }
 
-/** A note as an idea in the «Замечания» branch; where it came from goes in its description. */
+/** A note as an idea in the «Notes» branch; where it came from goes in its description. */
 export function addNote(tree: Tree, text: string, origin: NoteOrigin, source?: string): TreeNode {
   const branch = notesBranch(tree);
   return addNode(

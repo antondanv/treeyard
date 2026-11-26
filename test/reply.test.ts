@@ -27,7 +27,7 @@ const minute = () => new Date(Date.now() - 60_000).toISOString();
 
 afterEach(() => setLang('ru'));
 
-/** A node «в работе» whose session runs in pane `claude-<id>`. */
+/** A node active whose session runs in pane `claude-<id>`. */
 function paneNode(tree: Tree, title: string) {
   const node = addNode(tree, { title, status: 'active' });
   attachSession(tree, node.id, {

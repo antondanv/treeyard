@@ -143,7 +143,7 @@ export function layoutGraph(rows: Row[], options: LayoutOptions): GraphLayout {
   const cards: GraphCard[] = [];
   const middle = card ? 2 : 0;
   // Lines: children start right after their parent's own title, not after the longest
-  // title of the whole column — a short «Готовые · 27» does not push its children away.
+  // title of the whole column — a short «Done · 27» does not push its children away.
   const place = (id: string, depth: number, top: number, x: number, row?: Row): number => {
     const kids = children.get(id) ?? [];
     const width = labelWidth.get(id) ?? options.width;

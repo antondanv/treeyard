@@ -148,7 +148,7 @@ function movesFile(dir: string): string {
 interface Move {
   /** The node the session was opened from. */
   from: string;
-  /** The node its agent set to «в работе» last. */
+  /** The node its agent set to active last. */
   node: string;
   at: string;
 }
@@ -182,7 +182,7 @@ export type MoveResult =
 const OWN_SESSION_HOURS = 12;
 
 /**
- * The agent of a node's session set node `id` of the session's own tree to «в работе»: the work
+ * The agent of a node's session set node `id` of the session's own tree to active: the work
  * moved there, and the session's commits follow it. The node the session was opened from moves
  * them back. A node with a session of its own (one a coordinator handed out) takes nothing: a
  * coordinator putting its child back to work does not do the child's work. Sessions without a mark
@@ -224,7 +224,7 @@ export function noteMove(tree: Tree, id: string, env: NodeJS.ProcessEnv = proces
   return result;
 }
 
-/** What the command says about a move, or nothing: «коммиты этой сессии теперь идут в «X»…». */
+/** What the command says about a move, or nothing: «this session's commits now go to «X»…». */
 export function moveText(tree: Tree, move: MoveResult | undefined): string | undefined {
   if (!move) return undefined;
   const title = (id: string) => tree.nodes.get(id)?.title ?? id;

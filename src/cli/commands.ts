@@ -836,7 +836,7 @@ function placeArg(tree: Tree, id: string, parent: string, value: string | undefi
   return sibling;
 }
 
-/** `idea, todo (к работе), …`: the keys, with the label where it says more. */
+/** `idea, todo (to do), …`: the keys, with the label where it says more. */
 function statusChoices(): string {
   return STATUSES.map((s) => (STATUS_LABEL[s] === s ? s : `${s} (${STATUS_LABEL[s]})`)).join(', ');
 }
@@ -1419,7 +1419,7 @@ function onlyArg(value: string): Set<NodePart> {
   return parts;
 }
 
-/** `treeyard find "текст"`: nodes that mention it anywhere, finished ones too, with the piece that matched. */
+/** `treeyard find "text"`: nodes that mention it anywhere, finished ones too, with the piece that matched. */
 function findCommand(args: string[]): number {
   const { values, positionals } = parse(args, {
     status: { type: 'string', short: 's' },
@@ -1512,7 +1512,7 @@ function watchCommand(args: string[]): Promise<number> {
 }
 
 /**
- * `treeyard wait <id…>`: until one of the nodes needs the coordinator — it left «в работе», or its
+ * `treeyard wait <id…>`: until one of the nodes needs the coordinator — it left active, or its
  * session ended its turn, waits for the person or ended (see agents/wait.ts). Exit 124: out of time.
  */
 async function waitCommand(args: string[]): Promise<number> {
@@ -2014,7 +2014,7 @@ function queueLine(event: QueueEvent, p: typeof out): string {
 }
 
 /**
- * `treeyard docs`: the project's documents in the order of the «Документы» window, so a program
+ * `treeyard docs`: the project's documents in the order of the «Project documents» window, so a program
  * (Treeyard Web) never picks the files itself. `--json` — `[{path, title, lines, modified}]`.
  */
 async function docsCommand(args: string[]): Promise<number> {
@@ -2377,7 +2377,7 @@ async function setCommand(args: string[]): Promise<number> {
         ...(values.note ? { note: values.note } : {}),
       });
     }
-    // One node set to «в работе» from a node's session: the session moved there, its commits follow.
+    // One node set to active from a node's session: the session moved there, its commits follow.
     // Several at once say nothing about where the session itself works.
     if (status === 'active' && ids.length === 1) {
       const said = moveText(tree, noteMove(tree, ids[0]!));
@@ -2921,8 +2921,8 @@ function imageCommand(args: string[]): number {
 }
 
 /**
- * `treeyard rm <id>…`: deletes a node added by mistake — no children, no journal beyond «завёл
- * узел», no sessions, commits, pictures or links. A node with a history is dropped, not
+ * `treeyard rm <id>…`: deletes a node added by mistake — no children, no journal beyond «added the
+ * node», no sessions, commits, pictures or links. A node with a history is dropped, not
  * deleted: then nothing is deleted, and the command says why.
  */
 function rmCommand(args: string[]): number {
@@ -2964,7 +2964,7 @@ function keepReasons(tree: Tree, node: TreeNode): string[] {
 }
 
 /**
- * `treeyard decide "…"`: a line in «Решения» of `.tree/tree.md`, dated; without text, the list.
+ * `treeyard decide "…"`: a line in «Decisions» of `.tree/tree.md`, dated; without text, the list.
  * `--json` gives the list as `{"decisions": [{"text", "date"}]}`, after a write too.
  */
 function decideCommand(args: string[]): number {
@@ -3007,7 +3007,7 @@ function goalCommand(args: string[]): number {
 
 /**
  * `treeyard rules [--from <file|->]`: the rules of the tree — the body of `.tree/tree.md`
- * without «Решения» (those are `decide`'s); with `--from`, new ones — the header and «Решения» stay.
+ * without «Decisions» (those are `decide`'s); with `--from`, new ones — the header and «Decisions» stay.
  * `--upgrade` takes out the agents' rules an old template wrote, now held by the skill.
  */
 async function rulesCommand(args: string[]): Promise<number> {
@@ -3105,7 +3105,7 @@ function commitCommand(args: string[]): number {
   return 0;
 }
 
-/** One line about what gets in the way, from any folder into «Замечания» of the `notes` tree. */
+/** One line about what gets in the way, from any folder into «Notes» of the `notes` tree. */
 function noteCommand(args: string[]): number {
   const { values, positionals } = parse(args, { node: { type: 'string', short: 'n' }, as: { type: 'string' } });
   const text = positionals.join(' ').trim();
@@ -4317,7 +4317,7 @@ export async function limitsCommand(
   return 0;
 }
 
-/** «Запустить? [Y/n]» — Enter is yes. */
+/** «Start? [Y/n]» — Enter is yes. */
 async function askYes(question: string): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   const answer = await new Promise<string>((done) => rl.question(`${question} ${err.dim('[Y/n]')} `, done));

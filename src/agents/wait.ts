@@ -1,6 +1,6 @@
 /**
  * `treeyard wait`: a coordinator handed nodes out to sessions and waits until one of them needs
- * it — the node left «в работе», or its session ended its turn, waits for the person or is gone.
+ * it — the node left active, or its session ended its turn, waits for the person or is gone.
  * Without it the coordinator polls `show` and `git log`, or keeps a subagent it can hear back from.
  *
  * The tree is watched (a change wakes the wait at once); the sessions are asked every few seconds,
@@ -430,7 +430,7 @@ export async function lookOverlaps(
 
 /**
  * Waits until one of the nodes (every one with `all`) needs the coordinator, or the time is up.
- * Nodes that are not «в работе» already need it: the answer comes at once.
+ * Nodes that are not active already need it: the answer comes at once.
  */
 export async function waitFor(dir: string, ids: readonly string[], options: WaitOptions = {}): Promise<WaitResult> {
   const sources = options.sources ?? SOURCES;

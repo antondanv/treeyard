@@ -387,7 +387,7 @@ export function panesToSleep(
   return out;
 }
 
-/** «312 МБ», «1.4 ГБ». */
+/** «312 MB», «1.4 GB». */
 export function formatMemory(bytes: number | undefined): string {
   if (!bytes) return '';
   const mb = bytes / 1024 / 1024;

@@ -34,7 +34,7 @@ const plain = paint({ isTTY: false } as NodeJS.WriteStream);
 
 afterEach(() => setLang('ru'));
 
-/** A node «в работе» with one session. */
+/** A node active with one session. */
 function nodeWithSession(tree: Tree, title: string, ref: Partial<SessionRef> & { id: string }) {
   const node = addNode(tree, { title, status: 'active' });
   attachSession(tree, node.id, {

@@ -69,7 +69,7 @@ export interface TreeTextOptions {
   closed?: boolean;
   /** The branch to print instead of the whole tree, without the project's header. */
   under?: string;
-  /** Finished children fold into one «✓ готово: N» line, as in the TUI. */
+  /** Finished children fold into one «✓ done: N» line, as in the TUI. */
   foldDone?: boolean;
   stale?: StaleFn;
   /** The status as a word after the id: off a terminal, so `grep` by a word finds it and nobody reads glyphs. */
@@ -119,7 +119,7 @@ export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): s
     for (const kid of childrenOf(tree, parent)) {
       const closed = CLOSED.has(kid.status);
       const hide = closed && (folded || options.closed === false);
-      // Like the TUI's «Готовые» group: finished children collapse into one counter at the first one's place.
+      // Like the TUI's «Done» group: finished children collapse into one counter at the first one's place.
       const count = !hide && options.foldDone === true && kid.status === 'done';
       if (!hide && !count) kids.push({ node: kid, fold: false });
       else if (openInside(kid.id)) kids.push({ node: kid, fold: true });
@@ -153,7 +153,7 @@ export function treeText(tree: Tree, p: Paint, options: TreeTextOptions = {}): s
       }
       let line = `${prefix}${p.dim(last ? '└─ ' : '├─ ')}${glyph(node)} ${node.status === 'done' ? p.dim(node.title) : node.title}`;
       line += p.dim(`  ${node.id}`);
-      // A waiting node says «ждёт» further on, with its reason.
+      // A waiting node says «waiting» further on, with its reason.
       if (options.words && node.status !== 'waiting') line += p.dim(`  ${STATUS_LABEL[node.status]}`);
       const grandkids = childrenOf(tree, node.id);
       if (grandkids.length > 0) {
@@ -295,7 +295,7 @@ function headerLines(tree: Tree, node: TreeNode, p: Paint, stale: Stale | undefi
   return lines;
 }
 
-/** «Готово, когда», the check, what it waits for and the links both ways. */
+/** «Done when», the check, what it waits for and the links both ways. */
 function criterionLines(tree: Tree, node: TreeNode, p: Paint): string[] {
   const lines = [`${p.dim(t('готово, когда:'))} ${node.doneWhen ?? p.dim(t('не задано'))}`];
   if (node.check) lines.push(`${p.dim(t('проверка:'))} ${node.check}`);
@@ -396,7 +396,7 @@ export function partsJson(
   return out;
 }
 
-/** `← 2026-11-22 21:45  от «Сайт»: «текст»` — a letter the node got (←) or its session sent (→). */
+/** `← 2026-11-22 21:45  from «Site»: «text»` — a letter the node got (←) or its session sent (→). */
 function letterLine(letter: Letter, p: Paint): string {
   const n = letter.n === undefined ? '' : `${t('№{n}', { n: letter.n })} `;
   // The whole letter, as the mailbox keeps it: its lines under the first one.

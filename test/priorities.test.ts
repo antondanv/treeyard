@@ -20,7 +20,7 @@ const SHIFT_DOWN = '\u001b[1;2B';
 const RIGHT = '\u001b[C';
 const DOWN = '\u001b[B';
 const ESC = '\u001b';
-/** «Порядок статусов» on the settings screen: language, confirm, Antigravity, Codex, theme, animation, marquee, then it. */
+/** «Status order» on the settings screen: language, confirm, Antigravity, Codex, theme, animation, marquee, then it. */
 const STATUS_ORDER_ROW = 7;
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -368,7 +368,7 @@ describe('status order setting', () => {
     const cancelled = await snapshot(tree.project.dir, { ...opts, keys: [',', ...DOWN5, '\r', 'J', ESC] });
     expect(cancelled).toContain('❯ Порядок статусов');
     expect(loadSettings().statusOrder).toBe('active-first');
-    // «идея» (5th) up to the top with К in both layouts and Shift+↑, then «готово» one down.
+    // «idea» (5th) up to the top with К in both layouts and Shift+↑, then «done» one down.
     const keys = [
       ',',
       ...DOWN5,

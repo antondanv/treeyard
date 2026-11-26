@@ -1,7 +1,7 @@
 /**
  * Point edits of `tree.md`: the goal in its front matter, the rules and the decisions in its body. Each edit
  * rewrites only its own piece of the text, so the rest — other keys with their quotes, order
- * and comments, the sessions, «Решения» — stays byte for byte, however it was written.
+ * and comments, the sessions, «Decisions» — stays byte for byte, however it was written.
  * `writeProject` would serialize the whole header again; these edits never do.
  */
 import { readFileSync } from 'node:fs';
@@ -72,7 +72,7 @@ function keyRange(lines: string[], key: string): [number, number] | undefined {
   return [start, end];
 }
 
-/** Where «Решения» stands in the body: from its heading to the next heading or the end. */
+/** Where «Decisions» stands in the body: from its heading to the next heading or the end. */
 function decisionsRange(body: string): [number, number] | undefined {
   const match = DECISIONS.exec(body);
   if (!match) return undefined;
@@ -86,7 +86,7 @@ function eolOf(text: string): string {
 }
 
 /**
- * A body with decisions added at the end of «Решения»: only their lines go in, everything
+ * A body with decisions added at the end of «Decisions»: only their lines go in, everything
  * around stays as written, line ends too. Without the section, it ends the text.
  */
 export function addDecisions(body: string, decisions: readonly string[], eol = eolOf(body)): string {
@@ -109,7 +109,7 @@ export function addDecisions(body: string, decisions: readonly string[], eol = e
   return `${body.slice(0, at)}${gap}${lines}${tail || eol}`;
 }
 
-/** The lines of «Решения» (or «Decisions»), as written. */
+/** The lines of «Decisions» (or «Decisions» in a Russian tree), as written. */
 export function decisionsOf(body: string): string[] {
   const range = decisionsRange(body);
   if (!range) return [];
@@ -126,7 +126,7 @@ export interface Decision {
   date: string | null;
 }
 
-/** «Решения» as data, so a program never parses the section itself. */
+/** «Decisions» as data, so a program never parses the section itself. */
 export function decisionList(body: string): Decision[] {
   return decisionsOf(body).map((line) => {
     const text = line.trim().slice(2).trim();
@@ -135,7 +135,7 @@ export function decisionList(body: string): Decision[] {
   });
 }
 
-/** The rules: the body of `tree.md` without «Решения» — the method, how the tree is kept, rules for agents. */
+/** The rules: the body of `tree.md` without «Decisions» — the method, how the tree is kept, rules for agents. */
 export function rulesOf(body: string): string {
   const range = decisionsRange(body);
   if (!range) return body.trim();
@@ -144,13 +144,13 @@ export function rulesOf(body: string): string {
   return [before, after].filter(Boolean).join('\n\n');
 }
 
-/** Whether a text carries its own «Решения» heading: those lines belong to `treeyard decide`. */
+/** Whether a text carries its own «Decisions» heading: those lines belong to `treeyard decide`. */
 export function hasDecisions(text: string): boolean {
   return DECISIONS.test(text);
 }
 
 /**
- * `tree.md` with new rules: the header and «Решения» are kept as they are; «Решения» ends the
+ * `tree.md` with new rules: the header and «Decisions» are kept as they are; «Decisions» ends the
  * file, as in every template (a section that stood after it was part of the rules).
  */
 export function withRules(text: string, rules: string): string {
@@ -164,7 +164,7 @@ export function withRules(text: string, rules: string): string {
   return `${head}${gap}${rules.trim()}${decisions}\n`;
 }
 
-/** `tree.md` with decisions added to «Решения»; the header is not even parsed, so it stays byte for byte. */
+/** `tree.md` with decisions added to «Decisions»; the header is not even parsed, so it stays byte for byte. */
 export function withDecisions(text: string, decisions: readonly string[]): string {
   const fence = FENCE.exec(text);
   if (!fence) return addDecisions(text, decisions);
@@ -189,7 +189,7 @@ export function writeGoal(dir: string, goal: string): boolean {
   return true;
 }
 
-/** Adds decisions to «Решения» of `tree.md`: the file gains their lines and nothing else changes. */
+/** Adds decisions to «Decisions» of `tree.md`: the file gains their lines and nothing else changes. */
 export function writeDecisions(dir: string, decisions: readonly string[]): void {
   atomicWrite(treeFile(dir), withDecisions(readTreeText(dir), decisions));
 }

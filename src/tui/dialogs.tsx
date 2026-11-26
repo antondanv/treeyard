@@ -435,7 +435,7 @@ const WHERE_LABEL: Record<LaunchWhere, () => string> = {
   background: () => t('в фоне'),
 };
 
-/** What a launch comes with, in a line: «делать · opus · high · в панели · worktree». */
+/** What a launch comes with, in a line: «do · opus · high · in a pane · worktree». */
 export function launchSummary(options: LaunchOptions): string {
   const parts: string[] = [START_LABEL[options.start]];
   if (options.model) parts.push(options.model);
@@ -476,7 +476,7 @@ function launchItem(
 
 /**
  * The launch section of a menu: one item per CLI — the one launched last on top with all its
- * settings, the others with their own last launch or the defaults — and «Настроить запуск…».
+ * settings, the others with their own last launch or the defaults — and «Set up the launch…».
  * The node's menu and the agent menu (`c`) both show it, so the two cannot drift apart.
  */
 export function launchItems(launches: LaunchEntry[], width: number): MenuItem[] {
@@ -765,7 +765,7 @@ export function ProjectMenu(props: {
   );
 }
 
-/** «my-app · Оплата» shown inside «Оплата» is just noise before the point. */
+/** «my-app · Payments» shown inside «Payments» is just noise before the point. */
 function shortSessionName(name: string | undefined, title: string): string | undefined {
   if (!name) return undefined;
   const cut = name.indexOf(' · ');
@@ -1068,7 +1068,7 @@ export function ConfirmDelete(props: {
 export function PointerDialog(props: {
   gap?: 'missing' | 'outdated';
   files: string[];
-  /** Lines of the old template in «Правила для агентов»; 0 — nothing to take out. */
+  /** Lines of the old template in «Rules for agents»; 0 — nothing to take out. */
   rules?: number;
   width: number;
   onConfirm: () => void;
@@ -1374,8 +1374,8 @@ export interface PaletteItem {
 }
 
 /**
- * Every word of the query somewhere in the text, in any order: «мастер
- * чист» finds «Установка с нуля на чистой машине… мастер». A match at the
+ * Every word of the query somewhere in the text, in any order: «wizard
+ * clean» finds «Install from scratch on a clean machine… wizard». A match at the
  * start of a word, and earlier in the text, ranks higher. Letters scattered
  * across unrelated words do not count — they find everything.
  */

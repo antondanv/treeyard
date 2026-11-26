@@ -6,7 +6,7 @@
  * A node of the same tree is `.#id` (typed by hand as `id` or `#id`).
  *
  * Reading forgives here too: a folder that moved or a node that was deleted
- * shows as «не найдено», and nothing else breaks.
+ * shows as «not found», and nothing else breaks.
  */
 import { realpathSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
@@ -134,13 +134,13 @@ export function needsMet(tree: Tree, node: TreeNode): boolean {
   return needs.length > 0 && needs.every((link) => link.node?.status === 'done');
 }
 
-/** `Brainyard › Релиз 0.2`, or `../Brainyard#c67r — не найдено`: one line wherever a link is shown. */
+/** `Brainyard › Release 0.2`, or `../Brainyard#c67r — not found`: one line wherever a link is shown. */
 export function linkLabel(link: Link): string {
   if (!link.node) return t('{ref} — не найдено', { ref: link.ref });
   return `${link.project} › ${link.node.title}`;
 }
 
-/** `Brainyard › «Релиз 0.2» (c67r)` — for journals and notes. */
+/** `Brainyard › «Release 0.2» (c67r)` — for journals and notes. */
 export function linkText(project: string, node: TreeNode): string {
   return `${project} › «${node.title}» (${node.id})`;
 }
@@ -174,7 +174,7 @@ export function linkNodes(from: Tree, fromId: string, to: Tree, toId: string, so
 
 const SHARED_TITLES = ['совместные узлы', 'shared nodes'];
 
-/** The «Совместные узлы» branch, the one at the top first; planted when the tree has none. */
+/** The «Shared nodes» branch, the one at the top first; planted when the tree has none. */
 export function sharedBranch(tree: Tree): TreeNode {
   const named = [...tree.nodes.values()].filter((node) => SHARED_TITLES.includes(node.title.trim().toLowerCase()));
   const found = named.find((node) => node.parent === ROOT) ?? named[0];
@@ -189,7 +189,7 @@ export function sharedBranch(tree: Tree): TreeNode {
 
 /**
  * A node in another project's tree for work this node needs (`treeyard add
- * --project ../X --for <id>`): in «Совместные узлы» unless a parent is named,
+ * --project ../X --for <id>`): in «Shared nodes» unless a parent is named,
  * where it came from in its description, and linked both ways.
  */
 export function addLinkedNode(from: Tree, fromId: string, to: Tree, input: NewNode, source: string): TreeNode {
@@ -245,7 +245,7 @@ export function closeNeeds(tree: Tree, node: TreeNode, source: string): TreeNode
  * Replaces what a node waits for (`treeyard set <id> needs=…`). The other
  * side follows where it is found: `for` is added to new targets and removed
  * from dropped ones. A ref into another project that leads nowhere is kept —
- * it shows «не найдено»; a node of this tree has to exist.
+ * it shows «not found»; a node of this tree has to exist.
  */
 export function setNeeds(tree: Tree, id: string, wanted: string[], source: string): Link[] {
   const node = need(tree, id);

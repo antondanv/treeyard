@@ -1,5 +1,5 @@
 /**
- * «Картинки узла»: the list with a preview beside it, one picture on the
+ * «Node pictures»: the list with a preview beside it, one picture on the
  * whole screen, a caption. A screenshot comes from the clipboard (`v`) or as
  * a file dropped into the terminal — the terminal pastes its path.
  */

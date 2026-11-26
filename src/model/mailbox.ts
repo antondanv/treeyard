@@ -61,7 +61,7 @@ export interface MailItem {
   to: string;
   /** The node whose session wrote it; none for a letter from a shell outside the tree's sessions. */
   from?: string;
-  /** Who wrote it, as the journal names them: an agent's CLI or «ты». */
+  /** Who wrote it, as the journal names them: an agent's CLI or «you». */
   who?: string;
   text: string;
   /** When it was sent. */

@@ -140,7 +140,7 @@ export function updateNode(tree: Tree, id: string, patch: NodePatch): TreeNode {
 export interface StatusChange {
   waiting?: string;
   until?: string;
-  /** Who made the change, for the journal: `ты`, `claude`… */
+  /** Who made the change, for the journal: `you` (`ты` in a Russian tree), `claude`… */
   source?: string;
   /** A sentence for the journal along with the change. */
   note?: string;

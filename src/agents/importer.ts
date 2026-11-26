@@ -31,7 +31,7 @@ export interface Proposal {
   /** For a new tree: the project's name and the template it is grown by. */
   title?: string;
   template?: string;
-  /** Lines for the tree's «Решения»: what was decided, and why. */
+  /** Lines for the tree's «Decisions»: what was decided, and why. */
   decisions?: string[];
   nodes: ImportedNode[];
 }
