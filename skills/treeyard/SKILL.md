@@ -21,9 +21,10 @@ Agents break these most often. Follow them even when the task looks too small.
 
 1. **Before work**, know the task's node and tell the person which it is: a session opened
    from a node already has it in its context; otherwise find it in `treeyard show`.
-2. **Read `treeyard show` whole.** Never pipe it into `head`, `tail`, `grep` or `sed`, not
-   even after `2>&1`. Too long → `--brief`, `--journal N` or `--only journal,sessions`;
-   several nodes → one call; looking for something → `treeyard find "…"`.
+2. **Read `treeyard show` and `treeyard find` whole.** Never pipe them into `head`, `tail`,
+   `grep` or `sed`, not even after `2>&1`. Too long → `--brief`, `--journal N` or
+   `--only journal,sessions`; several nodes → one call; looking for something →
+   `treeyard find "…"` with a narrower word.
 3. **Write `.tree/` only with `treeyard` commands**, never by hand.
 4. **Finish in order:** checks → commit → one command:
    `treeyard log <id> "…" --status review --commit HEAD`. Status `done` only when the person
